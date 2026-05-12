@@ -4766,6 +4766,30 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
     path: "/whatsapp/phone_numbers/{phone_number}/profile",
     category: "whatsapp",
   },
+  check_whatsapp_window: {
+    name: "check_whatsapp_window",
+    description:
+      "Check whether the 24-hour WhatsApp customer-service window is open between a phone number and a destination. Freeform messages are only permitted inside this window; outside it a pre-approved template is required.",
+    parameters: {
+      type: "object",
+      properties: {
+        phone_number: {
+          type: "string",
+          description:
+            "Telnyx WhatsApp phone number in E.164 format (e.g. +19452940762).",
+        },
+        destination_number: {
+          type: "string",
+          description:
+            "Customer phone number in E.164 format (e.g. +18005551234).",
+        },
+      },
+      required: ["phone_number", "destination_number"],
+    },
+    method: "GET",
+    path: "/whatsapp/phone_numbers/{phone_number}/conversation_window",
+    category: "whatsapp",
+  },
   // ─── Audit Logs ─────────────────────────────────────────────
   list_audit_events: {
     name: "list_audit_events",
@@ -5035,4 +5059,5 @@ export const PERMISSION_MAP: Record<string, string> = {
   "whatsapp.get_whatsapp_template": "get_whatsapp_template",
   "whatsapp.list_whatsapp_phone_numbers": "list_whatsapp_phone_numbers",
   "whatsapp.get_whatsapp_business_profile": "get_whatsapp_business_profile",
+  "whatsapp.check_whatsapp_window": "check_whatsapp_window",
 };
