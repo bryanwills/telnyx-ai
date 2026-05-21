@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { createHostedMcpAppsHttpApp } from "./http.js";
 
-const AUTH_SCHEME = String.fromCharCode(66, 101, 97, 114, 101, 114);
+const AUTH_SCHEME = "Bearer";
 const MCP_HEADERS = {
   "content-type": "application/json",
   accept: "application/json, text/event-stream"
@@ -101,6 +101,82 @@ describe("hosted MCP Apps HTTP service", () => {
     expect(afterDelete.status).toBe(404);
   });
 
+  it("rejects a valid session id when it is presented with a different bearer token", async () => {
+    const app = createHostedMcpAppsHttpApp();
+    const sessionId = await initializeSession(app, "original-token");
+
+    const mismatch = await app.request("/apps/number-intelligence/mcp", {
+      method: "POST",
+      headers: sessionHeaders(sessionId, "different-token"),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })
+    });
+
+    expect(mismatch.status).toBe(404);
+    await expect(mismatch.json()).resolves.toMatchObject({
+      jsonrpc: "2.0",
+      error: { code: -32001, message: "Session not found" }
+    });
+
+    const originalTokenStillWorks = await app.request("/apps/number-intelligence/mcp", {
+      method: "POST",
+      headers: sessionHeaders(sessionId, "original-token"),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/list", params: {} })
+    });
+    expect(originalTokenStillWorks.status).toBe(200);
+  });
+
+  it("evicts sessions after the idle timeout", async () => {
+    let currentTimeMs = 0;
+    const app = createHostedMcpAppsHttpApp({
+      sessionClock: () => currentTimeMs,
+      sessionMaxAgeMs: 60_000,
+      sessionIdleTimeoutMs: 1_000
+    });
+    const sessionId = await initializeSession(app, "idle-token");
+
+    currentTimeMs = 999;
+    const active = await app.request("/apps/number-intelligence/mcp", {
+      method: "POST",
+      headers: sessionHeaders(sessionId, "idle-token"),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })
+    });
+    expect(active.status).toBe(200);
+
+    currentTimeMs = 2_000;
+    const expired = await app.request("/apps/number-intelligence/mcp", {
+      method: "POST",
+      headers: sessionHeaders(sessionId, "idle-token"),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/list", params: {} })
+    });
+    expect(expired.status).toBe(404);
+  });
+
+  it("evicts sessions after the absolute max age even if recently used", async () => {
+    let currentTimeMs = 0;
+    const app = createHostedMcpAppsHttpApp({
+      sessionClock: () => currentTimeMs,
+      sessionMaxAgeMs: 1_000,
+      sessionIdleTimeoutMs: 60_000
+    });
+    const sessionId = await initializeSession(app, "ttl-token");
+
+    currentTimeMs = 999;
+    const active = await app.request("/apps/number-intelligence/mcp", {
+      method: "POST",
+      headers: sessionHeaders(sessionId, "ttl-token"),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })
+    });
+    expect(active.status).toBe(200);
+
+    currentTimeMs = 1_000;
+    const expired = await app.request("/apps/number-intelligence/mcp", {
+      method: "POST",
+      headers: sessionHeaders(sessionId, "ttl-token"),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "tools/list", params: {} })
+    });
+    expect(expired.status).toBe(404);
+  });
+
   it("passes the per-request Authorization token to MCP tool handlers as the Telnyx API key", async () => {
     const seenAuthorizations: string[] = [];
     delete process.env.TELNYX_API_KEY;
@@ -111,7 +187,7 @@ describe("hosted MCP Apps HTTP service", () => {
       return new Response(
         JSON.stringify({
           data: {
-            phone_number: "+15551234567",
+            phone_number: "+155****4567",
             country_code: "US",
             national_format: "(555) 123-4567",
             carrier: { name: "Telnyx", type: "mobile" },
@@ -151,7 +227,7 @@ describe("hosted MCP Apps HTTP service", () => {
         params: {
           name: "number_intelligence_analyze",
           arguments: {
-            phone_number: "+15551234567",
+            phone_number: "+155****4567",
             sources: ["lookup"]
           }
         }
@@ -162,6 +238,30 @@ describe("hosted MCP Apps HTTP service", () => {
     expect(seenAuthorizations).toEqual([authHeader("request-scoped-key")]);
   });
 });
+
+async function initializeSession(app: ReturnType<typeof createHostedMcpAppsHttpApp>, token: string): Promise<string> {
+  const initialize = await app.request("/apps/number-intelligence/mcp", {
+    method: "POST",
+    headers: {
+      ...MCP_HEADERS,
+      authorization: authHeader(token)
+    },
+    body: JSON.stringify(initializeRequest())
+  });
+
+  expect(initialize.status).toBe(200);
+  const sessionId = initialize.headers.get("mcp-session-id");
+  expect(sessionId).toMatch(/[0-9a-f-]{36}/);
+
+  const initialized = await app.request("/apps/number-intelligence/mcp", {
+    method: "POST",
+    headers: sessionHeaders(sessionId, token),
+    body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })
+  });
+  expect(initialized.status).toBe(202);
+
+  return sessionId ?? "";
+}
 
 function initializeRequest(): Record<string, unknown> {
   return {
