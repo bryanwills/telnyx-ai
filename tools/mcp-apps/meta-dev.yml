@@ -11,22 +11,7 @@ project:
 
 build:
   allow_vulnerable_image: false
-  dockerfile: tools/mcp-apps/Dockerfile
-  context: tools/mcp-apps
-
-deploy:
-  service:
-    - name: mcp-apps
-      port: 8080
-      tags: ["http"]
-      ready:
-        type: http
-        method: GET
-        path: /readyz
-        interval: 30s
-        timeout: 10s
-        success_threshold: 1
-  env:
-    static:
-      NODE_ENV: production
-      PORT: "8080"
+  promote_to_dev:
+    mode: always
+  promote_to_prod:
+    mode: on_file_mark
