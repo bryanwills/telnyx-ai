@@ -12,6 +12,8 @@ on:
       - "tools/mcp-apps/**"
       - ".github/workflows/docker-image-mcp-apps.yml"
 
+permissions: {}
+
 jobs:
   dockerImage:
     uses: team-telnyx/infra-ci-gha-workflows/.github/workflows/dockerImage.yml@latest
