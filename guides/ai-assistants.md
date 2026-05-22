@@ -89,6 +89,17 @@ curl -X POST "https://api.telnyx.com/v2/ai/assistants" \
 - Telnyx-hosted inference is the default recommendation for real-time voice agents because the LLM stays on the same private Telnyx path as transcription, synthesis, and call media.
 - If you need a provider or routing policy outside the hosted catalog, use the custom OpenAI-compatible LLM path deliberately and document the external dependency in your deployment runbook.
 
+## Voice Trust Checklist
+
+Use this checklist for production voice assistants, especially outbound AI or callback flows:
+
+- Use a Telnyx number you control and present a truthful caller identity. Do not imply a bank, carrier, or government caller if the call is actually from your own workflow.
+- If your policy or local law requires AI or recording disclosure, put that disclosure in the first turn the callee hears. Do not claim blanket or implied consent in prompts or examples.
+- For outbound AI, treat iOS Call Screening and Live Voicemail as a separate branch. Use `answering_machine_detection: "premium_ios_call_screening_detection"` and wait for the screening prompt to finish before identifying the caller or starting the assistant.
+- Keep outbound reach narrow with outbound voice profile allowlists such as `whitelisted_destinations`, and review changes to those allowlists like any other fraud-sensitive config change.
+- Log webhook outcomes for screening, voicemail, and hangups. On inbound trust-sensitive flows, inspect available caller trust signals such as SHAKEN/STIR attestation before allowing high-risk actions.
+- Describe voice-data handling honestly. Avoid claims such as "always listening" unless your product really captures audio continuously and your disclosure, consent, and retention policy all support that behavior.
+
 ### List Assistants
 
 **`GET /v2/ai/assistants`**

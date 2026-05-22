@@ -28,6 +28,7 @@ curl -X POST "https://api.telnyx.com/v2/calls" \
 - Use `transcription_start` with `transcription_engine: "Speechmatics"` and `transcription_model: "speechmatics/standard"` when you need real-time call transcription with interim results.
 - Use `answering_machine_detection: "premium_ios_call_screening_detection"` on outbound calls when you need to distinguish a live human from iOS Call Screening or Live Voicemail before connecting an agent or starting a voice AI flow.
 - Treat screened-call handling as a webhook-driven state machine. The value is not just the first AMD result, but the follow-up events that tell you when to speak, retry, or abort.
+- For voice AI, keep trust controls explicit: identify the caller truthfully, disclose AI or recording when your policy requires it, and do not present screening-aware flows as blanket consent to capture audio.
 
 ## API Reference
 
@@ -172,6 +173,14 @@ The key webhooks are:
 - `call.machine.premium.greeting.ended` with `result=prompt_ended` when the iOS screening prompt finishes and your app can respond with who is calling and why
 - `call.machine.premium.call_screening.detected` with `result=screening` when Apple call-screening audio is detected
 - a second `call.machine.premium.detection.ended` after screening, because Telnyx restarts Premium AMD on the screened call
+
+Recommended outbound AI behavior:
+
+- Place the call with Premium AMD enabled before starting your assistant or bridging to a human queue.
+- If Telnyx reports `call.machine.premium.greeting.ended` with `result=prompt_ended`, play a short truthful identification message such as who is calling and why.
+- If `call.machine.premium.call_screening.detected` fires, wait for the restarted Premium AMD result instead of speaking over the screening flow.
+- Start the assistant only after the restarted AMD cycle indicates a live person, and fall back to your voicemail or retry policy for voicemail outcomes.
+- Keep the script factual. Avoid deceptive language such as "we are always listening" or any implication that screened-call audio equals consent for recording.
 
 ### Conference Calls
 
@@ -345,7 +354,7 @@ def handle_amd(event: dict):
         requests.post(
             f"{BASE_URL}/calls/{payload['call_control_id']}/actions/speak",
             headers=headers,
-            json={"payload": "This is Acme Support returning your call.", "voice": "female"},
+            json={"payload": "This is Acme Support calling about your open support request.", "voice": "female"},
         )
         return
 

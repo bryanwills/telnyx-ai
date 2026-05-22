@@ -44,6 +44,16 @@ a specific error — see [Troubleshooting](#troubleshooting).
 4. An outbound voice profile with destination countries whitelisted
 5. An AI assistant with `telephony_settings.default_texml_app_id` set to the TeXML app
 
+## Trust and anti-scam guardrails
+
+Apply these before you automate a production outbound AI flow:
+
+- Use a Telnyx number you own and identify the caller truthfully when a human or screening prompt answers.
+- If your policy requires AI or recording disclosure, make that disclosure in the first live turn. Do not write prompts that imply blanket consent or "always listening" capture.
+- Treat iOS Call Screening and Live Voicemail as a separate branch. Premium AMD should decide when to speak, not just whether the line is answered.
+- Keep `whitelisted_destinations` tight on the outbound voice profile so accidental or abusive destination expansion becomes a visible config change.
+- Store webhook outcomes for screened calls, voicemail, and failed attempts so operators can distinguish deliverability issues from trust or anti-spam friction.
+
 ## Model availability
 
 Model availability varies by account. If `client.ai.assistants.create()` returns
@@ -154,7 +164,8 @@ assistant = client.ai.assistants.create(
     model="openai/gpt-4o",
     instructions=(
         "You are a helpful phone assistant. "
-        "Keep your answers concise and conversational since this is a phone call."
+        "Keep your answers concise and conversational since this is a phone call. "
+        "If the workflow requires disclosure, identify yourself as an AI assistant before continuing."
     ),
     greeting="Hello! How can I help you today?",
     telephony_settings={"default_texml_app_id": app_id},
@@ -189,6 +200,13 @@ event = client.ai.assistants.scheduled_events.create(
 )
 print(f"Status: {event.status}")  # "pending"
 ```
+
+If this call flow must react safely to iOS Call Screening or Live Voicemail,
+combine the assistant with a Call Control path that uses
+`answering_machine_detection: "premium_ios_call_screening_detection"` before
+starting the live AI interaction. Wait until the screening prompt finishes,
+identify the caller and reason for the call, then act on the restarted Premium
+AMD result before speaking further or transferring.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
