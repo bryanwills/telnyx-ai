@@ -1,0 +1,123 @@
+{
+  "defaultRoute": {
+    "routeKey": "repo-metadata",
+    "ownerTeam": "AI Tooling Platform",
+    "ownerLabel": "Repo Metadata Maintainers",
+    "pathPrefix": "",
+    "surface": "shared"
+  },
+  "routes": [
+    {
+      "routeKey": "docs-guides",
+      "ownerTeam": "AI Tooling Docs",
+      "ownerLabel": "Guides Maintainers",
+      "pathPrefix": "guides/",
+      "surface": "docs"
+    },
+    {
+      "routeKey": "docs-inference",
+      "ownerTeam": "AI Tooling Docs",
+      "ownerLabel": "Inference Docs Maintainers",
+      "pathPrefix": "inference/",
+      "surface": "docs"
+    },
+    {
+      "routeKey": "repo-root-docs",
+      "ownerTeam": "AI Tooling Platform",
+      "ownerLabel": "Repo Metadata Maintainers",
+      "pathPrefix": "README.md",
+      "surface": "docs"
+    },
+    {
+      "routeKey": "repo-root-manifest",
+      "ownerTeam": "AI Tooling Platform",
+      "ownerLabel": "Repo Metadata Maintainers",
+      "pathPrefix": "agent.json",
+      "surface": "docs"
+    },
+    {
+      "routeKey": "gemini-extension",
+      "ownerTeam": "AI Tooling Platform",
+      "ownerLabel": "Repo Metadata Maintainers",
+      "pathPrefix": "gemini-extension.json",
+      "surface": "docs"
+    },
+    {
+      "routeKey": "skills-canonical",
+      "ownerTeam": "AI Tooling Skills",
+      "ownerLabel": "Canonical Skills Maintainers",
+      "pathPrefix": "skills/",
+      "surface": "templates"
+    },
+    {
+      "routeKey": "providers-claude",
+      "ownerTeam": "AI Tooling Providers",
+      "ownerLabel": "Claude Packaging Maintainers",
+      "pathPrefix": "providers/claude/",
+      "surface": "templates"
+    },
+    {
+      "routeKey": "providers-cursor",
+      "ownerTeam": "AI Tooling Providers",
+      "ownerLabel": "Cursor Packaging Maintainers",
+      "pathPrefix": "providers/cursor/",
+      "surface": "templates"
+    },
+    {
+      "routeKey": "plugin-opencode",
+      "ownerTeam": "AI Tooling Plugins",
+      "ownerLabel": "OpenCode Plugin Maintainers",
+      "pathPrefix": "plugins/opencode/",
+      "surface": "templates"
+    },
+    {
+      "routeKey": "plugin-readme",
+      "ownerTeam": "AI Tooling Plugins",
+      "ownerLabel": "Plugin Docs Maintainers",
+      "pathPrefix": "plugins/README.md",
+      "surface": "docs"
+    },
+    {
+      "routeKey": "cli-package",
+      "ownerTeam": "AI Tooling CLI",
+      "ownerLabel": "CLI Maintainers",
+      "pathPrefix": "cli/",
+      "surface": "examples"
+    },
+    {
+      "routeKey": "typescript-sdk",
+      "ownerTeam": "AI Tooling SDKs",
+      "ownerLabel": "TypeScript SDK Maintainers",
+      "pathPrefix": "tools/typescript/",
+      "surface": "examples"
+    },
+    {
+      "routeKey": "python-sdk",
+      "ownerTeam": "AI Tooling SDKs",
+      "ownerLabel": "Python SDK Maintainers",
+      "pathPrefix": "tools/python/",
+      "surface": "examples"
+    },
+    {
+      "routeKey": "mcp-proxy",
+      "ownerTeam": "AI Tooling MCP",
+      "ownerLabel": "MCP Proxy Maintainers",
+      "pathPrefix": "tools/mcp/",
+      "surface": "examples"
+    },
+    {
+      "routeKey": "mcp-apps",
+      "ownerTeam": "AI Tooling MCP",
+      "ownerLabel": "MCP Apps Maintainers",
+      "pathPrefix": "tools/mcp-apps/",
+      "surface": "examples"
+    },
+    {
+      "routeKey": "ffl-cli",
+      "ownerTeam": "AI Tooling FFL",
+      "ownerLabel": "FFL CLI Maintainers",
+      "pathPrefix": "tools/ffl-cli/",
+      "surface": "templates"
+    }
+  ]
+}
