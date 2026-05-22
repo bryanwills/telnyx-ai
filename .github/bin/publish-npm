@@ -1,30 +1,72 @@
 #!/usr/bin/env bash
-# Publish @telnyx/agent-toolkit and @telnyx/agent-cli to npm using OIDC.
+# Publish @telnyx packages to npm using OIDC and emit a machine-readable
+# publish-alert evidence bundle for downstream incident handling.
 # Called from the publish-npm.yml workflow — no NPM_TOKEN needed.
-# Adapted from team-telnyx/telnyx-node/bin/publish-npm.
 
-set -eux
+set -euo pipefail
 
 PACKAGE_DIR="${1:-.}"
 
 cd "$PACKAGE_DIR"
 
+PUBLISH_RESULT="error"
+PUBLISH_PROVENANCE_MODE="unknown"
+PUBLISH_CREDENTIAL_SOURCE="unknown"
+PACKAGE_NAME=""
+VERSION=""
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+EVIDENCE_DIR="$REPO_ROOT/.github/artifacts/publish-alert-evidence"
+MISSING_MAINTAINERS_JSON='[]'
+
+write_evidence_bundle() {
+  if [[ -z "$PACKAGE_NAME" || -z "$VERSION" ]]; then
+    return
+  fi
+
+  local safe_package_name
+  safe_package_name="${PACKAGE_NAME//@/}"
+  safe_package_name="${safe_package_name//\//-}"
+
+  PUBLISH_PROVENANCE_MODE="$PUBLISH_PROVENANCE_MODE" \
+  PUBLISH_CREDENTIAL_SOURCE="$PUBLISH_CREDENTIAL_SOURCE" \
+  NPM_PACKAGE_MAINTAINERS_JSON="${NPM_PACKAGE_MAINTAINERS_JSON:-$MISSING_MAINTAINERS_JSON}" \
+  node "$REPO_ROOT/.github/bin/write-publish-alert-evidence.mjs" \
+    "$PACKAGE_DIR" \
+    "$EVIDENCE_DIR/${safe_package_name}-${VERSION}.json" \
+    "$PUBLISH_RESULT"
+}
+
+trap 'status=$?; if [[ $status -eq 0 && "$PUBLISH_RESULT" == "error" ]]; then PUBLISH_RESULT="success"; fi; write_evidence_bundle; exit $status' EXIT
+
 # Authenticate — prefer OIDC, fall back to NPM_TOKEN
 if [[ ${NPM_TOKEN:-} ]]; then
+  PUBLISH_PROVENANCE_MODE="npm_token"
+  PUBLISH_CREDENTIAL_SOURCE="NPM_TOKEN"
   npm config set '//registry.npmjs.org/:_authToken' "$NPM_TOKEN"
 elif [[ ! ${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-} ]]; then
   echo "ERROR: NPM_TOKEN must be set if not running in a GitHub Action with id-token permission"
   exit 1
+else
+  PUBLISH_PROVENANCE_MODE="github_actions_oidc"
+  PUBLISH_CREDENTIAL_SOURCE="github_actions_oidc"
 fi
-
-# Build (CLI has a no-op build, TS SDK compiles)
-npm run build
 
 # Get package info
 PACKAGE_NAME="$(jq -r -e '.name' ./package.json)"
 VERSION="$(jq -r -e '.version' ./package.json)"
 
 echo "Publishing $PACKAGE_NAME@$VERSION"
+
+# Build (CLI has a no-op build, TS SDK compiles)
+npm run build
+
+# Best-effort registry owner snapshot for the evidence bundle.
+if MAINTAINERS_JSON="$(npm view "$PACKAGE_NAME" maintainers --json 2>/dev/null || true)"; then
+  if [[ -n "$MAINTAINERS_JSON" && "$MAINTAINERS_JSON" != "null" ]]; then
+    NPM_PACKAGE_MAINTAINERS_JSON="$MAINTAINERS_JSON"
+  fi
+fi
 
 # Get latest version from npm
 NPM_INFO="$(npm view "$PACKAGE_NAME" version --json 2>/dev/null || true)"
@@ -42,6 +84,7 @@ fi
 
 if [[ "$LAST_VERSION" == "$VERSION" ]]; then
   echo "$PACKAGE_NAME@$VERSION is already published on npm; skipping publish."
+  PUBLISH_RESULT="skipped"
   exit 0
 fi
 
@@ -56,3 +99,4 @@ fi
 
 # Use the system npm (Node 24 ships npm 11+) for OIDC provenance
 npm publish --access public --no-git-checks --tag "$TAG"
+PUBLISH_RESULT="success"

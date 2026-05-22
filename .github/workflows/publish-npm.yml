@@ -53,6 +53,14 @@ jobs:
       - name: Publish @telnyx/agent-toolkit
         run: bash ./.github/bin/publish-npm tools/typescript
 
+      - name: Upload publish evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-alert-evidence-typescript
+          path: .github/artifacts/publish-alert-evidence/*.json
+          if-no-files-found: error
+
   publish-cli:
     name: publish @telnyx/agent-cli
     runs-on: ubuntu-latest
@@ -77,6 +85,14 @@ jobs:
       - name: Publish @telnyx/agent-cli
         run: bash ./.github/bin/publish-npm cli
 
+      - name: Upload publish evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-alert-evidence-cli
+          path: .github/artifacts/publish-alert-evidence/*.json
+          if-no-files-found: error
+
   publish-mcp:
     name: publish @telnyx/mcp
     runs-on: ubuntu-latest
@@ -100,6 +116,14 @@ jobs:
 
       - name: Publish @telnyx/mcp
         run: bash ./.github/bin/publish-npm tools/mcp
+
+      - name: Upload publish evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-alert-evidence-mcp
+          path: .github/artifacts/publish-alert-evidence/*.json
+          if-no-files-found: error
 
   publish-opencode:
     name: publish @telnyx/opencode
@@ -126,6 +150,14 @@ jobs:
 
       - name: Publish @telnyx/opencode
         run: bash ./.github/bin/publish-npm plugins/opencode
+
+      - name: Upload publish evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-alert-evidence-opencode
+          path: .github/artifacts/publish-alert-evidence/*.json
+          if-no-files-found: error
 
   publish-mcp-registry:
     name: publish to MCP Registry
