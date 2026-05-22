@@ -79,6 +79,28 @@ Add the Telnyx MCP server to your project's `.cursor/mcp.json`:
   }
 ```
 
+### Harnesses
+
+Finalized Telnyx harness plugin repositories for OpenClaw and Hermes integrations:
+
+**OpenClaw**
+
+- [Voice Call](https://github.com/team-telnyx/telnyx-openclaw-voice-call)
+- [Text-to-Speech](https://github.com/team-telnyx/telnyx-openclaw-tts)
+- [Speech-to-Text](https://github.com/team-telnyx/telnyx-openclaw-stt)
+- [Embeddings](https://github.com/team-telnyx/telnyx-openclaw-embeddings)
+- [Intelligence](https://github.com/team-telnyx/telnyx-openclaw-intelligence)
+- [SMS Channel](https://github.com/team-telnyx/telnyx-openclaw-sms-channel)
+
+**Hermes**
+
+- [Intelligence](https://github.com/team-telnyx/telnyx-hermes-intelligence)
+- [Text-to-Speech](https://github.com/team-telnyx/telnyx-hermes-tts)
+- [Speech-to-Text](https://github.com/team-telnyx/telnyx-hermes-stt)
+- [SMS](https://github.com/team-telnyx/telnyx-hermes-sms)
+
+Hermes voice-call support is in progress and will be added once finalized.
+
 ## Agent Toolkit
 
 Integrate Telnyx APIs with popular agent frameworks through function calling — available in [Python](/tools/python) and [TypeScript](/tools/typescript).
