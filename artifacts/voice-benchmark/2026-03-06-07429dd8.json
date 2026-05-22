@@ -1,0 +1,75 @@
+{
+  "artifact_version": 1,
+  "source": {
+    "conversation_id": "07429dd8-57ba-42f5-a45d-907288f6ef5d",
+    "assistant_id": "assistant-b26afd32-84a9-4c09-8346-b667002d0d63",
+    "assistant_version_id": "20251128T124239879700",
+    "call_control_id": "v3:agDj8jL5inxNuekNlZCa991rSaXkixtXTKnbM0z04cXgjtx8qeVEKw",
+    "call_leg_id": "c8253a1c-1964-11f1-880d-02420a1f0d69",
+    "call_session_id": "c8252b6c-1964-11f1-a380-02420a1f0d69",
+    "channel": "phone_call",
+    "created_at": "2026-03-06T14:00:07.760Z",
+    "usage_date": "2026-03-06",
+    "usage_bucket_hour_utc": "2026-03-06T14:00:00Z"
+  },
+  "runtime_path": {
+    "mode": "codex_local",
+    "workspace_path": "/Users/olitron/.paperclip-pilot/instances/default/projects/e0cf1306-4ac9-4ffc-b928-1fed128af7bb/f9eb5df1-8448-4ccb-b064-a1b1c4c5ff6d/ai",
+    "restored_from_gateway_adapter": true
+  },
+  "latency": {
+    "sample_size": 4,
+    "end_user_perceived_latency_ms": {
+      "min": 850,
+      "max": 1079,
+      "avg": 925.25
+    }
+  },
+  "transcript_quality": {
+    "user_turns": 4,
+    "assistant_turns": 5,
+    "assistant_clarification_turns": 2,
+    "insight_status": "completed",
+    "insight_summary": "The user is in Bracko and was looking for restaurant recommendations, specifically a Chinese restaurant. The assistant provided some options, although the list was not fully shared in the conversation. The user thanked the assistant and ended the conversation, intending to visit one of the recommended Chinese restaurants in Bracko. The user's goal was to find a suitable Chinese restaurant in the area.",
+    "assessment": "goal_completed_with_recovery_turns"
+  },
+  "interruption_handling": {
+    "status": "not_observed",
+    "observed": false,
+    "evidence": "The selected live conversation exposes no interruption-specific fields, barge-in markers, or mid-response tool calls; only normal turn-taking was observed."
+  },
+  "provider_cost": {
+    "granularity": "hourly_usage_bucket",
+    "call_control": {
+      "connected": 8,
+      "connection_name": "ai-assistant-b26afd32-84a9-4c09-8346-b667002d0d63",
+      "product": "call-control",
+      "cost": 0.011,
+      "date_time": "2026-03-06T14:00:00Z",
+      "connection_id": "2757370214298420945",
+      "completed": 8,
+      "call_sec": 308,
+      "billed_sec": 330,
+      "direction": "inbound"
+    },
+    "inference": [
+      {
+        "product": "inference",
+        "cost": 0,
+        "date_time": "2026-03-06T14:00:00Z",
+        "record_type": "inference"
+      }
+    ],
+    "total_hour_bucket_usd": 0.011
+  },
+  "verification": {
+    "live_api_sources": [
+      "GET /v2/ai/conversations/{conversation_id}",
+      "GET /v2/ai/conversations/{conversation_id}/messages",
+      "GET /v2/ai/conversations/{conversation_id}/conversations-insights",
+      "GET /v2/usage_reports?product=call-control",
+      "GET /v2/usage_reports?product=inference"
+    ],
+    "generated_at": "2026-05-22T12:09:42.739Z"
+  }
+}
