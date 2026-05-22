@@ -36,6 +36,16 @@ export type ScanReport = {
   findings: SecretFinding[];
 };
 
+export const DEFAULT_SCAN_PATHS = [
+  ".github",
+  "guides",
+  "skills",
+  "providers",
+  "cli",
+  "plugins",
+  "tools",
+];
+
 type Detector = {
   detectorId: string;
   secretClass: string;
@@ -46,15 +56,6 @@ type Detector = {
 };
 
 const REPORT_VERSION = "1";
-const DEFAULT_SCAN_PATHS = [
-  ".github",
-  "guides",
-  "skills",
-  "providers",
-  "cli",
-  "plugins",
-  "tools",
-];
 const TEXT_EXTENSIONS = new Set([
   ".cjs",
   ".env",

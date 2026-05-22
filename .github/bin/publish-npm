@@ -5,9 +5,89 @@
 
 set -eux
 
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PACKAGE_DIR="${1:-.}"
+WORKFLOW_NAME="${WORKFLOW_NAME:-publish-npm}"
+PUBLISH_NPM_GATE_STATE="${PUBLISH_NPM_GATE_STATE:-enabled}"
+PUBLISH_NPM_ENABLED="${PUBLISH_NPM_ENABLED:-true}"
+PUBLISH_DISABLE_REASON="${PUBLISH_DISABLE_REASON:-}"
+PUBLISH_DISABLE_INCIDENT_ID="${PUBLISH_DISABLE_INCIDENT_ID:-}"
+PUBLISH_DISABLED_BY="${PUBLISH_DISABLED_BY:-${GITHUB_ACTOR:-unknown}}"
+PACKAGE_OWNER_ID="${PACKAGE_OWNER_ID:-}"
+PACKAGE_OWNER_CONTACT_TARGET="${PACKAGE_OWNER_CONTACT_TARGET:-}"
+RELEASE_ONCALL_GROUP_ID="${RELEASE_ONCALL_GROUP_ID:-release-oncall}"
 
-cd "$PACKAGE_DIR"
+cd "$REPO_ROOT/$PACKAGE_DIR"
+
+PACKAGE_NAME="$(jq -r -e '.name' ./package.json)"
+VERSION="$(jq -r -e '.version' ./package.json)"
+RUN_URL="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-team-telnyx/ai}/actions/runs/${GITHUB_RUN_ID:-0}"
+TMP_DIR="$(mktemp -d)"
+SCAN_REPORT_PATH="$TMP_DIR/scan-report.json"
+HANDOFF_DIR="$TMP_DIR/evidence-handoff"
+HANDOFF_PATH="$HANDOFF_DIR/$(basename "$PACKAGE_DIR")-${PUBLISH_NPM_GATE_STATE}.json"
+
+emit_handoff_payload() {
+  local mode="$1"
+  shift
+  env \
+    EVIDENCE_PACKAGE_NAME="$PACKAGE_NAME" \
+    EVIDENCE_PACKAGE_DIR="$PACKAGE_DIR" \
+    EVIDENCE_WORKFLOW_NAME="$WORKFLOW_NAME" \
+    EVIDENCE_ACTOR="$PUBLISH_DISABLED_BY" \
+    EVIDENCE_INCIDENT_ID="${PUBLISH_DISABLE_INCIDENT_ID:-${GITHUB_RUN_ID:-manual}}" \
+    EVIDENCE_REASON="${PUBLISH_DISABLE_REASON:-publish gate triggered}" \
+    EVIDENCE_GATE_STATE="$PUBLISH_NPM_GATE_STATE" \
+    EVIDENCE_OWNER_ID="$PACKAGE_OWNER_ID" \
+    EVIDENCE_OWNER_CONTACT_TARGET="$PACKAGE_OWNER_CONTACT_TARGET" \
+    EVIDENCE_ONCALL_GROUP_ID="$RELEASE_ONCALL_GROUP_ID" \
+    EVIDENCE_RUN_URL="$RUN_URL" \
+    EVIDENCE_WORKFLOW_SUMMARY_PATH="${GITHUB_STEP_SUMMARY:-}" \
+    EVIDENCE_AUDIT_LOG_PATH="$TMP_DIR/publish-audit-log.txt" \
+    EVIDENCE_SCAN_REPORT_PATH="$SCAN_REPORT_PATH" \
+    EVIDENCE_OUTPUT_PATH="$HANDOFF_PATH" \
+    npx --yes tsx "$REPO_ROOT/scripts/evidence-handoff-cli.ts" "$mode" "$@"
+}
+
+{
+  echo "package_name=$PACKAGE_NAME"
+  echo "package_version=$VERSION"
+  echo "publish_gate_state=$PUBLISH_NPM_GATE_STATE"
+  echo "publish_disable_reason=${PUBLISH_DISABLE_REASON:-none}"
+  echo "publish_disable_incident_id=${PUBLISH_DISABLE_INCIDENT_ID:-none}"
+  echo "publish_disable_by=$PUBLISH_DISABLED_BY"
+} | tee "$TMP_DIR/publish-audit-log.txt"
+
+if [[ "$PUBLISH_NPM_ENABLED" != "true" || "$PUBLISH_NPM_GATE_STATE" == "disabled" ]]; then
+  emit_handoff_payload publish-path
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    {
+      echo "## Publish gate disabled"
+      echo
+      echo "- package: \`$PACKAGE_NAME\`"
+      echo "- incident: \`${PUBLISH_DISABLE_INCIDENT_ID:-${GITHUB_RUN_ID:-manual}}\`"
+      echo "- reason: ${PUBLISH_DISABLE_REASON:-publish gate triggered}"
+      echo "- evidence payload: \`$HANDOFF_PATH\`"
+    } >> "$GITHUB_STEP_SUMMARY"
+  fi
+  echo "Publish gate disabled for $PACKAGE_NAME; evidence handoff payload written to $HANDOFF_PATH"
+  exit 1
+fi
+
+if [[ "$PUBLISH_NPM_GATE_STATE" == "override" ]]; then
+  emit_handoff_payload publish-path
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    {
+      echo "## Publish gate override recorded"
+      echo
+      echo "- package: \`$PACKAGE_NAME\`"
+      echo "- incident: \`${PUBLISH_DISABLE_INCIDENT_ID:-${GITHUB_RUN_ID:-manual}}\`"
+      echo "- reason: ${PUBLISH_DISABLE_REASON:-publish gate override recorded}"
+      echo "- evidence payload: \`$HANDOFF_PATH\`"
+    } >> "$GITHUB_STEP_SUMMARY"
+  fi
+  echo "Publish gate override recorded for $PACKAGE_NAME; evidence handoff payload written to $HANDOFF_PATH"
+fi
 
 # Authenticate — prefer OIDC, fall back to NPM_TOKEN
 if [[ ${NPM_TOKEN:-} ]]; then
@@ -20,9 +100,24 @@ fi
 # Build (CLI has a no-op build, TS SDK compiles)
 npm run build
 
-# Get package info
-PACKAGE_NAME="$(jq -r -e '.name' ./package.json)"
-VERSION="$(jq -r -e '.version' ./package.json)"
+if ! (cd "$REPO_ROOT" && npx --yes tsx scripts/publish-secret-scan.ts --ci "$PACKAGE_DIR" > "$SCAN_REPORT_PATH"); then
+  PUBLISH_DISABLE_REASON="${PUBLISH_DISABLE_REASON:-release artifact secret scan detected blocking findings}"
+  PUBLISH_DISABLE_INCIDENT_ID="${PUBLISH_DISABLE_INCIDENT_ID:-${GITHUB_RUN_ID:-manual}-secret-scan}"
+  PUBLISH_NPM_GATE_STATE="disabled"
+  emit_handoff_payload secret-exposure
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    {
+      echo "## Secret exposure scan blocked publish"
+      echo
+      echo "- package: \`$PACKAGE_NAME\`"
+      echo "- incident: \`${PUBLISH_DISABLE_INCIDENT_ID}\`"
+      echo "- report: \`$SCAN_REPORT_PATH\`"
+      echo "- evidence payload: \`$HANDOFF_PATH\`"
+    } >> "$GITHUB_STEP_SUMMARY"
+  fi
+  echo "Secret exposure scan blocked publish for $PACKAGE_NAME; evidence handoff payload written to $HANDOFF_PATH"
+  exit 1
+fi
 
 echo "Publishing $PACKAGE_NAME@$VERSION"
 

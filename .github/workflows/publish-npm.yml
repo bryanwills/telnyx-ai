@@ -25,6 +25,27 @@ on:
           - cli
           - mcp
           - opencode
+      gate_state:
+        description: 'Publish gate state for incident routing'
+        required: false
+        default: enabled
+        type: choice
+        options:
+          - enabled
+          - disabled
+          - override
+      publish_disable_reason:
+        description: 'Reason for blocking or overriding the publish gate'
+        required: false
+        type: string
+      publish_disable_incident_id:
+        description: 'Incident or ticket id for the publish-path alert'
+        required: false
+        type: string
+      publish_disable_by:
+        description: 'Actor recording the disable or override'
+        required: false
+        type: string
   release:
     types: [published]
 
@@ -68,6 +89,15 @@ jobs:
         run: npm ci
 
       - name: Publish @telnyx/agent-toolkit
+        env:
+          PUBLISH_NPM_ENABLED: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.gate_state == 'disabled' && 'false' || 'true' }}
+          PUBLISH_NPM_GATE_STATE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.gate_state || 'enabled' }}
+          PUBLISH_DISABLE_REASON: ${{ github.event.inputs.publish_disable_reason }}
+          PUBLISH_DISABLE_INCIDENT_ID: ${{ github.event.inputs.publish_disable_incident_id }}
+          PUBLISH_DISABLED_BY: ${{ github.event.inputs.publish_disable_by || github.actor }}
+          PACKAGE_OWNER_ID: aisling404
+          RELEASE_ONCALL_GROUP_ID: release-oncall
+          WORKFLOW_NAME: publish-npm
         run: bash ./.github/bin/publish-npm tools/typescript
 
   publish-cli:
@@ -93,6 +123,15 @@ jobs:
         run: npm ci
 
       - name: Publish @telnyx/agent-cli
+        env:
+          PUBLISH_NPM_ENABLED: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.gate_state == 'disabled' && 'false' || 'true' }}
+          PUBLISH_NPM_GATE_STATE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.gate_state || 'enabled' }}
+          PUBLISH_DISABLE_REASON: ${{ github.event.inputs.publish_disable_reason }}
+          PUBLISH_DISABLE_INCIDENT_ID: ${{ github.event.inputs.publish_disable_incident_id }}
+          PUBLISH_DISABLED_BY: ${{ github.event.inputs.publish_disable_by || github.actor }}
+          PACKAGE_OWNER_ID: aisling404
+          RELEASE_ONCALL_GROUP_ID: release-oncall
+          WORKFLOW_NAME: publish-npm
         run: bash ./.github/bin/publish-npm cli
 
   publish-mcp:
@@ -118,6 +157,15 @@ jobs:
         run: npm ci
 
       - name: Publish @telnyx/mcp
+        env:
+          PUBLISH_NPM_ENABLED: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.gate_state == 'disabled' && 'false' || 'true' }}
+          PUBLISH_NPM_GATE_STATE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.gate_state || 'enabled' }}
+          PUBLISH_DISABLE_REASON: ${{ github.event.inputs.publish_disable_reason }}
+          PUBLISH_DISABLE_INCIDENT_ID: ${{ github.event.inputs.publish_disable_incident_id }}
+          PUBLISH_DISABLED_BY: ${{ github.event.inputs.publish_disable_by || github.actor }}
+          PACKAGE_OWNER_ID: aisling404
+          RELEASE_ONCALL_GROUP_ID: release-oncall
+          WORKFLOW_NAME: publish-npm
         run: bash ./.github/bin/publish-npm tools/mcp
 
   publish-opencode:
@@ -145,6 +193,15 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Publish @telnyx/opencode
+        env:
+          PUBLISH_NPM_ENABLED: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.gate_state == 'disabled' && 'false' || 'true' }}
+          PUBLISH_NPM_GATE_STATE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.gate_state || 'enabled' }}
+          PUBLISH_DISABLE_REASON: ${{ github.event.inputs.publish_disable_reason }}
+          PUBLISH_DISABLE_INCIDENT_ID: ${{ github.event.inputs.publish_disable_incident_id }}
+          PUBLISH_DISABLED_BY: ${{ github.event.inputs.publish_disable_by || github.actor }}
+          PACKAGE_OWNER_ID: aaronjo-Telnyx
+          RELEASE_ONCALL_GROUP_ID: release-oncall
+          WORKFLOW_NAME: publish-npm
         run: bash ./.github/bin/publish-npm plugins/opencode
 
   publish-mcp-registry:

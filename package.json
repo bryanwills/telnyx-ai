@@ -6,7 +6,7 @@
     "publish:preflight": "npx tsx scripts/publish-secret-scan.ts --ci",
     "test:guides": "npx tsx --test tests/guides.test.ts",
     "test:guides-api": "npx tsx --test tests/guides-api.test.ts",
-    "test:publish-preflight": "npx tsx --test tests/publish-secret-scan.test.ts"
+    "test:publish-preflight": "npx tsx --test tests/publish-secret-scan.test.ts tests/evidence-handoff.test.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.0"
