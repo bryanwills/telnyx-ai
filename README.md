@@ -85,19 +85,23 @@ Finalized Telnyx harness plugin repositories for OpenClaw and Hermes integration
 
 **OpenClaw**
 
-- [Voice Call](https://github.com/team-telnyx/telnyx-openclaw-voice-call)
-- [Text-to-Speech](https://github.com/team-telnyx/telnyx-openclaw-tts)
-- [Speech-to-Text](https://github.com/team-telnyx/telnyx-openclaw-stt)
-- [Embeddings](https://github.com/team-telnyx/telnyx-openclaw-embeddings)
-- [Intelligence](https://github.com/team-telnyx/telnyx-openclaw-intelligence)
-- [SMS Channel](https://github.com/team-telnyx/telnyx-openclaw-sms-channel)
+| Name | Description | Link |
+| --- | --- | --- |
+| Voice Call | Telnyx-first Voice Call provider plugin for OpenClaw realtime voice agents | [Repository](https://github.com/team-telnyx/telnyx-openclaw-voice-call) |
+| Text-to-Speech | Telnyx TTS speech provider for OpenClaw — carrier-grade voice synthesis | [Repository](https://github.com/team-telnyx/telnyx-openclaw-tts) |
+| Speech-to-Text | Telnyx STT provider for OpenClaw audio transcription | [Repository](https://github.com/team-telnyx/telnyx-openclaw-stt) |
+| Embeddings | Telnyx embedding provider for OpenClaw memory search | [Repository](https://github.com/team-telnyx/telnyx-openclaw-embeddings) |
+| Intelligence | Telnyx AI text-inference provider plugin for OpenClaw | [Repository](https://github.com/team-telnyx/telnyx-openclaw-intelligence) |
+| SMS Channel | OpenClaw channel plugin for SMS/MMS via Telnyx Messaging API | [Repository](https://github.com/team-telnyx/telnyx-openclaw-sms-channel) |
 
 **Hermes**
 
-- [Intelligence](https://github.com/team-telnyx/telnyx-hermes-intelligence)
-- [Text-to-Speech](https://github.com/team-telnyx/telnyx-hermes-tts)
-- [Speech-to-Text](https://github.com/team-telnyx/telnyx-hermes-stt)
-- [SMS](https://github.com/team-telnyx/telnyx-hermes-sms)
+| Name | Description | Link |
+| --- | --- | --- |
+| Intelligence | Telnyx AI text-inference provider plugin for Hermes | [Repository](https://github.com/team-telnyx/telnyx-hermes-intelligence) |
+| Text-to-Speech | Telnyx TTS speech-provider plugin for Hermes — WebSocket streaming, NaturalHD, and KokoroTTS voices | [Repository](https://github.com/team-telnyx/telnyx-hermes-tts) |
+| Speech-to-Text | Telnyx STT transcription-provider plugin for Hermes — streaming speech recognition | [Repository](https://github.com/team-telnyx/telnyx-hermes-stt) |
+| SMS | Telnyx SMS/MMS platform adapter for Hermes Agent | [Repository](https://github.com/team-telnyx/telnyx-hermes-sms) |
 
 Hermes voice-call support is in progress and will be added once finalized.
 
