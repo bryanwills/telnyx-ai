@@ -14,6 +14,19 @@
     "docs": "https://developers.telnyx.com/docs/api/v2/overview#authentication"
   },
 
+  "discovery": {
+    "start_url": "https://telnyx.com/agents/start",
+    "agent_manifest_url": "https://telnyx.com/.well-known/agent-card.json",
+    "agent_access_url": "https://telnyx.com/.well-known/agent-access.json",
+    "agent_skills_index_url": "https://telnyx.com/.well-known/agent-skills/index.json",
+    "mcp_server_card_url": "https://telnyx.com/.well-known/mcp/server-card.json",
+    "mcp_url": "https://api.telnyx.com/v2/mcp",
+    "openapi_url": "https://telnyx.com/.well-known/openapi.json",
+    "capabilities_url": "https://telnyx.com/ai/capabilities.json",
+    "pricing_url": "https://telnyx.com/ai/pricing.json",
+    "webhooks_guide": "/guides/webhooks.md"
+  },
+
   "capabilities": [
     {
       "id": "messaging",
@@ -270,8 +283,17 @@
     "api_reference": "https://developers.telnyx.com/docs/api/v2",
     "portal": "https://portal.telnyx.com",
     "agent_portal": "https://agent.telnyx.com",
+    "agents_start": "https://telnyx.com/agents/start",
+    "agent_manifest": "https://telnyx.com/.well-known/agent-card.json",
+    "agent_access": "https://telnyx.com/.well-known/agent-access.json",
+    "agent_skills_index": "https://telnyx.com/.well-known/agent-skills/index.json",
+    "openapi": "https://telnyx.com/.well-known/openapi.json",
+    "mcp_server_card": "https://telnyx.com/.well-known/mcp/server-card.json",
+    "mcp": "https://api.telnyx.com/v2/mcp",
+    "capabilities": "https://telnyx.com/ai/capabilities.json",
     "status": "https://status.telnyx.com",
-    "pricing": "https://telnyx.com/pricing",
+    "pricing": "https://telnyx.com/ai/pricing.json",
+    "webhooks_guide": "/guides/webhooks.md",
     "support": "https://support.telnyx.com",
     "github": "https://github.com/team-telnyx"
   }

@@ -110,7 +110,7 @@ If you are an AI agent **using** Telnyx (not modifying this repo), the entry poi
 
 | You want to…                                              | Start here                                                              |
 | --------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Discover Telnyx capabilities                              | `/agent.json` (this repo) or `https://telnyx.com/agents/start`          |
+| Discover Telnyx capabilities                              | `https://telnyx.com/agents/start` first, then `/agent.json` in this repo as the local mirror |
 | Generate Telnyx code with a coding assistant              | Install the plugin: `team-telnyx/ai` marketplace (Claude / Cursor / Gemini / OpenCode) — see `README.md` |
 | Use Telnyx APIs from an agent framework (OpenAI Agents SDK, LangChain, CrewAI, Vercel AI SDK) | `tools/python/` or `tools/typescript/`                                   |
 | Talk to Telnyx via MCP                                    | `https://api.telnyx.com/v2/mcp` (Bearer auth) — proxy in `tools/mcp/`   |
@@ -138,6 +138,7 @@ See `agent.json` (`auth` block) for the canonical auth contract.
 | llms.txt                                         | `https://telnyx.com/llms.txt`                             |
 | Capability index                                 | `https://telnyx.com/ai/capabilities.json`                 |
 | Pricing                                          | `https://telnyx.com/ai/pricing.json`                      |
+| Webhooks guide                                   | `/guides/webhooks.md`                                     |
 
 ---
 

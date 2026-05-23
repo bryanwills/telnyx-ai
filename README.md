@@ -7,6 +7,8 @@ This repo is the one-stop shop for AI Agents and AI-first developers building wi
 
 ## Table of contents
 
+- [Agent Discovery](#agent-discovery) - canonical agent-first entry points, auth, OpenAPI, MCP, pricing, and webhooks.
+
 - [Telnyx Plugins](#plugins) - Install the Telnyx plugin for Claude Code, Cursor, or Gemini CLI to give your coding assistant Telnyx MCP server access and Telnyx Agent Skills.
 
 - [Agent Toolkit](#agent-toolkit) - integrate Telnyx APIs with popular agent frameworks including OpenAI's Agent SDK, LangChain, CrewAI, and Vercel's AI SDK through function calling — available in [Python](#python) and [TypeScript](#typescript).
@@ -20,9 +22,27 @@ This repo is the one-stop shop for AI Agents and AI-first developers building wi
 - [Guides](#guides) - step-by-step tutorials for common workflows
  
 
-## Plugins and Extenstion
+## Agent Discovery
 
-Install the unified Telnyx plugin to give your AI coding assistant Telnyx MCP server access and 228 Agent Skills covering messaging, voice, numbers, AI, IoT, WebRTC, Twilio migration, and more. 
+Start agent discovery at `https://telnyx.com/agents/start`. The surfaces below are the canonical repo-owned or repo-linked entry points that agents should use without guessing.
+
+| Surface | URL | What it is for |
+| --- | --- | --- |
+| Agent fast path | `https://telnyx.com/agents/start` | Primary discovery entry point for runtime agents |
+| Agent manifest | `https://telnyx.com/.well-known/agent-card.json` | Agent identity, capabilities, and links |
+| Agent access | `https://telnyx.com/.well-known/agent-access.json` | Signup and auth contract |
+| Agent skills index | `https://telnyx.com/.well-known/agent-skills/index.json` | Published skill catalog |
+| OpenAPI spec | `https://telnyx.com/.well-known/openapi.json` | Machine-readable API surface |
+| MCP server card | `https://telnyx.com/.well-known/mcp/server-card.json` | MCP metadata and connection details |
+| Remote MCP endpoint | `https://api.telnyx.com/v2/mcp` | Bearer-auth MCP server |
+| Capability index | `https://telnyx.com/ai/capabilities.json` | Machine-readable capability map |
+| Pricing | `https://telnyx.com/ai/pricing.json` | Machine-readable pricing surface |
+| Webhooks guide | [`/guides/webhooks.md`](/guides/webhooks.md) | Webhook configuration, signature verification, and delivery debugging |
+| Auth guide | `https://telnyx.com/agent-signup.md` | Programmatic API-key signup for agents |
+
+## Plugins
+
+Install the unified Telnyx plugin to give your AI coding assistant Telnyx MCP server access and 235+ Agent Skills covering messaging, voice, numbers, AI, IoT, WebRTC, Twilio migration, and more.
 
 Empowers coding agents to generate correct, production-ready code without relying on pre-training or fragile doc retrieval.
 
@@ -162,7 +182,7 @@ See [Agent CLI](/cli)
 
 ## Model Context Protocol (MCP)
 
-Telnyx hosts a remote MCP server at `https://api.telnyx.com/v2/mcp`.
+Telnyx hosts a remote MCP server at `https://api.telnyx.com/v2/mcp`. The machine-readable MCP server card lives at `https://telnyx.com/.well-known/mcp/server-card.json`.
 
 To run a local Telnyx MCP server using npx:
 
