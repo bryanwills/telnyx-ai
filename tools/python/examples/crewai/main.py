@@ -1,70 +1,59 @@
-"""CrewAI + Telnyx Agent Toolkit example — Telecom crew.
-
-This example creates a CrewAI agent with Telnyx tools for
-managing telecom resources.
-
-Requirements:
-    pip install telnyx-agent-toolkit[crewai]
-
-Usage:
-    export TELNYX_API_KEY=KEY...
-    export OPENAI_API_KEY=sk-...
-    python main.py
-"""
+"""CrewAI example for governed Telnyx MCP Apps."""
 
 import os
+import sys
+from pathlib import Path
 
 from crewai import Agent, Crew, Task
 
-from telnyx_agent_toolkit import TelnyxAgentToolkit
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from governed_mcp import GovernedMcpAppClient, build_crewai_tools
 
 
 def main() -> None:
     telnyx_api_key = os.environ["TELNYX_API_KEY"]
+    governed_app = os.environ.get("TELNYX_GOVERNED_APP", "number-intelligence")
 
-    toolkit = TelnyxAgentToolkit(
+    mcp_client = GovernedMcpAppClient(
         api_key=telnyx_api_key,
-        configuration={
-            "actions": {
-                "messaging": {"send_sms": True},
-                "numbers": {"list": True, "search": True, "buy": True},
-                "account": {"get_balance": True},
-            }
-        },
+        slug=governed_app,
+        client_name="telnyx-governed-crewai-example",
     )
+    tools = build_crewai_tools(mcp_client.list_tools(), mcp_client.call_tool)
 
-    tools = toolkit.get_crewai_tools()
-
-    # Create a telecom provisioning agent
     telecom_agent = Agent(
-        role="Telecom Provisioning Specialist",
-        goal="Help users manage their Telnyx phone numbers and messaging",
+        role="Telecom Readiness Analyst",
+        goal="Explain telecom readiness using governed, least-privilege Telnyx tools",
         backstory=(
-            "You are an expert in telecom provisioning. You help users "
-            "search for, purchase, and manage phone numbers on the Telnyx platform."
+            "You analyze telecom state through read-first or preview-first "
+            "governed tools before suggesting any mutating follow-up."
         ),
         tools=tools,
         verbose=True,
     )
 
-    # Create a task
     task = Task(
         description=(
-            "Check the current account balance, then search for "
-            "available local phone numbers in area code 415."
+            os.environ.get(
+                "TELNYX_EXAMPLE_PROMPT",
+                "Analyze +14155550123 and recommend the safest next action for onboarding.",
+            )
         ),
-        expected_output="A summary of the account balance and available phone numbers.",
+        expected_output=(
+            "A summary of the governed analysis, including any read-first findings "
+            "and whether a separate approval-gated action would be needed."
+        ),
         agent=telecom_agent,
     )
 
-    crew = Crew(
-        agents=[telecom_agent],
-        tasks=[task],
-        verbose=True,
-    )
+    crew = Crew(agents=[telecom_agent], tasks=[task], verbose=True)
 
-    result = crew.kickoff()
-    print(f"\nResult: {result}")
+    try:
+        result = crew.kickoff()
+        print(f"\nResult: {result}")
+    finally:
+        mcp_client.close()
 
 
 if __name__ == "__main__":

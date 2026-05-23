@@ -1,6 +1,6 @@
 # LangChain Example
 
-Telecom agent using LangChain with Telnyx tools.
+Governed external-agent example using LangChain with a focused Telnyx MCP App. It binds the app's published tool contract instead of raw Telnyx endpoint tools.
 
 ## Setup
 
@@ -8,6 +8,7 @@ Telecom agent using LangChain with Telnyx tools.
 pip install telnyx-agent-toolkit[langchain] langchain-openai
 export TELNYX_API_KEY=KEY...
 export OPENAI_API_KEY=sk-...
+export TELNYX_MCP_APPS_BASE_URL=http://localhost:3000
 ```
 
 ## Run
@@ -18,7 +19,7 @@ python main.py
 
 ## What it does
 
-1. Creates a Telnyx toolkit with messaging, numbers, balance, and AI permissions
-2. Wraps tools as LangChain `BaseTool` instances
-3. Binds tools to a ChatOpenAI model
-4. Executes tool calls from the LLM response
+1. Discovers a governed MCP App such as `number-intelligence`.
+2. Wraps the app's tool schemas as LangChain tools.
+3. Binds those governed tools to a `ChatOpenAI` model.
+4. Executes only the MCP App tools returned by the model.

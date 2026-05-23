@@ -1,94 +1,87 @@
-"""OpenAI + Telnyx Agent Toolkit example — SMS assistant.
+"""OpenAI example for governed Telnyx MCP Apps.
 
-This example creates an AI assistant that can send SMS messages,
-search for phone numbers, and check account balance using Telnyx APIs.
-
-Requirements:
-    pip install telnyx-agent-toolkit[openai]
-
-Usage:
-    export TELNYX_API_KEY=KEY...
-    export OPENAI_API_KEY=sk-...
-    python main.py
+This example discovers a focused Telnyx MCP App and exposes only its published
+tool contract to the model. By default it uses the read-first Number
+Intelligence app instead of raw Telnyx API tools.
 """
 
 import json
 import os
+import sys
+from pathlib import Path
 
 from openai import OpenAI
 
-from telnyx_agent_toolkit import TelnyxAgentToolkit
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from governed_mcp import GovernedMcpAppClient, build_openai_tools, mcp_result_to_text
 
 
 def main() -> None:
     telnyx_api_key = os.environ["TELNYX_API_KEY"]
+    governed_app = os.environ.get("TELNYX_GOVERNED_APP", "number-intelligence")
     openai_client = OpenAI()
 
-    # Create toolkit with specific permissions
-    toolkit = TelnyxAgentToolkit(
+    mcp_client = GovernedMcpAppClient(
         api_key=telnyx_api_key,
-        configuration={
-            "actions": {
-                "messaging": {"send_sms": True},
-                "numbers": {"list": True, "search": True},
-                "account": {"get_balance": True},
-            }
-        },
+        slug=governed_app,
+        client_name="telnyx-governed-openai-example",
     )
-
-    # Get OpenAI-formatted tools
-    tools = toolkit.get_openai_tools()
-    executor = toolkit.get_openai_tool_executor()
+    tools = build_openai_tools(mcp_client.list_tools())
 
     messages = [
         {
             "role": "system",
             "content": (
-                "You are a helpful telecom assistant powered by Telnyx. "
-                "You can send SMS messages, search for phone numbers, "
-                "and check account balance."
+                "You are a careful Telnyx telecom assistant. "
+                "Use only the governed Telnyx MCP App tools that were provided. "
+                "Prefer read-first analysis. If a future tool requires a preview "
+                "token, explicit confirm flag, or operator approval before a "
+                "mutation, do not bypass that contract."
             ),
         },
         {
             "role": "user",
-            "content": "What's my current account balance?",
+            "content": os.environ.get(
+                "TELNYX_EXAMPLE_PROMPT",
+                "Analyze +14155550123 and explain whether it looks ready for SMS onboarding.",
+            ),
         },
     ]
 
-    print("Sending request to OpenAI...")
-    response = openai_client.chat.completions.create(
-        model="gpt-4o",
-        messages=messages,
-        tools=tools,
-    )
+    try:
+        while True:
+            print(f"Sending request to OpenAI with governed app '{governed_app}'...")
+            response = openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                tools=tools,
+            )
+            message = response.choices[0].message
 
-    message = response.choices[0].message
+            if not message.tool_calls:
+                print(f"\nAssistant: {message.content}")
+                break
 
-    # Handle tool calls
-    if message.tool_calls:
-        messages.append(message)  # type: ignore[arg-type]
+            messages.append(message)  # type: ignore[arg-type]
+            for tool_call in message.tool_calls:
+                arguments = json.loads(tool_call.function.arguments)
+                print(f"Calling governed tool: {tool_call.function.name}")
+                print(f"  Arguments: {tool_call.function.arguments}")
 
-        for tool_call in message.tool_calls:
-            print(f"Calling tool: {tool_call.function.name}")
-            print(f"  Arguments: {tool_call.function.arguments}")
+                result = mcp_client.call_tool(tool_call.function.name, arguments)
+                text_result = mcp_result_to_text(result)
+                print(f"  Result: {text_result}")
 
-            result = executor.execute(tool_call)
-            print(f"  Result: {result}")
-
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content": result,
-            })
-
-        # Get final response
-        final_response = openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-        )
-        print(f"\nAssistant: {final_response.choices[0].message.content}")
-    else:
-        print(f"\nAssistant: {message.content}")
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": text_result,
+                    }
+                )
+    finally:
+        mcp_client.close()
 
 
 if __name__ == "__main__":

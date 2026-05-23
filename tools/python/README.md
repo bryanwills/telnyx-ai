@@ -2,6 +2,8 @@
 
 Python SDK for building AI agents with [Telnyx](https://telnyx.com) APIs. Works with **OpenAI**, **LangChain**, and **CrewAI**.
 
+For trusted in-process agents, the toolkit can expose raw Telnyx tools directly. For external, multi-tenant, or approval-sensitive agents, prefer a governed Telnyx MCP App first and only fall back to the raw toolkit when you intentionally own the broader behavior model.
+
 ## Installation
 
 ```bash
@@ -86,6 +88,20 @@ agent = Agent(
     tools=tools,
 )
 ```
+
+## Governed External-Agent Pattern
+
+Use the governed MCP App surface when you need a stable, least-privilege contract instead of raw endpoint semantics.
+
+- Use [`tools/mcp-apps`](/tools/mcp-apps) when the workflow should stay read-first or preview-first and the agent should not invent its own mutation policy.
+- Use the generic [`tools/mcp`](/tools/mcp) proxy when an expert client needs broad MCP access to the Telnyx API surface.
+- Use this toolkit directly when you control the agent code, trust boundary, and approval/idempotency rules yourself.
+
+The example directories show the governed pattern for OpenAI, LangChain, and CrewAI by discovering a focused MCP App and binding only the published tool contract:
+
+- [OpenAI governed example](/tools/python/examples/openai)
+- [LangChain governed example](/tools/python/examples/langchain)
+- [CrewAI governed example](/tools/python/examples/crewai)
 
 ## Configuration
 

@@ -83,6 +83,8 @@ Add the Telnyx MCP server to your project's `.cursor/mcp.json`:
 
 Integrate Telnyx APIs with popular agent frameworks through function calling — available in [Python](/tools/python) and [TypeScript](/tools/typescript).
 
+For external or approval-sensitive agents, prefer a focused governed MCP App before exposing raw toolkit tools. The governed OpenAI, LangChain, and CrewAI examples live under [`tools/python/examples`](/tools/python/examples).
+
 ### Python
 
 ```sh
@@ -176,6 +178,8 @@ See [MCP](/tools/mcp) for more details about the generic API MCP proxy.
 
 [`tools/mcp-apps`](/tools/mcp-apps) contains app-layer MCP servers with MCP Apps UI resources for focused Telnyx workflows. These are separate from the generic `@telnyx/mcp` proxy above.
 
+Use MCP Apps when the agent should stay on a read-first or preview-first contract with least-privilege credentials. Use the generic proxy only when you intentionally need the broader Telnyx API MCP surface.
+
 Current apps:
 
 - Number Intelligence (`tools/mcp-apps/apps/number-intelligence`)
@@ -183,6 +187,15 @@ Current apps:
 - Voice Monitor (`tools/mcp-apps/apps/voice-monitor`)
 
 From `tools/mcp-apps`, use `npm install`, `npm run typecheck`, `npm run build`, and `npm test`.
+
+The public docs-facing MCP Apps discovery contract is intended to live on `https://developers.telnyx.com` with these proof URLs:
+
+- `https://developers.telnyx.com/.well-known/mcp-app-registry.json`
+- `https://developers.telnyx.com/.well-known/mcp-apps.json`
+- `https://developers.telnyx.com/apps/number-intelligence`
+- `https://developers.telnyx.com/apps/number-intelligence/mcp`
+
+From the repo root, `npm run verify:live-docs-mcp-apps` probes that hosted surface and reports whether the public registry, per-app discovery document, tool annotations, and `ui://` resources are actually visible end-to-end.
 
 ## Guides
 

@@ -57,3 +57,41 @@ npm run dev --workspace @telnyx-mcp-apps/voice-monitor
 ## MCP Apps surface
 
 Each app exposes a stdio MCP server using `@modelcontextprotocol/sdk` and registers MCP Apps metadata/UI resources using `@modelcontextprotocol/ext-apps`. See the app READMEs for tool names, environment variables, and safety behavior.
+
+## When to use MCP Apps vs other Telnyx surfaces
+
+Choose the narrowest surface that matches the agent's trust boundary:
+
+- Use a focused MCP App when the workflow should stay governed, least-privilege, and aligned to a single operational contract.
+- Use [`tools/mcp`](../mcp) when an expert client truly needs the broad generic Telnyx MCP proxy.
+- Use the raw SDK/toolkit packages when you own the agent's mutation policy, approval flow, and idempotency behavior in-process.
+
+For external-agent builders, the intended default is: discover an app at `/apps/:slug`, bind only the listed tools, and follow that app's contract rather than recreating raw Telnyx endpoint behavior in prompts.
+
+## Governed contract for external agents
+
+The MCP Apps in this repo are meant to be consumed as policy-bearing tool surfaces, not just transport wrappers.
+
+- Read-first tools can run directly and should be the default troubleshooting path.
+- Preview-first or confirmation-gated tools must keep their confirmation token or explicit `confirm=true` requirement intact. Do not compress preview and mutation into one synthetic step.
+- Use least-privilege API keys for the chosen app. A diagnostic app should not run with a write-everything credential.
+- When a governed surface accepts an idempotency field or confirmation token, keep that value stable across retries and log it in your orchestration layer.
+- If the app does not expose the mutation you want, stop at the governed boundary and hand off to a broader reviewed surface instead of inventing a second behavior model.
+
+The hosted HTTP wrapper also exposes public discovery surfaces for deploys:
+
+- `GET /apps` — public app catalog
+- `GET /apps/:slug` — per-app discovery document with bearer-auth contract, absolute MCP URL, tool names, and `ui://` resource URIs
+- `GET /.well-known/mcp-app-registry.json` — machine-readable MCP Apps registry for scanners and server cards
+- `GET /.well-known/mcp-apps.json` — alias of the registry endpoint above
+
+On the hosted MCP endpoint itself, `tools/list` returns the app tool annotations and `_meta.ui.resourceUri` values, and `resources/list` returns the corresponding `ui://` app resources. That is the public runtime proof path for ORA-style scanners and clients.
+
+For the public docs-facing deployment, the expected hosted proof path is:
+
+- `https://developers.telnyx.com/.well-known/mcp-app-registry.json`
+- `https://developers.telnyx.com/.well-known/mcp-apps.json`
+- `https://developers.telnyx.com/apps/number-intelligence`
+- `https://developers.telnyx.com/apps/number-intelligence/mcp`
+
+From the repo root, run `npm run verify:live-docs-mcp-apps` to check that the hosted docs wrapper publishes the registry, the per-app discovery document, and the runtime `tools/list` / `resources/list` surface for the proof app.

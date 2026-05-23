@@ -1,6 +1,6 @@
 # OpenAI Example
 
-SMS assistant using OpenAI function calling with Telnyx tools.
+Governed external-agent example using OpenAI function calling with a focused Telnyx MCP App. By default it targets the read-first `number-intelligence` app instead of exposing raw Telnyx endpoints.
 
 ## Setup
 
@@ -8,6 +8,9 @@ SMS assistant using OpenAI function calling with Telnyx tools.
 pip install telnyx-agent-toolkit[openai]
 export TELNYX_API_KEY=KEY...
 export OPENAI_API_KEY=sk-...
+export TELNYX_MCP_APPS_BASE_URL=http://localhost:3000
+# optional: export TELNYX_MCP_APP_URL=http://localhost:3000/apps/number-intelligence/mcp
+# optional: export TELNYX_GOVERNED_APP=number-intelligence
 ```
 
 ## Run
@@ -18,8 +21,8 @@ python main.py
 
 ## What it does
 
-1. Creates a Telnyx toolkit with messaging, numbers, and balance permissions
-2. Converts tools to OpenAI function-calling format
-3. Sends a user query to GPT-4o
-4. Automatically executes any Telnyx tool calls
-5. Returns the final response
+1. Discovers the governed MCP App over `/apps/{slug}` and initializes an MCP session.
+2. Converts the app's published tool schemas into OpenAI function definitions.
+3. Sends a read-first telecom question to the model.
+4. Executes only the governed tool calls returned by the model.
+5. Preserves the MCP App contract for preview/confirm flows instead of inventing raw endpoint behavior.

@@ -1,60 +1,55 @@
-"""LangChain + Telnyx Agent Toolkit example — Telecom agent.
-
-This example creates a LangChain agent that can interact with
-Telnyx APIs to manage phone numbers and send messages.
-
-Requirements:
-    pip install telnyx-agent-toolkit[langchain] langchain-openai
-
-Usage:
-    export TELNYX_API_KEY=KEY...
-    export OPENAI_API_KEY=sk-...
-    python main.py
-"""
+"""LangChain example for governed Telnyx MCP Apps."""
 
 import os
+import sys
+from pathlib import Path
 
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
-from telnyx_agent_toolkit import TelnyxAgentToolkit
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+from governed_mcp import GovernedMcpAppClient, build_langchain_tools
 
 
 def main() -> None:
     telnyx_api_key = os.environ["TELNYX_API_KEY"]
+    governed_app = os.environ.get("TELNYX_GOVERNED_APP", "number-intelligence")
 
-    toolkit = TelnyxAgentToolkit(
+    mcp_client = GovernedMcpAppClient(
         api_key=telnyx_api_key,
-        configuration={
-            "actions": {
-                "messaging": {"send_sms": True, "list_messaging_profiles": True},
-                "numbers": {"list": True, "search": True},
-                "account": {"get_balance": True},
-                "ai": {"chat": True},
-            }
-        },
+        slug=governed_app,
+        client_name="telnyx-governed-langchain-example",
     )
-
-    tools = toolkit.get_langchain_tools()
+    tools = build_langchain_tools(mcp_client.list_tools(), mcp_client.call_tool)
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
     llm_with_tools = llm.bind_tools(tools)
 
-    messages = [HumanMessage(content="Search for available toll-free numbers in the US")]
+    messages = [
+        HumanMessage(
+            content=os.environ.get(
+                "TELNYX_EXAMPLE_PROMPT",
+                "Analyze +14155550123 and summarize the safest next step for messaging setup.",
+            )
+        )
+    ]
 
-    print("Sending request to LangChain agent...")
-    response = llm_with_tools.invoke(messages)
-    print(f"\nResponse: {response.content}")
+    try:
+        print(f"Sending request to LangChain with governed app '{governed_app}'...")
+        response = llm_with_tools.invoke(messages)
+        print(f"\nResponse: {response.content}")
 
-    if hasattr(response, "tool_calls") and response.tool_calls:
-        for tc in response.tool_calls:
-            print(f"\nTool call: {tc['name']}")
-            print(f"  Args: {tc['args']}")
+        if hasattr(response, "tool_calls") and response.tool_calls:
+            for tc in response.tool_calls:
+                print(f"\nGoverned tool call: {tc['name']}")
+                print(f"  Args: {tc['args']}")
 
-            # Find and execute the matching tool
-            for tool in tools:
-                if tool.name == tc["name"]:
-                    result = tool.invoke(tc["args"])
-                    print(f"  Result: {result[:200]}...")
+                for tool in tools:
+                    if tool.name == tc["name"]:
+                        result = tool.invoke(tc["args"])
+                        print(f"  Result: {result[:400]}...")
+    finally:
+        mcp_client.close()
 
 
 if __name__ == "__main__":
