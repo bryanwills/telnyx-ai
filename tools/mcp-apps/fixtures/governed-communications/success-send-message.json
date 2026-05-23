@@ -1,0 +1,45 @@
+{
+  "ok": true,
+  "tool": "communications_send_message",
+  "request_id": "req_01jwc7mkyj8f6fh0xv2m8f4s8q",
+  "operation": {
+    "id": "op_01jwc7n6f7f9ng74jfn6bdw0ta",
+    "resource_type": "message",
+    "resource_id": "4011777e-8010-4c9f-9f7c-935e0f8a4f38",
+    "status": "accepted"
+  },
+  "policy": {
+    "name": "default-us-messaging",
+    "version": "2026-05-23",
+    "decision": "allow",
+    "selector_result": {
+      "sender_id": "1293384261075731499",
+      "sender_type": "long_code",
+      "messaging_profile_id": "4001777e-8010-4c9f-9f7c-935e0f8a4f38",
+      "country_code": "US"
+    }
+  },
+  "approval": {
+    "mode": "auto",
+    "state": "approved",
+    "reference": null
+  },
+  "idempotency": {
+    "key": "idem-msg-20260523-001",
+    "first_seen_at": "2026-05-23T17:22:40Z",
+    "replayed": false
+  },
+  "data": {
+    "message_id": "4011777e-8010-4c9f-9f7c-935e0f8a4f38",
+    "to": [
+      "+353861234567"
+    ],
+    "from": "+13125550123",
+    "channel": "sms",
+    "accepted_at": "2026-05-23T17:22:41Z",
+    "status": "queued",
+    "messaging_profile_id": "4001777e-8010-4c9f-9f7c-935e0f8a4f38"
+  },
+  "warnings": [],
+  "provider": null
+}

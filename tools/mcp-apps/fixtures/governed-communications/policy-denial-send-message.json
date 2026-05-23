@@ -1,0 +1,40 @@
+{
+  "ok": false,
+  "tool": "communications_send_message",
+  "request_id": "req_01jwc8a6nx6rbh5h0k9qkz6cna",
+  "operation": {
+    "id": "op_01jwc8b5a0h5gbqwt4ws5pg6fv",
+    "resource_type": "message",
+    "resource_id": null,
+    "status": "failed"
+  },
+  "policy": {
+    "name": "default-us-messaging",
+    "version": "2026-05-23",
+    "decision": "deny",
+    "selector_result": null
+  },
+  "approval": {
+    "mode": "deny",
+    "state": "rejected",
+    "reference": null
+  },
+  "idempotency": {
+    "key": "idem-msg-20260523-002",
+    "first_seen_at": "2026-05-23T17:29:10Z",
+    "replayed": false
+  },
+  "error": {
+    "class": "policy_denied",
+    "code": "policy.sender_not_allowed",
+    "message": "No allowed sender route matched the request policy.",
+    "retryable": false,
+    "details": {
+      "country_code": "GB",
+      "channel": "sms",
+      "suggested_action": "Choose an approved sender pool or adjust policy configuration."
+    }
+  },
+  "warnings": [],
+  "provider": null
+}

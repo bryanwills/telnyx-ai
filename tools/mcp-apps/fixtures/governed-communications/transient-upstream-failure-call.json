@@ -1,0 +1,49 @@
+{
+  "ok": false,
+  "tool": "communications_start_outbound_call",
+  "request_id": "req_01jwc8nr6s0n1rv2d89pp11evk",
+  "operation": {
+    "id": "op_01jwc8p02v0h5cae7tm4r2xjdc",
+    "resource_type": "call",
+    "resource_id": null,
+    "status": "failed"
+  },
+  "policy": {
+    "name": "default-global-outbound-voice",
+    "version": "2026-05-23",
+    "decision": "allow",
+    "selector_result": {
+      "connection_id": "2309958742199946301",
+      "sender_id": "1293384261075731499",
+      "sender_type": "long_code"
+    }
+  },
+  "approval": {
+    "mode": "confirm",
+    "state": "approved",
+    "reference": "apr_01jwc8nn4ng7j4gt3c4h7v1s7h"
+  },
+  "idempotency": {
+    "key": "idem-call-20260523-001",
+    "first_seen_at": "2026-05-23T17:34:55Z",
+    "replayed": false
+  },
+  "error": {
+    "class": "provider_transient",
+    "code": "provider.timeout",
+    "message": "The upstream provider did not confirm call creation before the timeout.",
+    "retryable": true,
+    "details": {
+      "connection_id": "2309958742199946301",
+      "retry_after_secs": 15
+    }
+  },
+  "warnings": [],
+  "provider": {
+    "name": "telnyx",
+    "error": {
+      "status": 504,
+      "title": "Gateway Timeout"
+    }
+  }
+}

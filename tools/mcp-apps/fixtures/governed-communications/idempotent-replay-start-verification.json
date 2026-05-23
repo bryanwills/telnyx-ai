@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "tool": "communications_start_verification",
+  "request_id": "req_01jwc8ye3mkn7h8h6yq5ga4vg5",
+  "operation": {
+    "id": "op_01jwc8z8q71w61d14bwdprp5pf",
+    "resource_type": "verification",
+    "resource_id": "ver_8d98f1cb-9d10-4819-b6a1-a58bdfbb8710",
+    "status": "accepted"
+  },
+  "policy": {
+    "name": "default-verification",
+    "version": "2026-05-23",
+    "decision": "allow",
+    "selector_result": {
+      "verification_profile_id": "7bc4c21f-4e1a-45eb-a942-7d7bc228bf31",
+      "country_code": "IE"
+    }
+  },
+  "approval": {
+    "mode": "auto",
+    "state": "approved",
+    "reference": null
+  },
+  "idempotency": {
+    "key": "idem-verify-20260523-001",
+    "first_seen_at": "2026-05-23T17:40:02Z",
+    "replayed": true
+  },
+  "data": {
+    "verification_id": "ver_8d98f1cb-9d10-4819-b6a1-a58bdfbb8710",
+    "to": "+353861234567",
+    "channel": "sms",
+    "profile_id": "7bc4c21f-4e1a-45eb-a942-7d7bc228bf31",
+    "status": "pending",
+    "started_at": "2026-05-23T17:39:58Z",
+    "expires_at": "2026-05-23T17:44:58Z"
+  },
+  "warnings": [],
+  "provider": null
+}
