@@ -15,6 +15,7 @@ import { NUMBER_INTELLIGENCE_UI_HTML } from "./ui.js";
 const TOOL_NAME = "number_intelligence_analyze";
 const BATCH_TOOL_NAME = "number_intelligence_batch_analyze";
 const UI_RESOURCE_URI = "ui://number-intelligence/index.html";
+const READ_ONLY_ANNOTATIONS = { readOnlyHint: true, destructiveHint: false, openWorldHint: true };
 const SOURCE_IDS = ["lookup", "owned", "portability", "messaging", "voice", "reputation"] as const;
 const DEFAULT_SAFE_SOURCES: NumberIntelligenceSourceId[] = ["owned", "messaging", "voice"];
 const MAX_BATCH_SIZE = 25;
@@ -47,6 +48,7 @@ export function createServer(): McpServer {
             "Optional source selection. Omit for safe defaults: owned, messaging, voice. Add portability for eligibility POST or reputation for cached fresh=false reputation."
           )
       },
+      annotations: READ_ONLY_ANNOTATIONS,
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } }
     },
     async ({ phone_number, include_raw, sources }, extra) => {
@@ -91,6 +93,7 @@ export function createServer(): McpServer {
           .optional()
           .describe("Optional source selection. Omit for safe defaults: owned, messaging, voice.")
       },
+      annotations: READ_ONLY_ANNOTATIONS,
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } }
     },
     async ({ numbers, include_raw, sources }, extra) => {

@@ -10,6 +10,7 @@ import { findMcpApp, listPublicApps } from "./catalog.js";
 
 const SERVICE_NAME = "mcp-apps";
 const WWW_AUTHENTICATE = 'Bearer realm="Telnyx MCP Apps"';
+const REGISTRY_KIND = "mcp-app-registry";
 const DEFAULT_SESSION_MAX_AGE_MS = 60 * 60 * 1000;
 const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -72,6 +73,26 @@ export function createHostedMcpAppsHttpApp(options: HostedMcpAppsOptions = {}): 
   );
 
   app.get("/apps", (c) => c.json({ apps: listPublicApps() }));
+
+  app.get("/apps/:slug", (c) => {
+    const definition = findMcpApp(c.req.param("slug"));
+    if (!definition) {
+      return c.json({ error: "app_not_found" }, 404);
+    }
+
+    const origin = new URL(c.req.url).origin;
+    return c.json({ app: buildPublicAppDetails(origin, definition) });
+  });
+
+  app.get("/.well-known/mcp-app-registry.json", (c) => {
+    const origin = new URL(c.req.url).origin;
+    return c.json(buildRegistryDocument(origin, now()));
+  });
+
+  app.get("/.well-known/mcp-apps.json", (c) => {
+    const origin = new URL(c.req.url).origin;
+    return c.json(buildRegistryDocument(origin, now()));
+  });
 
   app.all("/apps/:slug/mcp", async (c) => {
     const definition = findMcpApp(c.req.param("slug"));
@@ -215,4 +236,48 @@ function unauthorizedResponse(): Response {
       "WWW-Authenticate": WWW_AUTHENTICATE
     }
   });
+}
+
+function buildRegistryDocument(origin: string, generatedAt: string): Record<string, unknown> {
+  return {
+    kind: REGISTRY_KIND,
+    service: SERVICE_NAME,
+    generated_at: generatedAt,
+    transport: "streamable-http",
+    auth: {
+      type: "bearer",
+      header: "Authorization",
+      prefix: "Bearer",
+      same_api_key_as: "https://api.telnyx.com/v2"
+    },
+    registry_url: absoluteUrl(origin, "/.well-known/mcp-app-registry.json"),
+    alternate_registry_url: absoluteUrl(origin, "/.well-known/mcp-apps.json"),
+    apps: listPublicApps().map((app) => buildPublicAppDetails(origin, app))
+  };
+}
+
+function buildPublicAppDetails(
+  origin: string,
+  app: ReturnType<typeof listPublicApps>[number]
+): Record<string, unknown> {
+  return {
+    slug: app.slug,
+    name: app.name,
+    description: app.description,
+    transport: "streamable-http",
+    endpoint: app.endpoint,
+    mcp_url: absoluteUrl(origin, app.endpoint),
+    discovery_url: absoluteUrl(origin, `/apps/${app.slug}`),
+    auth: {
+      type: "bearer",
+      same_api_key_as: "https://api.telnyx.com/v2",
+      note: "No separate MCP Apps credential is required."
+    },
+    tool_names: app.toolNames,
+    resource_uris: app.resourceUris
+  };
+}
+
+function absoluteUrl(origin: string, path: string): string {
+  return new URL(path, origin).toString();
 }

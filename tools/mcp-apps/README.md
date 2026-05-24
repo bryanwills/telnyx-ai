@@ -8,6 +8,7 @@ These apps are separate from [`tools/mcp`](../mcp), which is the generic `@telny
 
 ## Apps
 
+- [`apps/governed-communications`](apps/governed-communications) — bounded outbound messaging, call start, verification, and status follow-up with server-side selector policy.
 - [`apps/number-intelligence`](apps/number-intelligence) — phone-number analysis using Telnyx Number Lookup and read-first readiness signals.
 - [`apps/usage-cost-explorer`](apps/usage-cost-explorer) — balance, usage reports, billing groups, and guarded billing controls.
 - [`apps/voice-monitor`](apps/voice-monitor) — read-only active-call monitoring, call timelines, call status, and recording discovery.
@@ -17,6 +18,7 @@ These apps are separate from [`tools/mcp`](../mcp), which is the generic `@telny
 ```text
 tools/mcp-apps/
   apps/
+    governed-communications/
     number-intelligence/
     usage-cost-explorer/
     voice-monitor/

@@ -198,12 +198,23 @@ See [MCP](/tools/mcp) for more details about the generic API MCP proxy.
 
 Current apps:
 
+- Governed Communications (`tools/mcp-apps/apps/governed-communications`)
 - Number Intelligence (`tools/mcp-apps/apps/number-intelligence`)
 - Usage & Cost Explorer (`tools/mcp-apps/apps/usage-cost-explorer`)
 - Voice Monitor (`tools/mcp-apps/apps/voice-monitor`)
 
 From `tools/mcp-apps`, use `npm install`, `npm run typecheck`, `npm run build`, and `npm test`.
 
+The public docs-facing MCP Apps discovery contract is intended to live on `https://developers.telnyx.com` with these proof URLs:
+
+- `https://developers.telnyx.com/.well-known/mcp-app-registry.json`
+- `https://developers.telnyx.com/.well-known/mcp-apps.json`
+- `https://developers.telnyx.com/apps/number-intelligence`
+- `https://developers.telnyx.com/apps/number-intelligence/mcp`
+
+The registry and per-app discovery document are meant to stay machine-readable and lightweight: they expose bearer-auth expectations, exact MCP URLs, tool names, and `ui://` resources without requiring an agent to parse the heavier docs shell first.
+
+From the repo root, `npm run verify:live-docs-mcp-apps` probes that hosted surface and reports whether the public registry, per-app discovery document, tool annotations, and `ui://` resources are actually visible end-to-end.
 ## Guides
 
 Curl-first operational guides for common Telnyx workflows — SMS messaging, voice call control, AI assistants, phone numbers, porting, verification, webhooks, 10DLC registration, WireGuard networking, x402 payments, Edge Compute handoff patterns, and [evidence handoff / escalation runbooks](/guides/evidence-handoff.md).

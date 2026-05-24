@@ -38,14 +38,66 @@ describe("hosted MCP Apps HTTP service", () => {
     await expect(ready.json()).resolves.toMatchObject({
       status: "ready",
       service: "mcp-apps",
-      apps: ["number-intelligence", "usage-cost-explorer", "voice-monitor"]
+      apps: ["governed-communications", "number-intelligence", "usage-cost-explorer", "voice-monitor"]
     });
 
     const catalog = await app.request("/apps");
     expect(catalog.status).toBe(200);
     const body = await catalog.json();
-    expect(body.apps).toHaveLength(3);
+    expect(body.apps).toHaveLength(4);
     expect(body.apps[0]).not.toHaveProperty("createServer");
+
+    const details = await app.request("http://mcp-apps.telnyx.test/apps/governed-communications");
+    expect(details.status).toBe(200);
+    await expect(details.json()).resolves.toMatchObject({
+      app: {
+        slug: "governed-communications",
+        mcp_url: "http://mcp-apps.telnyx.test/apps/governed-communications/mcp",
+        discovery_url: "http://mcp-apps.telnyx.test/apps/governed-communications",
+        tool_names: [
+          "communications_send_message",
+          "communications_start_call",
+          "communications_start_verification",
+          "communications_get_message_status",
+          "communications_get_call_status",
+          "communications_get_call_timeline",
+          "communications_get_verification_status",
+          "communications_list_owned_senders"
+        ],
+        resource_uris: ["ui://governed-communications/index.html"]
+      }
+    });
+
+    const registry = await app.request("http://mcp-apps.telnyx.test/.well-known/mcp-app-registry.json");
+    expect(registry.status).toBe(200);
+    await expect(registry.json()).resolves.toMatchObject({
+      kind: "mcp-app-registry",
+      service: "mcp-apps",
+      transport: "streamable-http",
+      auth: {
+        type: "bearer",
+        header: "Authorization",
+        prefix: "Bearer"
+      },
+      apps: [
+        {
+          slug: "governed-communications",
+          mcp_url: "http://mcp-apps.telnyx.test/apps/governed-communications/mcp"
+        },
+        {
+          slug: "number-intelligence",
+          mcp_url: "http://mcp-apps.telnyx.test/apps/number-intelligence/mcp"
+        },
+        {
+          slug: "usage-cost-explorer",
+          mcp_url: "http://mcp-apps.telnyx.test/apps/usage-cost-explorer/mcp"
+        },
+        {
+          slug: "voice-monitor",
+          mcp_url: "http://mcp-apps.telnyx.test/apps/voice-monitor/mcp"
+        }
+      ]
+    });
   });
 
   it("requires bearer authorization on MCP endpoints", async () => {
@@ -236,6 +288,49 @@ describe("hosted MCP Apps HTTP service", () => {
 
     expect(toolCall.status).toBe(200);
     expect(seenAuthorizations).toEqual([authHeader("request-scoped-key")]);
+  });
+
+  it("exposes tool UI metadata and ui:// resources end-to-end over the hosted MCP endpoint", async () => {
+    const app = createHostedMcpAppsHttpApp();
+    const sessionId = await initializeSession(app, "metadata-token");
+
+    const toolsResponse = await app.request("/apps/number-intelligence/mcp", {
+      method: "POST",
+      headers: sessionHeaders(sessionId, "metadata-token"),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} })
+    });
+    expect(toolsResponse.status).toBe(200);
+    const toolsBody = await toolsResponse.json();
+    expect(JSON.stringify(toolsBody)).toContain("ui://number-intelligence/index.html");
+    expect(JSON.stringify(toolsBody)).toContain("number_intelligence_analyze");
+    expect(JSON.stringify(toolsBody)).toContain("readOnlyHint");
+    expect(JSON.stringify(toolsBody)).toContain("destructiveHint");
+
+    const resourcesResponse = await app.request("/apps/number-intelligence/mcp", {
+      method: "POST",
+      headers: sessionHeaders(sessionId, "metadata-token"),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "resources/list", params: {} })
+    });
+    expect(resourcesResponse.status).toBe(200);
+    const resourcesBody = await resourcesResponse.json();
+    expect(JSON.stringify(resourcesBody)).toContain("ui://number-intelligence/index.html");
+
+    const toolEntries = ((toolsBody as { result?: { tools?: Array<Record<string, unknown>> } }).result?.tools ?? []) as Array<{
+      name?: string;
+      annotations?: Record<string, boolean>;
+    }>;
+    expect(toolEntries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "number_intelligence_analyze",
+          annotations: expect.objectContaining({ readOnlyHint: true, destructiveHint: false })
+        }),
+        expect.objectContaining({
+          name: "number_intelligence_batch_analyze",
+          annotations: expect.objectContaining({ readOnlyHint: true, destructiveHint: false })
+        })
+      ])
+    );
   });
 });
 
