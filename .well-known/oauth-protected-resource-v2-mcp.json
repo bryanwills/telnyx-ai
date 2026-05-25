@@ -1,0 +1,12 @@
+{
+  "resource": "https://api.telnyx.com/v2/mcp",
+  "resource_name": "Telnyx MCP",
+  "authorization_servers": [
+    "https://api.telnyx.com"
+  ],
+  "bearer_methods_supported": [
+    "header"
+  ],
+  "documentation_uri": "https://telnyx.com/auth.md",
+  "agent_access_uri": "https://telnyx.com/.well-known/agent-access.json"
+}

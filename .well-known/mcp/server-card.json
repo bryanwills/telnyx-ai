@@ -1,0 +1,41 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.team-telnyx/telnyx-mcp",
+  "title": "Telnyx",
+  "description": "Telnyx remote MCP server for voice, messaging, networking, and AI API discovery/invocation.",
+  "websiteUrl": "https://telnyx.com",
+  "instructions": "Connect to https://api.telnyx.com/v2/mcp using streamable-http transport. Authenticate with `Authorization: Bearer <TELNYX_API_KEY>`. Start auth discovery at https://telnyx.com/auth.md, then follow the protected-resource metadata hinted by any 401 bearer challenge. For programmatic onboarding, use https://telnyx.com/.well-known/agent-access.json and https://telnyx.com/agent-signup.md. Always inspect the endpoint schema before mutating calls because invoke_api_endpoint is destructive-capable.",
+  "version": "0.2.1",
+  "package_proxies_remote": false,
+  "repository": {
+    "url": "https://github.com/team-telnyx/ai",
+    "source": "github"
+  },
+  "serverUrl": "https://api.telnyx.com/v2/mcp",
+  "serverInfo": {
+    "name": "telnyx_api",
+    "version": "3.0.0"
+  },
+  "protocolVersion": "2024-11-05",
+  "capabilities": {
+    "tools": {},
+    "logging": {}
+  },
+  "transport": "streamable-http",
+  "auth": {
+    "type": "bearer",
+    "description": "Telnyx API key. Send as `Authorization: Bearer <TELNYX_API_KEY>`."
+  },
+  "links": {
+    "canonical": "https://telnyx.com/.well-known/mcp/server-card.json",
+    "mcp_discovery": "https://telnyx.com/.well-known/mcp.json",
+    "mcp_endpoint": "https://api.telnyx.com/v2/mcp",
+    "auth_md": "https://telnyx.com/auth.md",
+    "oauth_authorization_server": "https://api.telnyx.com/.well-known/oauth-authorization-server",
+    "oauth_protected_resource": "https://api.telnyx.com/.well-known/oauth-protected-resource",
+    "mcp_resource_metadata": "https://api.telnyx.com/.well-known/oauth-protected-resource/v2/mcp",
+    "agent_access": "https://telnyx.com/.well-known/agent-access.json",
+    "agent_signup": "https://telnyx.com/agent-signup.md",
+    "agents_start": "https://telnyx.com/agents/start"
+  }
+}

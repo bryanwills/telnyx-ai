@@ -3,9 +3,10 @@
   "private": true,
   "description": "Telnyx AI skills monorepo — SDKs, CLI, guides, and agent skills",
   "scripts": {
-    "test:guides": "npx tsx --test tests/guides.test.ts tests/discovery-surfaces.test.ts",
+    "test:guides": "npx tsx --test tests/guides.test.ts tests/discovery-surfaces.test.ts tests/auth-discovery-surfaces.test.ts",
     "test:guides-api": "npx tsx --test tests/guides-api.test.ts",
-    "test:live-docs-mcp": "npx tsx --test tests/verify-live-docs-mcp.test.ts tests/verify-live-docs-mcp-apps.test.ts",
+    "test:live-docs-mcp": "npx tsx --test tests/verify-live-docs-mcp.test.ts tests/verify-live-docs-mcp-apps.test.ts tests/verify-live-agent-discovery.test.ts",
+    "verify:live-agent-discovery": "npx tsx scripts/verify-live-agent-discovery.ts",
     "verify:live-docs-mcp-apps": "npx tsx scripts/verify-live-docs-mcp-apps.ts"
   },
   "devDependencies": {

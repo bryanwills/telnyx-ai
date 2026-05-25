@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "servers": [
+    {
+      "name": "telnyx",
+      "description": "Telnyx API MCP server — voice, messaging, networking, AI inference.",
+      "endpoint": "https://api.telnyx.com/v2/mcp",
+      "transport": "streamable-http",
+      "auth": "bearer",
+      "card": "https://telnyx.com/.well-known/mcp/server-card.json"
+    }
+  ]
+}

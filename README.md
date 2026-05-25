@@ -26,19 +26,29 @@ This repo is the one-stop shop for AI Agents and AI-first developers building wi
 
 Start agent discovery at `https://telnyx.com/agents/start`. The surfaces below are the canonical repo-owned or repo-linked entry points that agents should use without guessing.
 
+The repo-owned source mirrors for that public path live in [`agents/start.md`](/agents/start.md), [`agent.json`](/agent.json), [`auth.md`](/auth.md), [`AGENTS.md`](/AGENTS.md), and [`llms.txt`](/llms.txt). The corresponding public mirrors are `https://telnyx.com/AGENTS.md` and `https://telnyx.com/llms.txt`.
+
 | Surface | URL | What it is for |
 | --- | --- | --- |
 | Agent fast path | `https://telnyx.com/agents/start` | Primary discovery entry point for runtime agents |
 | Agent manifest | `https://telnyx.com/.well-known/agent-card.json` | Agent identity, capabilities, and links |
 | Agent access | `https://telnyx.com/.well-known/agent-access.json` | Signup and auth contract |
 | Agent skills index | `https://telnyx.com/.well-known/agent-skills/index.json` | Published skill catalog |
-| OpenAPI spec | `https://telnyx.com/.well-known/openapi.json` | Machine-readable API surface |
+| Auth guide | `https://telnyx.com/auth.md` | Root agent auth walkthrough that pairs with protected-resource metadata |
+| OAuth authorization server | `https://api.telnyx.com/.well-known/oauth-authorization-server` | Auth-server metadata for delegated auth and agent onboarding pointers |
+| OAuth protected resource | `https://api.telnyx.com/.well-known/oauth-protected-resource` | Resource metadata for the generic API bearer surface |
+| MCP resource metadata | `https://api.telnyx.com/.well-known/oauth-protected-resource/v2/mcp` | Resource metadata for the MCP endpoint and bearer challenge target |
 | MCP server card | `https://telnyx.com/.well-known/mcp/server-card.json` | MCP metadata and connection details |
 | Remote MCP endpoint | `https://api.telnyx.com/v2/mcp` | Bearer-auth MCP server |
+| MCP Apps registry | `https://developers.telnyx.com/.well-known/mcp-app-registry.json` | Machine-readable catalog of docs-hosted MCP Apps for scanners and server cards |
+| MCP Apps registry alias | `https://developers.telnyx.com/.well-known/mcp-apps.json` | Alias of the MCP Apps registry endpoint |
+| MCP Apps catalog | `https://developers.telnyx.com/apps` | Docs-hosted landing page for focused MCP Apps |
+| MCP Apps proof app | `https://developers.telnyx.com/apps/number-intelligence` | Public per-app discovery document with tool names and `ui://` resources |
+| OpenAPI spec | `https://telnyx.com/.well-known/openapi.json` | Machine-readable API surface |
 | Capability index | `https://telnyx.com/ai/capabilities.json` | Machine-readable capability map |
 | Pricing | `https://telnyx.com/ai/pricing.json` | Machine-readable pricing surface |
 | Webhooks guide | [`/guides/webhooks.md`](/guides/webhooks.md) | Webhook configuration, signature verification, and delivery debugging |
-| Auth guide | `https://telnyx.com/agent-signup.md` | Programmatic API-key signup for agents |
+| Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic API-key signup for agents |
 
 ## Plugins
 
@@ -184,6 +194,8 @@ See [Agent CLI](/cli)
 
 Telnyx hosts a remote MCP server at `https://api.telnyx.com/v2/mcp`. The machine-readable MCP server card lives at `https://telnyx.com/.well-known/mcp/server-card.json`.
 
+For auth discovery, start at `https://telnyx.com/auth.md`. An unauthenticated MCP `initialize` probe is expected to return `WWW-Authenticate: Bearer resource_metadata="https://api.telnyx.com/.well-known/oauth-protected-resource/v2/mcp"`.
+
 To run a local Telnyx MCP server using npx:
 
 ```sh
@@ -196,6 +208,9 @@ See [MCP](/tools/mcp) for more details about the generic API MCP proxy.
 
 [`tools/mcp-apps`](/tools/mcp-apps) contains app-layer MCP servers with MCP Apps UI resources for focused Telnyx workflows. These are separate from the generic `@telnyx/mcp` proxy above.
 
+Use MCP Apps when the agent should stay on a read-first or preview-first contract with least-privilege credentials. Use the generic proxy only when you intentionally need the broader Telnyx API MCP surface.
+
+Public discoverability boundary: the generic API MCP endpoint at `https://api.telnyx.com/v2/mcp` is not the public MCP Apps surface and should not be presented as one. Public MCP Apps discovery lives on the docs-hosted wrapper under `https://developers.telnyx.com/apps`, where each app gets its own discovery document and MCP endpoint that can expose `tool_names` and `ui://` resources.
 Current apps:
 
 - Governed Communications (`tools/mcp-apps/apps/governed-communications`)
@@ -205,7 +220,7 @@ Current apps:
 
 From `tools/mcp-apps`, use `npm install`, `npm run typecheck`, `npm run build`, and `npm test`.
 
-The public docs-facing MCP Apps discovery contract is intended to live on `https://developers.telnyx.com` with these proof URLs:
+The public docs-facing MCP Apps discovery contract lives on `https://developers.telnyx.com` with these proof URLs:
 
 - `https://developers.telnyx.com/.well-known/mcp-app-registry.json`
 - `https://developers.telnyx.com/.well-known/mcp-apps.json`
@@ -215,6 +230,8 @@ The public docs-facing MCP Apps discovery contract is intended to live on `https
 The registry and per-app discovery document are meant to stay machine-readable and lightweight: they expose bearer-auth expectations, exact MCP URLs, tool names, and `ui://` resources without requiring an agent to parse the heavier docs shell first.
 
 From the repo root, `npm run verify:live-docs-mcp-apps` probes that hosted surface and reports whether the public registry, per-app discovery document, tool annotations, and `ui://` resources are actually visible end-to-end.
+
+Validation note: what is public is the docs-hosted registry, app catalog, per-app discovery document, and app-specific MCP endpoint. What remains intentionally separate/private is the generic Telnyx API MCP runtime, which stays a broader bearer-auth proxy and does not double as the public MCP Apps catalog.
 ## Guides
 
 Curl-first operational guides for common Telnyx workflows — SMS messaging, voice call control, AI assistants, phone numbers, porting, verification, webhooks, 10DLC registration, WireGuard networking, x402 payments, Edge Compute handoff patterns, and [evidence handoff / escalation runbooks](/guides/evidence-handoff.md).
@@ -231,12 +248,16 @@ Instead, this repo should be treated as the orchestration/discoverability layer,
 
 In practice:
 - use `team-telnyx/ai` for agent workflows, capability discovery, and AI-oriented integration patterns
-- use `team-telnyx/edge-compute` + `telnyx-edge` for function creation, deployment, secrets, bindings, and lifecycle management
+- use `team-telnyx/edge-compute` + `telnyx-edge` for function creation, status checks, deployment, deletion, secrets, bindings, storage/KV, and lifecycle management
 
 The intended end state is a clean bridge:
 - `ai` = orchestrates and explains
 - Edge Compute = deploys and runs (prefer API-key auth for agent flows)
 - the boundary between them is a documented HTTP/MCP/function contract
+
+Current upstream examples worth starting from are `examples/ts/mcp-server` for MCP, `examples/ts/call-event-router` for typed Telnyx webhook/event routing, and `examples/js/webhook-receiver` for a minimal HTTP ingress function.
+
+Storage/KV is intentionally documented as an upstream `telnyx-edge` capability rather than a `telnyx-agent` helper command today. This repo should point to that surface clearly without pretending to own it.
 
 See [Edge Compute guide](/guides/edge-compute.md).
 
