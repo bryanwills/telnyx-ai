@@ -373,7 +373,7 @@ Before using any operation below, read [the optional-parameters section](referen
 | Get Brand SMS OTP Status by Brand ID | HTTP only | `GET /10dlc/brand/{brandId}/smsOtp` | Fetch the current state before updating, deleting, or making control-flow decisions. | `brandId` |
 | Trigger Brand SMS OTP | HTTP only | `POST /10dlc/brand/{brandId}/smsOtp` | Create or provision an additional resource when the core tasks do not cover this flow. | `pinSms`, `successSms`, `brandId` |
 | Verify Brand SMS OTP | HTTP only | `PUT /10dlc/brand/{brandId}/smsOtp` | Modify an existing resource without recreating it. | `otpPin`, `brandId` |
-| List Campaigns | HTTP only | `GET /10dlc/campaign` | Inspect available resources or choose an existing resource before mutating it. | None |
+| List Campaigns | HTTP only | `GET /10dlc/campaign` | Inspect available resources or choose an existing resource before mutating it. | `brandId` |
 | Accept Shared Campaign | HTTP only | `POST /10dlc/campaign/acceptSharing/{campaignId}` | Create or provision an additional resource when the core tasks do not cover this flow. | `campaignId` |
 | Get Campaign Cost | HTTP only | `GET /10dlc/campaign/usecase/cost` | Inspect available resources or choose an existing resource before mutating it. | None |
 | Update campaign | HTTP only | `PUT /10dlc/campaign/{campaignId}` | Inspect the current state of an existing campaign registration. | `campaignId` |

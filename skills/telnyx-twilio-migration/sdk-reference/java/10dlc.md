@@ -417,7 +417,7 @@ Before using any operation below, read [the optional-parameters section](referen
 | Get Brand SMS OTP Status by Brand ID | `client.messaging10dlc().brand().retrieveSmsOtpStatus()` | `GET /10dlc/brand/{brandId}/smsOtp` | Fetch the current state before updating, deleting, or making control-flow decisions. | `brandId` |
 | Trigger Brand SMS OTP | `client.messaging10dlc().brand().triggerSmsOtp()` | `POST /10dlc/brand/{brandId}/smsOtp` | Create or provision an additional resource when the core tasks do not cover this flow. | `pinSms`, `successSms`, `brandId` |
 | Verify Brand SMS OTP | `client.messaging10dlc().brand().verifySmsOtp()` | `PUT /10dlc/brand/{brandId}/smsOtp` | Modify an existing resource without recreating it. | `otpPin`, `brandId` |
-| List Campaigns | `client.messaging10dlc().campaign().list()` | `GET /10dlc/campaign` | Inspect available resources or choose an existing resource before mutating it. | None |
+| List Campaigns | `client.messaging10dlc().campaign().list()` | `GET /10dlc/campaign` | Inspect available resources or choose an existing resource before mutating it. | `brandId` |
 | Accept Shared Campaign | `client.messaging10dlc().campaign().acceptSharing()` | `POST /10dlc/campaign/acceptSharing/{campaignId}` | Create or provision an additional resource when the core tasks do not cover this flow. | `campaignId` |
 | Get Campaign Cost | `client.messaging10dlc().campaign().usecase().getCost()` | `GET /10dlc/campaign/usecase/cost` | Inspect available resources or choose an existing resource before mutating it. | None |
 | Update campaign | `client.messaging10dlc().campaign().update()` | `PUT /10dlc/campaign/{campaignId}` | Inspect the current state of an existing campaign registration. | `campaignId` |
