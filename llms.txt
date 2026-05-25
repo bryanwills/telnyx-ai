@@ -1,0 +1,35 @@
+Telnyx AI
+Primary agent entrypoint: https://telnyx.com/agents/start
+
+Core discovery surfaces
+- Agent manifest: https://telnyx.com/.well-known/agent-card.json
+- Agent access: https://telnyx.com/.well-known/agent-access.json
+- Agent skills index: https://telnyx.com/.well-known/agent-skills/index.json
+- Auth guide: https://telnyx.com/auth.md
+- OAuth authorization server: https://api.telnyx.com/.well-known/oauth-authorization-server
+- OAuth protected resource: https://api.telnyx.com/.well-known/oauth-protected-resource
+- MCP resource metadata: https://api.telnyx.com/.well-known/oauth-protected-resource/v2/mcp
+- MCP server card: https://telnyx.com/.well-known/mcp/server-card.json
+- MCP endpoint: https://api.telnyx.com/v2/mcp
+- MCP Apps registry: https://developers.telnyx.com/.well-known/mcp-app-registry.json
+- MCP Apps registry alias: https://developers.telnyx.com/.well-known/mcp-apps.json
+- MCP Apps catalog: https://developers.telnyx.com/apps
+- MCP Apps proof app: https://developers.telnyx.com/apps/number-intelligence
+- OpenAPI: https://telnyx.com/.well-known/openapi.json
+- Capabilities: https://telnyx.com/ai/capabilities.json
+- Pricing: https://telnyx.com/ai/pricing.json
+- Webhooks guide: https://telnyx.com/guides/webhooks.md
+- Signup guide: https://telnyx.com/agent-signup.md
+
+Repo mirrors
+- Local manifest mirror: https://telnyx.com/agent.json
+- Runtime instructions: https://telnyx.com/AGENTS.md
+- Auth source: https://telnyx.com/auth.md
+- This file: https://telnyx.com/llms.txt
+
+Recommended path
+1. Start at https://telnyx.com/agents/start
+2. Read https://telnyx.com/auth.md
+3. Use https://telnyx.com/.well-known/agent-access.json if you need onboarding
+4. Use https://api.telnyx.com/v2/mcp for MCP or https://telnyx.com/.well-known/openapi.json for REST discovery
+5. Read https://telnyx.com/guides/webhooks.md before implementing inbound webhook handlers

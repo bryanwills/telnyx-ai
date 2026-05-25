@@ -60,8 +60,11 @@ Run the relevant package's test suite before declaring a task done. Don't run al
 | `cli/`                  | Agent CLI for provisioning Telnyx infrastructure.                         |
 | `inference/`            | Documentation for Telnyx-hosted inference.                                |
 | `guides/`               | Step-by-step operational guides.                                          |
+| `agents/`               | Public agent-entry landing pages such as `/agents/start`.                 |
 | `scripts/sync-skills.sh`| Syncs `skills/` → `providers/{claude,cursor}/plugin/skills/`.             |
 | `agent.json`            | Top-level agent manifest (capabilities, auth, endpoints).                 |
+| `auth.md`               | Public bearer-auth and protected-resource discovery walkthrough.          |
+| `llms.txt`              | LLM-oriented discovery index for the public agent surfaces.              |
 | `.claude-plugin/`       | Claude Code marketplace metadata.                                         |
 | `.cursor-plugin/`       | Cursor marketplace metadata.                                              |
 | `gemini-extension.json` | Gemini CLI extension manifest.                                            |
@@ -120,8 +123,9 @@ If you are an AI agent **using** Telnyx (not modifying this repo), the entry poi
 ### Auth (for runtime consumers)
 
 - **API keys**: Bearer token, `Authorization: Bearer <key>`. Get one via the portal or programmatically via `https://telnyx.com/agent-signup.md`.
-- **OAuth**: Metadata at `https://telnyx.com/.well-known/oauth-authorization-server`.
+- **OAuth**: Metadata at `https://api.telnyx.com/.well-known/oauth-authorization-server`.
 - **MCP**: Bearer auth against `https://api.telnyx.com/v2/mcp`. Card at `https://telnyx.com/.well-known/mcp/server-card.json`.
+- **Auth discovery**: Start at `https://telnyx.com/auth.md`, then follow `https://api.telnyx.com/.well-known/oauth-protected-resource` or the MCP-specific `https://api.telnyx.com/.well-known/oauth-protected-resource/v2/mcp`.
 
 See `agent.json` (`auth` block) for the canonical auth contract.
 
@@ -133,9 +137,18 @@ See `agent.json` (`auth` block) for the canonical auth contract.
 | Agent manifest                                   | `https://telnyx.com/.well-known/agent-card.json`          |
 | Agent access (signup contract)                   | `https://telnyx.com/.well-known/agent-access.json`        |
 | Agent skills index                               | `https://telnyx.com/.well-known/agent-skills/index.json`  |
+| Runtime agent contract                           | `https://telnyx.com/AGENTS.md`                            |
+| Auth guide                                       | `https://telnyx.com/auth.md`                              |
+| LLM index                                        | `https://telnyx.com/llms.txt`                             |
+| OAuth authorization server                       | `https://api.telnyx.com/.well-known/oauth-authorization-server` |
+| OAuth protected resource                         | `https://api.telnyx.com/.well-known/oauth-protected-resource` |
+| MCP resource metadata                            | `https://api.telnyx.com/.well-known/oauth-protected-resource/v2/mcp` |
 | MCP server card                                  | `https://telnyx.com/.well-known/mcp/server-card.json`     |
+| MCP Apps registry                                | `https://developers.telnyx.com/.well-known/mcp-app-registry.json` |
+| MCP Apps registry alias                          | `https://developers.telnyx.com/.well-known/mcp-apps.json` |
+| MCP Apps catalog                                 | `https://developers.telnyx.com/apps`                      |
+| MCP Apps proof app                               | `https://developers.telnyx.com/apps/number-intelligence`  |
 | OpenAPI spec                                     | `https://telnyx.com/.well-known/openapi.json`             |
-| llms.txt                                         | `https://telnyx.com/llms.txt`                             |
 | Capability index                                 | `https://telnyx.com/ai/capabilities.json`                 |
 | Pricing                                          | `https://telnyx.com/ai/pricing.json`                      |
 | Webhooks guide                                   | `/guides/webhooks.md`                                     |
