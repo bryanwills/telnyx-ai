@@ -38,7 +38,7 @@
     "openapi_url": "https://telnyx.com/.well-known/openapi.json",
     "capabilities_url": "https://telnyx.com/ai/capabilities.json",
     "pricing_url": "https://telnyx.com/ai/pricing.json",
-    "webhooks_guide": "/guides/webhooks.md"
+    "webhooks_guide": "https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks"
   },
 
   "capabilities": [
@@ -159,7 +159,7 @@
       "id": "webhooks",
       "name": "Webhooks",
       "description": "Real-time event notifications for messaging, voice, and account events.",
-      "guide": "/guides/webhooks.md",
+      "guide": "https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks",
       "api": "GET /v2/webhook_deliveries",
       "docs": "https://developers.telnyx.com/docs/webhooks",
       "requires": []
@@ -326,7 +326,7 @@
     "capabilities": "https://telnyx.com/ai/capabilities.json",
     "status": "https://status.telnyx.com",
     "pricing": "https://telnyx.com/ai/pricing.json",
-    "webhooks_guide": "/guides/webhooks.md",
+    "webhooks_guide": "https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks",
     "support": "https://support.telnyx.com",
     "github": "https://github.com/team-telnyx"
   }

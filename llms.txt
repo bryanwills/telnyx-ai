@@ -18,7 +18,7 @@ Core discovery surfaces
 - OpenAPI: https://telnyx.com/.well-known/openapi.json
 - Capabilities: https://telnyx.com/ai/capabilities.json
 - Pricing: https://telnyx.com/ai/pricing.json
-- Webhooks guide: https://telnyx.com/guides/webhooks.md
+- Telnyx webhooks guide: https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks
 - Signup guide: https://telnyx.com/agent-signup.md
 
 Repo mirrors
@@ -32,4 +32,4 @@ Recommended path
 2. Read https://telnyx.com/auth.md
 3. Use https://telnyx.com/.well-known/agent-access.json if you need onboarding
 4. Use https://api.telnyx.com/v2/mcp for MCP or https://telnyx.com/.well-known/openapi.json for REST discovery
-5. Read https://telnyx.com/guides/webhooks.md before implementing inbound webhook handlers
+5. Read https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks before implementing inbound webhook handlers

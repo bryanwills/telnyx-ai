@@ -47,7 +47,7 @@ The repo-owned source mirrors for that public path live in [`agents/start.md`](/
 | OpenAPI spec | `https://telnyx.com/.well-known/openapi.json` | Machine-readable API surface |
 | Capability index | `https://telnyx.com/ai/capabilities.json` | Machine-readable capability map |
 | Pricing | `https://telnyx.com/ai/pricing.json` | Machine-readable pricing surface |
-| Webhooks guide | [`/guides/webhooks.md`](/guides/webhooks.md) | Webhook configuration, signature verification, and delivery debugging |
+| Telnyx webhooks guide | `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` | Live webhook configuration, signature verification, payload structure, and delivery debugging |
 | Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic API-key signup for agents |
 
 ## Plugins

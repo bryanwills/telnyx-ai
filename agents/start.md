@@ -25,7 +25,7 @@ This page is the single public entrypoint for the agent-facing Telnyx surfaces t
 | OpenAPI spec | `https://telnyx.com/.well-known/openapi.json` | Machine-readable REST surface |
 | Capability index | `https://telnyx.com/ai/capabilities.json` | Machine-readable capability catalog |
 | Pricing | `https://telnyx.com/ai/pricing.json` | Machine-readable pricing surface |
-| Webhooks guide | `https://telnyx.com/guides/webhooks.md` | Webhook configuration, signature verification, and delivery debugging |
+| Telnyx webhooks guide | `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` | Live Telnyx webhooks documentation for setup, signature verification, payloads, and retry behavior |
 | Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic API-key signup flow |
 
 ## Repo-owned mirrors and operating files
@@ -37,7 +37,10 @@ This page is the single public entrypoint for the agent-facing Telnyx surfaces t
 
 ## Webhook discoverability
 
-If your workflow receives events, read the Webhooks guide first: [`/guides/webhooks.md`](/guides/webhooks.md).
+If your workflow receives events, read the live Telnyx webhooks guide first:
+`https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks`
+
+Repo mirror source: [`/guides/webhooks.md`](/guides/webhooks.md)
 
 That guide is the crawlable named entrypoint for:
 
@@ -53,4 +56,4 @@ That guide is the crawlable named entrypoint for:
 3. Fetch `https://telnyx.com/.well-known/agent-access.json` if you need onboarding.
 4. Fetch `https://telnyx.com/.well-known/agent-card.json` or local `/agent.json` for the capability map.
 5. Use `https://api.telnyx.com/v2/mcp` or `https://telnyx.com/.well-known/openapi.json` depending on whether you need MCP or REST.
-6. Read `https://telnyx.com/guides/webhooks.md` before building inbound event handlers.
+6. Read `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` before building inbound event handlers.

@@ -16,6 +16,7 @@ export interface DiscoveryVerificationReport {
 
 const JSONRPC_VERSION = "2.0";
 const MCP_PROTOCOL_VERSION = "2025-06-18";
+const LIVE_WEBHOOKS_URL = "https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks";
 
 export function checkAuthMd(body: string, status: number): DiscoveryProbe {
   const urls = [
@@ -62,8 +63,57 @@ export function checkWwwAuthenticate(status: number, header: string | null): Dis
   };
 }
 
+export function checkWebhookDiscoverability(status: number, body: string): DiscoveryProbe {
+  const requiredSnippets = ["Telnyx webhooks", LIVE_WEBHOOKS_URL];
+  const missing = requiredSnippets.filter((snippet) => !body.includes(snippet));
+
+  return {
+    name: "root llms.txt webhook discoverability",
+    method: "GET",
+    url: "https://telnyx.com/llms.txt",
+    ok: status === 200 && missing.length === 0,
+    status,
+    details: missing.length === 0
+      ? "llms.txt linked the live Telnyx webhooks guide with explicit webhook wording"
+      : `llms.txt missing: ${missing.join(", ")}`,
+    bodyExcerpt: body.slice(0, 240)
+  };
+}
+
+export function checkWebhookGuideUrl(status: number, url: string): DiscoveryProbe {
+  return {
+    name: "live Telnyx webhooks guide",
+    method: "GET",
+    url,
+    ok: status === 200,
+    status,
+    details: status === 200
+      ? "webhook guide resolved successfully"
+      : `expected 200 from live webhook guide but received ${status}`
+  };
+}
+
 export async function verifyLiveAgentDiscovery(): Promise<DiscoveryVerificationReport> {
   const probes: DiscoveryProbe[] = [];
+
+  const agentsStart = await fetchJson("https://telnyx.com/agents/start");
+  probes.push(checkJsonDocument(
+    "agent fast path webhook discoverability",
+    "GET",
+    "https://telnyx.com/agents/start",
+    agentsStart.status,
+    agentsStart.body,
+    (body) => JSON.stringify(body).includes(LIVE_WEBHOOKS_URL),
+    "agent fast path linked the live Telnyx webhooks guide",
+    "agent fast path did not link the live Telnyx webhooks guide"
+  ));
+
+  const llmsTxtResponse = await fetch("https://telnyx.com/llms.txt");
+  const llmsTxtBody = await llmsTxtResponse.text();
+  probes.push(checkWebhookDiscoverability(llmsTxtResponse.status, llmsTxtBody));
+
+  const webhookGuide = await fetch(LIVE_WEBHOOKS_URL);
+  probes.push(checkWebhookGuideUrl(webhookGuide.status, LIVE_WEBHOOKS_URL));
 
   const authMdResponse = await fetch("https://telnyx.com/auth.md");
   const authMdBody = await authMdResponse.text();

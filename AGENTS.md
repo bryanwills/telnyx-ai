@@ -151,7 +151,7 @@ See `agent.json` (`auth` block) for the canonical auth contract.
 | OpenAPI spec                                     | `https://telnyx.com/.well-known/openapi.json`             |
 | Capability index                                 | `https://telnyx.com/ai/capabilities.json`                 |
 | Pricing                                          | `https://telnyx.com/ai/pricing.json`                      |
-| Webhooks guide                                   | `/guides/webhooks.md`                                     |
+| Telnyx webhooks guide                           | `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` |
 
 ---
 
