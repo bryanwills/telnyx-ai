@@ -37,7 +37,7 @@ const canonicalDiscovery = {
   openapi_url: "https://telnyx.com/.well-known/openapi.json",
   capabilities_url: "https://telnyx.com/ai/capabilities.json",
   pricing_url: "https://telnyx.com/ai/pricing.json",
-  webhooks_guide: "/guides/webhooks.md",
+  webhooks_guide: "https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks",
 } as const;
 
 describe("agent discovery surfaces", () => {
@@ -93,12 +93,22 @@ describe("agent discovery surfaces", () => {
     for (const value of [
       ...Object.values(canonicalDiscovery),
       "/agent.json",
-      "/guides/webhooks.md"
+      "/guides/webhooks.md",
+      "/tools/python/examples"
     ]) {
       assert.match(AGENTS_START, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
 
-    for (const term of ["Webhooks guide", "Webhook discoverability", "signature verification"]) {
+    for (const term of [
+      "Telnyx webhooks guide",
+      "signature verification",
+      "What agents can do with Telnyx",
+      "Frequently asked questions",
+      "application/ld+json",
+      "\"@type\": \"Article\"",
+      "\"@type\": \"FAQPage\"",
+      "governed examples"
+    ]) {
       assert.match(AGENTS_START, new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
   });
@@ -112,15 +122,26 @@ describe("agent discovery surfaces", () => {
       canonicalDiscovery.llms_txt_url,
       canonicalDiscovery.openapi_url,
       canonicalDiscovery.mcp_url,
-      "https://telnyx.com/guides/webhooks.md",
-      canonicalDiscovery.agents_md_url
+      canonicalDiscovery.webhooks_guide,
+      canonicalDiscovery.agents_md_url,
+      "https://github.com/team-telnyx/ai/tree/main/tools/python/examples"
     ]) {
       assert.match(LLMS, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    }
+
+    for (const term of [
+      "Summary",
+      "What an agent should learn first",
+      "How to choose a surface",
+      "Governed examples",
+      "without JavaScript"
+    ]) {
+      assert.match(LLMS, new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
   });
 
   it("README.md explicitly names auth, MCP Apps, OpenAPI, MCP, pricing, and webhooks in the discovery section", () => {
-    for (const term of ["Auth guide", "OAuth authorization server", "OAuth protected resource", "MCP resource metadata", "MCP Apps registry", "MCP Apps catalog", "OpenAPI spec", "MCP server card", "Pricing", "Webhooks guide"]) {
+    for (const term of ["Auth guide", "OAuth authorization server", "OAuth protected resource", "MCP resource metadata", "MCP Apps registry", "MCP Apps catalog", "OpenAPI spec", "MCP server card", "Pricing", "Telnyx webhooks guide"]) {
       assert.match(README, new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
   });

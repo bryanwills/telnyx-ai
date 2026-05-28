@@ -1,6 +1,15 @@
 Telnyx AI
 Primary agent entrypoint: https://telnyx.com/agents/start
 
+Summary
+Telnyx is a communications and AI infrastructure platform for agents that need programmable voice, messaging, phone numbers, SIP trunking, inference, webhook delivery, and MCP access. This file is the text-first retrieval index for the stable agent-consumption artifacts that should be visible without JavaScript.
+
+What an agent should learn first
+- Telnyx exposes both direct REST discovery and MCP discovery.
+- The stable auth contract lives in the public auth and protected-resource documents.
+- Webhook setup, signature verification, and retry behavior have an explicit public guide.
+- Governed examples exist for agents that should not begin with broad raw-tool access.
+
 Core discovery surfaces
 - Agent manifest: https://telnyx.com/.well-known/agent-card.json
 - Agent access: https://telnyx.com/.well-known/agent-access.json
@@ -21,11 +30,18 @@ Core discovery surfaces
 - Telnyx webhooks guide: https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks
 - Signup guide: https://telnyx.com/agent-signup.md
 
-Repo mirrors
-- Local manifest mirror: https://telnyx.com/agent.json
+How to choose a surface
+- Use https://api.telnyx.com/v2/mcp when the agent already speaks MCP and should discover tools dynamically.
+- Use https://telnyx.com/.well-known/openapi.json when the workflow needs endpoint-level REST exploration or code generation.
+- Use https://developers.telnyx.com/apps when the workflow should stay on a focused, governed MCP App with narrower tool exposure.
+- Read https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks before implementing inbound webhook handlers or retry logic.
+
+Governed examples
+- OpenAI, LangChain, and CrewAI governed examples: https://github.com/team-telnyx/ai/tree/main/tools/python/examples
 - Runtime instructions: https://telnyx.com/AGENTS.md
 - Auth source: https://telnyx.com/auth.md
 - This file: https://telnyx.com/llms.txt
+- Local manifest mirror: https://telnyx.com/agent.json
 
 Recommended path
 1. Start at https://telnyx.com/agents/start
@@ -33,3 +49,4 @@ Recommended path
 3. Use https://telnyx.com/.well-known/agent-access.json for the demo-first path and current signup contract
 4. Use https://api.telnyx.com/v2/mcp for MCP or https://telnyx.com/.well-known/openapi.json for REST discovery
 5. Read https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks before implementing inbound webhook handlers
+6. Review https://github.com/team-telnyx/ai/tree/main/tools/python/examples when you need governed examples instead of broad raw-tool access
