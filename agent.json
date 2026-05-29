@@ -132,6 +132,21 @@
       }
     },
     {
+      "id": "ai_receptionist_missed_call",
+      "name": "AI Receptionist Missed-Call Capture",
+      "description": "Run a bounded SMB inbound workflow that answers with a Telnyx AI receptionist, transfers live callers when possible, and captures callback requests with SMS follow-up when the call cannot be completed live.",
+      "guide": "/guides/ai-receptionist-missed-call.md",
+      "api": "POST /v2/ai/assistants",
+      "docs": "https://developers.telnyx.com/docs/ai/assistants",
+      "requires": ["ai_assistants", "voice", "messaging", "webhooks"],
+      "governance": {
+        "risk_class": "guarded_write",
+        "approval_expectation": "confirm_before_external_effect",
+        "memory_scope": "customer_configured",
+        "model_behavior": "customer_configured"
+      }
+    },
+    {
       "id": "ai_inference",
       "name": "AI Inference",
       "description": "LLM chat completions and embeddings via OpenAI-compatible API.",

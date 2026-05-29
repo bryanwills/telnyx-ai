@@ -195,6 +195,7 @@ For assistant-first discovery, use the CLI as the bootstrap path and the guides 
 
 - [`/guides/ai-assistants.md`](/guides/ai-assistants.md) shows the current Telnyx-hosted OpenAI assistant examples with `openai/gpt-5.4`.
 - [`/guides/voice-agent-onboarding.md`](/guides/voice-agent-onboarding.md) shows the first live voice-agent path, including the assistant answer webhook.
+- [`/guides/ai-receptionist-missed-call.md`](/guides/ai-receptionist-missed-call.md) shows a bounded SMB receptionist flow for missed-call capture, live transfer, and SMS callback confirmation.
 - `telnyx-agent setup-ai` stays bootstrap-oriented in the README because the CLI should optimize for a working account-level setup, not silently promise that one hosted model is available on every account.
 
 See [Agent CLI](/cli)
@@ -251,6 +252,8 @@ Curl-first operational guides for common Telnyx workflows — SMS messaging, voi
 For current assistant examples, start with [AI Voice Assistants](/guides/ai-assistants.md). That guide uses `openai/gpt-5.4` in the hosted OpenAI assistant examples and links directly into the first-call voice bootstrap path.
 
 For the first live Telnyx voice-agent evaluation path, start with [Production Voice-Agent Onboarding](/guides/voice-agent-onboarding.md).
+
+For a production-shaped but still bounded inbound workflow, use [AI Receptionist Missed-Call Capture](/guides/ai-receptionist-missed-call.md).
 
 For Edge Compute specifically, the goal is to make the handoff testable fast: start from a real `telnyx-edge` example, deploy it, and let `team-telnyx/ai` orchestrate against that live endpoint.
 

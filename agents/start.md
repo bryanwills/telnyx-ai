@@ -88,6 +88,7 @@ When the workflow is specifically "build or evaluate a Telnyx voice assistant", 
 
 - [`/guides/ai-assistants.md`](/guides/ai-assistants.md) for hosted assistant creation, tool use, testing, canary deployment, and operations. The first-run hosted OpenAI examples use `openai/gpt-5.4`.
 - [`/guides/voice-agent-onboarding.md`](/guides/voice-agent-onboarding.md) for the first live answer-webhook path, conversation capture, and Voice Monitor debugging.
+- [`/guides/ai-receptionist-missed-call.md`](/guides/ai-receptionist-missed-call.md) for a bounded SMB receptionist flow that captures callback requests, transfers live callers when possible, and confirms missed calls by SMS.
 
 ## Repo-owned mirrors and operating files
 
