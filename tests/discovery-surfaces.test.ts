@@ -41,6 +41,30 @@ const canonicalDiscovery = {
 } as const;
 
 describe("agent discovery surfaces", () => {
+  it("agent.json publishes a governed-execution legend", () => {
+    assert.deepEqual(agentJson.governed_execution.fields, [
+      "risk_class",
+      "approval_expectation",
+      "memory_scope",
+      "model_behavior"
+    ]);
+    assert.deepEqual(Object.keys(agentJson.governed_execution.risk_classes), [
+      "read_only",
+      "guarded_write",
+      "live_write"
+    ]);
+  });
+
+  it("every agent capability exposes governed-execution metadata", () => {
+    for (const capability of agentJson.capabilities) {
+      assert.ok(capability.governance, `${capability.id} missing governance`);
+      assert.match(capability.governance.risk_class, /^(read_only|guarded_write|live_write)$/);
+      assert.match(capability.governance.approval_expectation, /^(none|confirm_before_mutation|confirm_before_external_effect)$/);
+      assert.match(capability.governance.memory_scope, /^(stateless|host_controlled|customer_configured|app_scoped)$/);
+      assert.match(capability.governance.model_behavior, /^(host_controlled|request_selected|customer_configured|app_defined)$/);
+    }
+  });
+
   it("agent.json exposes the canonical discovery map", () => {
     assert.deepEqual(agentJson.discovery, canonicalDiscovery);
   });
@@ -106,6 +130,14 @@ describe("agent discovery surfaces", () => {
       "signature verification",
       "What agents can do with Telnyx",
       "Frequently asked questions",
+      "Governed execution metadata",
+      "risk_class",
+      "approval_expectation",
+      "memory_scope",
+      "model_behavior",
+      "read_only",
+      "guarded_write",
+      "live_write",
       "application/ld+json",
       "\"@type\": \"Article\"",
       "\"@type\": \"FAQPage\"",

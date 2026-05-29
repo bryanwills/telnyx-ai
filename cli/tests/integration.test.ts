@@ -31,6 +31,7 @@ describe("telnyx-agent CLI", () => {
       assert.ok(output.includes("Messaging"), "Should list Messaging category");
       assert.ok(output.includes("Voice"), "Should list Voice category");
       assert.ok(output.includes("AI"), "Should list AI category");
+      assert.ok(output.includes("Governance: risk="), "Should surface governed execution metadata");
     });
 
     it("outputs JSON capabilities", () => {
@@ -40,6 +41,9 @@ describe("telnyx-agent CLI", () => {
       assert.ok(data.composite_commands, "Should have composite_commands");
       assert.ok(typeof data.total_tools === "number", "Should have total_tools count");
       assert.ok(data.total_tools >= 18, "Should have at least 18 tools");
+      const firstCategory = Object.values(data.api_capabilities)[0] as Array<Record<string, unknown>>;
+      assert.ok(firstCategory[0].governance, "Capability should have governance metadata");
+      assert.ok((data.composite_commands[0] as Record<string, unknown>).governance, "Composite command should have governance metadata");
     });
   });
 

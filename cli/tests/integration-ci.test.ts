@@ -145,7 +145,27 @@ describe("CLI — capabilities", () => {
       for (const cap of caps) {
         assert.ok(cap.name, `Capability in ${catName} missing name`);
         assert.ok(Array.isArray(cap.actions), `Capability ${cap.name} missing actions array`);
+        assert.ok(cap.governance, `Capability ${cap.name} missing governance`);
       }
+    }
+  });
+
+  it("capabilities and composite commands expose governed-execution metadata", () => {
+    const data = runJson("capabilities --json");
+    for (const caps of Object.values(data.api_capabilities || {}) as any[]) {
+      for (const cap of caps) {
+        assert.ok(cap.governance.risk_class);
+        assert.ok(cap.governance.approval_expectation);
+        assert.ok(cap.governance.memory_scope);
+        assert.ok(cap.governance.model_behavior);
+      }
+    }
+
+    for (const command of data.composite_commands) {
+      assert.ok(command.governance.risk_class);
+      assert.ok(command.governance.approval_expectation);
+      assert.ok(command.governance.memory_scope);
+      assert.ok(command.governance.model_behavior);
     }
   });
 
@@ -171,6 +191,7 @@ describe("CLI — capabilities", () => {
       out.includes("Voice") || out.includes("voice"),
       "Missing voice category"
     );
+    assert.ok(out.includes("Governance: risk="), "Missing governance legend in human output");
   });
 });
 

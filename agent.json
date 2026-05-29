@@ -41,6 +41,33 @@
     "webhooks_guide": "https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks"
   },
 
+  "governed_execution": {
+    "schema_version": "2026-05-29",
+    "fields": ["risk_class", "approval_expectation", "memory_scope", "model_behavior"],
+    "risk_classes": {
+      "read_only": "Discovery or inspection only. No account mutation or external side effect is expected.",
+      "guarded_write": "Billed execution or account-scoped mutation may occur. Confirm intent before mutating state.",
+      "live_write": "Can send traffic, move money, provision resources, or change regulated production state. Explicit approval is expected before execution."
+    },
+    "approval_expectations": {
+      "none": "No extra approval is expected beyond normal caller authorization.",
+      "confirm_before_mutation": "Obtain human or policy confirmation before any state-changing or billed execution.",
+      "confirm_before_external_effect": "Obtain explicit human or policy approval before sending traffic, spending funds, or provisioning live resources."
+    },
+    "memory_scopes": {
+      "stateless": "The surface does not retain conversation state unless the caller supplies it.",
+      "host_controlled": "Persistence, if any, is owned by Telnyx or the host system rather than the model runtime.",
+      "customer_configured": "The customer configures the memory or conversation-retention behavior for this capability.",
+      "app_scoped": "State is bounded to the MCP app or workflow contract rather than the full Telnyx account surface."
+    },
+    "model_behaviors": {
+      "host_controlled": "No model behavior is exposed at this discovery layer, or execution is not model-driven.",
+      "request_selected": "The caller chooses the model at request time.",
+      "customer_configured": "The customer selects and configures the model during resource setup.",
+      "app_defined": "Model behavior is constrained by the governed app or workflow surface."
+    }
+  },
+
   "capabilities": [
     {
       "id": "messaging",
@@ -50,7 +77,13 @@
       "cli": "telnyx message send --from +15551234567 --to +15559876543 --text 'Hello'",
       "api": "POST /v2/messages",
       "docs": "https://developers.telnyx.com/docs/messaging",
-      "requires": ["messaging_profile", "phone_number", "10dlc_registration"]
+      "requires": ["messaging_profile", "phone_number", "10dlc_registration"],
+      "governance": {
+        "risk_class": "live_write",
+        "approval_expectation": "confirm_before_external_effect",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
     },
     {
       "id": "voice",
@@ -60,7 +93,13 @@
       "cli": "telnyx call dial --from +15551234567 --to +15559876543",
       "api": "POST /v2/calls",
       "docs": "https://developers.telnyx.com/docs/voice",
-      "requires": ["voice_connection", "phone_number"]
+      "requires": ["voice_connection", "phone_number"],
+      "governance": {
+        "risk_class": "live_write",
+        "approval_expectation": "confirm_before_external_effect",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
     },
     {
       "id": "ai_assistants",
@@ -70,7 +109,13 @@
       "cli": "telnyx assistant create --name 'Support Bot'",
       "api": "POST /v2/ai/assistants",
       "docs": "https://developers.telnyx.com/docs/ai/assistants",
-      "requires": ["phone_number"]
+      "requires": ["phone_number"],
+      "governance": {
+        "risk_class": "live_write",
+        "approval_expectation": "confirm_before_external_effect",
+        "memory_scope": "customer_configured",
+        "model_behavior": "customer_configured"
+      }
     },
     {
       "id": "voice_agent_onboarding",
@@ -78,7 +123,13 @@
       "description": "Follow the paved-road first-evaluation flow for Telnyx voice agents, including assistant answer webhook wiring, conversation tracking, message history reuse, and Voice Monitor debugging.",
       "guide": "/guides/voice-agent-onboarding.md",
       "api": "POST /v2/ai/assistants",
-      "requires": ["ai_assistants", "voice", "webhooks"]
+      "requires": ["ai_assistants", "voice", "webhooks"],
+      "governance": {
+        "risk_class": "guarded_write",
+        "approval_expectation": "confirm_before_mutation",
+        "memory_scope": "customer_configured",
+        "model_behavior": "customer_configured"
+      }
     },
     {
       "id": "ai_inference",
@@ -87,7 +138,13 @@
       "cli": "telnyx ai chat 'Hello'",
       "api": "POST /v2/ai/chat/completions",
       "docs": "https://developers.telnyx.com/docs/ai/inference",
-      "requires": []
+      "requires": [],
+      "governance": {
+        "risk_class": "guarded_write",
+        "approval_expectation": "confirm_before_mutation",
+        "memory_scope": "stateless",
+        "model_behavior": "request_selected"
+      }
     },
     {
       "id": "numbers",
@@ -97,7 +154,13 @@
       "cli": "telnyx number search --country US --json",
       "api": "GET /v2/available_phone_numbers",
       "docs": "https://developers.telnyx.com/docs/numbers",
-      "requires": []
+      "requires": [],
+      "governance": {
+        "risk_class": "live_write",
+        "approval_expectation": "confirm_before_external_effect",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
     },
     {
       "id": "verify",
@@ -107,7 +170,13 @@
       "cli": "telnyx verify send --phone-number +15551234567",
       "api": "POST /v2/verifications",
       "docs": "https://developers.telnyx.com/docs/verify",
-      "requires": ["verify_profile"]
+      "requires": ["verify_profile"],
+      "governance": {
+        "risk_class": "live_write",
+        "approval_expectation": "confirm_before_external_effect",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
     },
     {
       "id": "fax",
@@ -116,7 +185,13 @@
       "cli": "telnyx fax send --to +15551234567 --media-url https://example.com/doc.pdf",
       "api": "POST /v2/faxes",
       "docs": "https://developers.telnyx.com/docs/fax",
-      "requires": ["phone_number"]
+      "requires": ["phone_number"],
+      "governance": {
+        "risk_class": "live_write",
+        "approval_expectation": "confirm_before_external_effect",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
     },
     {
       "id": "iot",
@@ -125,7 +200,13 @@
       "cli": "telnyx sim list --json",
       "api": "GET /v2/sim_cards",
       "docs": "https://developers.telnyx.com/docs/wireless",
-      "requires": []
+      "requires": [],
+      "governance": {
+        "risk_class": "guarded_write",
+        "approval_expectation": "confirm_before_mutation",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
     },
     {
       "id": "storage",
@@ -134,7 +215,13 @@
       "cli": "telnyx storage bucket create --name my-bucket",
       "api": "POST /v2/storage/buckets",
       "docs": "https://developers.telnyx.com/docs/storage",
-      "requires": []
+      "requires": [],
+      "governance": {
+        "risk_class": "live_write",
+        "approval_expectation": "confirm_before_external_effect",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
     },
     {
       "id": "networking",
@@ -143,7 +230,13 @@
       "guide": "/guides/wireguard-networking.md",
       "api": "POST /v2/networks",
       "docs": "https://developers.telnyx.com/docs/networking",
-      "requires": []
+      "requires": [],
+      "governance": {
+        "risk_class": "live_write",
+        "approval_expectation": "confirm_before_external_effect",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
     },
     {
       "id": "mcp_apps",
@@ -152,7 +245,13 @@
       "guide": "/tools/mcp-apps/README.md",
       "api": "GET https://developers.telnyx.com/.well-known/mcp-app-registry.json",
       "docs": "https://developers.telnyx.com/apps",
-      "requires": ["api_key"]
+      "requires": ["api_key"],
+      "governance": {
+        "risk_class": "read_only",
+        "approval_expectation": "none",
+        "memory_scope": "app_scoped",
+        "model_behavior": "app_defined"
+      }
     },
     {
       "id": "edge_compute",
@@ -161,7 +260,13 @@
       "guide": "/guides/edge-compute.md",
       "cli": "telnyx-edge ship",
       "docs": "https://developers.telnyx.com/docs/edge-compute",
-      "requires": []
+      "requires": [],
+      "governance": {
+        "risk_class": "live_write",
+        "approval_expectation": "confirm_before_external_effect",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
     },
     {
       "id": "webhooks",
@@ -170,7 +275,13 @@
       "guide": "https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks",
       "api": "GET /v2/webhook_deliveries",
       "docs": "https://developers.telnyx.com/docs/webhooks",
-      "requires": []
+      "requires": [],
+      "governance": {
+        "risk_class": "guarded_write",
+        "approval_expectation": "confirm_before_mutation",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
     },
     {
       "id": "10dlc",
@@ -180,7 +291,13 @@
       "cli": "telnyx 10dlc wizard",
       "api": "POST /v2/10dlc/brand",
       "docs": "https://developers.telnyx.com/docs/messaging/10dlc",
-      "requires": []
+      "requires": [],
+      "governance": {
+        "risk_class": "live_write",
+        "approval_expectation": "confirm_before_external_effect",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
     },
     {
       "id": "payments",
@@ -189,7 +306,13 @@
       "guide": "/guides/x402-payments.md",
       "api": "POST /v2/x402/credit_account/quote",
       "docs": "https://developers.telnyx.com/docs/account/billing",
-      "requires": []
+      "requires": [],
+      "governance": {
+        "risk_class": "live_write",
+        "approval_expectation": "confirm_before_external_effect",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
     },
     {
       "id": "porting",
@@ -199,7 +322,13 @@
       "cli": "telnyx-agent setup-porting --phone-numbers +13125550001,+13125550002 --customer-name 'Acme Corp'",
       "api": "POST /v2/porting_orders",
       "docs": "https://developers.telnyx.com/docs/porting",
-      "requires": []
+      "requires": [],
+      "governance": {
+        "risk_class": "live_write",
+        "approval_expectation": "confirm_before_external_effect",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
     }
   ],
 

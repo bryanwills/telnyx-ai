@@ -28,6 +28,8 @@ Start agent discovery at `https://telnyx.com/agents/start`. The surfaces below a
 
 The repo-owned source mirrors for that public path live in [`agents/start.md`](/agents/start.md), [`agent.json`](/agent.json), [`auth.md`](/auth.md), [`agent-signup.md`](/agent-signup.md), [`/.well-known/agent-access.json`](/.well-known/agent-access.json), [`AGENTS.md`](/AGENTS.md), and [`llms.txt`](/llms.txt). The corresponding public mirrors are `https://telnyx.com/AGENTS.md` and `https://telnyx.com/llms.txt`.
 
+Governed execution metadata is exposed in the canonical manifest and discovery docs using four fields: `risk_class`, `approval_expectation`, `memory_scope`, and `model_behavior`. Risk classes are `read_only`, `guarded_write`, and `live_write`; side-effecting flows should be confirmed before mutation and explicitly approved before external effects, production provisioning, or spending.
+
 | Surface | URL | What it is for |
 | --- | --- | --- |
 | Agent fast path | `https://telnyx.com/agents/start` | Primary discovery entry point for runtime agents |

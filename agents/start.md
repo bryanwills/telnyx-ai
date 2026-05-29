@@ -38,6 +38,16 @@ If you only read one page before deciding whether Telnyx fits your agent workflo
 | Telnyx webhooks guide | `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` | Live Telnyx webhooks documentation for setup, signature verification, payloads, and retry behavior |
 | Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic bot-signup walkthrough, including the current email-link limitation |
 
+## Governed execution metadata
+
+The canonical manifest exposes four per-capability governance fields so agents can reason about execution safety before they call anything: `risk_class`, `approval_expectation`, `memory_scope`, and `model_behavior`.
+
+- `read_only` means discovery or inspection only.
+- `guarded_write` means billed execution or account mutation can happen and intent should be confirmed first.
+- `live_write` means traffic, money movement, regulated changes, or live resource provisioning can happen and explicit approval is expected first.
+
+When a capability is not model-driven, `model_behavior` is `host_controlled`. When no conversation retention is implied by the surface itself, `memory_scope` is `stateless` or `host_controlled`.
+
 ## How to choose the right surface
 
 ### Start with discovery and auth
