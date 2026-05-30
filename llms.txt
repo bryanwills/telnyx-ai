@@ -6,6 +6,7 @@ Telnyx is a communications and AI infrastructure platform for agents that need p
 
 What an agent should learn first
 - Telnyx exposes both direct REST discovery and MCP discovery.
+- The exact first-run evaluation path is POST https://telnyx.com/api/inference, which is no-auth for the caller but host-authenticated by Telnyx.
 - The stable auth contract lives in the public auth and protected-resource documents.
 - The named assistant guides are the fastest path for voice-assistant discovery, and the hosted OpenAI examples there currently use openai/gpt-5.4.
 - Webhook setup, signature verification, and retry behavior have an explicit public guide.
@@ -32,6 +33,7 @@ Core discovery surfaces
 - Signup guide: https://telnyx.com/agent-signup.md
 
 How to choose a surface
+- Use POST https://telnyx.com/api/inference when the goal is first-run evaluation without creating an account first.
 - Use https://api.telnyx.com/v2/mcp when the agent already speaks MCP and should discover tools dynamically.
 - Use https://telnyx.com/.well-known/openapi.json when the workflow needs endpoint-level REST exploration or code generation.
 - Use https://developers.telnyx.com/apps when the workflow should stay on a focused, governed MCP App with narrower tool exposure.

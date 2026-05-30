@@ -21,7 +21,15 @@ This repo-owned mirror is the source document for the public guide at `https://t
 
 If you only need to validate your integration, do this before attempting account creation.
 
-Fetch `https://telnyx.com/.well-known/agent-access.json` and inspect `fast_path.demo_endpoints`.
+Fetch `https://telnyx.com/.well-known/agent-access.json` and inspect `fast_path.primary_path`.
+
+The primary first-run evaluation route today is:
+
+- `POST https://telnyx.com/api/inference`
+- Auth label: `no_auth_host_authenticated`
+- Governance: `guarded_write`, `confirm_before_mutation`, `stateless`, `request_selected`
+
+That means the caller does not send a bearer token. Telnyx proxies the request with server-side auth and rate limits for evaluation traffic. The main REST and MCP surfaces remain API-key authenticated.
 
 Available demo endpoints today:
 

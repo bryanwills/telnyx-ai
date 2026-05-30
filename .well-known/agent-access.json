@@ -46,42 +46,61 @@
     ]
   },
   "fast_path": {
-    "description": "Try the API immediately. No signup, API key, or email is required for these demo endpoints. They are proxied through telnyx.com with server-side authentication and rate limits.",
+    "description": "Try the API immediately. The primary first-run evaluation path is a host-authenticated inference request through telnyx.com, so no signup, API key, or email is required. Main REST and MCP surfaces still require a standard Telnyx API key.",
+    "primary_path": {
+      "name": "inference",
+      "method": "POST",
+      "url": "https://telnyx.com/api/inference",
+      "auth_mode": "no_auth_host_authenticated",
+      "governance": {
+        "risk_class": "guarded_write",
+        "approval_expectation": "confirm_before_mutation",
+        "memory_scope": "stateless",
+        "model_behavior": "request_selected"
+      },
+      "note": "Recommended first-run evaluation path. Telnyx applies server-side auth and rate limits on behalf of the caller."
+    },
     "demo_endpoints": [
       {
         "name": "send_sms",
         "method": "POST",
         "url": "https://telnyx.com/api/demo/send-sms",
-        "note": "Send a test SMS. No auth required. Test numbers only."
+        "auth_mode": "no_auth_host_authenticated",
+        "note": "Send a test SMS. No bearer token required. Test numbers only."
       },
       {
         "name": "inference",
         "method": "POST",
         "url": "https://telnyx.com/api/inference",
-        "note": "AI chat completions. No auth required."
+        "auth_mode": "no_auth_host_authenticated",
+        "note": "AI chat completions. No bearer token required."
       },
       {
         "name": "tts_demo",
         "method": "POST",
         "url": "https://telnyx.com/api/tts-demo",
-        "note": "Text-to-speech synthesis. No auth required."
+        "auth_mode": "no_auth_host_authenticated",
+        "note": "Text-to-speech synthesis. No bearer token required."
       },
       {
         "name": "stt_demo",
         "method": "POST",
         "url": "https://telnyx.com/api/stt-demo",
-        "note": "Speech-to-text transcription. No auth required."
+        "auth_mode": "no_auth_host_authenticated",
+        "note": "Speech-to-text transcription. No bearer token required."
       },
       {
         "name": "number_lookup",
         "method": "GET",
         "url": "https://telnyx.com/api/number-lookup",
-        "note": "Carrier lookup. Requires hCaptcha token, so it is not fully autonomous."
+        "auth_mode": "no_auth_hcaptcha_gated",
+        "note": "Carrier lookup. No bearer token required, but it requires hCaptcha so it is not fully autonomous."
       },
       {
         "name": "voice_ai_register_web_caller",
         "method": "POST",
         "url": "https://telnyx.com/api/voice-ai-agent/register-web-caller",
+        "auth_mode": "session_bootstrap",
         "note": "Registers a web caller for the Voice AI demo. Requires session_id and email in the body."
       }
     ],

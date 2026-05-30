@@ -68,6 +68,40 @@
     }
   },
 
+  "first_run_paths": [
+    {
+      "id": "host_authenticated_inference_demo",
+      "name": "Host-Authenticated Inference Demo",
+      "description": "Primary first-run evaluation path for agents that need a no-auth or near-zero-friction Telnyx call before creating an account.",
+      "method": "POST",
+      "url": "https://telnyx.com/api/inference",
+      "auth_mode": "no_auth_host_authenticated",
+      "guide": "https://telnyx.com/agent-signup.md",
+      "docs": "https://telnyx.com/.well-known/agent-access.json",
+      "governance": {
+        "risk_class": "guarded_write",
+        "approval_expectation": "confirm_before_mutation",
+        "memory_scope": "stateless",
+        "model_behavior": "request_selected"
+      }
+    },
+    {
+      "id": "standard_api_key_signup",
+      "name": "Standard API-Key Signup",
+      "description": "Fallback path when the caller needs real account resources such as numbers, messaging profiles, or authenticated MCP access.",
+      "method": "READ",
+      "url": "https://telnyx.com/agent-signup.md",
+      "auth_mode": "api_key_after_email_signup",
+      "docs": "https://telnyx.com/auth.md",
+      "governance": {
+        "risk_class": "read_only",
+        "approval_expectation": "none",
+        "memory_scope": "host_controlled",
+        "model_behavior": "host_controlled"
+      }
+    }
+  ],
+
   "capabilities": [
     {
       "id": "messaging",
@@ -379,6 +413,11 @@
   },
 
   "quickstart": {
+    "first_run": {
+      "entry": "curl -s https://telnyx.com/.well-known/agent-access.json | jq '.fast_path.primary_path'",
+      "auth_label": "POST https://telnyx.com/api/inference is the primary no-auth, host-authenticated first-run path.",
+      "fallback": "Use https://telnyx.com/agent-signup.md when you need an API key for the main REST or MCP surfaces."
+    },
     "signup": "curl -s https://telnyx.com/agent-signup.md",
     "signup_guide": "https://telnyx.com/agent-signup.md",
     "install": "npm install -g @telnyx/api-cli",

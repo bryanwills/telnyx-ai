@@ -30,6 +30,8 @@ The repo-owned source mirrors for that public path live in [`agents/start.md`](/
 
 Governed execution metadata is exposed in the canonical manifest and discovery docs using four fields: `risk_class`, `approval_expectation`, `memory_scope`, and `model_behavior`. Risk classes are `read_only`, `guarded_write`, and `live_write`; side-effecting flows should be confirmed before mutation and explicitly approved before external effects, production provisioning, or spending.
 
+For first-run evaluation, use `POST https://telnyx.com/api/inference` first. That path is `no-auth, host-authenticated`: the caller does not send a bearer token, Telnyx applies server-side auth and rate limits, and the governed-execution shape is `guarded_write`, `confirm_before_mutation`, `stateless`, `request_selected`. The main REST surface at `https://api.telnyx.com/v2` and MCP surface at `https://api.telnyx.com/v2/mcp` remain standard API-key-authenticated paths.
+
 | Surface | URL | What it is for |
 | --- | --- | --- |
 | Agent fast path | `https://telnyx.com/agents/start` | Primary discovery entry point for runtime agents |
@@ -51,6 +53,8 @@ Governed execution metadata is exposed in the canonical manifest and discovery d
 | Pricing | `https://telnyx.com/ai/pricing.json` | Machine-readable pricing surface |
 | Telnyx webhooks guide | `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` | Live webhook configuration, signature verification, payload structure, and delivery debugging |
 | Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic bot-signup walkthrough, including the current email-link limitation |
+
+If you need exact first-run path metadata instead of the broader manifest, fetch `https://telnyx.com/.well-known/agent-access.json` and inspect `fast_path.primary_path`.
 
 ## Plugins
 

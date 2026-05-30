@@ -59,7 +59,8 @@ Choose one of these paths:
 Use it directly.
 
 2. You need a zero-auth evaluation path.
-Fetch `https://telnyx.com/.well-known/agent-access.json` and start with `fast_path.demo_endpoints`.
+Fetch `https://telnyx.com/.well-known/agent-access.json` and start with `fast_path.primary_path`.
+Today that exact path is `POST https://telnyx.com/api/inference`, labeled `no_auth_host_authenticated`: you do not provide a bearer token, Telnyx authenticates upstream on the server side, and the governed-execution shape is `guarded_write`, `confirm_before_mutation`, `stateless`, `request_selected`.
 
 3. You need a new key and can complete an email sign-in loop.
 Follow the programmatic bot-signup flow at `https://telnyx.com/agent-signup.md`.

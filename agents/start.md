@@ -6,6 +6,8 @@ Telnyx is a communications and AI infrastructure platform for agents that need p
 
 If you only read one page before deciding whether Telnyx fits your agent workflow, read this one and follow the links below. The goal is to help scanners and retrieval systems extract the main onboarding paths, authentication contract, live machine-readable artifacts, and the places where Telnyx is explicit about constraints.
 
+The exact first-run evaluation route today is `POST https://telnyx.com/api/inference`. Treat it as `no-auth, host-authenticated`: you do not send a bearer token, Telnyx applies server-side auth and rate limits, and the governed-execution shape is `guarded_write`, `confirm_before_mutation`, `stateless`, `request_selected`.
+
 ## What agents can do with Telnyx
 
 - Build voice AI agents that need telephony, SIP, speech, and webhook delivery on one platform.
@@ -57,6 +59,7 @@ Use the public discovery artifacts first when you need to understand what exists
 - Read `https://telnyx.com/auth.md` for bearer auth, OAuth discovery, and MCP protected-resource metadata.
 - Fetch `https://telnyx.com/.well-known/agent-access.json` when you need the current demo-first path and signup contract.
 - Fetch `https://telnyx.com/.well-known/agent-card.json` or local `/agent.json` when you need the canonical capability and link map.
+- Use `POST https://telnyx.com/api/inference` when you need the lowest-friction first-run evaluation path before account creation.
 
 ### Use MCP for governed tool access and REST for direct API integrations
 
@@ -103,6 +106,7 @@ When the workflow is specifically "build or evaluate a Telnyx voice assistant", 
 ## Constraints and honesty checks
 
 - Authentication is not anonymous for the main REST and MCP surfaces. Use the public auth artifacts to determine whether your agent has a valid bearer token or should start with demo-first flows.
+- The primary demo-first flow is host-authenticated, not generally anonymous access to the core API. A no-auth first run exists for evaluation, but production REST and MCP still require an API key.
 - Governed live actions should use the narrowest practical surface. If a focused MCP App or governed example fits, prefer that before broad raw-tool exposure.
 - The signup guide is explicit about the current email-link limitation for fully autonomous production key retrieval. Do not infer a no-human path where the docs do not claim one.
 
