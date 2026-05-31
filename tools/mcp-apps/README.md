@@ -70,6 +70,8 @@ Choose the narrowest surface that matches the agent's trust boundary:
 
 For external-agent builders, the intended default is: discover an app at `/apps/:slug`, bind only the listed tools, and follow that app's contract rather than recreating raw Telnyx endpoint behavior in prompts.
 
+For a concrete read-only external-runtime example, see [guides/voice-diagnostics-external-runtime.md](/Users/olitron/.paperclip-pilot/instances/default/workspaces/f1581f81-bb45-4a83-82d1-b7deca1ecbc4/guides/voice-diagnostics-external-runtime.md).
+
 ## Governed contract for external agents
 
 The MCP Apps in this repo are meant to be consumed as policy-bearing tool surfaces, not just transport wrappers.
@@ -88,6 +90,8 @@ The hosted HTTP wrapper also exposes public discovery surfaces for deploys:
 - `GET /.well-known/mcp-apps.json` — alias of the registry endpoint above
 
 On the hosted MCP endpoint itself, `tools/list` returns the app tool annotations and `_meta.ui.resourceUri` values, and `resources/list` returns the corresponding `ui://` app resources. That is the public runtime proof path for ORA-style scanners and clients.
+
+The hosted per-app discovery document now also publishes a structured `governance` block so external runtimes can reason about read-only vs governed-write posture, least-privilege key expectations, redaction behavior, and where a workflow must hand off for explicit confirmation.
 
 For the public docs-facing deployment, the expected hosted proof path is:
 

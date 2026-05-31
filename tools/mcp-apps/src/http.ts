@@ -273,6 +273,20 @@ function buildPublicAppDetails(
       same_api_key_as: "https://api.telnyx.com/v2",
       note: "No separate MCP Apps credential is required."
     },
+    governance: {
+      access_mode: app.governance.accessMode,
+      least_privilege_api_key: app.governance.leastPrivilegeApiKey,
+      action_boundary: app.governance.actionBoundary,
+      future_write_path: app.governance.futureWritePath,
+      sensitive_data_redaction: app.governance.sensitiveDataRedaction,
+      external_runtime_pattern: app.governance.externalRuntimePattern
+        ? {
+            use_case: app.governance.externalRuntimePattern.useCase,
+            preserve_ids: app.governance.externalRuntimePattern.preserveIds,
+            handoff_target: app.governance.externalRuntimePattern.handoffTarget
+          }
+        : undefined
+    },
     tool_names: app.toolNames,
     resource_uris: app.resourceUris
   };

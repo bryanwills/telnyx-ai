@@ -54,6 +54,11 @@ describe("hosted MCP Apps HTTP service", () => {
         slug: "governed-communications",
         mcp_url: "http://mcp-apps.telnyx.test/apps/governed-communications/mcp",
         discovery_url: "http://mcp-apps.telnyx.test/apps/governed-communications",
+        governance: {
+          access_mode: "governed_write",
+          action_boundary: expect.stringMatching(/outbound communication actions/i),
+          future_write_path: expect.stringMatching(/preview|approval|confirmation/i)
+        },
         tool_names: [
           "communications_send_message",
           "communications_start_call",
@@ -97,6 +102,33 @@ describe("hosted MCP Apps HTTP service", () => {
           mcp_url: "http://mcp-apps.telnyx.test/apps/voice-monitor/mcp"
         }
       ]
+    });
+
+    const voiceMonitor = await app.request("http://mcp-apps.telnyx.test/apps/voice-monitor");
+    expect(voiceMonitor.status).toBe(200);
+    await expect(voiceMonitor.json()).resolves.toMatchObject({
+      app: {
+        slug: "voice-monitor",
+        governance: {
+          access_mode: "read_only",
+          least_privilege_api_key: expect.stringMatching(/read-only Telnyx API key/i),
+          action_boundary: expect.stringMatching(/cannot answer, hang up, transfer, speak, or modify voice resources/i),
+          future_write_path: expect.stringMatching(/explicit confirmation/i),
+          sensitive_data_redaction: expect.stringMatching(/redacting phone numbers/i),
+          external_runtime_pattern: {
+            use_case: expect.stringMatching(/default read-only voice diagnostics workspace/i),
+            preserve_ids: [
+              "connection_id",
+              "call_control_id",
+              "call_leg_id",
+              "call_session_id",
+              "assistant_id",
+              "conversation_id"
+            ],
+            handoff_target: expect.stringMatching(/reviewed surface/i)
+          }
+        }
+      }
     });
   });
 
