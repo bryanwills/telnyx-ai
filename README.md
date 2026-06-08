@@ -22,7 +22,9 @@ This repo is the one-stop shop for AI Agents and AI-first developers building wi
 
 ## Plugins and Extenstion
 
-Install the unified Telnyx plugin to give your AI coding assistant Telnyx MCP server access and 228 Agent Skills covering messaging, voice, numbers, AI, IoT, WebRTC, Twilio migration, and more. 
+Install the unified Telnyx plugin to give your AI coding assistant Telnyx MCP server access and 228 Agent Skills covering messaging, voice, numbers, AI, IoT, WebRTC, Twilio migration, and more.
+
+For Hermes Agent and OpenClaw users, the Telnyx-owned SMS platform adapter lives in [`/telnyx-hermes-sms`](/telnyx-hermes-sms). Start with [`telnyx-hermes-sms/README.md`](/telnyx-hermes-sms/README.md) for the installer CLI, Hermes plugin enablement steps, and the current canonical install path. Use that adapter instead of hardcoding Telnyx support into Hermes core. Today the canonical install path is the GitHub repo install command; once GitHub Releases are published, the tagged release path should become the stable default.
 
 Empowers coding agents to generate correct, production-ready code without relying on pre-training or fragile doc retrieval.
 
@@ -216,6 +218,7 @@ Curl-first operational guides for common Telnyx workflows — SMS messaging, voi
 
 For Edge Compute specifically, the goal is to make the handoff testable fast: start from a real `telnyx-edge` example, deploy it, and let `team-telnyx/ai` orchestrate against that live endpoint.
 
+For Hermes Agent or OpenClaw SMS integrations, use [`telnyx-hermes-sms/README.md`](/telnyx-hermes-sms/README.md). That repo-owned subdirectory is the fastest path when the goal is "wire Telnyx SMS into Hermes" rather than "call Telnyx APIs directly from a generic agent framework" or patch Hermes core yourself.
 See [Guides](/guides) for the full list.
 
 ## Edge Compute

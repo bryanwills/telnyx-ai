@@ -90,6 +90,18 @@ Telnyx skills work with all agents supported by the Skills CLI.
 > [!IMPORTANT]
 > Use only the skills your project actually needs. Loading too many skills wastes tokens, dilutes context, and makes it easier for an agent to confuse SDK patterns.
 
+## Hermes and OpenClaw
+
+If the goal is specifically to add Telnyx SMS to Hermes Agent or OpenClaw, start with [`/telnyx-hermes-sms/README.md`](/telnyx-hermes-sms/README.md) before installing general-purpose messaging skills.
+
+That adapter is the Telnyx-owned Hermes plugin path. It includes:
+
+- the `telnyx-hermes-sms-install` installer CLI
+- Hermes plugin enablement steps
+- the current canonical install command and the future tagged-release path
+
+Use the skills in this directory for API generation and adjacent workflows; use `telnyx-hermes-sms` when you need the ready-made Hermes platform adapter itself.
+
 ## Available Skills
 
 Skills are organized by product and language. Each product skill is available in **Curl**, **JavaScript**, **Python**, **Go**, **Java**, and **Ruby** .
