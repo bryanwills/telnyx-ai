@@ -2,6 +2,7 @@
 
 import { LinkRuntime } from "./runtime.js";
 import { formatSharedChannelResponse } from "./shared-channel.js";
+import { createLinkAppPublisherServer, listenLinkAppPublisherServer } from "./app-publisher.js";
 
 const runtime = new LinkRuntime();
 const [command = "chat", ...args] = process.argv.slice(2);
@@ -29,6 +30,13 @@ try {
         "Internal note: carrier route id R-42 showed latency. Raw log trace id abc123. Customer impact appears limited to delayed SMS delivery for a subset of US traffic.",
     });
     console.log(formatSharedChannelResponse(result));
+  } else if (command === "app-publisher") {
+    const port = Number(args.find((arg) => /^\d+$/.test(arg)) ?? process.env.PORT ?? 0);
+    const requireAuth = !args.includes("--dev-no-auth");
+    const server = createLinkAppPublisherServer(undefined, { requireAuth });
+    const listener = await listenLinkAppPublisherServer(server, port);
+    console.log(`Link App Publisher listening at ${listener.url}`);
+    console.log(requireAuth ? "Auth required: Bearer, x-telnyx-auth-rev2, or x-telnyx-api-key." : "Auth disabled for local development.");
   } else {
     throw new Error(`Unknown command: ${command}`);
   }

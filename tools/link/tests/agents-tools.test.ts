@@ -8,6 +8,7 @@ import { createDefaultToolRegistry, metadataForTool, mockedTools } from "../src/
 test("root agent is configured for Telnyx Link with specialist handoffs", () => {
   assert.equal(rootAgent.name, "Telnyx Link");
   assert.match(rootAgent.instructions, /trusted AI companion/);
+  assert.match(rootAgent.instructions, /Hindsight is Link's source-attributed long-term memory layer/);
   assert.equal(rootAgent.handoffs.length, 8);
   assert.ok(rootAgent.handoffs.includes("Link Shared Channel Agent"));
 });
@@ -17,6 +18,7 @@ test("specialist agents declare boundaries and safety metadata", () => {
     assert.ok(agent.name);
     assert.ok(agent.purpose);
     assert.ok(agent.instructions);
+    assert.match(agent.instructions, /Hindsight is Link's source-attributed long-term memory layer/);
     assert.ok(agent.allowedToolCategories.length > 0);
     assert.ok(["low", "medium", "high"].includes(agent.riskLevel));
     assert.ok(agent.customerSafeRules.length > 0);
