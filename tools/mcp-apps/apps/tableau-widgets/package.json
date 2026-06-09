@@ -1,0 +1,29 @@
+{
+  "name": "@telnyx-mcp-apps/tableau-widgets",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Strict-access Tableau widget catalog and data service for Link.",
+  "main": "dist/server.js",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "tsx src/server.ts",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/team-telnyx/ai",
+    "directory": "tools/mcp-apps/apps/tableau-widgets"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.2",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "dotenv": "^17.4.2"
+  }
+}

@@ -15,6 +15,7 @@ The product direction is inspired by Ramp's Glass as an internal AI coworker pat
 - Markdown skill loader with frontmatter validation
 - Shared customer Slack draft workflow
 - Approval decision model
+- Managed Link App Publisher API contract
 - In-memory audit logger
 - Memory service placeholders
 - CLI surfaces for chat, skills, and shared-channel draft mode
@@ -27,6 +28,7 @@ npm ci
 npm run link:dev -- "brief me on Acme Messaging"
 npm run link:skill -- "SMS Delivery Investigation"
 npm run link:shared-channel
+npm exec -- telnyx-link app-publisher 4300 --dev-no-auth
 ```
 
 Verification:
@@ -51,6 +53,19 @@ Telnyx Link surfaces
 ```
 
 The OpenAI Agents SDK adapter is in `src/agents/openai-sdk.ts`. The mocked local runtime does not require an OpenAI API key. Live SDK mode should only be used after explicit authorization and environment setup.
+
+## Link App Publisher
+
+`src/app-publisher.ts` contains the managed publisher API contract used by Link Desktop:
+
+- `POST /publish-intents`
+- `POST /apps/{id}/versions`
+- `GET /apps`
+- `GET /apps/{id}`
+- `POST /apps/{id}/duplicate`
+- `POST /apps/{id}/reviews`
+
+The service accepts only VPN-access apps, requires an internal auth header by default, stores source refs instead of local files, rejects non-`team-telnyx` source repos, and never returns local `.env` or secret values in duplicate responses. Production deployment should place this service behind the company VPN and replace the in-memory store/build simulation with durable storage plus Edge Compute deploy jobs.
 
 ## Add a Skill
 

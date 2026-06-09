@@ -1,0 +1,21 @@
+names:
+  service: link-desktop
+  github: team-telnyx-ai
+
+project:
+  squad: ai-fde.squad
+  primary_maintainer: pete
+  public_api: false
+  private_api: false
+  processes_pii: true
+  service_type: frontend
+  dependencies:
+    - tools-link
+    - agent-control-plane
+    - auth-internal
+    - litellm-aiswe
+    - hindsight
+  tags:
+    - electron
+    - desktop
+    - internal-ai

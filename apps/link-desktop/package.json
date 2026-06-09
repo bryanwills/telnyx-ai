@@ -11,6 +11,7 @@
     "prestart": "npm --prefix ../../tools/link run build && npm run build",
     "start": "LINK_DESKTOP_RENDERER=dist/renderer/index.html electron src/main/main.js",
     "build": "vite build",
+    "metadata:check": "scripts/check-service-metadata.sh",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
     "preview": "vite --host 127.0.0.1"
@@ -22,6 +23,8 @@
     "lucide-react": "^0.561.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "react-is": "^19.2.7",
+    "recharts": "^3.8.1",
     "vite": "^7.2.7"
   },
   "devDependencies": {
@@ -30,6 +33,9 @@
     "@types/react-dom": "^19.2.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   },
   "engines": {
     "node": ">=20.0.0"

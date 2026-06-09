@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { InMemoryAuditLogger } from "../src/audit.js";
@@ -10,9 +10,10 @@ import { createDefaultToolRegistry } from "../src/tools.js";
 
 test("discovers starter skills and parses frontmatter", async () => {
   const skills = await discoverSkills();
+  const skillFiles = (await readdir("skills")).filter((file) => file.endsWith(".md"));
   const names = skills.map((skill) => skill.metadata.name);
 
-  assert.equal(skills.length, 11);
+  assert.equal(skills.length, skillFiles.length);
   assert.ok(names.includes("Account Briefing"));
   assert.ok(names.includes("Make HTML Slides"));
   assert.ok(names.includes("Shared Slack Channel Response Draft"));

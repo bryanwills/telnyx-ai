@@ -7,13 +7,14 @@ export type ViewId =
   | "agents"
   | "workboard"
   | "phone"
+  | "calendar"
   | "memory"
   | "dojo"
   | "settings";
 
 export type Decision = "approve" | "dismiss";
 export type ConnectionStatus = "connected" | "needs_access" | "requested" | "signed_in";
-export type ConnectionMode = "env" | "saved" | "mocked" | "okta" | "live";
+export type ConnectionMode = "env" | "saved" | "okta" | "live";
 
 export interface SkillMetadata {
   name: string;
@@ -96,9 +97,9 @@ export interface WorkspaceSummary {
 export interface ExplorerResult {
   id: string;
   title: string;
-  source: "guru" | "google_drive" | "link_file" | "skill" | "agent" | "memory";
+  source: "guru" | "google_drive" | "link_file" | "skill" | "agent" | "memory" | "telnyx_support" | "telnyx_developers";
   type: "doc" | "file" | "skill" | "agent" | "memory";
-  permission: "allowed" | "needs_access" | "mocked";
+  permission: "allowed" | "needs_access";
   freshness: string;
   excerpt: string;
   workspaceId?: string;
@@ -110,6 +111,7 @@ export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
   createdAt: string;
+  displayName?: string;
   sources?: ExplorerResult[];
   artifacts?: ChatArtifact[];
 }
@@ -121,6 +123,15 @@ export interface ChatArtifact {
   filename: string;
   content: string;
   createdAt: string;
+}
+
+export interface VoiceTranscriptionInput {
+  audioBase64: string;
+  mimeType: string;
+}
+
+export interface VoiceTranscriptionResult {
+  text: string;
 }
 
 export interface ChatSession {
@@ -143,8 +154,9 @@ export interface LinkChangeRequest {
   updatedAt: string;
   sourceSessionId?: string;
   workspaceId?: string;
+  githubRepo?: string;
   github?: {
-    mode: "mocked" | "live";
+    mode: "live";
     branch?: string;
     prUrl?: string;
     issueUrl?: string;
@@ -196,6 +208,7 @@ export interface AgentControlPlaneAuthStatus {
   actor?: string;
   userId?: string;
   userName?: string;
+  avatarUrl?: string;
   onBehalfOf?: string;
   rev2Configured: boolean;
   message: string;
@@ -213,7 +226,7 @@ export interface HostedAgentSummary {
 
 export interface AgentSummary extends HostedAgentSummary {
   visibility: "public" | "slack" | "private" | "internal";
-  source: "agent-control-plane" | "a2a-discovery" | "slack" | "mock";
+  source: "agent-control-plane" | "a2a-discovery" | "slack" | "aida";
   slackChannel?: string;
   slackUserId?: string;
   slackChannelId?: string;
@@ -227,7 +240,7 @@ export interface AgentSummary extends HostedAgentSummary {
 }
 
 export interface AgentInteractionResult {
-  mode: "slack" | "mocked";
+  mode: "slack";
   agentId: string;
   message: string;
   channelId?: string;
@@ -245,86 +258,12 @@ export interface PhoneNumberOption {
   upfrontCost?: string;
 }
 
-export interface PhoneSetupPlan {
+export interface PhoneAssistantOption {
   id: string;
-  phoneNumber: string;
-  sipUsername: string;
-  sipPassword: string;
-  webhookUrl: string;
-  voiceAssistant?: PhoneVoiceAssistantPlan;
-  warning: string;
-  purchaseReview: {
-    endpoint: string;
-    method: "POST";
-    body: unknown;
-  };
-  resources: { label: string; endpoint: string; method: "POST" | "PATCH"; body: unknown }[];
-  steps: string[];
-}
-
-export interface PhoneProvisionResult extends PhoneSetupPlan {
-  status: "provisioned" | "needs_regulatory_requirements" | "partial";
-  credentialConnectionId?: string;
-  callControlApplicationId?: string;
-  voiceAssistantId?: string;
-  numberOrderId?: string;
-  numberOrderStatus?: string;
-  orderedPhoneNumberId?: string;
-  raw: {
-    credentialConnection?: unknown;
-    callControlApplication?: unknown;
-    voiceAssistant?: unknown;
-    numberOrder?: unknown;
-  };
-}
-
-export interface PhoneVoiceAssistantPlan {
-  enabled: boolean;
   name: string;
-  mode: "after_hours" | "always" | "manual";
-  timezone: string;
-  workHours: {
-    mondayToFriday: string;
-    saturday: string;
-    sunday: string;
-  };
-  googleCalendar: {
-    enabled: boolean;
-    calendarId: string;
-    mode: "free_busy_only" | "create_tentative_sales_calls";
-    webhookUrl: string;
-  };
-  assistantReview: {
-    endpoint: string;
-    method: "POST";
-    body: unknown;
-  };
-  callControlRouting: {
-    endpoint: string;
-    method: "POST";
-    body: unknown;
-  };
-}
-
-export interface PhoneSetupInput {
-  phoneNumber: string;
-  displayName: string;
-  webhookUrl: string;
-  voiceAssistantEnabled?: boolean;
-  voiceAssistantName?: string;
-  voiceAssistantMode?: PhoneVoiceAssistantPlan["mode"];
-  voiceAssistantGreeting?: string;
-  voiceAssistantInstructions?: string;
-  voiceAssistantLanguage?: string;
-  voiceAssistantVoice?: string;
-  voiceAssistantTemperature?: string;
-  voiceAssistantEscalationTarget?: string;
-  timezone?: string;
-  workHours?: PhoneVoiceAssistantPlan["workHours"];
-  googleCalendarEnabled?: boolean;
-  googleCalendarId?: string;
-  googleCalendarWebhookUrl?: string;
-  googleCalendarMode?: PhoneVoiceAssistantPlan["googleCalendar"]["mode"];
+  description?: string;
+  status?: string;
+  phoneNumber?: string;
 }
 
 export type WorkboardProvider = "auto" | "hermes" | "openclaw" | "local";
@@ -419,7 +358,7 @@ export interface MemoryBank {
   id: string;
   name: string;
   scope: "user" | "workspace" | "bot" | "squad";
-  status: "connected" | "mocked" | "needs_key";
+  status: "connected" | "needs_key";
   mission: string;
   updatedAt: string;
   observationCount: number;
@@ -432,7 +371,7 @@ export interface MemoryRecallResult {
   summary: string;
   evidence: string[];
   score: number;
-  source: "hindsight" | "mock";
+  source: "hindsight";
 }
 
 export interface DojoProfile {
@@ -475,6 +414,139 @@ export interface OnboardingState {
   updatedAt: string;
 }
 
+export type WidgetChartType = "kpi" | "line" | "bar" | "area";
+export type WidgetCategory = "Revenue" | "Operations" | "Product";
+export type WidgetValueFormat = "currency" | "number" | "percent";
+
+export interface WidgetChartSpec {
+  type: WidgetChartType;
+  xField?: string;
+  yField: string;
+  seriesField?: string;
+  metricField?: string;
+  metricFormat?: WidgetValueFormat;
+}
+
+export interface WidgetCatalogItem {
+  id: string;
+  title: string;
+  source: "Tableau";
+  category: WidgetCategory;
+  description: string;
+  cadence: string;
+  refreshTtlSeconds: number;
+  chart: WidgetChartSpec;
+}
+
+export interface WidgetLayoutState {
+  widgetIds: string[];
+  updatedAt: string;
+}
+
+export interface WidgetDataResult {
+  widgetId: string;
+  source: "Tableau";
+  status: "ready";
+  updatedAt: string;
+  columns: string[];
+  rows: Array<Record<string, string | number | null>>;
+  metric: string;
+  trend: string;
+}
+
+export type LinkPublishedAppStatus =
+  | "draft"
+  | "submitted"
+  | "building"
+  | "preview"
+  | "approved"
+  | "deployed"
+  | "rejected"
+  | "deprecated";
+
+export type LinkPublishedAppType = "web" | "mcp_app";
+export type LinkPublishedAppRisk = "low" | "medium" | "high";
+
+export interface LinkPublishedAppVersion {
+  id: string;
+  appId: string;
+  version: string;
+  sourceRepo?: string;
+  sourceRef?: string;
+  sourceSubdir?: string;
+  status: LinkPublishedAppStatus;
+  submittedAt?: string;
+  reviewedAt?: string;
+  previewUrl?: string;
+  deployedAt?: string;
+  buildLogUrl?: string;
+}
+
+export interface LinkPublishedApp {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  ownerSquad: string;
+  audience: string;
+  appType: LinkPublishedAppType;
+  access: "vpn";
+  riskLevel: LinkPublishedAppRisk;
+  status: LinkPublishedAppStatus;
+  sourceRepo?: string;
+  sourceRef?: string;
+  sourceSubdir?: string;
+  buildCommand?: string;
+  startCommand?: string;
+  outputDir?: string;
+  vpnUrl?: string;
+  previewUrl?: string;
+  deployedUrl?: string;
+  reviewers: string[];
+  envSchema: string[];
+  latestVersion?: LinkPublishedAppVersion;
+  reviewNotes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LinkAppPublishInput {
+  name: string;
+  slug?: string;
+  description?: string;
+  ownerSquad: string;
+  audience: string;
+  appType: LinkPublishedAppType;
+  sourceRepo: string;
+  sourceRef?: string;
+  sourceSubdir?: string;
+  buildCommand?: string;
+  startCommand?: string;
+  outputDir?: string;
+  envSchema?: string[];
+  reviewers?: string[];
+  riskLevel: LinkPublishedAppRisk;
+}
+
+export interface LinkAppPublishResult {
+  mode: "live" | "local_fallback";
+  message: string;
+  intentId?: string;
+  app: LinkPublishedApp;
+  version?: LinkPublishedAppVersion;
+}
+
+export interface LinkAppDuplicateResult {
+  mode: "live" | "local_fallback";
+  action: "source_ref" | "fork" | "bundle" | "unavailable";
+  sourceRepo?: string;
+  sourceSubdir?: string;
+  sourceRef?: string;
+  command?: string;
+  url?: string;
+  message: string;
+}
+
 export interface LinkDesktopApi {
   chat(prompt: string): Promise<{ response?: string; routedTo?: string; finalOutput?: unknown }>;
   runSkill(skillName: string): Promise<unknown>;
@@ -493,15 +565,21 @@ export interface LinkDesktopApi {
   listCredentials(): Promise<CredentialGroupStatus[]>;
   saveCredential(input: { name: string; value: string }): Promise<CredentialGroupStatus[]>;
   updateConnectorStatus(id: string, status: ConnectorStatus["status"]): Promise<ConnectorStatus[]>;
+  listWidgetCatalog(): Promise<WidgetCatalogItem[]>;
+  listWidgetLayout(): Promise<WidgetLayoutState>;
+  saveWidgetLayout(input: { widgetIds: string[] }): Promise<WidgetLayoutState>;
+  refreshWidgetData(input: { widgetId: string }): Promise<WidgetDataResult>;
   listOnboarding(): Promise<OnboardingState>;
   updateOnboarding(input: Partial<Pick<OnboardingState, "dismissed" | "completed" | "completedStepIds">>): Promise<OnboardingState>;
   signInAgentControlPlane(): Promise<AgentControlPlaneAuthStatus>;
   signOutAgentControlPlane(): Promise<AgentControlPlaneAuthStatus>;
   getAgentControlPlaneAuthStatus(): Promise<AgentControlPlaneAuthStatus>;
+  openAgentControlPlaneSetup(): Promise<{ url: string }>;
   listHostedAgents(): Promise<HostedAgentSummary[]>;
   listWorkspaces(): Promise<WorkspaceSummary[]>;
   searchExplorer(input: { query: string; workspaceId?: string }): Promise<ExplorerResult[]>;
   listChatSessions(): Promise<ChatSession[]>;
+  renameChatSession(input: { sessionId: string; title: string }): Promise<ChatSession>;
   sendChatMessage(input: {
     sessionId?: string;
     workspaceId?: string;
@@ -512,12 +590,14 @@ export interface LinkDesktopApi {
     modelMode?: string;
     contextScope?: string;
   }): Promise<ChatSession>;
+  transcribeAudio(input: VoiceTranscriptionInput): Promise<VoiceTranscriptionResult>;
   createChangeRequest(input: {
     title: string;
     summary: string;
     requestedChange: string;
     workspaceId?: string;
     sourceSessionId?: string;
+    githubRepo?: string;
   }): Promise<LinkChangeRequest>;
   approveChangeRequest(id: string): Promise<LinkChangeRequest>;
   dismissChangeRequest(id: string): Promise<LinkChangeRequest>;
@@ -528,12 +608,23 @@ export interface LinkDesktopApi {
   createWorkboardCard(input: WorkboardCreateInput): Promise<WorkboardSnapshot>;
   updateWorkboardCard(input: WorkboardUpdateInput): Promise<WorkboardSnapshot>;
   dispatchWorkboard(input: { provider: WorkboardProvider; boardId?: string }): Promise<WorkboardSnapshot>;
-  searchPhoneNumbers(input: { countryCode: string; areaCode?: string; locality?: string; region?: string }): Promise<PhoneNumberOption[]>;
-  previewPhoneSetup(input: PhoneSetupInput): Promise<PhoneSetupPlan>;
-  provisionPhoneSystem(input: PhoneSetupInput): Promise<PhoneProvisionResult>;
+  listAccountPhoneNumbers(): Promise<PhoneNumberOption[]>;
+  listPhoneAssistants(): Promise<PhoneAssistantOption[]>;
   listMemoryBanks(): Promise<MemoryBank[]>;
   recallMemory(input: { query: string; bankId?: string }): Promise<MemoryRecallResult[]>;
   listDojoState(): Promise<DojoState>;
+  listPublishedApps(): Promise<LinkPublishedApp[]>;
+  createPublishIntent(input: LinkAppPublishInput): Promise<LinkAppPublishResult>;
+  createPublishedAppVersion(input: {
+    appId: string;
+    sourceRepo: string;
+    sourceRef?: string;
+    sourceSubdir?: string;
+    notes?: string;
+  }): Promise<LinkAppPublishResult>;
+  reviewPublishedApp(input: { appId: string; decision: "approve" | "reject"; notes?: string }): Promise<LinkAppPublishResult>;
+  duplicatePublishedApp(id: string): Promise<LinkAppDuplicateResult>;
+  openPublishedApp(id: string): Promise<{ opened: boolean; url: string }>;
   auditEvents(): Promise<unknown[]>;
 }
 
@@ -544,313 +635,185 @@ declare global {
 }
 
 const now = new Date().toISOString();
-
-const mockSkills: SkillMetadata[] = [
+const previewSkills: SkillMetadata[] = [];
+const previewTools: ToolMetadata[] = [];
+let previewWork: ActiveWorkItem[] = [];
+let previewWorkboardCards: WorkboardCard[] = [];
+const previewAutomations: AutomationItem[] = [];
+let previewChangeRequests: LinkChangeRequest[] = [];
+const previewConnectors: ConnectorStatus[] = [];
+let previewPublishedApps: LinkPublishedApp[] = [
   {
-    name: "Account Briefing",
-    description: "Create a concise account briefing from internal context.",
-    owner: "GTM",
-    team: "Sales",
+    id: "app-carrier-readiness",
+    name: "Carrier Readiness Hub",
+    slug: "carrier-readiness-hub",
+    description: "Check carrier launch gates, retrieve internal runbooks, and coordinate squad review before customer updates.",
+    ownerSquad: "messaging-ops.squad",
+    audience: "Messaging, NOC",
+    appType: "web",
+    access: "vpn",
     riskLevel: "medium",
-    toolsRequired: ["salesforce.account_lookup", "slack.search", "google_workspace.search"],
-    customerSafe: false,
-    approvalRequired: false,
-    source: "link",
-  },
-  {
-    name: "SMS Delivery Investigation",
-    description: "Investigate mocked SMS delivery issues using safe internal context.",
-    owner: "Support",
-    team: "Messaging",
-    riskLevel: "medium",
-    toolsRequired: ["telnyx.messaging_logs.lookup", "datadog.incident_lookup"],
-    customerSafe: false,
-    approvalRequired: false,
-    source: "link",
-  },
-  {
-    name: "telnyx-ai-assistants-python",
-    description: "AI voice assistants with custom instructions, knowledge bases, and tool integrations.",
-    owner: "telnyx",
-    team: "AI",
-    riskLevel: "low",
-    toolsRequired: ["telnyx.ai_assistants"],
-    customerSafe: false,
-    approvalRequired: false,
-    source: "telnyx",
-    product: "ai-assistants",
-    language: "python",
-  },
-  {
-    name: "telnyx-messaging-curl",
-    description: "Messaging API examples and operational guidance.",
-    owner: "telnyx",
-    team: "Messaging",
-    riskLevel: "low",
-    toolsRequired: ["telnyx.messaging"],
-    customerSafe: false,
-    approvalRequired: false,
-    source: "telnyx",
-    product: "messaging",
-    language: "curl",
-  },
-];
-
-const mockTools: ToolMetadata[] = [
-  tool("slack.search", "Search mocked internal Slack messages and threads.", "slack", "read", "medium", false),
-  tool("slack.post_message", "Mock a Slack post action gated by approval.", "slack", "write", "high", true, "customer_safe"),
-  tool("guru.search", "Search Guru cards and verified knowledge.", "knowledge", "read", "low", false),
-  tool("google_workspace.search", "Search mocked docs and meeting notes.", "workspace", "read", "medium", false),
-  tool("github.repo_search", "Search mocked GitHub repositories and code references.", "code", "read", "medium", false),
-  tool("github.create_draft_pr", "Create an admin-reviewed Link improvement PR.", "code", "write", "high", true),
-  tool("hindsight.recall", "Recall long-term agent memory from Hindsight banks.", "memory", "read", "medium", false),
-  tool("telnyx.messaging_logs.lookup", "Look up mocked messaging logs.", "telnyx_messaging", "read", "medium", false),
-];
-
-let mockWork: ActiveWorkItem[] = [
-  createMockWork("work-seed-1", "Acme SMS delivery response", "Shared-channel draft - Pending review", "pending"),
-  createMockWork("work-seed-2", "Acme account briefing", "Account Briefing - Ready", "ready"),
-];
-
-let mockWorkboardCards: WorkboardCard[] = [
-  createMockWorkboardCard({
-    id: "card-triage-agent-directory",
-    title: "Tighten Agents directory squad filtering",
-    body: "Verify A2A discovery fields, add missing squad labels, and capture a short proof note.",
-    status: "ready",
-    assignee: "openclaw:support-reviewer",
-    provider: "local",
-    priority: "high",
-    labels: ["agents", "directory"],
-    proof: ["Acceptance criteria are ready; no live agent runtime is required in preview."],
-  }),
-  createMockWorkboardCard({
-    id: "card-hermes-kanban-preview",
-    title: "Prepare Hermes Kanban adapter smoke test",
-    body: "Run hermes kanban list/create/show with JSON output when Hermes is installed.",
-    status: "todo",
-    assignee: "hermes:researcher",
-    provider: "local",
-    priority: "normal",
-    labels: ["hermes", "kanban"],
-  }),
-  createMockWorkboardCard({
-    id: "card-phone-review",
-    title: "Review Link Phone provisioning copy",
-    body: "Check that number purchase warnings are clear before enabling real Telnyx account provisioning.",
-    status: "review",
-    assignee: "openclaw:ops-review",
-    provider: "local",
-    priority: "normal",
-    labels: ["phone", "review"],
-    artifacts: ["apps/link-desktop/src/renderer/App.tsx"],
-  }),
-];
-
-const mockAutomations: AutomationItem[] = [
-  {
-    id: "automation-doc-maintenance",
-    name: "Doc Maintenance",
-    status: "active",
-    schedule: "Every day at 10:00 AM",
-    channel: "#telnyx-link-eng",
-    tools: ["slack.post_message", "guru.search"],
-    skills: ["Incident Thread Summarizer", "Weekly Team Update"],
-    instructions: "Maintain troubleshooting docs by cross-referencing support patterns, internal knowledge, and follow-up items.",
-    runHistory: [
-      { time: "Today 03:05 PM", duration: "9m 52s", status: "Ran after restart", tone: "success" },
-      { time: "Today 09:59 AM", duration: "5m 58s", status: "Ran on schedule", tone: "success" },
-      { time: "Yesterday 07:09 PM", duration: "49m 55s", status: "Ran after restart", tone: "error" },
-    ],
-  },
-];
-
-let mockChangeRequests: LinkChangeRequest[] = [
-  {
-    id: "change-seed-1",
-    title: "Improve SMS escalation workspace",
-    summary: "Add a prefilled workflow for account context, delivery logs, and customer-safe Slack drafts.",
-    requestedChange: "Create a Link skill and workspace template for SMS delivery escalations.",
-    status: "pending_review",
+    status: "deployed",
+    sourceRepo: "https://github.com/team-telnyx/mcp-apps",
+    sourceRef: "main",
+    sourceSubdir: "apps/carrier-readiness",
+    vpnUrl: "https://carrier-readiness.apps.telnyx.io",
+    previewUrl: "https://carrier-readiness-preview.apps.telnyx.io",
+    reviewers: ["messaging-ops.squad"],
+    envSchema: ["TELNYX_AUTH_CONTEXT"],
+    latestVersion: {
+      id: "version-carrier-readiness-1",
+      appId: "app-carrier-readiness",
+      version: "2026.06.01",
+      sourceRepo: "https://github.com/team-telnyx/mcp-apps",
+      sourceRef: "main",
+      sourceSubdir: "apps/carrier-readiness",
+      status: "deployed",
+      submittedAt: now,
+      deployedAt: now,
+    },
     createdAt: now,
     updatedAt: now,
-    workspaceId: "workspace-acme",
+  },
+  {
+    id: "app-release-desk",
+    name: "Release Desk",
+    slug: "release-desk",
+    description: "Publish release notes, inspect pending approvals, and hand off app-specific review steps to the owning squad.",
+    ownerSquad: "product-platform.squad",
+    audience: "Product, Engineering",
+    appType: "mcp_app",
+    access: "vpn",
+    riskLevel: "medium",
+    status: "preview",
+    sourceRepo: "https://github.com/team-telnyx/mcp-apps",
+    sourceRef: "main",
+    sourceSubdir: "apps/release-desk",
+    previewUrl: "https://release-desk-preview.apps.telnyx.io",
+    reviewers: ["product-platform.squad"],
+    envSchema: ["TELNYX_AUTH_CONTEXT", "GITHUB_APP_INSTALLATION"],
+    latestVersion: {
+      id: "version-release-desk-1",
+      appId: "app-release-desk",
+      version: "2026.06.03-preview",
+      sourceRepo: "https://github.com/team-telnyx/mcp-apps",
+      sourceRef: "main",
+      sourceSubdir: "apps/release-desk",
+      status: "preview",
+      submittedAt: now,
+      previewUrl: "https://release-desk-preview.apps.telnyx.io",
+    },
+    createdAt: now,
+    updatedAt: now,
   },
 ];
 
-const mockConnectors: ConnectorStatus[] = [
-  connector("agent-control-plane", "Agent Control Plane", "Hosted agents", "List and route to hosted Hermes/OpenClaw agents through Link.", ["Okta SSO", "optional TELNYX_ACTOR", "optional TELNYX_ON_BEHALF_OF"], "needs_access", "mocked"),
-  connector("litellm", "Telnyx LiteLLM", "Model runtime", "Chat with Telnyx-hosted models from Link.", ["LITELLM_API_KEY", "LITELLM_MODEL"], "needs_access", "mocked"),
-  connector("hindsight", "Hindsight", "Memory", "Recall and inspect long-term agent memory banks.", ["Per-user bank-scoped HINDSIGHT_API_KEY"], "needs_access", "mocked"),
-  connector("guru", "Guru", "Knowledge", "Search verified cards and knowledge-base context.", ["GURU_USER_EMAIL", "GURU_USER_TOKEN"], "needs_access", "mocked"),
-  connector("google-drive", "Google Drive", "Knowledge", "Search docs, Drive files, and meeting artifacts.", ["Google Drive OAuth"], "needs_access", "mocked"),
-  connector("github", "GitHub", "Code", "Read repositories and create admin-approved draft PRs.", ["GH_TOKEN or GitHub App"], "connected", "env"),
-  connector("slack", "Slack", "Communications", "Search threads and draft shared-channel replies.", ["Slack OAuth or SLACK_BOT_TOKEN"], "needs_access", "mocked"),
-  connector("telnyx", "Telnyx", "Internal systems", "Use account, messaging, network, and billing context.", ["TELNYX_API_KEY"], "needs_access", "mocked"),
-  connector("linear", "Linear", "Work tracking", "Search projects, issues, and planning context.", ["LINEAR_API_KEY"], "needs_access", "mocked"),
-];
-
-let mockCredentials: CredentialGroupStatus[] = [
-  credentials("telnyx-okta", "Telnyx Okta", "Okta sign-in uses auth-internal. TELNYX_AUTH_REV2 is created by sign-in and stored securely.", ["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"]),
-  credentials("litellm", "Telnyx LiteLLM", "Per-user key from AI-swe-Agent in Slack channel D0995UB1PLY.", ["LITELLM_API_KEY", "LITELLM_MODEL"]),
+let previewCredentials: CredentialGroupStatus[] = [
+  credentials("agent-control-plane", "Agent Control Plane", "Okta sign-in creates the Agent Control Plane session Link uses for internal agents and tools. TELNYX_AUTH_REV2 is stored securely after sign-in.", ["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"]),
+  credentials("mcp-proxy", "Telnyx MCP Proxy", "Connect Link to team-telnyx/mcp-proxy so agents discover approved MCP servers and tools through one Telnyx registry.", ["MCP_PROXY_URL"]),
+  credentials("link-app-publisher", "Link App Publisher", "Optional VPN-only publisher service override. Link defaults to the internal managed publisher endpoint and authenticates with Okta Rev2 or TELNYX_API_KEY.", ["LINK_APP_PUBLISHER_URL"]),
+  credentials("tableau-widgets", "Tableau Widgets", "URL for the strict-access Tableau widget service. Tableau connected-app secrets stay server-side.", ["TABLEAU_WIDGETS_SERVICE_URL"]),
+  credentials("litellm", "Telnyx LiteLLM", "Get your LiteLLM Key by asking the AI-swe-Agent bot for one in Slack. Link uses Agent Control Plane routes automatically for hosted Hermes and OpenClaw agents.", ["LITELLM_API_KEY"]),
   credentials("hindsight", "Hindsight", "Per-user, bank-scoped key from the Hindsight bank API Keys tab. Hindsight infers the bank from this key.", ["HINDSIGHT_API_KEY"]),
-  credentials("guru", "Guru", "Guru user auth from Apps & Integrations > API Access.", ["GURU_USER_EMAIL", "GURU_USER_TOKEN"]),
   credentials("linear", "Linear", "Linear API key for issue and project lookup.", ["LINEAR_API_KEY"]),
   credentials("telnyx", "Telnyx", "Telnyx API key for account, phone, messaging, and network operations.", ["TELNYX_API_KEY"]),
   credentials("github", "GitHub", "Fine-grained GitHub token for approved draft PR creation.", ["GH_TOKEN"]),
   credentials("slack", "Slack", "Slack user token discovers and DMs bot users; bot token can post where the app has access.", ["SLACK_USER_TOKEN", "SLACK_BOT_TOKEN"]),
-  credentials("google-drive", "Google Drive", "Temporary Drive token until Google OAuth is implemented.", ["GOOGLE_DRIVE_ACCESS_TOKEN"]),
+  credentials("google-workspace", "Google Workspace", "Connect Google Workspace so Link can load Calendar events, Drive docs, Meet artifacts, notes, and transcripts for your agents.", ["GOOGLE_WORKSPACE_ACCESS_TOKEN"]),
 ];
 
-let mockOnboarding: OnboardingState = {
+const previewWidgetCatalog: WidgetCatalogItem[] = [
+  {
+    id: "preview-revenue-pipeline",
+    title: "Revenue pipeline",
+    source: "Tableau",
+    category: "Revenue",
+    description: "Preview-only sample of a Tableau-backed revenue widget.",
+    cadence: "Refreshes hourly",
+    refreshTtlSeconds: 300,
+    chart: { type: "bar", xField: "stage", yField: "amount", metricField: "amount", metricFormat: "currency" },
+  },
+  {
+    id: "preview-support-volume",
+    title: "Support volume",
+    source: "Tableau",
+    category: "Operations",
+    description: "Preview-only sample of a Tableau-backed support widget.",
+    cadence: "Refreshes daily",
+    refreshTtlSeconds: 900,
+    chart: { type: "line", xField: "day", yField: "tickets", metricField: "tickets", metricFormat: "number" },
+  },
+  {
+    id: "preview-product-adoption",
+    title: "Product adoption",
+    source: "Tableau",
+    category: "Product",
+    description: "Preview-only sample of a Tableau-backed product widget.",
+    cadence: "Refreshes daily",
+    refreshTtlSeconds: 900,
+    chart: { type: "area", xField: "week", yField: "active_accounts", metricField: "active_accounts", metricFormat: "number" },
+  },
+];
+let previewWidgetLayout: WidgetLayoutState = {
+  widgetIds: previewWidgetCatalog.slice(0, 2).map((widget) => widget.id),
+  updatedAt: now,
+};
+
+let previewOnboarding: OnboardingState = {
   dismissed: false,
   completed: false,
   completedStepIds: [],
   updatedAt: now,
 };
 
-const mockWorkspaces: WorkspaceSummary[] = [
-  {
-    id: "workspace-acme",
-    name: "Acme Messaging Escalation",
-    description: "Customer support workspace for SMS delivery context, drafts, and approvals.",
-    status: "review",
-    updatedAt: now,
-    tabs: [
-      tab("tab-acme-chat", "Acme account briefing", "chat", "open"),
-      tab("tab-acme-draft", "Customer-safe update", "approval", "pending"),
-      tab("tab-acme-logs", "Messaging logs", "artifact", "pinned"),
-    ],
-    activeWorkIds: ["work-seed-1", "change-seed-1"],
-    automationIds: ["automation-doc-maintenance"],
-    fileCount: 4,
-    memoryBankId: "bank-user",
-  },
-  {
-    id: "workspace-link",
-    name: "Link Product Improvements",
-    description: "Requests from nontechnical users that become admin-reviewed Link changes.",
-    status: "active",
-    updatedAt: now,
-    tabs: [
-      tab("tab-link-chat", "Based on everything you can tell me", "chat", "open"),
-      tab("tab-link-pr", "Pending improvement requests", "approval", "pending"),
-    ],
-    activeWorkIds: ["change-seed-1"],
-    automationIds: [],
-    fileCount: 2,
-    memoryBankId: "bank-link",
-  },
-];
-
-let mockChatSessions: ChatSession[] = [
-  {
-    id: "chat-seed-1",
-    title: "Based on everything you can tell me",
-    workspaceId: "workspace-link",
-    model: "mock-link-runtime",
-    status: "active",
-    updatedAt: now,
-    messages: [
-      message("system", "Telnyx Link can use workspace context, tools, skills, and Hindsight recall when connected."),
-      message("assistant", "Ask about customers, internal docs, agents, skills, or a Link improvement you want admins to review."),
-    ],
-  },
-];
-
-const mockMemoryBanks: MemoryBank[] = [
-  {
-    id: "bank-user",
-    name: "Pete - Link working memory",
-    scope: "user",
-    status: "mocked",
-    mission: "Remember personal Link workflows, preferred review style, and recurring customer support patterns.",
-    updatedAt: "Today 09:12 AM",
-    observationCount: 128,
-    sourceCount: 5,
-  },
-  {
-    id: "bank-link",
-    name: "Link product memory",
-    scope: "workspace",
-    status: "mocked",
-    mission: "Track Link product decisions, open questions, and admin-reviewed improvement requests.",
-    updatedAt: "Yesterday 05:48 PM",
-    observationCount: 74,
-    sourceCount: 4,
-  },
-];
-
-const mockDojoState: DojoState = {
+const previewWorkspaces: WorkspaceSummary[] = [];
+let previewChatSessions: ChatSession[] = [];
+const emptyDojoState: DojoState = {
   profile: {
     id: "dojo-profile-link",
-    name: "Pete's Experto",
-    rank: "Warrior",
-    masteredSkills: 9,
-    nextRankAt: 13,
-    focus: "Train personal and squad bots on Telnyx support workflows.",
+    name: "Experto",
+    rank: "Ready",
+    masteredSkills: 0,
+    nextRankAt: 0,
+    focus: "Connect live skills and agents to start training.",
   },
-  kits: [
-    kit("essentials", "Essentials", "Core Link workflows and safety boundaries.", 5, 6, "blue"),
-    kit("messaging", "Messaging", "SMS delivery, campaigns, and customer escalations.", 3, 5, "orange"),
-    kit("account-management", "Account Management", "Account context, renewal prep, and internal handoffs.", 2, 4, "teal"),
-    kit("product", "Product", "Docs, feature requests, and product feedback loops.", 1, 4, "purple"),
-    kit("data", "Data", "Metrics, evidence, and warehouse-safe previews.", 1, 3, "green"),
-    kit("cx", "Customer Experience", "Shared-channel drafts and customer-safe summaries.", 2, 4, "pink"),
-  ],
-  sessions: [
-    {
-      id: "training-personal",
-      title: "Train my bot to draft like me",
-      target: "personal_bot",
-      status: "ready",
-      updatedAt: "Today 08:40 AM",
-      inputs: ["recent chats", "approved drafts", "preferred tone"],
-    },
-    {
-      id: "training-squad",
-      title: "Learn Messaging squad escalation style",
-      target: "squad_bot",
-      status: "running",
-      updatedAt: "Today 09:20 AM",
-      inputs: ["squad docs", "incident reviews", "support playbooks"],
-    },
-  ],
+  kits: [],
+  sessions: [],
 };
 
 export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
   async chat(prompt) {
-    const routedTo = prompt.toLowerCase().includes("sms") ? "Customer Support Investigation Agent" : "Product/Docs Agent";
+    void prompt;
     return {
-      routedTo,
-      response: `Telnyx Link received the request and routed it to ${routedTo}.\nNo production systems were contacted.`,
+      routedTo: "No live runtime",
+      response: "No live desktop bridge or model runtime is connected.",
     };
   },
   async runSkill(skillName) {
     return {
-      skill: mockSkills.find((skill) => skill.name === skillName) ?? mockSkills[0],
+      skill: previewSkills.find((skill) => skill.name === skillName),
       execution: {
-        mode: "mocked",
-        summary: `Loaded and ran ${skillName} with deterministic mocked context.`,
+        mode: "unavailable",
+        summary: `No live skill runtime is connected for ${skillName}.`,
       },
     };
   },
   async listSkills() {
-    return mockSkills;
+    return previewSkills;
   },
   async listTools() {
-    return mockTools;
+    return previewTools;
   },
   async createSharedChannelDraft(input) {
-    const work = createMockWork(`work-${Date.now()}`, input.title || "Shared-channel response draft", "Shared-channel draft - Pending review", "pending");
-    mockWork = [work, ...mockWork];
+    const work = createLocalWork(`work-${Date.now()}`, input.title || "Shared-channel response draft", "Shared-channel draft - Pending review", "pending");
+    previewWork = [work, ...previewWork];
     return work;
   },
   async listActiveWork() {
-    return mockWork;
+    return previewWork;
   },
   async decideWork(id, decision) {
-    mockWork = mockWork.map((item) =>
+    previewWork = previewWork.map((item) =>
       item.id === id
         ? {
             ...item,
@@ -859,90 +822,118 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
           }
         : item,
     );
-    return mockWork.find((item) => item.id === id)!;
+    return previewWork.find((item) => item.id === id)!;
   },
   async listAutomations() {
-    return mockAutomations;
+    return previewAutomations;
   },
   async listConnectors() {
-    return mockConnectors;
+    return previewConnectors;
   },
   async listCredentials() {
-    return mockCredentials;
+    return previewCredentials;
   },
   async saveCredential({ name }) {
-    mockCredentials = mockCredentials.map((group) => ({
+    previewCredentials = previewCredentials.map((group) => ({
       ...group,
       fields: group.fields.map((field) =>
         field.name === name ? { ...field, configured: true, source: "saved", updatedAt: new Date().toISOString() } : field,
       ),
     }));
-    return mockCredentials;
+    return previewCredentials;
   },
   async updateConnectorStatus(id, status) {
-    return mockConnectors.map((connectorItem) =>
-      connectorItem.id === id ? { ...connectorItem, status, mode: status === "connected" ? connectorItem.mode : "mocked" } : connectorItem,
+    return previewConnectors.map((connectorItem) =>
+      connectorItem.id === id ? { ...connectorItem, status, mode: status === "connected" ? connectorItem.mode : "live" } : connectorItem,
     );
   },
-  async listOnboarding() {
-    return mockOnboarding;
+  async listWidgetCatalog() {
+    return previewWidgetCatalog;
   },
-  async updateOnboarding(input) {
-    mockOnboarding = {
-      ...mockOnboarding,
-      ...input,
-      completedStepIds: input.completedStepIds ?? mockOnboarding.completedStepIds,
+  async listWidgetLayout() {
+    return previewWidgetLayout;
+  },
+  async saveWidgetLayout({ widgetIds }) {
+    const allowedIds = new Set(previewWidgetCatalog.map((widget) => widget.id));
+    previewWidgetLayout = {
+      widgetIds: [...new Set(widgetIds.filter((id) => allowedIds.has(id)))],
       updatedAt: new Date().toISOString(),
     };
-    return mockOnboarding;
+    return previewWidgetLayout;
+  },
+  async refreshWidgetData({ widgetId }) {
+    return previewWidgetData(widgetId);
+  },
+  async listOnboarding() {
+    return previewOnboarding;
+  },
+  async updateOnboarding(input) {
+    previewOnboarding = {
+      ...previewOnboarding,
+      ...input,
+      completedStepIds: input.completedStepIds ?? previewOnboarding.completedStepIds,
+      updatedAt: new Date().toISOString(),
+    };
+    return previewOnboarding;
   },
   async signInAgentControlPlane() {
-    return mockAgentControlPlaneAuthStatus(true);
+    throw new Error("Okta sign-in is only available in the Electron app. The Electron preload bridge is not available.");
   },
   async signOutAgentControlPlane() {
-    return mockAgentControlPlaneAuthStatus(false);
+    return agentControlPlaneAuthStatus(false);
   },
   async getAgentControlPlaneAuthStatus() {
-    return mockAgentControlPlaneAuthStatus(false);
+    return agentControlPlaneAuthStatus(previewAuthEnabled());
+  },
+  async openAgentControlPlaneSetup() {
+    return { url: "http://agent-control-plane.query.prod.telnyx.io:8000/agents/new" };
   },
   async listHostedAgents() {
-    return mockAgents();
+    return [];
   },
   async listWorkspaces() {
-    return mockWorkspaces;
+    return previewWorkspaces;
   },
   async searchExplorer({ query }) {
     return explorerResults(query);
   },
   async listChatSessions() {
-    return mockChatSessions;
+    return previewChatSessions;
   },
-  async sendChatMessage({ sessionId, workspaceId, content, agentId, agentName, approvalMode, modelMode, contextScope }) {
-    let session = mockChatSessions.find((item) => item.id === sessionId);
+  async renameChatSession({ sessionId, title }) {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) throw new Error("Session name cannot be empty.");
+    const session = previewChatSessions.find((item) => item.id === sessionId);
+    if (!session) throw new Error("Session not found.");
+    session.title = trimmedTitle.slice(0, 120);
+    session.updatedAt = new Date().toISOString();
+    return session;
+  },
+  async sendChatMessage({ sessionId, workspaceId, content }) {
+    let session = previewChatSessions.find((item) => item.id === sessionId);
     if (!session) {
       session = {
         id: `chat-${Date.now()}`,
         title: content.slice(0, 54),
         workspaceId: workspaceId ?? "workspace-link",
-        model: "mock-link-runtime",
+        model: "live-runtime-unavailable",
         status: "active",
         updatedAt: new Date().toISOString(),
         messages: [message("system", "You are Telnyx Link.")],
       };
-      mockChatSessions = [session, ...mockChatSessions];
+      previewChatSessions = [session, ...previewChatSessions];
     }
     session.messages = [
       ...session.messages,
       message("user", content),
-      message(
-        "assistant",
-        `Mock Link response routed to ${agentName ?? agentId ?? "Personal OpenClaw"} using ${contextScope ?? "workspace"} context, ${modelMode ?? "Default - LiteLLM"}, and ${approvalMode ?? "auto"} approval mode for: ${content}`,
-        createChatArtifacts(content),
-      ),
+      message("assistant", "No live desktop bridge or model runtime is connected.", createChatArtifacts(content)),
     ];
     session.workspaceId = workspaceId ?? session.workspaceId;
     session.updatedAt = new Date().toISOString();
     return session;
+  },
+  async transcribeAudio() {
+    throw new Error("Add your LiteLLM API key in Settings to use voice input.");
   },
   async createChangeRequest(input) {
     const request: LinkChangeRequest = {
@@ -956,53 +947,35 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
       workspaceId: input.workspaceId,
       sourceSessionId: input.sourceSessionId,
     };
-    mockChangeRequests = [request, ...mockChangeRequests];
+    previewChangeRequests = [request, ...previewChangeRequests];
     return request;
   },
   async approveChangeRequest(id) {
-    mockChangeRequests = mockChangeRequests.map((request) =>
-      request.id === id
-        ? {
-            ...request,
-            status: "draft_pr_created",
-            updatedAt: new Date().toISOString(),
-            github: {
-              mode: "mocked",
-              branch: `link/change-${request.id}`,
-              prUrl: "https://github.com/team-telnyx/ai/pull/mock-link-change",
-              note: "Preview mode created a mocked draft PR record. No GitHub state changed.",
-            },
-          }
-        : request,
-    );
-    return mockChangeRequests.find((request) => request.id === id)!;
+    void id;
+    throw new Error("Live GitHub draft PR creation is unavailable without the Electron desktop bridge.");
   },
   async dismissChangeRequest(id) {
-    mockChangeRequests = mockChangeRequests.map((request) =>
+    previewChangeRequests = previewChangeRequests.map((request) =>
       request.id === id ? { ...request, status: "dismissed", updatedAt: new Date().toISOString() } : request,
     );
-    return mockChangeRequests.find((request) => request.id === id)!;
+    return previewChangeRequests.find((request) => request.id === id)!;
   },
   async listChangeRequests() {
-    return mockChangeRequests;
+    return previewChangeRequests;
   },
   async listAgents() {
-    return mockAgents();
+    return [];
   },
-  async sendAgentMessage({ agentId, content }) {
-    return {
-      mode: "mocked",
-      agentId,
-      message: `Preview mode staged a Slack agent message: ${content}`,
-    };
+  async sendAgentMessage() {
+    throw new Error("No live agent messaging adapter is connected.");
   },
   async listWorkboard({ provider = "local", boardId = "local" } = {}) {
-    return mockWorkboardSnapshot(provider === "auto" ? "local" : provider, boardId);
+    return localWorkboardSnapshot(provider === "auto" ? "local" : provider, boardId);
   },
   async createWorkboardCard(input) {
     const provider = input.provider === "auto" ? "local" : input.provider;
-    mockWorkboardCards = [
-      createMockWorkboardCard({
+    previewWorkboardCards = [
+      createLocalWorkboardCard({
         id: `card-${Date.now()}`,
         title: input.title,
         body: input.body,
@@ -1015,13 +988,13 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
         workspace: input.workspace,
         sourceUrl: input.sourceUrl,
       }),
-      ...mockWorkboardCards,
+      ...previewWorkboardCards,
     ];
-    return mockWorkboardSnapshot(provider, input.boardId ?? "local");
+    return localWorkboardSnapshot(provider, input.boardId ?? "local");
   },
   async updateWorkboardCard(input) {
     const provider = input.provider === "auto" ? "local" : input.provider;
-    mockWorkboardCards = mockWorkboardCards.map((card) =>
+    previewWorkboardCards = previewWorkboardCards.map((card) =>
       card.id === input.cardId
         ? {
             ...card,
@@ -1032,143 +1005,26 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
           }
         : card,
     );
-    return mockWorkboardSnapshot(provider, input.boardId ?? "local");
+    return localWorkboardSnapshot(provider, input.boardId ?? "local");
   },
   async dispatchWorkboard({ provider = "local", boardId = "local" }) {
     const resolvedProvider = provider === "auto" ? "local" : provider;
-    mockWorkboardCards = mockWorkboardCards.map((card) =>
+    previewWorkboardCards = previewWorkboardCards.map((card) =>
       card.status === "ready" && card.provider === resolvedProvider
         ? {
             ...card,
             status: "running",
-            diagnostics: ["Preview dispatch moved this card to running without starting a worker."],
             updatedAt: new Date().toISOString(),
           }
         : card,
     );
-    return mockWorkboardSnapshot(resolvedProvider, boardId);
+    return localWorkboardSnapshot(resolvedProvider, boardId);
   },
-  async searchPhoneNumbers({ countryCode, areaCode, locality }) {
-    const suffix = areaCode || "312";
-    return [
-      {
-        phoneNumber: `+1${suffix}5550142`,
-        countryCode: countryCode || "US",
-        locality: locality || "Chicago",
-        region: "IL",
-        type: "local",
-        features: ["voice", "emergency"],
-        monthlyCost: "1.00 USD",
-        upfrontCost: "1.00 USD",
-      },
-      {
-        phoneNumber: `+1${suffix}5550198`,
-        countryCode: countryCode || "US",
-        locality: locality || "Chicago",
-        region: "IL",
-        type: "local",
-        features: ["voice"],
-        monthlyCost: "1.00 USD",
-        upfrontCost: "1.00 USD",
-      },
-    ];
+  async listAccountPhoneNumbers() {
+    return [];
   },
-  async previewPhoneSetup(input) {
-    const { phoneNumber, displayName, webhookUrl } = input;
-    const safeName = displayName.trim() || "Telnyx Link Phone";
-    const assistant = mockPhoneVoiceAssistantPlan(input);
-    return {
-      id: `phone-plan-${Date.now()}`,
-      phoneNumber,
-      sipUsername: `link_${phoneNumber.replace(/\D/g, "").slice(-10)}`,
-      sipPassword: "preview-generated-password",
-      webhookUrl,
-      voiceAssistant: assistant,
-      warning: "Preview mode does not purchase the number or create Telnyx resources.",
-      purchaseReview: {
-        endpoint: "https://api.telnyx.com/v2/number_orders",
-        method: "POST",
-        body: {
-          phone_numbers: [{ phone_number: phoneNumber }],
-          connection_id: "{credential_connection_id}",
-          customer_reference: "telnyx-link-personal-phone",
-        },
-      },
-      resources: [
-        {
-          label: "Credential SIP connection for WebRTC registration",
-          endpoint: "https://api.telnyx.com/v2/credential_connections",
-          method: "POST",
-          body: {
-            connection_name: safeName,
-            user_name: `link_${phoneNumber.replace(/\D/g, "").slice(-10)}`,
-            active: true,
-            webhook_event_url: webhookUrl,
-            webhook_api_version: "2",
-          },
-        },
-        {
-          label: "Call Control application for inbound call events",
-          endpoint: "https://api.telnyx.com/v2/call_control_applications",
-          method: "POST",
-          body: { application_name: safeName, webhook_event_url: webhookUrl },
-        },
-        {
-          label: "Purchase and assign selected number to the SIP/WebRTC connection",
-          endpoint: "https://api.telnyx.com/v2/number_orders",
-          method: "POST",
-          body: {
-            phone_numbers: [{ phone_number: phoneNumber }],
-            connection_id: "{credential_connection_id}",
-            customer_reference: "telnyx-link-personal-phone",
-          },
-        },
-        ...(assistant.enabled
-          ? [
-              {
-                label: "Create Telnyx Voice AI assistant for after-hours call answering",
-                endpoint: assistant.assistantReview.endpoint,
-                method: "POST" as const,
-                body: assistant.assistantReview.body,
-              },
-              {
-                label: "Route inbound calls to Link Call Control so after-hours calls can start the AI assistant",
-                endpoint: assistant.callControlRouting.endpoint,
-                method: "POST" as const,
-                body: assistant.callControlRouting.body,
-              },
-            ]
-          : []),
-      ],
-      steps: [
-        "Review number purchase",
-        "Create SIP credential connection",
-        "Create Call Control app",
-        "Assign phone number",
-        ...(assistant.enabled ? ["Create Telnyx Voice AI assistant", "Enable after-hours AI answering and Calendar availability checks"] : []),
-        "Connect WebRTC client",
-      ],
-    };
-  },
-  async provisionPhoneSystem(input) {
-    const plan = await this.previewPhoneSetup(input);
-    return {
-      ...plan,
-      status: "provisioned",
-      warning: "Preview mode simulated provisioning without purchasing the number or creating Telnyx resources.",
-      credentialConnectionId: "preview-credential-connection",
-      callControlApplicationId: "preview-call-control-app",
-      voiceAssistantId: plan.voiceAssistant?.enabled ? "assistant-preview-link-phone" : undefined,
-      numberOrderId: "preview-number-order",
-      numberOrderStatus: "success",
-      orderedPhoneNumberId: "preview-number-order-phone-number",
-      raw: {
-        credentialConnection: { id: "preview-credential-connection" },
-        callControlApplication: { id: "preview-call-control-app" },
-        voiceAssistant: plan.voiceAssistant?.enabled ? { id: "assistant-preview-link-phone" } : undefined,
-        numberOrder: { id: "preview-number-order", status: "success" },
-      },
-    };
+  async listPhoneAssistants() {
+    return [];
   },
   async listMemoryBanks() {
     return [];
@@ -1177,12 +1033,126 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
     return [];
   },
   async listDojoState() {
-    return mockDojoState;
+    return emptyDojoState;
+  },
+  async listPublishedApps() {
+    return previewPublishedApps;
+  },
+  async createPublishIntent(input) {
+    const app = createPreviewPublishedApp(input);
+    previewPublishedApps = [app, ...previewPublishedApps.filter((item) => item.id !== app.id)];
+    return {
+      mode: "local_fallback",
+      message: "Publisher service is unavailable in browser preview; the publish intent was saved locally.",
+      intentId: `intent-${app.slug}-${Date.now()}`,
+      app,
+      version: app.latestVersion,
+    };
+  },
+  async createPublishedAppVersion(input) {
+    const app = previewPublishedApps.find((item) => item.id === input.appId);
+    if (!app) throw new Error("Published app not found.");
+    const version: LinkPublishedAppVersion = {
+      id: `version-${app.id}-${Date.now()}`,
+      appId: app.id,
+      version: new Date().toISOString().slice(0, 10),
+      sourceRepo: input.sourceRepo,
+      sourceRef: input.sourceRef ?? "main",
+      sourceSubdir: input.sourceSubdir ?? ".",
+      status: "submitted",
+      submittedAt: new Date().toISOString(),
+    };
+    const next = { ...app, status: "submitted" as const, latestVersion: version, updatedAt: new Date().toISOString() };
+    previewPublishedApps = [next, ...previewPublishedApps.filter((item) => item.id !== app.id)];
+    return { mode: "local_fallback", message: "Version request saved locally in browser preview.", app: next, version };
+  },
+  async reviewPublishedApp(input) {
+    const app = previewPublishedApps.find((item) => item.id === input.appId);
+    if (!app) throw new Error("Published app not found.");
+    const status: LinkPublishedAppStatus = input.decision === "approve" ? "approved" : "rejected";
+    const version = app.latestVersion ? { ...app.latestVersion, status, reviewedAt: new Date().toISOString() } : undefined;
+    const next = { ...app, status, latestVersion: version, reviewNotes: input.notes, updatedAt: new Date().toISOString() };
+    previewPublishedApps = [next, ...previewPublishedApps.filter((item) => item.id !== app.id)];
+    return { mode: "local_fallback", message: `App marked ${status} locally in browser preview.`, app: next, version };
+  },
+  async duplicatePublishedApp(id) {
+    const app = previewPublishedApps.find((item) => item.id === id);
+    if (!app) throw new Error("Published app not found.");
+    return {
+      mode: "local_fallback",
+      action: app.sourceRepo ? "source_ref" : "unavailable",
+      sourceRepo: app.sourceRepo,
+      sourceRef: app.sourceRef,
+      sourceSubdir: app.sourceSubdir,
+      command: app.sourceRepo ? `git clone ${app.sourceRepo}` : undefined,
+      message: app.sourceRepo ? "Use the source reference to duplicate or fork this app." : "No source reference is available.",
+    };
+  },
+  async openPublishedApp(id) {
+    const app = previewPublishedApps.find((item) => item.id === id);
+    if (!app) throw new Error("Published app not found.");
+    const url = app.vpnUrl || app.deployedUrl || app.previewUrl;
+    if (!url) throw new Error("This app does not have a private VPN URL yet.");
+    return { opened: true, url };
   },
   async auditEvents() {
     return [];
   },
 };
+
+function previewWidgetData(widgetId: string): WidgetDataResult {
+  const updatedAt = new Date().toISOString();
+  if (widgetId === "preview-support-volume") {
+    return {
+      widgetId,
+      source: "Tableau",
+      status: "ready",
+      updatedAt,
+      columns: ["day", "tickets"],
+      rows: [
+        { day: "Mon", tickets: 420 },
+        { day: "Tue", tickets: 388 },
+        { day: "Wed", tickets: 405 },
+        { day: "Thu", tickets: 371 },
+        { day: "Fri", tickets: 348 },
+      ],
+      metric: "348",
+      trend: "-72 vs first point",
+    };
+  }
+  if (widgetId === "preview-product-adoption") {
+    return {
+      widgetId,
+      source: "Tableau",
+      status: "ready",
+      updatedAt,
+      columns: ["week", "active_accounts"],
+      rows: [
+        { week: "W1", active_accounts: 1240 },
+        { week: "W2", active_accounts: 1310 },
+        { week: "W3", active_accounts: 1388 },
+        { week: "W4", active_accounts: 1462 },
+      ],
+      metric: "1,462",
+      trend: "+222 vs first point",
+    };
+  }
+  return {
+    widgetId,
+    source: "Tableau",
+    status: "ready",
+    updatedAt,
+    columns: ["stage", "amount"],
+    rows: [
+      { stage: "Prospect", amount: 2100000 },
+      { stage: "Qualified", amount: 4200000 },
+      { stage: "Commit", amount: 6100000 },
+      { stage: "Closed", amount: 8100000 },
+    ],
+    metric: "$8.1M",
+    trend: "+$6.0M vs first point",
+  };
+}
 
 function tool(
   name: string,
@@ -1205,7 +1175,7 @@ function tool(
   };
 }
 
-function createMockWork(
+function createLocalWork(
   id: string,
   title: string,
   subtitle: string,
@@ -1219,11 +1189,9 @@ function createMockWork(
     createdAt: new Date().toISOString(),
     summary: "Customer-visible action requires human approval before posting.",
     details: {
-      customerSafeDraft:
-        "Hi Acme Messaging Co.,\nWe are continuing to investigate the reported SMS delivery delay and will share the next confirmed update as soon as it is ready.",
-      internalRationale:
-        "The draft removes raw logs, internal Slack references, and carrier-private diagnostics. Approval is required before customer-visible posting.",
-      sourcesUsed: ["provided_thread_context", "mocked_link_shared_channel_policy", "mocked_tool_registry_metadata"],
+      customerSafeDraft: "",
+      internalRationale: "Live shared-channel drafting is unavailable without the Electron desktop bridge.",
+      sourcesUsed: [],
       approval: {
         approvalRequired: status === "pending",
         approvalStatus: status === "pending" ? "approval_required" : "not_required",
@@ -1232,7 +1200,7 @@ function createMockWork(
   };
 }
 
-function createMockWorkboardCard(input: {
+function createLocalWorkboardCard(input: {
   id: string;
   title: string;
   body?: string;
@@ -1270,8 +1238,55 @@ function createMockWorkboardCard(input: {
   };
 }
 
-function mockWorkboardSnapshot(provider: WorkboardProvider, boardId: string): WorkboardSnapshot {
-  const cards = mockWorkboardCards.filter((card) => provider === "local" || card.provider === provider);
+function createPreviewPublishedApp(input: LinkAppPublishInput): LinkPublishedApp {
+  const slug = slugify(input.slug || input.name);
+  const now = new Date().toISOString();
+  const appId = `app-${slug}`;
+  const version: LinkPublishedAppVersion = {
+    id: `version-${appId}-${Date.now()}`,
+    appId,
+    version: now.slice(0, 10),
+    sourceRepo: input.sourceRepo,
+    sourceRef: input.sourceRef || "main",
+    sourceSubdir: input.sourceSubdir || ".",
+    status: "submitted",
+    submittedAt: now,
+  };
+  return {
+    id: appId,
+    name: input.name,
+    slug,
+    description: input.description || "Private Link app.",
+    ownerSquad: input.ownerSquad,
+    audience: input.audience,
+    appType: input.appType,
+    access: "vpn",
+    riskLevel: input.riskLevel,
+    status: "submitted",
+    sourceRepo: input.sourceRepo,
+    sourceRef: input.sourceRef || "main",
+    sourceSubdir: input.sourceSubdir || ".",
+    buildCommand: input.buildCommand,
+    startCommand: input.startCommand,
+    outputDir: input.outputDir,
+    reviewers: input.reviewers ?? [],
+    envSchema: input.envSchema ?? [],
+    latestVersion: version,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64) || "link-app";
+}
+
+function localWorkboardSnapshot(provider: WorkboardProvider, boardId: string): WorkboardSnapshot {
+  const cards = previewWorkboardCards.filter((card) => provider === "local" || card.provider === provider);
   return {
     provider,
     boardId,
@@ -1289,100 +1304,7 @@ function mockWorkboardSnapshot(provider: WorkboardProvider, boardId: string): Wo
       { label: "Running", value: cards.filter((card) => card.status === "running").length, tone: "success" },
       { label: "Blocked", value: cards.filter((card) => card.status === "blocked").length, tone: "warning" },
     ],
-    message: "Preview mode uses Link's local fallback board.",
-  };
-}
-
-function mockPhoneVoiceAssistantPlan(input: PhoneSetupInput): PhoneVoiceAssistantPlan {
-  const name = input.voiceAssistantName?.trim() || `${input.displayName.trim() || "Telnyx Link"} Voice AI`;
-  const timezone = input.timezone?.trim() || Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago";
-  const workHours = input.workHours ?? {
-    mondayToFriday: "09:00-17:00",
-    saturday: "closed",
-    sunday: "closed",
-  };
-  const calendarWebhookUrl = input.googleCalendarWebhookUrl?.trim() || "https://link-phone-webhooks.telnyx.io/calendar";
-  const assistantBody = {
-    name,
-    description: "Telnyx Link personal phone after-hours assistant.",
-    enabled_features: ["telephony"],
-    greeting: "Hi, this is the AI assistant for this Telnyx Link phone. I can help schedule a sales call.",
-    instructions:
-      `Answer calls for ${input.displayName}. If the call is outside work hours (${workHours.mondayToFriday} ${timezone}), offer to schedule a sales call. Use Google Calendar availability before proposing times.`,
-    dynamic_variables_webhook_url: calendarWebhookUrl,
-    tools: [
-      {
-        type: "webhook",
-        webhook: {
-          name: "check_calendar_availability",
-          description: "Check Google Calendar free/busy availability for proposed sales call windows.",
-          url: calendarWebhookUrl,
-          method: "POST",
-          headers: [{ name: "X-Telnyx-Link-Tool", value: "calendar.free_busy" }],
-          body_parameters: {
-            type: "object",
-            properties: {
-              start_time: { type: "string", description: "ISO 8601 start time for the availability window." },
-              end_time: { type: "string", description: "ISO 8601 end time for the availability window." },
-              timezone: { type: "string", description: "IANA timezone for the caller-facing time window." },
-              duration_minutes: { type: "integer", description: "Requested meeting duration in minutes." },
-            },
-            required: ["start_time", "end_time", "timezone"],
-          },
-          timeout_ms: 5250,
-        },
-      },
-      {
-        type: "webhook",
-        webhook: {
-          name: "schedule_sales_call",
-          description: "Create a tentative Google Calendar sales-call hold after the caller confirms a time.",
-          url: calendarWebhookUrl,
-          method: "POST",
-          headers: [{ name: "X-Telnyx-Link-Tool", value: "calendar.create_tentative_sales_call" }],
-          body_parameters: {
-            type: "object",
-            properties: {
-              start_time: { type: "string", description: "ISO 8601 confirmed sales-call start time." },
-              end_time: { type: "string", description: "ISO 8601 confirmed sales-call end time." },
-              timezone: { type: "string", description: "IANA timezone for the meeting." },
-              caller_name: { type: "string", description: "Caller name." },
-              caller_company: { type: "string", description: "Caller company, if provided." },
-              caller_phone: { type: "string", description: "Caller callback phone number." },
-              caller_email: { type: "string", description: "Caller email, if provided." },
-              summary: { type: "string", description: "Short meeting subject." },
-            },
-            required: ["start_time", "end_time", "timezone", "caller_phone", "summary"],
-          },
-          timeout_ms: 5250,
-        },
-      },
-      { type: "hangup", hangup: {} },
-    ],
-    tags: ["telnyx-link", "personal-phone", "voice-ai"],
-  };
-  return {
-    enabled: Boolean(input.voiceAssistantEnabled),
-    name,
-    mode: input.voiceAssistantMode ?? "after_hours",
-    timezone,
-    workHours,
-    googleCalendar: {
-      enabled: Boolean(input.googleCalendarEnabled),
-      calendarId: input.googleCalendarId?.trim() || "primary",
-      mode: input.googleCalendarMode ?? "free_busy_only",
-      webhookUrl: calendarWebhookUrl,
-    },
-    assistantReview: {
-      endpoint: "https://api.telnyx.com/v2/ai/assistants",
-      method: "POST",
-      body: assistantBody,
-    },
-    callControlRouting: {
-      endpoint: "https://api.telnyx.com/v2/calls/{call_control_id}/actions/ai_assistant_start",
-      method: "POST",
-      body: { assistant: { id: "{voice_assistant_id}" } },
-    },
+    message: "Link local board is active.",
   };
 }
 
@@ -1393,7 +1315,7 @@ function connector(
   description: string,
   requiredAccess: string[],
   status: ConnectorStatus["status"],
-  mode: ConnectorStatus["mode"] = "mocked",
+  mode: ConnectorStatus["mode"] = "live",
 ): ConnectorStatus {
   return { id, name, category, description, requiredAccess, status, mode };
 }
@@ -1405,10 +1327,6 @@ function credentials(id: string, label: string, help: string, fields: string[]):
     help,
     fields: fields.map((name) => ({ name, configured: false, source: "missing" })),
   };
-}
-
-function tab(id: string, title: string, kind: WorkspaceTab["kind"], status: WorkspaceTab["status"]): WorkspaceTab {
-  return { id, title, kind, status, updatedAt: now };
 }
 
 function message(role: ChatMessage["role"], content: string, artifacts: ChatArtifact[] = []): ChatMessage {
@@ -1434,119 +1352,35 @@ function createChatArtifacts(prompt: string): ChatArtifact[] {
   ];
 }
 
-function kit(
-  id: string,
-  name: string,
-  description: string,
-  mastered: number,
-  total: number,
-  tone: DojoKit["tone"],
-): DojoKit {
-  return { id, name, description, mastered, total, tone };
-}
-
 function explorerResults(query: string): ExplorerResult[] {
   const term = query.trim() || "Telnyx Link";
   return [
     {
-      id: "explorer-guru-1",
-      title: "Messaging Delivery Investigation Playbook",
-      source: "guru",
+      id: "explorer-telnyx-support-center",
+      title: "Telnyx Support Center",
+      source: "telnyx_support",
       type: "doc",
-      permission: "mocked",
-      freshness: "Updated yesterday",
-      excerpt: `Guru card matching ${term}: customer-safe escalation checklist and evidence handling.`,
-      workspaceId: "workspace-acme",
+      permission: "allowed",
+      freshness: "Public Telnyx documentation",
+      excerpt: `Support Center source for ${term}: troubleshooting articles, product guidance, and customer-facing operational help.`,
+      workspaceId: "workspace-link",
+      url: "https://support.telnyx.com/en/",
     },
     {
-      id: "explorer-drive-1",
-      title: "Acme QBR and escalation notes",
-      source: "google_drive",
+      id: "explorer-telnyx-developer-docs",
+      title: "Telnyx Developer Docs",
+      source: "telnyx_developers",
       type: "doc",
-      permission: "needs_access",
-      freshness: "Drive OAuth required",
-      excerpt: `Google Drive adapter is ready for ${term}, but OAuth is not connected in preview.`,
-      workspaceId: "workspace-acme",
-    },
-    {
-      id: "explorer-link-file-1",
-      title: "customer-safe-draft.md",
-      source: "link_file",
-      type: "file",
       permission: "allowed",
-      freshness: "Generated today",
-      excerpt: "Link-created artifact from the active Acme SMS delivery response workspace.",
-      workspaceId: "workspace-acme",
-    },
-    {
-      id: "explorer-skill-1",
-      title: "SMS Delivery Investigation",
-      source: "skill",
-      type: "skill",
-      permission: "allowed",
-      freshness: "Git-backed skill",
-      excerpt: "Run this skill to inspect delivery signals and generate an internal support timeline.",
+      freshness: "Public Telnyx documentation",
+      excerpt: `Developer Docs source for ${term}: API guides, product overviews, SDK references, and implementation details.`,
+      workspaceId: "workspace-link",
+      url: "https://developers.telnyx.com/docs/overview",
     },
   ];
 }
 
-function mockAgents(): AgentSummary[] {
-  return [
-    {
-      id: "slack-bot-troubleshooting",
-      name: "bot-troubleshooting",
-      displayName: "bot-troubleshooting",
-      description: "Slack rescue bot for troubleshooting broken OpenClaw, Hermes, and internal agent workflows.",
-      status: "available",
-      type: "slack",
-      capabilities: ["agent-rescue", "openclaw", "hermes", "troubleshooting", "slack"],
-      visibility: "slack",
-      source: "slack",
-      slackUserId: "U0AR1M7T6GP",
-      slackChannelId: "D0ASV9TTDJ7",
-      slackChannel: "bot-troubleshooting",
-      squad: "agent-infra",
-      audience: "internal",
-      origin: "slack",
-      available: true,
-      requiresAuthentication: true,
-      updatedAt: "Pinned Link rescue route",
-    },
-    {
-      id: "agent-customer-escalation",
-      name: "customer-escalation-agent",
-      displayName: "Customer Escalation Agent",
-      description: "Public hosted agent for customer escalation triage.",
-      status: "active",
-      type: "hermes",
-      capabilities: ["support", "messaging", "customer-safe-drafts"],
-      visibility: "public",
-      source: "mock",
-      squad: "support.squad",
-      audience: "internal",
-      origin: "mock",
-      available: true,
-    },
-    {
-      id: "agent-link-assistant",
-      name: "link-assistant",
-      displayName: "Link Assistant",
-      description: "Slack-connected Link assistant for #telnyx-link-eng.",
-      status: "active",
-      type: "slack",
-      capabilities: ["docs", "feature-requests", "handoffs"],
-      visibility: "slack",
-      source: "mock",
-      slackChannel: "#telnyx-link-eng",
-      squad: "ai.platform.squad",
-      audience: "internal",
-      origin: "mock",
-      available: true,
-    },
-  ];
-}
-
-function mockAgentControlPlaneAuthStatus(signedIn: boolean): AgentControlPlaneAuthStatus {
+function agentControlPlaneAuthStatus(signedIn: boolean): AgentControlPlaneAuthStatus {
   return {
     baseUrl: "http://agent-control-plane.query.prod.telnyx.io:8000",
     authMode: "okta",
@@ -1558,6 +1392,15 @@ function mockAgentControlPlaneAuthStatus(signedIn: boolean): AgentControlPlaneAu
     actor: "preview@telnyx.com",
     onBehalfOf: "preview.squad",
     rev2Configured: false,
-    message: signedIn ? "Preview Okta session is mocked." : "Preview mode is not connected to Agent Control Plane.",
+    message: signedIn ? "Okta session is active." : "Agent Control Plane is not connected.",
   };
+}
+
+function previewAuthEnabled(): boolean {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("previewAuth") === "ready" || window.localStorage.getItem("telnyx-link-preview-auth") === "ready";
+  } catch {
+    return false;
+  }
 }
