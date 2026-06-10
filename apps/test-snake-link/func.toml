@@ -1,5 +1,5 @@
 [edge_compute]
-func_id = "3d6766ec-e1d6-4f18-b903-90fdfbf1a244"
+func_id = "f93ac750-abf4-4cba-bc09-b6428f3f5c8b"
 func_name = "test-snake-link"
 
 # This smoke app does not require runtime secrets.
