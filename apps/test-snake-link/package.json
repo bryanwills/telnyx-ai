@@ -1,0 +1,10 @@
+{
+  "name": "test-snake-link",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Static Snake smoke app for Telnyx Link app publishing.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  }
+}

@@ -1,0 +1,13 @@
+name: Test Snake Link
+slug: test-snake-link
+description: Internal smoke-test Snake app for validating Link app publishing.
+owner_squad: link-platform.squad
+audience: Link platform testers
+app_type: web
+install_command: npm ci
+build_command: npm run build
+output_dir: dist
+access: vpn
+reviewers:
+  - link-platform.squad
+risk_level: low

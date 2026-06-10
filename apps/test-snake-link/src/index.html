@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Test Snake Link</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hud" aria-label="Game status">
+        <div>
+          <p class="eyebrow">Telnyx Link Smoke Test</p>
+          <h1>Snake</h1>
+        </div>
+        <div class="score">
+          <span>Score</span>
+          <strong id="score">0</strong>
+        </div>
+      </section>
+      <canvas id="board" width="480" height="480" aria-label="Snake game board"></canvas>
+      <div class="controls" aria-label="Game controls">
+        <button type="button" data-dir="up" aria-label="Move up">↑</button>
+        <button type="button" data-dir="left" aria-label="Move left">←</button>
+        <button type="button" data-dir="down" aria-label="Move down">↓</button>
+        <button type="button" data-dir="right" aria-label="Move right">→</button>
+      </div>
+      <button class="restart" type="button" id="restart">Restart</button>
+    </main>
+    <script type="module" src="./snake.js"></script>
+  </body>
+</html>
