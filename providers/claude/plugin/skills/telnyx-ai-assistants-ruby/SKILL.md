@@ -60,6 +60,15 @@ Do not invent Telnyx parameters, enums, response fields, or webhook fields.
 - If the parameter, enum, or response field you need is not shown inline in this skill, read [references/api-details.md](references/api-details.md) before writing code.
 - Before using any operation in `## Additional Operations`, read [the optional-parameters section](references/api-details.md#optional-parameters) and [the response-schemas section](references/api-details.md#response-schemas).
 
+## Workflow and Relay Guidance
+
+- Use managed AI Assistants when you want Telnyx to own the voice runtime, tool execution surface, testing flow, and telephony path.
+- Use Conversation Workflows when the assistant needs multi-step routing such as intake, qualification, booking, escalation, or assistant handoff. Workflows support graph-style routing, per-step prompt behavior, per-step model and voice overrides, and per-step tool scoping.
+- Use Conversation Relay when your application already owns the LLM or business logic and you need Telnyx to bridge calls into a text-over-WebSocket workflow. Prefer Relay over raw media streaming when you only need transcribed text and synthesized replies, not audio frames.
+- Use raw bidirectional media instead of Relay only when you must process audio directly, run a custom speech pipeline, or depend on frame-level audio control.
+- For multilingual LiveKit agents on Telnyx, use `deepgram/flux-multi` or `flux-multi` for STT and add `language_hint` when you know the expected languages. Flux end-of-turn controls still apply.
+- If you need the exact workflow graph fields and they are not shown in this generated skill, inspect the current AI Assistants API schema before coding and use [guides/ai-assistants.md](/guides/ai-assistants.md) for the orchestration decision rules.
+
 ## Core Tasks
 
 ### Create an assistant
