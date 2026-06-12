@@ -239,3 +239,7 @@ See [Edge Compute guide](/guides/edge-compute.md).
 ## License
 
 [MIT](LICENSE)
+
+## AFK smoke test
+
+Verified the AFK coder pipeline on 2026-06-12.
