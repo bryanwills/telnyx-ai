@@ -12,7 +12,7 @@ This repo helps you discover where Edge Compute fits into an AI workflow, but th
 - the `telnyx-edge` CLI
 
 That means:
-- build/deploy/delete/secrets/bindings live in `telnyx-edge`
+- build/status/deploy/delete/secrets/bindings/storage live in `telnyx-edge`
 - agent/orchestration logic can live in `team-telnyx/ai`
 - `team-telnyx/ai` should not pretend to replace Edge Compute
 
@@ -28,14 +28,19 @@ Good bridge use cases:
    - expose AI-adjacent tools close to the runtime
 2. **Webhook ingestion + AI routing**
    - receive webhook traffic, normalize it, then hand off to AI logic
-3. **AI-adjacent functions**
+3. **Typed Telnyx event routing**
+   - route voice or messaging callbacks through a typed dispatcher before they fan into larger workflows
+4. **AI-adjacent functions**
    - redaction, enrichment, scoring, post-processing, lightweight transforms
 
 ## Quick Start
 
 ```bash
-# Authenticate with the dedicated Edge CLI (preferred for agents)
-telnyx-edge auth api-key set <your-api-key>
+# Authenticate with the dedicated Edge CLI
+telnyx-edge auth login
+
+# If your installed CLI exposes API-key auth, agents can use it non-interactively instead
+# telnyx-edge auth api-key set <your-api-key>
 
 # Start from the MCP server example
 telnyx-edge new-func --from-dir=examples/ts/mcp-server --name=my-mcp-server
@@ -43,10 +48,31 @@ cd my-mcp-server
 
 # Add required secrets and deploy
 telnyx-edge secrets add TELNYX_API_KEY <your-api-key>
+telnyx-edge secrets add SHARED_SECRET "$(openssl rand -hex 32)"
 telnyx-edge ship
 ```
 
 Once deployed, use `team-telnyx/ai` for orchestration and capability discovery, and use the deployed Edge endpoint for execution.
+
+Other strong upstream starting points:
+
+```bash
+# Typed call-event / webhook routing
+telnyx-edge new-func --from-dir=examples/ts/call-event-router --name=my-call-event-router
+
+# Minimal JavaScript webhook ingress
+telnyx-edge new-func --from-dir=examples/js/webhook-receiver --name=my-webhook-receiver
+```
+
+If you do not want to start from an upstream example, the current public Edge CLI also scaffolds fresh functions directly:
+
+```bash
+telnyx-edge new-func --language=js --name=my-js-function
+telnyx-edge new-func --language=ts --name=my-ts-function
+telnyx-edge new-func --language=python --name=my-python-function
+telnyx-edge new-func --language=go --name=my-go-function
+telnyx-edge new-func --language=quarkus --name=my-quarkus-function
+```
 
 ## API Reference
 
@@ -56,19 +82,53 @@ Common lifecycle commands:
 
 ```bash
 telnyx-edge auth status
+telnyx-edge status
 telnyx-edge list
+telnyx-edge delete-func
 telnyx-edge secrets list
+telnyx-edge bindings create <your-telnyx-api-key>
+telnyx-edge bindings validate
 telnyx-edge bindings get
+telnyx-edge storage kv create --name session-cache
+telnyx-edge storage kv key put <kv-id> prompt/system "edge-ready"
 ```
 
 | Command | Purpose |
 |---------|---------|
-| `telnyx-edge auth api-key set` | Authenticate the Edge CLI non-interactively |
+| `telnyx-edge auth login` | Authenticate the Edge CLI with the public upstream flow |
+| `telnyx-edge auth status` | Show whether the CLI is authenticated and which auth mode it is using |
+| `telnyx-edge status` | Check CLI configuration and connectivity before or after a deployment handoff |
 | `telnyx-edge new-func` | Scaffold a new function or clone an example |
 | `telnyx-edge ship` | Deploy the current function |
 | `telnyx-edge list` | List deployed functions |
+| `telnyx-edge delete-func` | Delete a deployed function by name |
 | `telnyx-edge secrets` | Manage runtime secrets |
 | `telnyx-edge bindings` | Manage Telnyx API key bindings |
+| `telnyx-edge storage` | Manage KV namespaces and keys via the dedicated Edge CLI |
+
+### Binding handoff
+
+When your function needs Telnyx API access, the upstream flow is:
+
+```bash
+telnyx-edge bindings create <your-telnyx-api-key>
+telnyx-edge bindings validate
+telnyx-edge bindings get
+```
+
+That keeps API-key injection owned by `telnyx-edge` instead of inventing a parallel `team-telnyx/ai` credential path.
+
+## Storage / KV scope decision
+
+Current upstream `telnyx-edge` CLI docs advertise storage/KV namespace and key operations as first-class commands.
+
+The bridge decision in `team-telnyx/ai` today is:
+
+- mention storage/KV explicitly so the command surface is honest
+- keep storage/KV execution in the dedicated `telnyx-edge` CLI
+- do **not** add `telnyx-agent` wrapper commands for storage/KV in this refresh
+
+That preserves the architecture boundary: `ai` stays on orchestration and discoverability, while `telnyx-edge` owns the actual runtime resource lifecycle.
 
 ## Prerequisites
 
@@ -81,12 +141,15 @@ telnyx-edge bindings get
 Edge Compute is managed through the separate CLI:
 
 ```sh
-# See the edge-compute repo for install/setup details
-# https://github.com/team-telnyx/edge-compute
+# Manual install from the upstream releases page
+tar -xzf telnyx-edge-*.tar.gz
+sudo mv telnyx-edge-*/telnyx-edge /usr/local/bin/
 
-telnyx-edge auth api-key set <your-api-key>
+telnyx-edge auth login
 telnyx-edge auth status
 ```
+
+For a one-liner install, the current upstream README also publishes platform-specific `curl ... | tar -xz` commands from the latest GitHub release assets. If your installed CLI exposes `auth api-key set`, agents can use that non-interactive flow after install, but the current upstream `v0.2.0` docs still document `telnyx-edge auth login` as the default auth entrypoint.
 
 Typical lifecycle commands live there:
 
@@ -94,9 +157,23 @@ Typical lifecycle commands live there:
 telnyx-edge new-func
 telnyx-edge ship
 telnyx-edge list
+telnyx-edge status
 telnyx-edge delete-func
 telnyx-edge secrets
 telnyx-edge bindings
+telnyx-edge storage
+```
+
+The current public quick-start documents direct scaffolding for `js`, `ts`, `python`, `go`, and `quarkus`; use those templates when you need a clean starting point instead of a prebuilt example.
+
+Concrete KV operations stay upstream as well:
+
+```sh
+telnyx-edge storage kv create --name agent-session-cache
+telnyx-edge storage kv list
+telnyx-edge storage kv key put <kv-id> prompts/system "hello from edge"
+telnyx-edge storage kv key get <kv-id> prompts/system
+telnyx-edge storage kv key delete <kv-id> prompts/system
 ```
 
 ## Reference architecture
@@ -110,8 +187,11 @@ A practical pattern looks like this:
    - Telnyx API integrations
 2. Use `team-telnyx/edge-compute` for:
    - function scaffolding
+   - status and connectivity checks
    - deployment
+   - deletion
    - secrets and bindings
+   - storage/KV lifecycle
    - running webhook/MCP edge endpoints
 3. Connect them with a stable boundary:
    - HTTP webhook
@@ -134,10 +214,13 @@ This layer should:
 ### Layer 2 — `team-telnyx/edge-compute`
 This layer should continue to own:
 - auth
+- status / connectivity diagnostics
 - function creation
 - deployment
+- deletion
 - secrets
 - bindings
+- storage / KV
 - runtime lifecycle and operational ergonomics
 
 ### Bridge between them
@@ -226,7 +309,10 @@ Use Edge Compute to host a narrow MCP adapter close to runtime, while `team-teln
 ### 2. Webhook receiver + AI router
 Use Edge Compute to receive inbound webhooks, normalize payloads, and forward structured requests into AI workflows.
 
-### 3. Post-processing function
+### 3. Typed call-event router
+Use the upstream `examples/ts/call-event-router` when you want a typed Telnyx event boundary before handing work to an agent or another service.
+
+### 4. Post-processing function
 Use Edge Compute for deterministic transforms such as:
 - redaction
 - enrichment
@@ -263,7 +349,19 @@ telnyx-edge ship
 
 Then have your AI workflow call or route into that edge endpoint.
 
-### Option C — Post-processing function
+### Option C — Typed call-event router on Edge
+Best when you want a compile-time checked Telnyx event boundary before AI routing.
+
+```sh
+telnyx-edge new-func --from-dir=examples/ts/call-event-router --name=my-call-event-router
+cd my-call-event-router
+npm run build
+telnyx-edge ship
+```
+
+Then map the typed event handlers to your AI or webhook orchestration path.
+
+### Option D — Post-processing function
 Best when you want a narrow but real AI-adjacent utility.
 
 Example use cases:
@@ -303,12 +401,13 @@ This repo **should not** claim that it:
 
 Here is the most practical end-to-end test loop:
 
-1. install `telnyx-edge` and authenticate with `telnyx-edge auth api-key set <your-api-key>`
-2. start from a working example in `team-telnyx/edge-compute`
-3. deploy it with `telnyx-edge ship`
-4. expose a stable HTTP or MCP boundary
-5. call that deployed endpoint from an AI workflow
-6. iterate on the boundary, not on duplicated deployment logic
+1. install `telnyx-edge` and authenticate with `telnyx-edge auth login`
+2. verify readiness with `telnyx-edge auth status` and `telnyx-edge status`
+3. start from a working example in `team-telnyx/edge-compute`
+4. deploy it with `telnyx-edge ship`
+5. expose a stable HTTP or MCP boundary
+6. call that deployed endpoint from an AI workflow
+7. iterate on the boundary, not on duplicated deployment logic
 
 That gives you a real integration test without pretending `team-telnyx/ai` owns lifecycle management.
 
@@ -316,10 +415,11 @@ That gives you a real integration test without pretending `team-telnyx/ai` owns 
 
 If you want to use Edge Compute from an AI workflow today:
 
-1. install `telnyx-edge` and authenticate with `telnyx-edge auth api-key set <your-api-key>`
-2. create/deploy your function in `team-telnyx/edge-compute`
-3. expose a stable HTTP or MCP boundary
-4. use `team-telnyx/ai` to orchestrate calls into that deployed endpoint
+1. install `telnyx-edge` and authenticate with `telnyx-edge auth login`
+2. verify the CLI state with `telnyx-edge auth status` and `telnyx-edge status`
+3. create/deploy your function in `team-telnyx/edge-compute`
+4. expose a stable HTTP or MCP boundary
+5. use `team-telnyx/ai` to orchestrate calls into that deployed endpoint
 
 For deploy/runtime specifics, use the `edge-compute` repo as the source of truth.
 

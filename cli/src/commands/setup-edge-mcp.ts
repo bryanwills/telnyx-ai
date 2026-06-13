@@ -11,8 +11,11 @@ interface SetupEdgeMcpResult {
   auth_mode: "api_key" | "oauth" | "none" | "unknown";
   api_key_auth_supported: boolean;
   example: string;
+  scaffold_commands: string[];
   auth_command: string;
   deploy_command: string;
+  secret_commands: string[];
+  validation_commands: string[];
   prerequisites: string[];
   notes: string[];
 }
@@ -37,8 +40,26 @@ export async function setupEdgeMcpCommand(flags: Record<string, string | boolean
     auth_mode: authStatus.mode,
     api_key_auth_supported: apiKeyAuthSupported,
     example: MCP_EXAMPLE,
+    scaffold_commands: [
+      "telnyx-edge new-func --language=js --name=<name>",
+      "telnyx-edge new-func --language=ts --name=<name>",
+      "telnyx-edge new-func --language=python --name=<name>",
+      "telnyx-edge new-func --language=go --name=<name>",
+      "telnyx-edge new-func --language=quarkus --name=<name>",
+    ],
     auth_command: authCommand,
     deploy_command: deployCommand,
+    secret_commands: [
+      "telnyx-edge secrets add TELNYX_API_KEY <your-api-key>",
+      "telnyx-edge secrets add SHARED_SECRET \"$(openssl rand -hex 32)\"",
+    ],
+    validation_commands: [
+      "telnyx-edge auth status",
+      "telnyx-edge status",
+      "telnyx-edge bindings create <your-telnyx-api-key>",
+      "telnyx-edge bindings validate",
+      "telnyx-edge bindings get",
+    ],
     prerequisites: [
       "Install telnyx-edge",
       `Authenticate with ${authCommand}`,
@@ -46,7 +67,10 @@ export async function setupEdgeMcpCommand(flags: Record<string, string | boolean
     ],
     notes: [
       "team-telnyx/ai provides the integration pattern, not the Edge lifecycle.",
-      "Use telnyx-edge for auth, deploy, secrets, bindings, and lifecycle management.",
+      "Use telnyx-edge for auth, status, deploy, delete, secrets, bindings, and lifecycle management.",
+      "The upstream MCP example currently expects both TELNYX_API_KEY and SHARED_SECRET before telnyx-edge ship.",
+      "Bindings create and validate live upstream as telnyx-edge commands; this helper only points to them.",
+      "KV/storage commands live in telnyx-edge as well, but this bridge does not wrap them directly today.",
       "After deploy, connect the exposed MCP or HTTP boundary back into your AI workflow.",
     ],
   };
@@ -72,6 +96,18 @@ export async function setupEdgeMcpCommand(flags: Record<string, string | boolean
   console.log(`  Example template: ${MCP_EXAMPLE}`);
   console.log(`  Auth step: ${authCommand}`);
   console.log(`  Suggested flow: ${deployCommand}`);
+  console.log("  Scaffold alternatives:");
+  for (const command of result.scaffold_commands) {
+    console.log(`    - ${command}`);
+  }
+  console.log("  Required secrets:");
+  for (const command of result.secret_commands) {
+    console.log(`    - ${command}`);
+  }
+  console.log("  Validation commands:");
+  for (const command of result.validation_commands) {
+    console.log(`    - ${command}`);
+  }
   console.log("\n  Notes:");
   for (const note of result.notes) {
     console.log(`    - ${note}`);

@@ -74,25 +74,34 @@ export async function edgeDoctorCommand(flags: Record<string, string | boolean>)
   if (!installed) {
     nextSteps = [
       "Install the dedicated Edge Compute CLI from team-telnyx/edge-compute releases.",
-      "Then authenticate: telnyx-edge auth api-key set <your-api-key> (preferred) or telnyx-edge auth login",
-      "Then start from a real example such as examples/ts/mcp-server or examples/js/webhook-receiver.",
+      "Then authenticate with the upstream-documented flow: telnyx-edge auth login",
+      "If your installed telnyx-edge build exposes auth api-key set, agents can use that non-interactive path instead.",
+      "Then start from a real example such as examples/ts/mcp-server, examples/ts/call-event-router, or examples/js/webhook-receiver.",
     ];
   } else if (!authenticated) {
     nextSteps = apiKeyAuthSupported
       ? [
           "Authenticate non-interactively: telnyx-edge auth api-key set <your-api-key>",
           "Verify with: telnyx-edge auth status",
+          "Check CLI and connectivity with: telnyx-edge status",
           "Then start from a real example and deploy with telnyx-edge ship.",
         ]
       : [
           "Authenticate with: telnyx-edge auth login",
           "Verify with: telnyx-edge auth status",
+          "Check CLI and connectivity with: telnyx-edge status",
           "Then start from a real example and deploy with telnyx-edge ship.",
         ];
   } else {
     nextSteps = [
       "Start from a real example: telnyx-edge new-func --from-dir=examples/ts/mcp-server --name=my-mcp-server",
+      "Or scaffold directly with the upstream language templates: telnyx-edge new-func --language=js|ts|python|go|quarkus --name=<name>",
+      "For the MCP example, add both TELNYX_API_KEY and SHARED_SECRET before shipping.",
+      "Typed webhook/event routing starts well from: telnyx-edge new-func --from-dir=examples/ts/call-event-router --name=my-call-event-router",
+      "Create or validate your Telnyx API binding with: telnyx-edge bindings create <your-telnyx-api-key>, telnyx-edge bindings validate, and telnyx-edge bindings get",
       "Deploy with: telnyx-edge ship",
+      "Provision KV resources directly in telnyx-edge when needed: telnyx-edge storage kv create --name <name> and telnyx-edge storage kv key put <kv-id> <key> <value>",
+      "Inspect or clean up lifecycle with: telnyx-edge list, telnyx-edge status, or telnyx-edge delete-func <name>",
       "Then connect the exposed HTTP or MCP boundary back into your AI workflow.",
     ];
   }

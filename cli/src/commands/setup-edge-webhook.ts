@@ -11,8 +11,11 @@ interface SetupEdgeWebhookResult {
   auth_mode: "api_key" | "oauth" | "none" | "unknown";
   api_key_auth_supported: boolean;
   example: string;
+  scaffold_commands: string[];
   auth_command: string;
   deploy_command: string;
+  validation_commands: string[];
+  kv_handoff_commands: string[];
   prerequisites: string[];
   notes: string[];
 }
@@ -37,8 +40,26 @@ export async function setupEdgeWebhookCommand(flags: Record<string, string | boo
     auth_mode: authStatus.mode,
     api_key_auth_supported: apiKeyAuthSupported,
     example: WEBHOOK_EXAMPLE,
+    scaffold_commands: [
+      "telnyx-edge new-func --language=js --name=<name>",
+      "telnyx-edge new-func --language=ts --name=<name>",
+      "telnyx-edge new-func --language=python --name=<name>",
+      "telnyx-edge new-func --language=go --name=<name>",
+      "telnyx-edge new-func --language=quarkus --name=<name>",
+    ],
     auth_command: authCommand,
     deploy_command: deployCommand,
+    validation_commands: [
+      "telnyx-edge auth status",
+      "telnyx-edge status",
+      "telnyx-edge bindings create <your-telnyx-api-key>",
+      "telnyx-edge bindings validate",
+      "telnyx-edge bindings get",
+    ],
+    kv_handoff_commands: [
+      "telnyx-edge storage kv create --name <name>",
+      "telnyx-edge storage kv key put <kv-id> <key> <value>",
+    ],
     prerequisites: [
       "Install telnyx-edge",
       `Authenticate with ${authCommand}`,
@@ -46,7 +67,8 @@ export async function setupEdgeWebhookCommand(flags: Record<string, string | boo
     ],
     notes: [
       "Use this when your AI workflow needs an HTTP ingress point at the edge.",
-      "The deployed function lifecycle is still owned by telnyx-edge.",
+      "The deployed function lifecycle, bindings, and KV/storage resources are still owned by telnyx-edge.",
+      "For a typed TypeScript webhook/event dispatcher, prefer the upstream examples/ts/call-event-router template.",
       "After deploy, point your webhook-producing system at the Edge endpoint and let team-telnyx/ai handle orchestration guidance.",
     ],
   };
@@ -72,6 +94,18 @@ export async function setupEdgeWebhookCommand(flags: Record<string, string | boo
   console.log(`  Example template: ${WEBHOOK_EXAMPLE}`);
   console.log(`  Auth step: ${authCommand}`);
   console.log(`  Suggested flow: ${deployCommand}`);
+  console.log("  Scaffold alternatives:");
+  for (const command of result.scaffold_commands) {
+    console.log(`    - ${command}`);
+  }
+  console.log("  Validation commands:");
+  for (const command of result.validation_commands) {
+    console.log(`    - ${command}`);
+  }
+  console.log("  KV handoff commands:");
+  for (const command of result.kv_handoff_commands) {
+    console.log(`    - ${command}`);
+  }
   console.log("\n  Notes:");
   for (const note of result.notes) {
     console.log(`    - ${note}`);
