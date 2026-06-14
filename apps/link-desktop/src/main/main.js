@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import extractZip from "extract-zip";
 import {
   createDefaultToolRegistry,
+  DEFAULT_SKILLS_DIR as defaultLinkSkillsDir,
   discoverSkills,
   InMemoryAuditLogger,
   importLocalLinkApp,
@@ -20,11 +21,11 @@ import {
   MessageGatewayService,
   metadataForTool,
   validateOkfBundle,
-} from "../../../../tools/link/dist/index.js";
+} from "@telnyx/link";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const execFileAsync = promisify(execFile);
-const repoRoot = path.resolve(__dirname, "../../../..");
+const sourceRepoRoot = path.resolve(__dirname, "../../../..");
 const auditLogger = new InMemoryAuditLogger();
 const runtime = new LinkRuntime({ auditLogger });
 const nativeFetch = globalThis.fetch.bind(globalThis);
@@ -180,6 +181,19 @@ const defaultGooglePeopleApiBaseUrl = "https://people.googleapis.com/v1";
 const defaultGoogleOAuthTokenUrl = "https://oauth2.googleapis.com/token";
 const appDisplayName = "Link";
 const appIconPath = path.resolve(__dirname, "../../public/link-icon.png");
+
+function desktopWorkspaceRoot() {
+  return app.isPackaged ? path.join(app.getPath("userData"), "workspace") : sourceRepoRoot;
+}
+
+function localEdgeAppsRoot() {
+  return path.join(desktopWorkspaceRoot(), "edge-apps");
+}
+
+function localAppsRoot() {
+  return path.join(desktopWorkspaceRoot(), "apps");
+}
+
 const knowledgeAgentAskUrl = "https://api.telnyx.com/v2/knowledge_agent/ask";
 const keyScopedHindsightBankId = "hindsight-key-scoped";
 const aidaAgentId = "agent-aida";
@@ -1900,9 +1914,9 @@ async function getSkillMarkdown(inputName) {
     failures.push(errorMessage(error));
   }
 
-  if (source.localFallback) {
+  if (source.localFallbackPath) {
     try {
-      const markdown = await fs.readFile(path.join(repoRoot, source.path), "utf8");
+      const markdown = await fs.readFile(source.localFallbackPath, "utf8");
       return {
         name,
         markdown,
@@ -1941,14 +1955,15 @@ function skillMarkdownSource(name) {
     return {
       repo: linkSkillRepo,
       path: linkSkillPaths[slug],
-      localFallback: true,
+      localFallbackPath: path.join(defaultLinkSkillsDir, `${slug}.md`),
     };
   }
 
+  const repoSkillPath = `skills/${slug}/SKILL.md`;
   return {
     repo: linkSkillRepo,
-    path: `skills/${slug}/SKILL.md`,
-    localFallback: true,
+    path: repoSkillPath,
+    localFallbackPath: app.isPackaged ? "" : path.join(sourceRepoRoot, repoSkillPath),
   };
 }
 
@@ -2013,7 +2028,7 @@ function githubBlobUrl(repo, repoPath) {
 }
 
 async function discoverTelnyxSkills() {
-  const skillsRoot = path.join(repoRoot, "skills");
+  const skillsRoot = path.join(sourceRepoRoot, "skills");
   const entries = await fs.readdir(skillsRoot, { withFileTypes: true }).catch(() => []);
   const skills = [];
 
@@ -7910,7 +7925,7 @@ function terminalSessionStatus(session) {
     running,
     pid: running ? session.process.pid : undefined,
     shell: enabled ? process.env.SHELL || "/bin/zsh" : "",
-    cwd: repoRoot,
+    cwd: desktopWorkspaceRoot(),
     buffer: session?.buffer || "",
     lastExit: session?.lastExit || null,
     startedAt: session?.startedAt || null,
@@ -7952,11 +7967,13 @@ function startTerminalProcess(sender, input = {}) {
     return terminalSessionStatus(session);
   }
   const shell = process.env.SHELL || "/bin/zsh";
+  const cwd = desktopWorkspaceRoot();
+  fsSync.mkdirSync(cwd, { recursive: true });
   session.buffer = "";
   session.lastExit = null;
   session.startedAt = new Date().toISOString();
   session.process = spawn(shell, ["-i"], {
-    cwd: repoRoot,
+    cwd,
     env: {
       ...process.env,
       TERM: process.env.TERM || "xterm-256color",
@@ -7964,7 +7981,7 @@ function startTerminalProcess(sender, input = {}) {
     },
     stdio: ["pipe", "pipe", "pipe"],
   });
-  appendTerminalOutput(sender, session, `Telnyx Link terminal started in ${repoRoot}\n`);
+  appendTerminalOutput(sender, session, `Telnyx Link terminal started in ${cwd}\n`);
   session.process.stdout.on("data", (chunk) => appendTerminalOutput(sender, session, chunk));
   session.process.stderr.on("data", (chunk) => appendTerminalOutput(sender, session, chunk));
   session.process.on("exit", (code, signal) => {
@@ -8709,7 +8726,7 @@ async function importLocalEdgeApp(input = {}) {
     }
 
     const imported = await importLocalLinkApp(importSourceDirectory, {
-      destinationRoot: path.join(repoRoot, "edge-apps"),
+      destinationRoot: localEdgeAppsRoot(),
       scope,
       slug: normalizeOptionalString(input.slug),
       name: normalizeOptionalString(input.name),
@@ -8954,18 +8971,18 @@ async function directoryHasLocalLinkManifest(directoryPath) {
 
 async function findGeneratedEdgeAppDirectory(slug) {
   const candidates = [
-    path.join(repoRoot, "edge-apps", slug),
-    path.join(repoRoot, "edge-apps", "personal", slug),
-    path.join(repoRoot, "edge-apps", "company", slug),
-    path.join(repoRoot, "apps", slug),
-    path.join(repoRoot, "apps", `${slug}-link`),
-    path.join(repoRoot, "apps", `test-${slug}-link`),
+    path.join(localEdgeAppsRoot(), slug),
+    path.join(localEdgeAppsRoot(), "personal", slug),
+    path.join(localEdgeAppsRoot(), "company", slug),
+    path.join(localAppsRoot(), slug),
+    path.join(localAppsRoot(), `${slug}-link`),
+    path.join(localAppsRoot(), `test-${slug}-link`),
   ];
   for (const candidate of candidates) {
     if (await directoryHasLocalLinkManifest(candidate)) return candidate;
   }
 
-  const searchRoots = [path.join(repoRoot, "edge-apps"), path.join(repoRoot, "apps")];
+  const searchRoots = await localEdgeDraftSearchRoots();
   for (const searchRoot of searchRoots) {
     for (const candidate of await localEdgeDraftCandidateDirectories(searchRoot, 2)) {
       if (!path.basename(candidate).toLowerCase().includes(slug)) continue;
@@ -8976,7 +8993,7 @@ async function findGeneratedEdgeAppDirectory(slug) {
 }
 
 async function localEdgeDraftSearchRoots() {
-  return [path.join(repoRoot, "edge-apps"), path.join(repoRoot, "apps")];
+  return [localEdgeAppsRoot(), localAppsRoot()];
 }
 
 async function localEdgeDraftCandidateDirectories(searchRoot, maxDepth = 2) {

@@ -35,6 +35,7 @@
     "preview": "vite --host 127.0.0.1"
   },
   "dependencies": {
+    "@telnyx/link": "file:../../tools/link",
     "@telnyx/webrtc": "^2.27.1",
     "extract-zip": "^2.0.1",
     "lucide-react": "^0.561.0",

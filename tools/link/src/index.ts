@@ -5,7 +5,7 @@ export { InMemoryAuditLogger } from "./audit.js";
 export { memoryScopes, MemoryStorePlaceholder, futureMemoryBehavior } from "./memory.js";
 export { runSharedChannelDraft, formatSharedChannelResponse } from "./shared-channel.js";
 export { redactInternalOnlyData, assertCustomerSafeText } from "./safety/redaction.js";
-export { discoverSkills, getSkillByName, runSkill } from "./skills/loader.js";
+export { DEFAULT_SKILLS_DIR, discoverSkills, getSkillByName, runSkill } from "./skills/loader.js";
 export { parseFrontmatter, normalizeSkillMetadata } from "./skills/frontmatter.js";
 export { ToolRegistry, metadataForTool, mockedTools, createDefaultToolRegistry } from "./tools.js";
 export { parseLinkAppManifestText, normalizeLinkAppManifest } from "./app-manifest.js";
