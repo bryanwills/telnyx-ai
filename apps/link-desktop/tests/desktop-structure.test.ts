@@ -91,6 +91,11 @@ test("Electron windows follow the internal app security baseline", async () => {
   assert.match(main, /checkedRendererDevServerUrl/);
   assert.match(main, /isLoopbackHostname/);
   assert.match(main, /shell\.openExternal/);
+  assert.match(main, /async function openExternalBrowserUrl/);
+  assert.match(main, /Refusing to open a non-HTTPS external URL/);
+  assert.doesNotMatch(main, /shell\.openExternal\(url\)/);
+  assert.doesNotMatch(main, /shell\.openExternal\(openUri\)/);
+  assert.doesNotMatch(main, /shell\.openExternal\(device\.verification_uri\)/);
   assert.match(index, /Content-Security-Policy/);
   assert.match(index, /object-src 'none'/);
   assert.match(index, /frame-src 'self' http:\/\/127\.0\.0\.1:\* http:\/\/localhost:\* https:\/\/\*\.online\.tableau\.com https:\/\/public\.tableau\.com https:\/\/\*\.tableau\.com https:\/\/\*\.tableauusercontent\.com/);

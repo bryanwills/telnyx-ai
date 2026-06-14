@@ -962,13 +962,13 @@ function registerTrustedRendererWindow(win) {
     trustedRendererWebContentsIds.delete(webContentsId);
   });
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (isExternalBrowserUrl(url)) void shell.openExternal(url);
+    if (isExternalBrowserUrl(url)) void openExternalBrowserUrl(url);
     return { action: "deny" };
   });
   win.webContents.on("will-navigate", (event, url) => {
     if (isAllowedRendererNavigation(url)) return;
     event.preventDefault();
-    if (isExternalBrowserUrl(url)) void shell.openExternal(url);
+    if (isExternalBrowserUrl(url)) void openExternalBrowserUrl(url);
   });
 }
 
@@ -1012,6 +1012,11 @@ function isLoopbackHostname(hostname) {
 function isExternalBrowserUrl(value) {
   const url = parseUrl(value);
   return Boolean(url && url.protocol === "https:");
+}
+
+async function openExternalBrowserUrl(value) {
+  if (!isExternalBrowserUrl(value)) throw new Error("Refusing to open a non-HTTPS external URL.");
+  await shell.openExternal(value);
 }
 
 function secureIpcHandle(channel, listener) {
@@ -4209,7 +4214,7 @@ async function connectPylonWithOAuth() {
     cancelId: 1,
   });
   if (decision.response !== 0) throw new Error("Pylon connection was cancelled.");
-  if (openUri) await shell.openExternal(openUri);
+  if (openUri) await openExternalBrowserUrl(openUri);
 
   const token = await pollPylonDeviceToken(oauth, clientId, device);
   await savePylonOAuthToken(token);
@@ -10093,7 +10098,7 @@ async function openPublishedApp(id) {
   const url = app.vpnUrl || app.deployedUrl || app.previewUrl;
   if (!url) throw new Error("This app does not have a private VPN URL yet.");
   if (!isAllowedLinkAppUrl(url)) throw new Error("Refusing to open a non-approved Link app URL.");
-  void shell.openExternal(url);
+  void openExternalBrowserUrl(url);
   auditPublisherAction("publisher.app.opened", "open_app", app.id, { url });
   return { opened: true, url };
 }
@@ -11233,14 +11238,14 @@ async function signInAgentControlPlane() {
     });
 
     authWindow.webContents.setWindowOpenHandler(({ url }) => {
-      if (isExternalBrowserUrl(url)) void shell.openExternal(url);
+      if (isExternalBrowserUrl(url)) void openExternalBrowserUrl(url);
       return { action: "deny" };
     });
 
     authWindow.webContents.on("will-navigate", (event, url) => {
       if (isAllowedAuthWindowNavigation(url, callbackServer.callbackUrl)) return;
       event.preventDefault();
-      if (isExternalBrowserUrl(url)) void shell.openExternal(url);
+      if (isExternalBrowserUrl(url)) void openExternalBrowserUrl(url);
     });
 
     authWindow.loadURL(loginUrl).catch((error) => {
@@ -11523,7 +11528,7 @@ async function openAgentControlPlaneSetup(input = {}) {
     if (isAllowedAgentControlPlaneSetupUrl(url)) {
       void setupWindow.loadURL(url);
     } else if (isExternalBrowserUrl(url)) {
-      void shell.openExternal(url);
+      void openExternalBrowserUrl(url);
     }
     return { action: "deny" };
   });
@@ -11531,7 +11536,7 @@ async function openAgentControlPlaneSetup(input = {}) {
   setupWindow.webContents.on("will-navigate", (event, url) => {
     if (!isAllowedAgentControlPlaneSetupUrl(url)) {
       event.preventDefault();
-      if (isExternalBrowserUrl(url)) void shell.openExternal(url);
+      if (isExternalBrowserUrl(url)) void openExternalBrowserUrl(url);
     }
   });
 
@@ -11849,7 +11854,7 @@ async function connectGitHubWithDeviceFlow() {
     cancelId: 1,
   });
   if (decision.response !== 0) throw new Error("GitHub pairing was cancelled.");
-  await shell.openExternal(device.verification_uri);
+  await openExternalBrowserUrl(device.verification_uri);
   const token = await pollGitHubDeviceToken(clientId, device);
   await saveSecureCredential(githubUserAccessTokenField, token.access_token);
 
@@ -12003,7 +12008,7 @@ async function connectGuruWithOAuth() {
       if (isAllowedGuruAuthWindowNavigation(url, callbackServer.callbackUrl)) {
         void authWindow.loadURL(url);
       } else if (isExternalBrowserUrl(url)) {
-        void shell.openExternal(url);
+        void openExternalBrowserUrl(url);
       }
       return { action: "deny" };
     });
@@ -12011,7 +12016,7 @@ async function connectGuruWithOAuth() {
     authWindow.webContents.on("will-navigate", (event, url) => {
       if (isAllowedGuruAuthWindowNavigation(url, callbackServer.callbackUrl)) return;
       event.preventDefault();
-      if (isExternalBrowserUrl(url)) void shell.openExternal(url);
+      if (isExternalBrowserUrl(url)) void openExternalBrowserUrl(url);
     });
 
     authWindow.loadURL(loginUrl).catch((error) => {
