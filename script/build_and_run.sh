@@ -8,6 +8,35 @@ APP_NAME="Electron"
 MAIN_PROCESS_PATTERN="$APP_DIR/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
 ENV_FILE="$APP_DIR/.env.local"
 
+configure_node_path() {
+  local candidate
+  local node_bin_candidates=()
+  shopt -s nullglob
+  node_bin_candidates+=(
+    "${NVM_BIN:-}"
+    "$HOME/.nvm/versions/node"/*/bin
+    "$HOME/.volta/bin"
+    "$HOME/.fnm/node-versions"/*/installation/bin
+    "/opt/homebrew/bin"
+    "/usr/local/bin"
+    "$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin"
+  )
+  shopt -u nullglob
+
+  for candidate in "${node_bin_candidates[@]}"; do
+    if [[ -n "$candidate" && -x "$candidate/npm" ]]; then
+      PATH="$candidate:$PATH"
+      export PATH
+      return
+    fi
+  done
+
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "npm was not found. Install Node.js 20+ or set NVM_BIN/PATH before running $0." >&2
+    exit 127
+  fi
+}
+
 load_env() {
   if [[ -f "$ENV_FILE" ]]; then
     set -a
@@ -42,6 +71,7 @@ launch_app() {
 
 stop_existing
 load_env
+configure_node_path
 build_app
 
 case "$MODE" in
