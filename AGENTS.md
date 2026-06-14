@@ -63,7 +63,7 @@ For the Telnyx Link desktop shell, use `./script/build_and_run.sh` from the repo
 | `plugins/opencode/`     | OpenCode plugin (auth + TUI for Telnyx-hosted models).                    |
 | `tools/python/`         | Python agent toolkit (PyPI: `telnyx-agent-toolkit`).                      |
 | `tools/typescript/`     | TypeScript agent toolkit (npm).                                           |
-| `tools/link/`           | Telnyx Link MVP skeleton for internal employee AI companion workflows.    |
+| `tools/link/`           | Telnyx Link local runtime and managed-service contracts for skills, apps, approvals, and shared-channel safety. |
 | `tools/link-skill-registry/` | Private Link Skill Registry Edge service for skill stars, installs/downloads, and run counts. |
 | `tools/mcp/`            | MCP proxy server for the generic Telnyx API MCP endpoint.                |
 | `tools/mcp-apps/`       | Focused app-layer MCP servers with MCP Apps UI resources.                |
