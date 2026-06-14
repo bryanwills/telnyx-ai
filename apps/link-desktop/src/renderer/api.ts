@@ -1,4 +1,4 @@
-import { createDefaultDialerConfig, dialerTemplates, normalizeDialerConfig, type DialerConfig, type DialerState } from "./phone/dialer-config.js";
+import { createDefaultDialerConfig, normalizeDialerConfig, type DialerConfig, type DialerState } from "./phone/dialer-config.js";
 
 export type ViewId =
   | "workspaces"
@@ -642,14 +642,22 @@ export interface AgentInteractionResult {
 }
 
 export interface PhoneNumberOption {
+  id?: string;
   phoneNumber: string;
   countryCode: string;
   locality?: string;
   region?: string;
   type?: string;
+  status?: string;
   features: string[];
   monthlyCost?: string;
   upfrontCost?: string;
+  connectionId?: string;
+  messagingProfileId?: string;
+  emergencyAddressId?: string;
+  tags?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface PhoneAssistantOption {
@@ -669,6 +677,16 @@ export interface PhoneCallHistoryRow {
   direction: "inbound" | "outbound";
   status: "answered" | "missed" | "voicemail" | "failed";
   time: string;
+  startedAt?: string;
+  durationSeconds?: number;
+  callControlId?: string;
+  callSessionId?: string;
+  callLegId?: string;
+  recordingId?: string;
+  recordingUrl?: string;
+  transcriptionId?: string;
+  transcriptionText?: string;
+  rawStatus?: string;
 }
 
 export type ChatAgentSource = AgentSummary["source"] | "link" | "voice-assistant";
@@ -1556,6 +1574,10 @@ export interface GoogleInboxThreadSummary {
   subject: string;
   from: string;
   to?: string;
+  cc?: string;
+  deliveredTo?: string;
+  accountEmail?: string;
+  recipientType?: "direct" | "group";
   date: string;
   snippet: string;
   unread: boolean;
@@ -2057,7 +2079,7 @@ const previewMeetingBots: MeetingBotOption[] = [
     id: "preview-meeting-bot",
     name: "link-preview-agent",
     displayName: "Link Preview Agent",
-    description: "Preview meeting bot. Electron loads live agents and Telnyx Assistants.",
+    description: "Preview meeting bot. Link loads live agents and Telnyx Assistants.",
     status: "available",
     type: "preview",
     source: "preview",
@@ -2241,7 +2263,7 @@ function previewTerminalStatus(input?: { terminalId?: string; title?: string }):
     running: false,
     shell: "preview-shell",
     cwd: "Telnyx Link",
-    buffer: "Terminal preview. Open the Electron app to run commands on your local device.\n",
+    buffer: "Terminal preview. Open Link to run commands on your local device.\n",
     lastExit: null,
     startedAt: null,
     updatedAt: now,
@@ -2259,7 +2281,7 @@ function previewScribesRoute(input: Partial<ScribesSettings> = {}): ScribesProvi
       modelId: settings.sttModel || "telnyx/stt",
       engine: "Telnyx",
       ready: false,
-      diagnostics: { ready: false, message: "Save TELNYX_API_KEY in the Electron app to use Scribes Cloud STT." },
+      diagnostics: { ready: false, message: "Save TELNYX_API_KEY in Link to use Scribes Cloud STT." },
       endpoint: "https://api.telnyx.com/v2/speech-to-text",
       updatedAt: new Date().toISOString(),
     };
@@ -2273,7 +2295,7 @@ function previewScribesRoute(input: Partial<ScribesSettings> = {}): ScribesProvi
     modelId: model.id,
     engine: model.engine,
     ready: model.downloaded && model.diagnostics.ready,
-    diagnostics: model.downloaded ? model.diagnostics : { ...model.diagnostics, message: `Download ${model.label} in the Electron app before local transcription.` },
+    diagnostics: model.downloaded ? model.diagnostics : { ...model.diagnostics, message: `Download ${model.label} in Link before local transcription.` },
     endpoint: previewScribesServer.endpoint ? `${previewScribesServer.endpoint}/v1/transcribe` : "",
     updatedAt: new Date().toISOString(),
   };
@@ -2363,7 +2385,7 @@ function previewLiteLlmRuntimeStatus(): LiteLlmRuntimeStatus {
       route("managed/telnyx-cloud", "Telnyx managed gateway", "managed-telnyx", "telnyx-cloud", "telnyx/recommended", managedConfigured),
       route("frontier/opus", "Frontier BYO: Claude 3 Opus", "anthropic", "frontier-byo", "claude-3-opus-20240229", anthropicConfigured),
     ],
-    message: "Preview model gateway status. Local-first routes are available; cloud routes require credentials in the Electron app.",
+    message: "Preview model gateway status. Local-first routes are available; cloud routes require credentials in Link.",
   };
 }
 
@@ -2376,14 +2398,14 @@ let previewCredentials: CredentialGroupStatus[] = [
   credentials("litellm", "Model Gateway", "Optional managed gateway and frontier BYO settings. Local Ollama mode does not require a cloud key; Telnyx BYO uses the Telnyx API key group.", ["LITELLM_BASE_URL", "LITELLM_API_KEY", "TELNYX_INFERENCE_BASE_URL", "ANTHROPIC_API_KEY"]),
   credentials("hindsight", "Hindsight", "Per-user Hindsight API key plus the memory bank id used when saving archive entries.", ["HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"]),
   credentials("linear", "Linear", "Linear API key for issue and project lookup.", ["LINEAR_API_KEY"]),
-  credentials("telnyx", "Telnyx API Key", "Telnyx API key for account, phone, messaging, and WebRTC token generation.", ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"]),
+  credentials("telnyx", "Telnyx", "Telnyx API key for account, phone, messaging, and WebRTC token generation.", ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"]),
   credentials("telnyx-meet-bridge", "Telnyx Meet Bridge", "Runtime settings for Google Meet live joins through Telnyx SIP/phone dial and Conversation Relay.", ["TELNYX_VOICE_CONNECTION_ID", "TELNYX_MEET_CALLER_ID", "TELNYX_MEET_WEBHOOK_URL", "TELNYX_MEET_CONVERSATION_RELAY_WS_URL", "LINK_MEETING_AGENT_ADAPTER_URL"]),
   credentials("agentmail", "AgentMail", "AgentMail API key plus optional domain for deterministic bot inbox identities.", ["AGENTMAIL_API_KEY", "AGENTMAIL_DOMAIN"]),
   credentials("github", "GitHub", "Pair GitHub with a read-only Telnyx Link GitHub App so Link can access approved Telnyx repositories without asking users to create personal access tokens.", ["GITHUB_USER_ACCESS_TOKEN", "GITHUB_APP_CLIENT_ID", "GH_TOKEN"]),
   credentials("guru", "Guru", "Connect Guru through OAuth so Link can search Guru MCP cards after the user approves access through Guru SSO. Admins can provide the OAuth client settings through env or managed app config.", ["GURU_OAUTH_CLIENT_ID", "GURU_OAUTH_CLIENT_SECRET", "GURU_OAUTH_SCOPE", "GURU_OAUTH_REDIRECT_URI", "GURU_OAUTH_ACCESS_TOKEN", "GURU_OAUTH_REFRESH_TOKEN", "GURU_OAUTH_TOKEN_EXPIRES_AT", "GURU_OAUTH_USER_ID"]),
   credentials("pylon", "Pylon", "Connect the team-telnyx/pylon-mcp-server compatible endpoint through Pylon OAuth so Link can search tickets and create issues through user-scoped Pylon MCP access. Link blocks update_issue and update_account in v1.", ["PYLON_MCP_URL", "PYLON_MCP_CLIENT_ID", "PYLON_MCP_ACCESS_TOKEN", "PYLON_MCP_REFRESH_TOKEN", "PYLON_MCP_TOKEN_EXPIRES_AT"]),
   credentials("slack", "Slack", "Slack user token discovers and DMs bot users; bot token can post where the app has access.", ["SLACK_USER_TOKEN", "SLACK_BOT_TOKEN"]),
-  credentials("google-workspace", "Google Workspace", "Connect Google Workspace through openclaw-itops-setup-utils/gog-setup so Link can load Calendar events, Drive docs, Meet artifacts, notes, transcripts, and contacts for your agents.", ["GOOGLE_WORKSPACE_AGENT_CONNECTION_ID", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
+  credentials("google-workspace", "Google", "Connect Google Workspace through openclaw-itops-setup-utils/gog-setup so Link can load Calendar events, Drive docs, Meet artifacts, notes, transcripts, and contacts for your agents.", ["GOOGLE_WORKSPACE_AGENT_CONNECTION_ID", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
   credentials("google-inbox", "Google Inbox", "Connect Gmail through gog so Link can read inbox threads and save Gmail drafts without exposing send.", ["GOOGLE_INBOX_AGENT_CONNECTION_ID", "GOOGLE_INBOX_VERIFIED_AT", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
   credentials("google-tasks", "Google Tasks", "Connect Google Tasks through gog so Taskbox can sync, create, update, and complete Google tasks without delete or clear commands.", ["GOOGLE_TASKS_AGENT_CONNECTION_ID", "GOOGLE_TASKS_VERIFIED_AT", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
 ];
@@ -2466,7 +2488,7 @@ let previewWidgetLayout: WidgetLayoutState = {
   widgetIds: previewWidgetCatalog.slice(0, 2).map((widget) => widget.id),
   updatedAt: now,
 };
-let previewDialerConfigs: DialerConfig[] = dialerTemplates.map((template) => normalizeDialerConfig(template, template.id === "standard"));
+let previewDialerConfigs: DialerConfig[] = [createDefaultDialerConfig()];
 let previewActiveDialerConfig = createDefaultDialerConfig();
 
 let previewOnboarding: OnboardingState = {
@@ -2790,7 +2812,7 @@ const previewLinkApi: LinkDesktopApi = {
         attendees: "Link Desktop",
         phone: "",
         meetUrl: "",
-        notes: "Preview-only event. The Electron app loads this from Google Calendar.",
+        notes: "Preview-only event. Link loads this from Google Calendar.",
         transcript: "",
         status: "upcoming",
       },
@@ -2871,7 +2893,7 @@ const previewLinkApi: LinkDesktopApi = {
         role: "Google contact",
         phone: "",
         source: "google",
-        detail: "Preview-only contact. The Electron app loads this from Google People API.",
+        detail: "Preview-only contact. Link loads this from Google People API.",
         connected: true,
       },
     ];
@@ -2906,11 +2928,29 @@ const previewLinkApi: LinkDesktopApi = {
         subject: "Customer follow-up draft",
         from: "Casey Customer <casey@example.com>",
         to: "link.preview@telnyx.com",
+        accountEmail: "link.preview@telnyx.com",
+        recipientType: "direct" as const,
         date: "Today, 9:14 AM",
         snippet: "Can you send over the SIP trunking notes from our call?",
         unread: true,
         labels: ["INBOX", "UNREAD"],
         url: "https://mail.google.com/mail/u/0/#inbox/preview-thread",
+      },
+      {
+        id: "preview-group-thread",
+        threadId: "preview-group-thread",
+        messageId: "preview-message-2",
+        subject: "Support queue escalation",
+        from: "Queue Sender <queue@example.com>",
+        to: "support-alias@telnyx.com",
+        deliveredTo: "link.preview@telnyx.com",
+        accountEmail: "link.preview@telnyx.com",
+        recipientType: "group" as const,
+        date: "Today, 8:47 AM",
+        snippet: "Can someone on the team take this customer follow-up?",
+        unread: true,
+        labels: ["INBOX", "UNREAD"],
+        url: "https://mail.google.com/mail/u/0/#inbox/preview-group-thread",
       },
     ];
   },
@@ -3060,7 +3100,7 @@ const previewLinkApi: LinkDesktopApi = {
         issuedAt: new Date().toISOString(),
       };
     }
-    throw new Error("WebRTC token generation is only available in the Electron app.");
+    throw new Error("WebRTC token generation is only available in Link.");
   },
   async getWebRtcStatus() {
     if (previewPhoneE2EEnabled()) {
@@ -3080,7 +3120,7 @@ const previewLinkApi: LinkDesktopApi = {
       webRtcCredentialReady: false,
       canAutoProvision: false,
       ready: false,
-      message: "Save TELNYX_API_KEY in the Electron app to enable WebRTC provisioning.",
+      message: "Save TELNYX_API_KEY in Link to enable WebRTC provisioning.",
       updatedAt: new Date().toISOString(),
     };
   },
@@ -3143,7 +3183,7 @@ const previewLinkApi: LinkDesktopApi = {
     return { modelId: input.modelId, canceled: false, updatedAt: new Date().toISOString() };
   },
   async transcribeScribesLocal() {
-    throw new Error("Scribes local transcription is only available in the Electron app.");
+    throw new Error("Scribes local transcription is only available in Link.");
   },
   async startScribesLocalServer(input) {
     previewScribesServer = {
@@ -3262,15 +3302,15 @@ const previewLinkApi: LinkDesktopApi = {
       sttMode: previewSpeakSettings.sttMode,
       sttProvider: previewSpeakSettings.sttProvider,
       providerRoute: route,
-      message: "Scribes dictation is available in the Electron app on macOS.",
+      message: "Scribes dictation is available in Link on macOS.",
       updatedAt: new Date().toISOString(),
     };
   },
   async buildWhisper() {
-    throw new Error("Scribes dictation build is only available in the Electron app on macOS.");
+    throw new Error("Scribes dictation build is only available in Link on macOS.");
   },
   async startWhisper() {
-    throw new Error("Scribes dictation launch is only available in the Electron app on macOS.");
+    throw new Error("Scribes dictation launch is only available in Link on macOS.");
   },
   async stopWhisper() {
     const route = previewScribesRoute();
@@ -3290,7 +3330,7 @@ const previewLinkApi: LinkDesktopApi = {
       sttMode: previewSpeakSettings.sttMode,
       sttProvider: previewSpeakSettings.sttProvider,
       providerRoute: route,
-      message: "Scribes dictation is available in the Electron app on macOS.",
+      message: "Scribes dictation is available in Link on macOS.",
       updatedAt: new Date().toISOString(),
     };
   },
@@ -3340,7 +3380,7 @@ const previewLinkApi: LinkDesktopApi = {
     const next = {
       ...current,
       updatedAt: new Date().toISOString(),
-      buffer: `${current.buffer}${command}Preview terminal cannot execute local commands in the browser. Open Electron to run this command.\npreview@telnyx-link % `,
+      buffer: `${current.buffer}${command}Preview terminal cannot execute local commands in the browser. Open Link to run this command.\npreview@telnyx-link % `,
     };
     previewTerminalStatuses.set(next.id || input?.terminalId || "terminal-1", next);
     return next;
@@ -3373,7 +3413,7 @@ const previewLinkApi: LinkDesktopApi = {
     return previewOnboarding;
   },
   async signInAgentControlPlane() {
-    throw new Error("Okta sign-in is only available in the Electron app. The Electron preload bridge is not available.");
+    throw new Error("Okta sign-in is only available in Link.");
   },
   async signOutAgentControlPlane() {
     return agentControlPlaneAuthStatus(false);
@@ -3519,7 +3559,7 @@ const previewLinkApi: LinkDesktopApi = {
   },
   async approveChangeRequest(id) {
     void id;
-    throw new Error("Live GitHub draft PR creation is unavailable without the Electron desktop bridge.");
+    throw new Error("Live GitHub draft PR creation is unavailable in this preview.");
   },
   async dismissChangeRequest(id) {
     previewChangeRequests = previewChangeRequests.map((request) =>
@@ -4281,7 +4321,7 @@ function createLocalWork(
     summary: "Customer-visible action requires human approval before posting.",
     details: {
       customerSafeDraft: "",
-      internalRationale: "Live shared-channel drafting is unavailable without the Electron desktop bridge.",
+      internalRationale: "Live shared-channel drafting is unavailable in this preview.",
       sourcesUsed: [],
       approval: {
         approvalRequired: status === "pending",
@@ -4547,7 +4587,7 @@ async function dispatchPreviewWorkboardTask(input: WorkboardTaskDispatchInput): 
     ...session.messages,
     message("system", `Taskbox dispatch: card ${card.id} moved to In Progress from Link.`),
     message("user", prompt),
-    message("assistant", "Preview runtime accepted the task. In the Electron app this routes to the selected ACP or A2A agent."),
+    message("assistant", "Preview runtime accepted the task. In Link this routes to the selected ACP or A2A agent."),
   ];
   session.updatedAt = now;
   session.task = {
@@ -4621,7 +4661,7 @@ function localWorkboardSnapshot(provider: WorkboardProvider, boardId: string): W
     providers: [
       { id: "hermes", label: "Hermes Kanban", available: false, mode: "unavailable", message: "Hermes CLI is not connected in browser preview." },
       { id: "openclaw", label: "OpenClaw Workboard", available: false, mode: "unavailable", message: "OpenClaw Gateway is not connected in browser preview." },
-      { id: "google_tasks", label: "Google Tasks", available: false, mode: "unavailable", message: "Google Tasks through gog is only available in the Electron app." },
+      { id: "google_tasks", label: "Google Tasks", available: false, mode: "unavailable", message: "Google Tasks through gog is only available in Link." },
       { id: "local", label: "Link local board", available: true, mode: "fallback", message: "Local fallback board is active." },
     ],
     boards: [{ id: provider === "google_tasks" ? "primary" : "local", name: provider === "google_tasks" ? "Google Tasks" : "Link local board", provider, description: "Durable Link-owned fallback board." }],

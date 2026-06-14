@@ -33,6 +33,7 @@
   --table-row-min-height: 58px;
   --table-header-min-height: 48px;
   --table-action-column-width: 44px;
+  --table-scrollbar-gutter-width: 16px;
   --rail-top-inset: var(--app-top-inset);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -222,10 +223,11 @@ button {
   background: transparent;
 }
 
-.authGateIcon svg {
+.authGateIcon img {
   display: block;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
 }
 
 .authGate h1 {
@@ -289,8 +291,8 @@ button {
 
 .desktop[data-theme="dark"] .railButton:hover,
 .desktop[data-theme="dark"] .railButton.selected,
-.desktop[data-theme="dark"] .projectChatRow:hover,
-.desktop[data-theme="dark"] .projectChatRow.selected {
+.desktop[data-theme="dark"] .avatar:hover,
+.desktop[data-theme="dark"] .avatar.selected {
   color: var(--text);
   background: #2d2b28;
 }
@@ -304,6 +306,10 @@ button {
 .desktop[data-theme="dark"] .brandButton:hover,
 .desktop[data-theme="dark"] .brandButton.selected {
   background: transparent;
+}
+
+.desktop[data-theme="dark"] .brandButton .railIconSlot svg {
+  color: #ffffff;
 }
 
 .desktop[data-theme="dark"] .railTooltip,
@@ -335,7 +341,6 @@ button {
 .desktop[data-theme="dark"] .startReadinessPanel,
 .desktop[data-theme="dark"] .startFirstUsePanel,
 .desktop[data-theme="dark"] .startTestingPanel,
-.desktop[data-theme="dark"] .numberOption,
 .desktop[data-theme="dark"] .assistantAttachMenu,
 .desktop[data-theme="dark"] .assistantRuntimeMenu,
 .desktop[data-theme="dark"] .assistantSkillPicker,
@@ -376,6 +381,32 @@ button {
   background: #181817;
 }
 
+.desktop[data-theme="dark"] .settingsView .pageSectionSidebar,
+.desktop[data-theme="dark"] .settingsView .pageSectionSidebarHeading {
+  background: #1b1a19;
+}
+
+.desktop[data-theme="dark"] .settingsView .pageSectionSidebarGroupTitle {
+  background: #242321;
+}
+
+.desktop[data-theme="dark"] .settingsView .pageSectionSidebar button.selected {
+  background: #2d2b28;
+}
+
+.desktop[data-theme="dark"] .wikiHubView .pageSectionSidebar,
+.desktop[data-theme="dark"] .wikiHubView .pageSectionSidebarHeading {
+  background: #1b1a19;
+}
+
+.desktop[data-theme="dark"] .wikiHubView .pageSectionSidebarGroupTitle {
+  background: #242321;
+}
+
+.desktop[data-theme="dark"] .wikiHubView .pageSectionSidebar button.selected {
+  background: #2d2b28;
+}
+
 .desktop[data-theme="dark"] input,
 .desktop[data-theme="dark"] select,
 .desktop[data-theme="dark"] textarea,
@@ -400,8 +431,7 @@ button {
 .desktop[data-theme="dark"] .button.secondary,
 .desktop[data-theme="dark"] .button.ghost,
 .desktop[data-theme="dark"] .iconButton,
-.desktop[data-theme="dark"] .widgetCategoryTabs button,
-.desktop[data-theme="dark"] .themeToggle {
+.desktop[data-theme="dark"] .widgetCategoryTabs button {
   color: var(--text);
   background: #2d2b28;
 }
@@ -421,6 +451,12 @@ button {
 }
 
 .desktop[data-theme="dark"] .workboardRowIcon {
+  color: var(--text);
+  background: #181817;
+  border-color: var(--border);
+}
+
+.desktop[data-theme="dark"] .settingsProviderLogoBox {
   color: var(--text);
   background: #181817;
   border-color: var(--border);
@@ -457,7 +493,6 @@ button {
 .desktop[data-theme="dark"] .assistantMessage,
 .desktop[data-theme="dark"] .agentCard,
 .desktop[data-theme="dark"] .explorerResult,
-.desktop[data-theme="dark"] .numberOption,
 .desktop[data-theme="dark"] .phoneNumberRow,
 .desktop[data-theme="dark"] .historyRow,
 .desktop[data-theme="dark"] .workboardRowCard,
@@ -484,12 +519,19 @@ button {
   border-color: var(--border);
 }
 
+.desktop[data-theme="dark"] .phoneCallArtifactHero,
+.desktop[data-theme="dark"] .phoneCallOverviewGrid > div,
+.desktop[data-theme="dark"] .phoneCallDataTable,
+.desktop[data-theme="dark"] .phoneCallTranscriptAvatar {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
 .desktop[data-theme="dark"] .widgetChartPreview,
 .desktop[data-theme="dark"] .chartBox,
 .desktop[data-theme="dark"] .resultPreview,
 .desktop[data-theme="dark"] .agentRecoveryBanner,
-.desktop[data-theme="dark"] .accessStatusGrid > div,
-.desktop[data-theme="dark"] .myAgentRow,
 .desktop[data-theme="dark"] .mySkillRow,
 .desktop[data-theme="dark"] .skillBuilderPreview pre,
 .desktop[data-theme="dark"] .provisionSummary,
@@ -499,6 +541,7 @@ button {
 .desktop[data-theme="dark"] .workboardCreateField select,
 .desktop[data-theme="dark"] .workboardCreateField textarea,
 .desktop[data-theme="dark"] .statusControl select,
+.desktop[data-theme="dark"] .workboardBulkStatus select,
 .desktop[data-theme="dark"] .assistantComposer,
 .desktop[data-theme="dark"] .composer input,
 .desktop[data-theme="dark"] .field input,
@@ -512,14 +555,11 @@ button {
 
 .desktop[data-theme="dark"] .assistantTabs,
 .desktop[data-theme="dark"] .segmented,
-.desktop[data-theme="dark"] .agentTabs,
-.desktop[data-theme="dark"] .wikiTabs,
 .desktop[data-theme="dark"] .explorerSourceTabs,
 .desktop[data-theme="dark"] .designTabs,
 .desktop[data-theme="dark"] .chatReviewTabs,
 .desktop[data-theme="dark"] .workboardLayoutToggle,
 .desktop[data-theme="dark"] .widgetCategoryTabs button,
-.desktop[data-theme="dark"] .themeToggle,
 .desktop[data-theme="dark"] .contactSourceBadge,
 .desktop[data-theme="dark"] .tagList span,
 .desktop[data-theme="dark"] .workspaceStats span {
@@ -545,6 +585,11 @@ button {
   border-color: var(--border);
 }
 
+.desktop[data-theme="dark"] .directoryTable .chatResultRowHead::after {
+  border-color: var(--border);
+  background: var(--surface-soft);
+}
+
 .desktop[data-theme="dark"] .chatResultRow {
   border-color: var(--border-soft);
 }
@@ -564,8 +609,6 @@ button {
 
 .desktop[data-theme="dark"] .assistantTabs button,
 .desktop[data-theme="dark"] .segmented button,
-.desktop[data-theme="dark"] .agentTabs button,
-.desktop[data-theme="dark"] .wikiTabs button,
 .desktop[data-theme="dark"] .memoryTabs button,
 .desktop[data-theme="dark"] .explorerSourceTabs button,
 .desktop[data-theme="dark"] .designTabs button,
@@ -576,8 +619,6 @@ button {
 
 .desktop[data-theme="dark"] .assistantTabs button.selected,
 .desktop[data-theme="dark"] .segmented .selected,
-.desktop[data-theme="dark"] .agentTabs button.selected,
-.desktop[data-theme="dark"] .wikiTabs button.selected,
 .desktop[data-theme="dark"] .memoryTabs button.selected,
 .desktop[data-theme="dark"] .explorerSourceTabs button.selected,
 .desktop[data-theme="dark"] .designTabs .selected,
@@ -595,7 +636,6 @@ button {
 .desktop[data-theme="dark"] .assistantPanel .iconButton,
 .desktop[data-theme="dark"] .button.secondary,
 .desktop[data-theme="dark"] .button.ghost,
-.desktop[data-theme="dark"] .accountMenuTheme,
 .desktop[data-theme="dark"] .accountThemeButton {
   color: var(--text);
   background: #2d2b28;
@@ -669,6 +709,11 @@ button {
 .railButton.selected {
   color: #22211f;
   background: #ece9e5;
+}
+
+.railButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .railIconSlot {
@@ -782,7 +827,7 @@ button {
 }
 
 .brandButton {
-  overflow: hidden;
+  overflow: visible;
   background: transparent;
   box-shadow: none;
 }
@@ -793,20 +838,33 @@ button {
 }
 
 .brandButton .railIconSlot {
-  flex-basis: 32px;
-  width: 32px;
-  height: 32px;
+  flex-basis: var(--top-control-height);
+  width: var(--top-control-height);
+  height: var(--top-control-height);
+  overflow: visible;
 }
 
-.brandButton img {
+.rail[data-expanded="true"] .brandButton {
+  background: transparent;
+  padding: 0;
+}
+
+.rail[data-expanded="true"] .brandButton .railIconSlot {
+  justify-content: start;
+  flex-basis: 35px;
+  width: 35px;
+}
+
+.brandButton .railIconSlot svg {
   flex: 0 0 auto;
   display: block;
-  width: 32px;
-  height: 32px;
-  object-fit: contain;
-  object-position: center;
-  image-rendering: pixelated;
-  transform: translateY(1px);
+  width: 35px;
+  height: auto;
+  color: #22211f;
+}
+
+.brandButton + .railButton {
+  margin-top: 6px;
 }
 
 .railSpacer {
@@ -827,9 +885,9 @@ button {
   place-items: center;
   width: var(--top-control-height);
   height: var(--top-control-height);
-  border-radius: 12px;
-  color: #ffffff;
-  background: #171717;
+  border-radius: 50%;
+  color: #22211f;
+  background: #ece9e5;
   font-size: 13px;
   font-weight: 700;
   overflow: hidden;
@@ -837,7 +895,8 @@ button {
 
 .avatar:hover,
 .avatar.selected {
-  background: #2b2b29;
+  color: #22211f;
+  background: #ece9e5;
 }
 
 .accountMenu {
@@ -858,26 +917,18 @@ button {
 
 .accountMenuHeader {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 34px auto;
+  grid-template-columns: minmax(0, 1fr) 34px auto;
   gap: 10px;
   align-items: center;
   padding: 6px;
 }
 
-.accountMenuHeader > div:not(.accountAvatar) {
+.accountMenuHeader > div {
   min-width: 0;
 }
 
 .accountMenuHeader + .accountMenuMeta,
-.accountMenuHeader + .accountMenuTheme,
 .accountMenuHeader + button[role="menuitem"] {
-  border-top: 1px solid var(--border-soft);
-  margin-top: 4px;
-  padding-top: 10px;
-}
-
-.accountMenuMeta + .accountMenuTheme,
-.accountMenuTheme + button[role="menuitem"] {
   border-top: 1px solid var(--border-soft);
   margin-top: 4px;
   padding-top: 10px;
@@ -888,21 +939,7 @@ button {
   min-height: 42px;
 }
 
-.accountAvatar {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
-  color: #ffffff;
-  background: #171717;
-  font-size: 13px;
-  font-weight: 780;
-  overflow: hidden;
-}
-
-.avatar img,
-.accountAvatar img {
+.avatar img {
   display: block;
   width: 100%;
   height: 100%;
@@ -952,14 +989,25 @@ button {
 }
 
 .accountAuthButton.signedIn {
-  color: #ffffff;
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
+.accountAuthButton.signedIn:hover,
+.accountAuthButton.signedIn:focus-visible {
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+.desktop[data-theme="dark"] .accountAuthButton.signedIn:hover,
+.desktop[data-theme="dark"] .accountAuthButton.signedIn:focus-visible {
+  color: var(--accent);
   background: #171717;
 }
 
 .accountMenuHeader strong,
 .accountMenuHeader small,
-.accountMenuMeta span,
-.accountMenuTheme span {
+.accountMenuMeta span {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -972,24 +1020,13 @@ button {
 }
 
 .accountMenuHeader small,
-.accountMenuMeta span,
-.accountMenuTheme span {
+.accountMenuMeta span {
   color: var(--text-muted);
   font-size: 12px;
 }
 
 .accountMenuMeta {
   padding: 2px 6px 4px;
-}
-
-.accountMenuTheme {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 6px;
-  color: var(--text-muted);
 }
 
 .accountThemeSwitch {
@@ -1173,12 +1210,12 @@ button {
 
 .pageSectionShell {
   display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
+  grid-template-columns: var(--page-section-sidebar-width, 142px) minmax(0, 1fr);
   align-items: stretch;
   flex: 1;
   width: 100%;
   height: 100%;
-  min-height: 0;
+  min-height: calc(100vh - var(--app-top-inset) - var(--app-bottom-inset));
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -1190,38 +1227,51 @@ button {
 }
 
 .pageSectionSidebar {
+  position: relative;
   display: grid;
   align-content: start;
-  gap: 6px;
+  align-self: stretch;
   min-width: 0;
-  min-height: 0;
-  padding: 0 12px var(--app-bottom-inset);
+  min-height: 100%;
+  padding: 0;
   border-right: 1px solid var(--border);
   background: #f4f2ef;
 }
 
+.pageSectionSidebarTabs {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  min-height: 100%;
+  padding: 0 12px var(--app-bottom-inset);
+}
+
 .pageSectionSidebarHeading {
   display: grid;
-  justify-items: center;
+  align-items: center;
   align-content: center;
+  justify-content: center;
+  justify-items: center;
   gap: 8px;
   min-width: 0;
   margin: 0 -12px;
-  min-height: 88px;
-  padding: 12px;
+  min-height: 112px;
+  padding: 14px 12px 16px;
   border: 0;
   color: var(--text);
-  background: #ffffff;
-  font-size: 15px;
-  font-weight: 820;
+  background: #fbfaf9;
+  font-size: 24px;
+  font-weight: 760;
   line-height: 1.1;
   text-align: center;
 }
 
 .pageSectionSidebarHeading svg {
-  width: 26px;
-  height: 26px;
-  color: var(--text-muted);
+  display: block;
+  width: 24px;
+  height: 24px;
+  color: currentColor;
 }
 
 .pageSectionSidebarHeading span {
@@ -1240,9 +1290,13 @@ button {
 }
 
 .pageSectionSidebarGroupTitle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-width: 0;
   margin: 0 -12px 2px;
-  padding: 7px 12px 6px;
+  min-height: var(--top-control-height);
+  padding: 0 12px;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   color: var(--text-muted);
@@ -1261,9 +1315,12 @@ button {
   gap: 9px;
   min-width: 0;
   min-height: var(--top-control-height);
-  padding: 0 9px;
-  border: 0;
-  border-radius: 8px;
+  margin: 0 -12px;
+  padding: 0 21px;
+  border: 1px solid transparent;
+  border-right: 0;
+  border-left: 0;
+  border-radius: 0;
   color: var(--text-muted);
   background: transparent;
   font-size: 12px;
@@ -1286,6 +1343,7 @@ button {
 }
 
 .pageSectionSidebar button.selected {
+  border-color: var(--border);
   color: var(--text);
   background: #ffffff;
   box-shadow: none;
@@ -1295,6 +1353,36 @@ button {
 .pageSectionSidebar button:focus-visible {
   color: var(--text);
   background: rgba(255, 255, 255, 0.72);
+  outline: none;
+}
+
+.pageSectionSidebarResizeHandle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  z-index: 2;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.pageSectionSidebarResizeHandle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 3px;
+  width: 1px;
+  height: 100%;
+  background: transparent;
+}
+
+.pageSectionSidebarResizeHandle:hover::after,
+.pageSectionSidebarResizeHandle:focus-visible::after {
+  background: var(--accent);
+}
+
+.pageSectionSidebarResizeHandle:focus-visible {
   outline: none;
 }
 
@@ -1365,8 +1453,9 @@ button {
 }
 
 .appSurface {
+  --assistant-panel-min-width: 340px;
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr);
+  grid-template-columns: minmax(0, 2fr) minmax(var(--assistant-panel-min-width), var(--assistant-panel-width, 1fr));
   min-width: 0;
   min-height: 0;
 }
@@ -3560,12 +3649,6 @@ button {
   font-weight: 700;
 }
 
-.projectChatRows {
-  display: grid;
-  gap: 2px;
-}
-
-.projectChatRow,
 .showMoreChats,
 .noProjectChats {
   display: grid;
@@ -3580,32 +3663,12 @@ button {
   text-align: left;
 }
 
-.projectChatRow:hover,
-.projectChatRow.selected {
-  color: var(--text);
-  background: #ece9e5;
-}
-
-.projectChatRow span,
 .showMoreChats,
 .noProjectChats {
   overflow: hidden;
   font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.projectChatRow kbd {
-  min-width: 32px;
-  padding: 2px 6px;
-  border: 0;
-  border-radius: 999px;
-  color: var(--text-faint);
-  background: rgba(32, 32, 31, 0.07);
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 700;
-  text-align: center;
 }
 
 .showMoreChats,
@@ -3847,6 +3910,7 @@ button {
 }
 
 .chatResultRowHead {
+  position: relative;
   min-height: var(--table-header-min-height);
   border-bottom: 1px solid var(--border);
   color: var(--text-muted);
@@ -3857,15 +3921,27 @@ button {
   text-transform: uppercase;
 }
 
+.directoryTable .chatResultRowHead::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: -1px;
+  width: var(--table-scrollbar-gutter-width);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+  content: "";
+  pointer-events: none;
+}
+
 .chatResultRowHead > [role="columnheader"],
-.phoneAssistantRowHead > [role="columnheader"],
 .phoneContactRowHead > [role="columnheader"],
 .phoneInboxRowHead > [role="columnheader"],
 .phoneCallRowHead > [role="columnheader"],
 .phoneNumberRowHead > [role="columnheader"],
 .chatResultRow > span:not(.bulkSelectCell),
 .chatSessionNameCell {
-  justify-self: start;
+  justify-self: stretch;
+  width: 100%;
   text-align: left;
 }
 
@@ -3948,6 +4024,11 @@ button {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.directoryTable .chatResultRowHead {
+  margin-right: 0;
 }
 
 .agentDirectorySection > .directoryTable,
@@ -3960,19 +4041,52 @@ button {
   min-width: 0;
 }
 
+.directoryResultRow > [role="columnheader"],
+.directoryResultRow > span:not(.bulkSelectCell):not(.directoryRowActions) {
+  justify-self: stretch;
+  width: 100%;
+  text-align: left;
+}
+
+.directoryResultRow > span:not(.bulkSelectCell):not(.directoryRowActions) {
+  display: block;
+}
+
+.directoryResultRow > .directoryRowActions {
+  justify-self: end;
+}
+
 .agentDirectoryResultRow,
-.chatSessionRows:not(.bulkEditing) .agentDirectoryResultRow {
-  grid-template-columns: minmax(220px, 1fr) minmax(120px, 0.22fr) minmax(120px, 0.22fr) minmax(74px, 0.12fr) var(--table-action-column-width);
-}
-
 .skillDirectoryResultRow,
+.chatSessionRows:not(.bulkEditing) .agentDirectoryResultRow,
 .chatSessionRows:not(.bulkEditing) .skillDirectoryResultRow {
-  grid-template-columns: minmax(230px, 1fr) minmax(120px, 0.22fr) minmax(120px, 0.2fr) minmax(150px, 0.24fr) minmax(86px, 0.14fr) var(--table-action-column-width);
+  grid-template-columns: minmax(220px, 0.9fr) minmax(180px, 0.42fr) var(--table-action-column-width);
 }
 
-.appDirectoryResultRow,
-.chatSessionRows:not(.bulkEditing) .appDirectoryResultRow {
-  grid-template-columns: minmax(230px, 1fr) minmax(150px, 0.28fr) minmax(110px, 0.18fr) minmax(110px, 0.18fr) var(--table-action-column-width);
+.agentDirectoryTable .chatResultRows,
+.skillDirectoryTable .chatResultRows {
+  scrollbar-gutter: auto;
+}
+
+.agentDirectoryTable .chatResultRowHead,
+.skillDirectoryTable .chatResultRowHead {
+  margin-right: 0;
+}
+
+.personalAppDirectoryResultRow,
+.chatSessionRows:not(.bulkEditing) .personalAppDirectoryResultRow {
+  grid-template-columns: minmax(260px, 1fr) minmax(160px, 0.24fr) var(--table-action-column-width);
+}
+
+.teamAppDirectoryResultRow,
+.chatSessionRows:not(.bulkEditing) .teamAppDirectoryResultRow {
+  grid-template-columns: minmax(260px, 1fr) minmax(160px, 0.22fr) minmax(160px, 0.22fr) minmax(120px, 0.16fr) var(--table-action-column-width);
+}
+
+.appDirectoryResultRow > span:not(.bulkSelectCell) {
+  display: block;
+  align-self: center;
+  min-height: 0;
 }
 
 .settingsDirectoryPanel {
@@ -3990,14 +4104,48 @@ button {
   min-height: min(620px, calc(100vh - 230px));
 }
 
+.settingsDirectoryTable .chatResultRows {
+  align-content: start;
+}
+
 .settingsDirectoryResultRow,
 .chatSessionRows:not(.bulkEditing) .settingsDirectoryResultRow {
-  grid-template-columns: minmax(240px, 1fr) minmax(120px, 0.2fr) minmax(132px, 0.18fr) minmax(92px, 0.14fr) var(--table-action-column-width);
+  grid-template-columns: minmax(240px, 1fr) minmax(140px, 0.22fr) minmax(132px, 0.2fr) var(--table-action-column-width);
+  min-height: var(--table-row-min-height);
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.settingsAuthDirectoryTable .settingsDirectoryResultRow,
+.chatSessionRows:not(.bulkEditing).settingsAuthDirectoryTable .settingsDirectoryResultRow {
+  grid-template-columns: minmax(300px, 1fr) minmax(132px, 0.2fr) var(--table-action-column-width);
 }
 
 .settingsDirectoryFilterBar,
 .phoneAssistantFilterBar {
   margin-top: -4px;
+}
+
+.settingsAuthExpandedHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 14px 0;
+}
+
+.settingsAuthExpandedHeader strong {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.settingsAuthExpandedHeader p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .settingsDirectoryDetail,
@@ -4071,6 +4219,64 @@ button {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 650;
+}
+
+.settingsProviderNameCell {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 14px;
+}
+
+.directoryResultRow > .settingsProviderNameCell {
+  display: grid;
+}
+
+.settingsProviderLogoBox {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  overflow: hidden;
+  color: var(--text);
+  background: #f7f5f2;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.settingsProviderLogoBox svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.settingsProviderLogoBox.telnyx svg {
+  width: 22px;
+  height: 22px;
+}
+
+.settingsProviderLogoBox.github svg {
+  fill: none;
+}
+
+.settingsProviderLogoMark {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.settingsProviderLogoMark.google {
+  color: #4285f4;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 30px;
+  font-weight: 800;
 }
 
 .directoryRowActions {
@@ -4278,23 +4484,88 @@ button {
   flex: 0 0 auto;
 }
 
+.drivePathBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+
+.drivePathBackButton {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+.drivePathBackButton:hover,
+.drivePathBackButton:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--accent);
+  background: var(--surface-soft);
+  outline: 0;
+}
+
+.driveBreadcrumbs {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.driveBreadcrumbs button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+}
+
+.driveBreadcrumbs .driveHomeCrumb {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+.driveBreadcrumbs .driveHomeCrumb:hover,
+.driveBreadcrumbs .driveHomeCrumb:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--accent);
+  background: var(--surface-soft);
+  outline: 0;
+}
+
 .driveFileRows .chatResultRows {
   align-content: start;
   min-height: 0;
 }
 
 .driveResultRow {
-  grid-template-columns: minmax(260px, 1.25fr) minmax(150px, 0.36fr) minmax(220px, 0.62fr) minmax(110px, 0.24fr) var(--table-action-column-width);
+  grid-template-columns: minmax(180px, 0.9fr) minmax(260px, 1.1fr) var(--table-action-column-width);
   width: 100%;
   min-height: var(--table-row-min-height);
 }
 
 .chatSessionRows:not(.bulkEditing) .driveResultRow {
-  grid-template-columns: minmax(260px, 1.25fr) minmax(150px, 0.36fr) minmax(220px, 0.62fr) minmax(110px, 0.24fr) var(--table-action-column-width);
+  grid-template-columns: minmax(180px, 0.9fr) minmax(260px, 1.1fr) var(--table-action-column-width);
 }
 
 .driveFileRows.bulkEditing .driveResultRow {
-  grid-template-columns: 28px minmax(260px, 1.25fr) minmax(150px, 0.36fr) minmax(220px, 0.62fr) minmax(110px, 0.24fr) var(--table-action-column-width);
+  grid-template-columns: 28px minmax(180px, 0.9fr) minmax(260px, 1.1fr) var(--table-action-column-width);
 }
 
 .driveFileRows .chatResultRowHead {
@@ -4646,6 +4917,7 @@ button {
 }
 
 .assistantPanel {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--top-row-gap);
@@ -4657,6 +4929,48 @@ button {
   border-left: 1px solid var(--border);
   color: var(--text);
   background: #fbfaf9;
+}
+
+.assistantResizeHandle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -7px;
+  z-index: 8;
+  width: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: col-resize;
+}
+
+.assistantResizeHandle::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 6px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.assistantResizeHandle:hover::before,
+.assistantResizeHandle:focus-visible::before,
+.appSurface.assistantResizing .assistantResizeHandle::before {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.assistantResizeHandle:focus-visible {
+  outline: 0;
+}
+
+body.assistantPanelResizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .assistantPanel.phoneMode {
@@ -4886,6 +5200,11 @@ button {
 }
 
 .assistantChatFrame {
+  --assistant-panel-edge-inset: 14px;
+  --assistant-dock-edge-inset: 12px;
+  --assistant-menu-divider-gap: 12px;
+  --assistant-popup-edge-inset: var(--assistant-panel-edge-inset);
+  --assistant-composer-actions-height: 42px;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -5235,7 +5554,7 @@ button {
 
 .assistantAttachMenu {
   --assistant-attach-menu-inset: 14px;
-  width: min(330px, calc(100vw - (var(--assistant-attach-menu-inset) * 2)));
+  width: auto;
   padding: var(--assistant-attach-menu-inset);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -5328,7 +5647,7 @@ button {
 }
 
 .assistantSessionMenuRoot {
-  position: relative;
+  position: static;
   display: inline-flex;
   justify-self: end;
 }
@@ -5342,11 +5661,12 @@ button {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
+  left: 0;
   z-index: 40;
   display: grid;
   gap: 2px;
-  width: max-content;
-  min-width: 172px;
+  width: auto;
+  min-width: 0;
   padding: 6px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
@@ -5677,17 +5997,18 @@ button {
 }
 
 .assistantRuntimeMenuRoot {
-  position: relative;
+  position: static;
 }
 
 .assistantRuntimeMenu {
   position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
+  bottom: calc(var(--assistant-composer-actions-height) + var(--assistant-menu-divider-gap));
+  right: var(--assistant-popup-edge-inset);
+  left: var(--assistant-popup-edge-inset);
   z-index: 76;
   display: grid;
   gap: 12px;
-  width: min(360px, calc(100vw - 56px));
+  width: auto;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -5789,59 +6110,14 @@ button {
 
 .assistantAttachMenu {
   position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
+  bottom: calc(var(--assistant-composer-actions-height) + var(--assistant-menu-divider-gap));
+  right: var(--assistant-popup-edge-inset);
+  left: var(--assistant-popup-edge-inset);
   z-index: 70;
   display: grid;
   gap: 4px;
   max-height: calc(100vh - (var(--assistant-attach-menu-inset) * 2));
   overflow-y: auto;
-}
-
-.assistantSkillList {
-  display: grid;
-  gap: 4px;
-  max-height: 280px;
-  overflow: auto;
-}
-
-.assistantSkillList button {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  min-height: 52px;
-  padding: 8px;
-  border: 0;
-  border-radius: 7px;
-  color: var(--text);
-  background: transparent;
-  text-align: left;
-}
-
-.assistantSkillList button:hover,
-.assistantSkillList button.selected {
-  background: var(--surface-muted);
-}
-
-.assistantSkillList strong,
-.assistantSkillList small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.assistantSkillList strong {
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.assistantSkillList small {
-  margin-top: 2px;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 650;
 }
 
 .assistantSkillEmpty {
@@ -6113,24 +6389,29 @@ button {
 }
 
 .assistantSendButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 42px;
-  width: 42px;
-  height: 42px;
-  border: 0;
-  border-radius: 50%;
-  color: #1b1b1a;
-  background: #ffffff;
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface-raised);
   padding: 0;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
 .assistantSendButton.thinking {
   color: #ffffff;
   background: #1b1b1a;
   box-shadow: none;
+}
+
+.assistantSendButton:hover,
+.assistantSendButton:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--accent);
+  background: var(--surface-soft);
+  outline: 0;
 }
 
 .assistantSendButton:disabled {
@@ -6551,8 +6832,6 @@ button {
 }
 
 .desktop[data-theme="dark"] .assistantAttachMenu button:hover,
-.desktop[data-theme="dark"] .assistantSkillList button:hover,
-.desktop[data-theme="dark"] .assistantSkillList button.selected,
 .desktop[data-theme="dark"] .assistantSkillPickerSection button:hover,
 .desktop[data-theme="dark"] .assistantSkillPickerSection button.selected,
 .desktop[data-theme="dark"] .assistantSettingField:hover,
@@ -6580,9 +6859,17 @@ button {
 }
 
 .desktop[data-theme="dark"] .assistantPanel .assistantSendButton {
-  color: #141414;
-  background: #ffffff;
-  border-color: transparent;
+  color: var(--text);
+  background: var(--surface-raised);
+  border-color: var(--border);
+}
+
+.desktop[data-theme="dark"] .assistantPanel .assistantSendButton:hover,
+.desktop[data-theme="dark"] .assistantPanel .assistantSendButton:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--accent);
+  background: var(--surface-soft);
+  outline: 0;
 }
 
 .desktop[data-theme="dark"] .assistantPanel .assistantSendButton.thinking {
@@ -6670,22 +6957,6 @@ button {
 
 .linkSoftphone audio {
   display: none;
-}
-
-.linkSoftphone.shape-square,
-.linkSoftphone.shape-square button,
-.linkSoftphone.shape-square input,
-.linkSoftphone.shape-square .linkSoftphoneSetup,
-.linkSoftphone.shape-square .linkSoftphoneIdentity,
-.linkSoftphone.shape-square .linkSoftphoneNumberPicker,
-.linkSoftphone.shape-square .linkSoftphoneBotPicker,
-.linkSoftphone.shape-square .linkSoftphoneFeatureModule,
-.linkSoftphone.shape-square .linkSoftphoneModuleButton,
-.linkSoftphone.shape-square .linkSoftphoneModuleField textarea,
-.linkSoftphone.shape-square .linkSoftphoneModuleField select,
-.linkSoftphone.shape-square .linkSoftphoneDock,
-.linkSoftphone.shape-square .linkSoftphoneIncoming {
-  border-radius: 4px;
 }
 
 .linkSoftphoneBody {
@@ -6780,6 +7051,34 @@ button {
 .linkSoftphonePhaseModules {
   display: grid;
   gap: 8px;
+}
+
+.linkSoftphoneCallTimer {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.linkSoftphoneCallTimer svg {
+  color: var(--text);
+}
+
+.linkSoftphoneCallTimer span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.linkSoftphoneCallTimer strong {
+  font-size: 13px;
+  font-weight: 850;
 }
 
 .linkSoftphoneFeatureModule {
@@ -7108,15 +7407,13 @@ button {
   font-weight: 800;
 }
 
-.linkSoftphoneKeypad,
-.previewNumpad {
+.linkSoftphoneKeypad {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-.linkSoftphoneKeypad button,
-.previewNumpad button {
+.linkSoftphoneKeypad button {
   display: grid;
   gap: 3px;
   place-items: center;
@@ -7128,8 +7425,7 @@ button {
   font: inherit;
 }
 
-.linkSoftphoneKeypad button:hover,
-.previewNumpad button:hover {
+.linkSoftphoneKeypad button:hover {
   background: var(--surface-raised);
 }
 
@@ -7178,8 +7474,7 @@ button {
   box-shadow: 0 -10px 22px rgba(31, 29, 26, 0.06);
 }
 
-.linkSoftphoneCallButton,
-.previewCallButton {
+.linkSoftphoneCallButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -7194,20 +7489,17 @@ button {
   font-weight: 850;
 }
 
-.linkSoftphone.accent-blue .linkSoftphoneCallButton,
-.previewPhone.accent-blue .previewCallButton {
+.linkSoftphone.accent-blue .linkSoftphoneCallButton {
   color: #ffffff;
   background: #3578f6;
 }
 
-.linkSoftphone.accent-purple .linkSoftphoneCallButton,
-.previewPhone.accent-purple .previewCallButton {
+.linkSoftphone.accent-purple .linkSoftphoneCallButton {
   color: #ffffff;
   background: #8559f4;
 }
 
-.linkSoftphone.accent-orange .linkSoftphoneCallButton,
-.previewPhone.accent-orange .previewCallButton {
+.linkSoftphone.accent-orange .linkSoftphoneCallButton {
   color: #111111;
   background: #ffb545;
 }
@@ -7378,98 +7670,13 @@ button {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 9px;
-  width: 100%;
-}
-
-.dialerTemplateGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.dialerTemplateCard {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 58px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.dialerTemplateCard.active {
-  border-color: rgba(0, 227, 170, 0.45);
-  box-shadow: inset 0 0 0 1px rgba(0, 227, 170, 0.22);
-}
-
-.dialerTemplateCard.selected:not(.active) {
-  border-color: rgba(53, 120, 246, 0.34);
-}
-
-.dialerTemplateCard > button:first-child {
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  border: 0;
-  color: var(--text);
-  background: transparent;
-  text-align: left;
-}
-
-.dialerTemplateIcon {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  color: #00664e;
-  background: rgba(0, 227, 170, 0.15);
-}
-
-.dialerTemplateCard.tone-orange .dialerTemplateIcon {
-  color: #9a5b00;
-  background: rgba(255, 181, 69, 0.2);
-}
-
-.dialerTemplateCard.tone-blue .dialerTemplateIcon {
-  color: #255fc7;
-  background: rgba(53, 120, 246, 0.14);
-}
-
-.dialerTemplateCard strong,
-.dialerSavedList strong {
-  display: block;
-  overflow: hidden;
-  font-size: 12px;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dialerTemplateCard .button {
-  min-height: 30px;
-  padding: 0 10px;
-  font-size: 11px;
-}
-
-.dialerTemplateCard em {
-  padding: 3px 7px;
-  border-radius: 999px;
-  color: var(--text-muted);
-  background: var(--surface-raised);
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 850;
-  white-space: nowrap;
+  width: auto;
 }
 
 .dialerBuilderLayout {
   display: grid;
   grid-template-columns: minmax(360px, 1fr) minmax(320px, 380px);
+  column-gap: 14px;
   min-height: 620px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -7528,7 +7735,7 @@ button {
 
 .dialerBuilderSettings,
 .dialerBuilderFeatures {
-  border-right: 1px solid var(--border);
+  border-right: 0;
 }
 
 .dialerSettingGroup {
@@ -7592,80 +7799,10 @@ button {
   font-weight: 750;
 }
 
-.dialerColorSwatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.dialerColorSwatches .swatch {
-  width: 28px;
-  height: 28px;
-  border: 2px solid transparent;
-  border-radius: 999px;
-}
-
-.dialerColorSwatches .swatch.green {
-  background: #00e3aa;
-}
-
-.dialerColorSwatches .swatch.blue {
-  background: #3578f6;
-}
-
-.dialerColorSwatches .swatch.purple {
-  background: #8559f4;
-}
-
-.dialerColorSwatches .swatch.orange {
-  background: #ffb545;
-}
-
-.dialerColorSwatches .swatch.selected {
-  border-color: var(--text);
-  box-shadow: 0 0 0 2px var(--surface);
-}
-
-.dialerSavedList {
-  display: grid;
-  gap: 7px;
-}
-
-.dialerSavedList button {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 46px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  background: var(--surface);
-  text-align: left;
-}
-
-.dialerSavedList button.selected {
-  border-color: rgba(0, 227, 170, 0.45);
-  background: rgba(0, 227, 170, 0.08);
-}
-
-.dialerSavedList small {
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
 .dialerBuilderFeatures {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-.dialerTemplateStrip {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #ffffff;
+  grid-template-rows: auto auto auto;
+  align-content: start;
 }
 
 .dialerPhaseTabs {
@@ -7884,175 +8021,16 @@ button {
   font-weight: 850;
 }
 
-.previewPhone {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: #ffffff;
-}
-
-.previewPhone.theme-dark {
-  border-color: #25231f;
-  color: #f6f3ee;
-  background: #10100f;
-}
-
-.previewPhone.shape-square {
-  border-radius: 6px;
-}
-
-.previewStrip,
-.previewSearch,
-.previewModule,
-.previewRecording,
-.previewUtility,
-.previewAnalytics {
-  padding: 9px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-muted);
-  background: var(--surface);
-  font-size: 11px;
-}
-
-.previewPhone.theme-dark .previewStrip,
-.previewPhone.theme-dark .previewSearch,
-.previewPhone.theme-dark .previewModule,
-.previewPhone.theme-dark .previewRecording,
-.previewPhone.theme-dark .previewUtility,
-.previewPhone.theme-dark .previewAnalytics,
-.previewPhone.theme-dark .previewNumpad button,
-.previewPhone.theme-dark .previewActions button {
-  border-color: #2b2926;
-  color: #c8c4be;
-  background: #171614;
-}
-
-.previewStrip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.previewSearch,
-.previewUtility,
-.previewRecording {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.previewIdentity {
-  display: grid;
-  gap: 4px;
-  padding: 6px 0;
-  text-align: center;
-}
-
-.previewIdentity strong {
-  font-size: 16px;
-}
-
-.previewIdentity span,
-.previewIdentity em {
-  color: var(--text-muted);
-  font-size: 12px;
-  font-style: normal;
-}
-
-.previewPhone.font-small .previewIdentity strong {
-  font-size: 14px;
-}
-
-.previewPhone.font-large .previewIdentity strong {
-  font-size: 18px;
-}
-
-.previewModule {
-  display: grid;
-  gap: 4px;
-}
-
-.previewModule strong {
-  color: inherit;
-  font-size: 10px;
-  font-weight: 850;
-  text-transform: uppercase;
-}
-
-.previewNumpad button {
-  min-height: 42px;
-}
-
-.previewActions {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.previewActions button {
-  display: grid;
-  gap: 4px;
-  place-items: center;
-  min-height: 46px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-muted);
-  background: var(--surface);
-  font: inherit;
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.previewActions button.end {
-  color: #d4482a;
-  background: rgba(242, 97, 50, 0.1);
-}
-
-.previewRecording {
-  justify-content: center;
-  color: #d4482a;
-}
-
-.previewRecording span {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.previewUtility,
-.previewCallButton {
-  border: 0;
-  font: inherit;
-}
-
-.previewAnalytics {
-  display: grid;
-  grid-template-columns: repeat(4, auto);
-  justify-content: space-around;
-  gap: 8px;
-  text-align: center;
-}
-
-.desktop[data-theme="dark"] .dialerTemplateCard,
 .desktop[data-theme="dark"] .dialerBuilderLayout,
 .desktop[data-theme="dark"] .dialerFeatureItem,
-.desktop[data-theme="dark"] .dialerActionRow,
-.desktop[data-theme="dark"] .previewPhone {
+.desktop[data-theme="dark"] .dialerActionRow {
   background: var(--surface);
 }
 
 .desktop[data-theme="dark"] .dialerSegmented button,
 .desktop[data-theme="dark"] .dialerPhaseTabs button,
-.desktop[data-theme="dark"] .dialerSavedList button,
 .desktop[data-theme="dark"] .dialerActionRow button,
-.desktop[data-theme="dark"] .dialerAvailableActions button,
-.desktop[data-theme="dark"] .previewActions button,
-.desktop[data-theme="dark"] .previewNumpad button {
+.desktop[data-theme="dark"] .dialerAvailableActions button {
   color: var(--text-muted);
   background: #181817;
 }
@@ -8062,17 +8040,11 @@ button {
   background: #181817;
 }
 
-.desktop[data-theme="dark"] .dialerTemplateCard.active,
-.desktop[data-theme="dark"] .dialerSavedList button.selected,
 .desktop[data-theme="dark"] .dialerFeatureItem.enabled {
   background: rgba(0, 227, 170, 0.08);
 }
 
 @media (max-width: 1320px) {
-  .dialerTemplateGrid:not(.dialerTemplateStrip) {
-    grid-template-columns: 1fr;
-  }
-
   .dialerBuilderLayout {
     grid-template-columns: minmax(360px, 1fr) minmax(320px, 380px);
   }
@@ -8111,8 +8083,7 @@ button {
     padding-left: 43px;
   }
 
-  .linkSoftphoneActions,
-  .previewActions {
+  .linkSoftphoneActions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -8159,41 +8130,6 @@ button {
   align-items: center;
   gap: 12px;
   margin-top: 0;
-}
-
-.agentTabs {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  align-items: center;
-  gap: 6px;
-  width: min(1120px, 100%);
-  margin: 0 auto;
-  padding: 4px;
-  border-radius: 8px;
-  background: #e9e5e0;
-}
-
-.agentTabs button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  width: 100%;
-  height: 32px;
-  min-width: 0;
-  border-radius: 7px;
-  padding: 0 14px;
-  color: var(--text-muted);
-  background: transparent;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.agentTabs button.selected {
-  color: var(--text);
-  background: #ffffff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 .agentFilterButton {
@@ -8658,10 +8594,34 @@ button {
 
 .workboardSearchRow {
   display: grid;
-  grid-template-columns: 44px minmax(280px, 1fr) 44px;
+  grid-template-columns: 44px 44px minmax(280px, 1fr) 44px;
   align-items: center;
   gap: 12px;
   margin: 0;
+}
+
+.workboardBulkEditControls {
+  min-height: 44px;
+}
+
+.workboardBulkStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.workboardBulkStatus select {
+  height: 34px;
+  min-width: 140px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
 }
 
 .workboardToolbar {
@@ -8842,8 +8802,9 @@ button {
 }
 
 .workboardRowCard {
+  position: relative;
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 128px;
+  grid-template-columns: 38px minmax(220px, 1.1fr) minmax(320px, 1.7fr) minmax(120px, 0.45fr) minmax(82px, 0.24fr);
   align-items: center;
   gap: var(--table-row-gap);
   min-height: var(--table-row-min-height);
@@ -8855,9 +8816,8 @@ button {
   cursor: grab;
 }
 
-.workboardRowCard.selected,
-.kanbanCard.selected {
-  box-shadow: inset 3px 0 0 var(--accent);
+.workboardRows.bulkEditing .workboardRowCard {
+  grid-template-columns: 28px 38px minmax(220px, 1.1fr) minmax(320px, 1.7fr) minmax(120px, 0.45fr) minmax(82px, 0.24fr);
 }
 
 .workboardRowCard:active,
@@ -8880,6 +8840,17 @@ button {
   border-radius: 999px;
   color: var(--text);
   background: #f7f5f2;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.workboardRowIcon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .workboardRowBody {
@@ -8888,41 +8859,81 @@ button {
   min-width: 0;
 }
 
-.workboardRowBody .connectorTitle {
+.workboardRowTitle,
+.workboardRowDescription,
+.workboardRowDetails,
+.workboardRowTime {
+  min-width: 0;
+}
+
+.workboardRowTitle .connectorTitle {
   align-items: center;
   gap: 8px;
 }
 
-.workboardRowBody .connectorTitle strong {
+.workboardRowTitle .connectorTitle strong {
   overflow: hidden;
   font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.workboardRowBody p {
-  display: -webkit-box;
+.workboardRowDescription {
   margin: 0;
   overflow: hidden;
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.3;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.workboardRowBody .tagList {
-  grid-column: auto;
+.workboardRowDetails {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.workboardRowDetails span {
+  min-width: 0;
+  max-width: 92px;
+  overflow: hidden;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  font-size: 11px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workboardRowTime {
+  justify-self: start;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workboardRowActions {
+  position: absolute;
+  top: 50%;
+  right: var(--table-row-inline-inset);
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
   min-width: 0;
+  padding: 3px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
   opacity: 0;
   pointer-events: none;
+  transform: translateY(-50%);
   transition: opacity 120ms ease;
 }
 
@@ -9129,8 +9140,50 @@ button {
   min-height: 0;
 }
 
+.calendarDirectorySectionHeader {
+  align-items: center;
+}
+
+.calendarViewToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.calendarViewToggle button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-muted);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.calendarViewToggle button.active {
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
 .calendarResultRow {
-  grid-template-columns: minmax(240px, 1fr) minmax(155px, 0.28fr) minmax(160px, 0.3fr) minmax(104px, 0.18fr) var(--table-action-column-width);
+  grid-template-columns: minmax(280px, 1fr) minmax(155px, 0.28fr) minmax(104px, 0.18fr) var(--table-action-column-width);
+}
+
+.calendarEventTable .calendarResultRow {
+  padding-right: var(--table-row-inline-inset);
+  padding-left: var(--table-row-inline-inset);
 }
 
 .calendarResultRow.chatResultRowHead {
@@ -9145,10 +9198,6 @@ button {
   line-height: 1;
 }
 
-.calendarResultRow.expanded {
-  background: var(--surface-raised);
-}
-
 .calendarResultRow.sample {
   box-shadow: inset 3px 0 0 rgba(0, 227, 170, 0.7);
 }
@@ -9159,20 +9208,22 @@ button {
   min-width: 0;
 }
 
-.calendarEventNameCell strong,
-.calendarResultRow > span strong,
+.calendarEventPrimary,
 .calendarEventNameCell small,
-.calendarResultRow > span small,
-.calendarEventInlineDetails small {
+.calendarResultRow > span small {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.calendarEventPrimary {
+  display: block;
+  font-weight: inherit;
+}
+
 .calendarEventNameCell small,
-.calendarResultRow > span small,
-.calendarEventInlineDetails small {
+.calendarResultRow > span small {
   color: var(--text-muted);
   font-size: 12px;
 }
@@ -9181,19 +9232,191 @@ button {
   justify-items: start;
 }
 
-.calendarResultRow.expanded .chatSessionOpenButton svg {
-  transform: rotate(180deg);
+.calendarJoinButton {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
 }
 
-.calendarEventInlineDetails {
+.calendarMonthView {
   display: grid;
-  gap: 12px;
-  padding: 14px 18px 18px;
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
 }
 
-.calendarTableDetails {
+.calendarMonthHeader {
+  display: flex;
+  align-items: center;
+  min-height: var(--table-header-min-height);
+  padding: 0 var(--table-row-inline-inset);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+.calendarMonthHeader strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.calendarMonthWeekdays,
+.calendarMonthGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendarMonthWeekdays {
+  min-height: 34px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.calendarMonthWeekdays span {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+}
+
+.calendarMonthGrid {
+  overflow: auto;
+}
+
+.calendarMonthDay {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 118px;
+  padding: 9px;
+  border-right: 1px solid var(--border-soft);
   border-bottom: 1px solid var(--border-soft);
   background: var(--surface);
+}
+
+.calendarMonthDay.empty {
+  background: var(--surface-raised);
+}
+
+.calendarMonthDay.today .calendarMonthDate {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.calendarMonthDate {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.calendarMonthEvents {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.calendarMonthEvent {
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--accent-soft);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.calendarMonthMore {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.calendarDetailView {
+  overflow: auto;
+}
+
+.detailTitleCluster {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.detailTitleCluster > div {
+  min-width: 0;
+}
+
+.detailTitleCluster span {
+  display: block;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendarDetailSurface {
+  display: grid;
+  gap: var(--top-row-gap);
+  padding-bottom: 18px;
+}
+
+.calendarDetailGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.calendarDetailGrid > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-right: 1px solid var(--border-soft);
+}
+
+.calendarDetailGrid > div:last-child {
+  border-right: 0;
+}
+
+.calendarDetailGrid strong {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.calendarDetailGrid span {
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .calendarDetailBlock {
@@ -9379,17 +9602,12 @@ button {
 }
 
 .phoneView .pageHeader,
-.phoneTabs,
 .phoneSetupGrid,
 .phoneAssistantGrid,
 .phoneContentTable,
 .numberResults,
 .phonePlan {
   width: 100%;
-}
-
-.phoneTabs {
-  margin-bottom: 0;
 }
 
 .phoneSetupGrid,
@@ -9444,69 +9662,6 @@ button {
   background: transparent;
 }
 
-.phoneAssistantRows {
-  display: grid;
-  flex: 0 0 auto;
-  align-content: start;
-  min-height: 0;
-  overflow: auto;
-}
-
-.phoneAssistantRow {
-  display: grid;
-  grid-template-columns: minmax(170px, 1.2fr) minmax(130px, 0.9fr) minmax(92px, 0.65fr) minmax(210px, 1.5fr);
-  align-items: center;
-  gap: var(--table-row-gap);
-  width: 100%;
-  min-height: var(--table-row-min-height);
-  padding: 0 var(--table-row-inline-inset);
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-  background: var(--surface);
-  text-align: left;
-}
-
-.phoneAssistantRowHead {
-  min-height: var(--table-header-min-height);
-  color: var(--text-muted);
-  background: var(--surface-raised);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.phoneAssistantRow:last-child {
-  border-bottom: 0;
-}
-
-.phoneAssistantRow span,
-.phoneAssistantRow strong {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.phoneAssistantRow span {
-  color: var(--text-muted);
-}
-
-.phoneAssistantRow em {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: fit-content;
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  color: #12623d;
-  background: #dff6e8;
-  font-style: normal;
-  font-size: 12px;
-  font-weight: 750;
-}
-
 .phoneContactTable,
 .phoneCallsTable {
   display: flex;
@@ -9522,42 +9677,42 @@ button {
   background: var(--surface);
 }
 
-.phoneContactControls .contactSearchControls {
-  grid-template-columns: var(--top-control-height) minmax(0, 1fr);
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.phoneContactControls .agentFilterButton,
-.phoneContactControls .componentField input {
-  height: var(--top-control-height);
-  min-height: var(--top-control-height);
-}
-
-.phoneContactControls .agentFilterButton {
-  width: var(--top-control-height);
-}
-
-.phoneContactControls .componentField {
-  display: flex;
-  min-width: 0;
-  margin: 0;
-}
-
-.phoneContactControls .componentField input {
-  width: 100%;
-}
-
 .phoneCallSearchRow {
   flex: 0 0 auto;
   grid-template-columns: 44px minmax(280px, 1fr) 44px 44px;
+}
+
+.phoneContactSearchRow {
+  flex: 0 0 auto;
+  grid-template-columns: 44px minmax(280px, 1fr) minmax(120px, 160px) 44px;
+}
+
+.phoneNumberSearchRow {
+  flex: 0 0 auto;
+  grid-template-columns: 44px minmax(280px, 1fr) minmax(120px, 160px) 44px;
 }
 
 .phoneCallFilterBar {
   grid-template-columns: auto repeat(3, minmax(150px, 190px));
 }
 
+.phoneContactFilterBar {
+  grid-template-columns: auto minmax(150px, 220px);
+}
+
+.phoneNumberFilterBar {
+  grid-template-columns: auto minmax(150px, 220px);
+}
+
 .phoneCallFilterBar .agentFilter {
+  margin: 0;
+}
+
+.phoneContactFilterBar .agentFilter {
+  margin: 0;
+}
+
+.phoneNumberFilterBar .agentFilter {
   margin: 0;
 }
 
@@ -9586,7 +9741,7 @@ button {
 
 .phoneContactRow {
   display: grid;
-  grid-template-columns: minmax(170px, 1.2fr) minmax(150px, 1fr) minmax(120px, 0.75fr) minmax(112px, 0.7fr);
+  grid-template-columns: minmax(170px, 1.2fr) minmax(150px, 1fr) minmax(120px, 0.75fr) 44px;
   align-items: center;
   gap: var(--table-row-gap);
   width: 100%;
@@ -9620,10 +9775,11 @@ button {
 
 .phoneContactTable .contactResultMain {
   display: grid;
-  grid-template-columns: minmax(170px, 1.2fr) minmax(150px, 1fr) minmax(120px, 0.75fr) minmax(112px, 0.7fr);
-  gap: 14px;
-  min-height: 54px;
-  padding: 0 18px;
+  grid-template-columns: minmax(170px, 1.2fr) minmax(150px, 1fr) minmax(120px, 0.75fr) 44px;
+  align-items: center;
+  gap: var(--table-row-gap);
+  min-height: var(--table-row-min-height);
+  padding: 0 var(--table-row-inline-inset);
 }
 
 .phoneContactTable .contactResultMain > span:not(:first-child) {
@@ -9671,7 +9827,7 @@ button {
 
 .phoneInboxFilterBar {
   margin: 12px 18px 0;
-  grid-template-columns: auto auto;
+  grid-template-columns: auto minmax(180px, 220px) auto;
   justify-content: start;
 }
 
@@ -9707,30 +9863,8 @@ button {
   min-height: 0;
 }
 
-.phoneInboxRows + .phoneInboxSectionHeader,
 .phoneInboxRows + .phoneInboxDetail {
   margin-top: 12px;
-}
-
-.phoneInboxSectionHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 42px;
-  padding: 0 var(--table-row-inline-inset);
-  border: 1px solid var(--border);
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
-  color: var(--text);
-  background: var(--surface-raised);
-  font-size: 14px;
-  font-weight: 850;
-}
-
-.phoneInboxSectionHeader small {
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 800;
 }
 
 .phoneInboxThreadList {
@@ -9754,16 +9888,17 @@ button {
 .phoneInboxRows .chatResultRows {
   overflow: auto;
   max-height: min(42vh, 420px);
+  scrollbar-gutter: stable;
 }
 
 .standaloneInboxView .phoneInboxRows {
-  border-top: 0;
-  border-radius: 0 0 8px 8px;
+  border-top: 1px solid var(--border);
+  border-radius: 8px;
   overflow: hidden;
 }
 
 .phoneInboxRow {
-  grid-template-columns: minmax(150px, 0.9fr) minmax(220px, 1.5fr) minmax(126px, 0.65fr) minmax(88px, 0.45fr) var(--table-action-column-width);
+  grid-template-columns: minmax(140px, 220px) minmax(260px, 1fr) minmax(92px, 128px) var(--table-action-column-width);
   min-height: var(--table-row-min-height);
 }
 
@@ -9802,6 +9937,7 @@ button {
 
 .phoneInboxFromCell,
 .phoneInboxSubjectCell,
+.phoneInboxDateCell,
 .phoneInboxRow > span {
   min-width: 0;
   overflow: hidden;
@@ -9812,6 +9948,26 @@ button {
 .phoneInboxSubjectCell {
   display: grid;
   gap: 3px;
+}
+
+.chatResultRow > span.phoneInboxFromCell:not(.bulkSelectCell),
+.chatResultRow > .phoneInboxFromCell,
+.phoneInboxFromCell {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.phoneInboxFromCell strong {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  font-size: inherit;
+  font-weight: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .phoneInboxSubjectCell strong {
@@ -9833,21 +9989,8 @@ button {
   white-space: nowrap;
 }
 
-.phoneInboxRow em {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: fit-content;
-  min-height: 26px;
-  padding: 0 9px;
-  border-radius: 999px;
-  color: var(--accent-ink);
-  background: var(--accent);
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 850;
-  text-transform: uppercase;
+.phoneInboxDateCell {
+  text-align: left;
 }
 
 .phoneInboxOpenCell {
@@ -10062,7 +10205,7 @@ button {
 
 .phoneCallRow {
   display: grid;
-  grid-template-columns: minmax(120px, 1.1fr) minmax(110px, 0.8fr) minmax(100px, 0.75fr) minmax(86px, 0.65fr) minmax(76px, 0.55fr);
+  grid-template-columns: minmax(120px, 1.1fr) minmax(110px, 0.8fr) minmax(100px, 0.75fr) minmax(86px, 0.65fr) minmax(76px, 0.55fr) var(--table-action-column-width);
   align-items: center;
   gap: var(--table-row-gap);
   width: 100%;
@@ -10074,7 +10217,23 @@ button {
 }
 
 .phoneCallsTable.bulkEditing .phoneCallRow {
-  grid-template-columns: 28px minmax(120px, 1.1fr) minmax(110px, 0.8fr) minmax(100px, 0.75fr) minmax(86px, 0.65fr) minmax(76px, 0.55fr);
+  grid-template-columns: 28px minmax(120px, 1.1fr) minmax(110px, 0.8fr) minmax(100px, 0.75fr) minmax(86px, 0.65fr) minmax(76px, 0.55fr) var(--table-action-column-width);
+}
+
+.phoneCallContactCell {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.phoneCallContactCell small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .phoneCallRowHead {
@@ -10085,6 +10244,374 @@ button {
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.phoneCallDetailView {
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.phoneCallDetailView.chatDetailView {
+  display: grid;
+  min-height: 0;
+}
+
+.phoneCallDetailHeader {
+  align-items: start;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.phoneCallDetailActions {
+  align-items: center;
+}
+
+.phoneCallDetailSurface {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.phoneCallReviewTabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.phoneCallDetailPane {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  padding: 18px;
+  overflow: auto;
+}
+
+.phoneCallDetailPane.compact {
+  align-content: start;
+  gap: 12px;
+  padding: 12px;
+}
+
+.phoneCallDataTable {
+  display: grid;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.phoneCallDataRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.55fr) minmax(160px, 0.85fr) minmax(260px, 1fr);
+  align-items: center;
+  min-height: 42px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.phoneCallDataRow:last-child {
+  border-bottom: 0;
+}
+
+.phoneCallHistoryTable .phoneCallDataRow {
+  grid-template-columns: minmax(150px, 0.95fr) minmax(90px, 0.45fr) minmax(90px, 0.45fr) minmax(130px, 0.65fr) minmax(85px, 0.4fr) minmax(190px, 1fr);
+}
+
+.phoneCallArtifactTable .phoneCallDataRow {
+  grid-template-columns: minmax(160px, 0.9fr) minmax(180px, 0.95fr) minmax(260px, 1fr) minmax(86px, 0.35fr);
+}
+
+.phoneCallTranscriptTable .phoneCallDataRow {
+  grid-template-columns: minmax(160px, 0.75fr) minmax(130px, 0.55fr) minmax(180px, 0.7fr) minmax(320px, 1.6fr);
+  align-items: start;
+}
+
+.phoneCallDataRow > * {
+  min-width: 0;
+  padding: 9px 12px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 680;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phoneCallDataRow > strong {
+  font-weight: 820;
+}
+
+.phoneCallDataRowHead {
+  min-height: 36px;
+  background: var(--surface-raised);
+}
+
+.phoneCallDataRowHead > * {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.phoneCallDataRow em {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-style: normal;
+  font-weight: 820;
+  text-overflow: ellipsis;
+}
+
+.phoneCallDataRow em.answered {
+  background: #e4faef;
+  color: #097a47;
+}
+
+.phoneCallDataRow em.missed,
+.phoneCallDataRow em.voicemail {
+  background: #fff1d3;
+  color: #80520f;
+}
+
+.phoneCallDataRow em.failed {
+  background: #ffe7df;
+  color: #a3341f;
+}
+
+.phoneCallEmptyRow > * {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  white-space: normal;
+}
+
+.phoneCallTranscriptCell {
+  white-space: normal;
+}
+
+.phoneCallArtifactHero {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.phoneCallSummaryIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+.phoneCallArtifactHero small,
+.phoneCallPanelHeader small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 820;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.phoneCallArtifactHero strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 19px;
+  line-height: 1.2;
+}
+
+.phoneCallArtifactHero p {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.phoneCallOverviewGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.phoneCallOverviewGrid > div {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.phoneCallOverviewGrid strong {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 820;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.phoneCallOverviewGrid span {
+  display: block;
+  min-width: 0;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 760;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phoneCallEvidenceGrid {
+  margin-top: -4px;
+}
+
+.phoneCallPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.phoneCallPanelHeader h3 {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.phoneCallMetadataGrid {
+  border-top: 0;
+}
+
+.phoneCallTimeline,
+.phoneCallArtifactList {
+  display: grid;
+  gap: 10px;
+}
+
+.phoneCallTimelineItem,
+.phoneCallArtifactListItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.phoneCallTimelineItem strong,
+.phoneCallArtifactListItem strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.phoneCallTimelineItem span,
+.phoneCallArtifactListItem span,
+.phoneCallTimelineItem small,
+.phoneCallArtifactListItem small,
+.phoneCallTranscriptMessage small {
+  display: block;
+  min-width: 0;
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phoneCallTimelineItem > div:last-child {
+  min-width: 140px;
+  text-align: right;
+}
+
+.phoneCallEmptyArtifact {
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.phoneCallArtifactPanel {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 18px;
+  overflow: auto;
+}
+
+.phoneCallTranscriptMessage {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.phoneCallTranscriptAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.phoneCallTranscriptMessage > div:last-child > strong {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.phoneCallTranscript {
+  min-height: 160px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  overflow: auto;
+  color: var(--text);
+  background: var(--surface-raised);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .availabilitySummary {
@@ -10582,19 +11109,13 @@ button {
 
   .skillDirectoryResultRow,
   .chatSessionRows:not(.bulkEditing) .skillDirectoryResultRow {
-    grid-template-columns: minmax(0, 1fr) minmax(78px, 0.18fr) var(--table-action-column-width);
+    grid-template-columns: minmax(0, 1fr) var(--table-action-column-width);
   }
 
   .agentDirectoryResultRow > span:nth-child(n+2),
   .appDirectoryResultRow > span:nth-child(n+2),
-  .skillDirectoryResultRow > span:nth-child(2),
-  .skillDirectoryResultRow > span:nth-child(3),
-  .skillDirectoryResultRow > span:nth-child(4) {
+  .skillDirectoryResultRow > span:nth-child(2) {
     display: none;
-  }
-
-  .skillDirectoryResultRow > .directoryRowActions {
-    display: inline-flex;
   }
 
   .directoryEmbeddedDetailHeader h2 {
@@ -10950,21 +11471,17 @@ button {
 
 .phoneNumberRow {
   display: grid;
-  grid-template-columns: minmax(150px, 1.4fr) minmax(130px, 1.2fr) minmax(90px, 0.8fr) minmax(140px, 1.3fr) minmax(92px, 0.7fr);
+  grid-template-columns: minmax(150px, 1.35fr) minmax(130px, 1.1fr) minmax(90px, 0.7fr) minmax(140px, 1.1fr) minmax(92px, 0.7fr) 44px;
   align-items: center;
-  gap: 14px;
+  gap: var(--table-row-gap);
   width: 100%;
-  min-height: 54px;
-  padding: 0 18px;
+  min-height: var(--table-row-min-height);
+  padding: 0 var(--table-row-inline-inset);
   border: 0;
   border-bottom: 1px solid var(--border);
   color: var(--text);
   background: var(--surface);
   text-align: left;
-}
-
-.phoneNumberRow:not(.phoneNumberRowHead) {
-  cursor: pointer;
 }
 
 .phoneNumberRow:not(.phoneNumberRowHead):hover,
@@ -11028,30 +11545,6 @@ button {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
-}
-
-.numberOption {
-  display: grid;
-  gap: 4px;
-  min-height: 92px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  background: #ffffff;
-  text-align: left;
-}
-
-.numberOption:hover,
-.numberOption.selected {
-  background: #fbfaf9;
-  box-shadow: inset 0 0 0 1px rgba(32, 32, 31, 0.08);
-}
-
-.numberOption span,
-.numberOption small {
-  color: var(--text-muted);
-  font-size: 12px;
 }
 
 .phoneStatus {
@@ -11256,35 +11749,6 @@ button {
   text-transform: uppercase;
 }
 
-.connectorNavItem {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 8px;
-  align-items: center;
-  gap: 10px;
-  min-height: 42px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 8px;
-  color: var(--text);
-  background: transparent;
-  text-align: left;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.connectorNavItem.selected,
-.connectorNavItem:hover {
-  background: var(--surface-soft);
-}
-
-.connectorNavItem span:not(.connectorLogo) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.connectorNavItem i,
 .connectionDot {
   width: 7px;
   height: 7px;
@@ -11292,12 +11756,10 @@ button {
   background: var(--text-faint);
 }
 
-.connectorNavItem i.connected,
 .connectionDot.connected {
   background: #3fb950;
 }
 
-.connectorNavItem i.available,
 .connectionDot.available {
   background: var(--text-faint);
 }
@@ -11412,41 +11874,6 @@ button {
   margin-top: 0;
 }
 
-.wikiTabs {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  align-items: center;
-  gap: 6px;
-  width: min(1120px, 100%);
-  margin: 0 auto;
-  padding: 4px;
-  border-radius: 8px;
-  background: #e9e5e0;
-}
-
-.wikiTabs button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  width: 100%;
-  height: 32px;
-  min-width: 0;
-  border-radius: 7px;
-  padding: 0 14px;
-  color: var(--text-muted);
-  background: transparent;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.wikiTabs button.selected {
-  color: var(--text);
-  background: #ffffff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-
 .wikiHubView {
   overflow: hidden;
 }
@@ -11463,6 +11890,12 @@ button {
 .wikiHubView .pageSectionShellSingle .pageSectionMain,
 .agentsView .pageSectionMain {
   overflow: hidden;
+}
+
+.agentsView .pageSectionMain.agentSetupPageSectionMain {
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-padding-bottom: var(--app-bottom-inset);
 }
 
 .wikiHubView .pageSectionShellSingle .wikiHubContent {
@@ -11528,7 +11961,7 @@ button {
 .wikiToolbar {
   display: grid;
   position: relative;
-  grid-template-columns: 44px minmax(260px, 1fr) 112px;
+  grid-template-columns: 44px minmax(260px, 1fr) 112px 44px;
   align-items: center;
   gap: 12px;
   width: min(1120px, 100%);
@@ -11754,6 +12187,20 @@ button {
   scrollbar-gutter: stable;
 }
 
+.wikiHubView .pageSectionShellSingle .wikiSkillList,
+.wikiHubView .pageSectionShellSingle .appDirectoryList,
+.agentsView .agentDirectoryList,
+.agentsView .botSkillsPanel {
+  scrollbar-color: #bcb8b2 var(--surface-raised);
+}
+
+.wikiHubView .pageSectionShellSingle .wikiSkillList::-webkit-scrollbar-track,
+.wikiHubView .pageSectionShellSingle .appDirectoryList::-webkit-scrollbar-track,
+.agentsView .agentDirectoryList::-webkit-scrollbar-track,
+.agentsView .botSkillsPanel::-webkit-scrollbar-track {
+  background: var(--surface-raised);
+}
+
 .agentsView .agentDirectoryList {
   margin-bottom: 0;
   overflow: auto;
@@ -11766,6 +12213,42 @@ button {
 
 .agentsView .agentDirectoryTable {
   min-height: auto;
+}
+
+.agentsView .agentDirectorySection.empty .directoryTable {
+  flex: 0 0 auto;
+}
+
+.agentsView .agentDirectorySection.empty .directoryTable .chatResultRows {
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.agentsView .agentDirectorySection.empty .tableEmptyState {
+  min-height: 104px;
+  padding: 14px 18px;
+}
+
+.agentsView .agentDirectorySection.empty .tableEmptyState .emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.agentsView .agentDirectorySection.empty .tableEmptyState .emptyState svg {
+  width: 22px;
+  height: 22px;
+}
+
+.agentsView .agentDirectorySection.empty .tableEmptyState .emptyState h1 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.agentsView .agentDirectorySection.empty .tableEmptyState .emptyState p {
+  display: none;
 }
 
 .wikiSkillList .skillResultRow {
@@ -11903,8 +12386,12 @@ button {
 
 .appDirectoryList {
   display: flex;
+  align-self: stretch;
   flex-direction: column;
   gap: 18px;
+  width: 100%;
+  max-width: 100%;
+  scrollbar-gutter: auto;
 }
 
 .appDirectorySection {
@@ -11913,10 +12400,47 @@ button {
   flex-direction: column;
   gap: 0;
   min-width: 0;
+  width: 100%;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
+}
+
+.appDirectorySection.empty .directoryTable {
+  flex: 0 0 auto;
+}
+
+.appDirectorySection.empty .directoryTable .chatResultRows {
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.appDirectorySection.empty .tableEmptyState {
+  min-height: 104px;
+  padding: 14px 18px;
+}
+
+.appDirectorySection.empty .tableEmptyState .emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.appDirectorySection.empty .tableEmptyState .emptyState svg {
+  width: 22px;
+  height: 22px;
+}
+
+.appDirectorySection.empty .tableEmptyState .emptyState h1 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.appDirectorySection.empty .tableEmptyState .emptyState p {
+  display: none;
 }
 
 .appEmptyPanel {
@@ -12082,6 +12606,62 @@ button {
 .settingsGrid,
 .connectorList {
   width: 100%;
+}
+
+.settingsView .pageSectionSidebar {
+  background: #fbfaf9;
+}
+
+.settingsView .pageSectionSidebarHeading {
+  border-bottom: 1px solid var(--border);
+  background: #fbfaf9;
+}
+
+.settingsView .pageSectionSidebarHeading + .pageSectionSidebarGroup .pageSectionSidebarGroupTitle {
+  border-top: 0;
+}
+
+.settingsView .pageSectionSidebarGroup {
+  gap: 4px;
+  padding-bottom: 10px;
+}
+
+.settingsView .pageSectionSidebarGroupTitle {
+  margin-bottom: 8px;
+  background: #f1efeb;
+}
+
+.settingsView .pageSectionSidebar button.selected {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border-soft);
+}
+
+.wikiHubView .pageSectionSidebar {
+  background: #fbfaf9;
+}
+
+.wikiHubView .pageSectionSidebarHeading {
+  border-bottom: 1px solid var(--border);
+  background: #fbfaf9;
+}
+
+.wikiHubView .pageSectionSidebarHeading + .pageSectionSidebarGroup .pageSectionSidebarGroupTitle {
+  border-top: 0;
+}
+
+.wikiHubView .pageSectionSidebarGroup {
+  gap: 4px;
+  padding-bottom: 14px;
+}
+
+.wikiHubView .pageSectionSidebarGroupTitle {
+  margin-bottom: 8px;
+  background: #f1efeb;
+}
+
+.wikiHubView .pageSectionSidebar button.selected {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border-soft);
 }
 
 .settingsSectionMain {
@@ -12340,18 +12920,165 @@ button {
 }
 
 .settingsView .acpAccessCard,
+.settingsView .agentMailSettingsPanel,
 .settingsView .themeSettingsCard,
 .settingsView .myAgentsPanel,
 .settingsView .credentialList,
+.settingsView .settingsDomainsPanel,
 .settingsView .settingsDesignPanel,
 .settingsView .wikiSettingsPanel {
   width: 100%;
   max-width: none;
 }
 
+.settingsDomainsPanel,
+.agentMailSettingsPanel,
 .wikiSettingsPanel {
   display: grid;
   gap: 14px;
+}
+
+.agentMailSettingsCard,
+.agentMailCredentialPanel {
+  width: 100%;
+}
+
+.agentMailReadiness {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--border-soft);
+}
+
+.agentMailReadiness div {
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--surface-raised);
+}
+
+.agentMailReadiness span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.agentMailReadiness strong {
+  color: var(--text);
+}
+
+.domainsSettingsCard {
+  width: 100%;
+}
+
+.domainOptionList {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.domainOption {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.domainOption.selected {
+  border-color: rgba(0, 227, 170, 0.58);
+  background: rgba(0, 227, 170, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(0, 227, 170, 0.2);
+}
+
+.domainOption input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.domainOptionIcon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border-soft);
+}
+
+.domainOptionCopy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.domainOptionCopy strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.domainOptionCopy small {
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.domainOption code {
+  min-width: 0;
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font: 600 12px/1.2 var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.domainCustomField {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.domainCustomField input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+}
+
+.domainSettingsFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.domainSettingsFooter p {
+  min-width: 0;
+  margin: 0;
+  color: var(--text-muted);
 }
 
 .wikiSourceSummary,
@@ -12537,7 +13264,27 @@ button {
 }
 
 .wikiSourceRow {
-  grid-template-columns: minmax(220px, 1fr) minmax(84px, 0.16fr) minmax(112px, 0.18fr) minmax(220px, 0.42fr) minmax(98px, 0.16fr);
+  grid-template-columns: minmax(260px, 1fr) minmax(140px, 0.22fr) minmax(132px, 0.2fr) var(--table-action-column-width);
+}
+
+.wikiSourceRow.expanded {
+  border-bottom: 0;
+}
+
+.wikiSourceExpandedDetail {
+  display: block;
+  padding: 0 32px 24px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.wikiSourceExpandedDetail .chatDetailSurface {
+  margin: 0;
+}
+
+.wikiSourceDetailActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .wikiSourceTargetCell {
@@ -12620,47 +13367,6 @@ button {
   line-height: 1.45;
   white-space: normal;
   overflow-wrap: anywhere;
-}
-
-.accessStatusGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
-  margin-top: 18px;
-  overflow: hidden;
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  background: var(--border-soft);
-}
-
-.accessStatusGrid.compact {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
-.accessStatusGrid > div {
-  min-width: 0;
-  padding: 11px 12px;
-  background: var(--surface-raised);
-}
-
-.accessStatusGrid span {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--text-faint);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.accessStatusGrid strong {
-  display: block;
-  min-width: 0;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 730;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .accessCardActions {
@@ -13583,30 +14289,12 @@ button {
   font-weight: 760;
 }
 
-.myAgentRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 12px;
-  min-height: 68px;
-  padding: 12px;
-  background: var(--surface-raised);
-}
-
 .agentDirectorySection .myAgentsList {
   gap: 0;
   overflow: visible;
   border: 0;
   border-radius: 0;
   background: transparent;
-}
-
-.agentDirectorySection .myAgentRow {
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.agentDirectorySection .myAgentRow:last-child {
-  border-bottom: 0;
 }
 
 .agentsView .agentDirectoryList > .agentGrid {
@@ -13658,7 +14346,6 @@ button {
   background: rgba(125, 99, 216, 0.14);
 }
 
-.myAgentRow strong,
 .mySkillRow strong {
   display: block;
   color: var(--text);
@@ -13666,8 +14353,6 @@ button {
   font-weight: 780;
 }
 
-.myAgentRow p,
-.myAgentRow small,
 .mySkillRow p,
 .mySkillRow small {
   display: block;
@@ -13860,6 +14545,19 @@ button {
     align-items: start;
   }
 
+  .workboardSearchRow {
+    grid-template-columns: var(--top-control-height) var(--top-control-height) minmax(0, 1fr) var(--top-control-height);
+  }
+
+  .workboardRowCard,
+  .workboardRows.bulkEditing .workboardRowCard {
+    grid-template-columns: 28px 38px minmax(180px, 1fr) minmax(220px, 1fr) minmax(96px, 0.35fr) minmax(74px, 0.2fr);
+  }
+
+  .workboardRows:not(.bulkEditing) .workboardRowCard {
+    grid-template-columns: 38px minmax(180px, 1fr) minmax(220px, 1fr) minmax(96px, 0.35fr) minmax(74px, 0.2fr);
+  }
+
   .acpSetupHeroIcon {
     width: 42px;
     height: 42px;
@@ -13982,6 +14680,13 @@ button {
   width: 100%;
 }
 
+.acpSetupBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .acpSetupHero {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr) auto;
@@ -14027,36 +14732,6 @@ button {
   justify-content: flex-end;
   gap: 8px;
   min-width: 0;
-}
-
-.acpHostedAgentList > div {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  column-gap: 8px;
-  row-gap: 3px;
-  min-width: 0;
-}
-
-.acpHostedAgentList strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.acpHostedAgentList small {
-  grid-column: 2;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .acpSetupGrid {
@@ -14157,6 +14832,7 @@ button {
 }
 
 .acpSetupField input,
+.acpSetupField select,
 .acpSetupField textarea {
   width: 100%;
   min-width: 0;
@@ -14167,9 +14843,21 @@ button {
   outline: 0;
 }
 
-.acpSetupField input {
+.acpSetupField input,
+.acpSetupField select {
   height: 42px;
   padding: 0 12px;
+}
+
+.acpSetupField input:disabled,
+.acpSetupField select:disabled {
+  color: var(--text-faint);
+  background: var(--surface-soft);
+}
+
+.acpSetupField input[readonly] {
+  color: var(--text-muted);
+  background: var(--surface-soft);
 }
 
 .acpSetupField textarea {
@@ -14179,7 +14867,141 @@ button {
   resize: vertical;
 }
 
-.acpHostedAgentList,
+.acpSetupField.wide,
+.acpResourceGrid {
+  grid-column: 1 / -1;
+}
+
+.acpOwnerTypeGroup,
+.acpInstallTargetGroup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  width: min(100%, 460px);
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f1efeb;
+}
+
+.acpOwnerTypeGroup button,
+.acpInstallTargetGroup button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 32px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.acpOwnerTypeGroup button.selected,
+.acpInstallTargetGroup button.selected {
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border-soft);
+}
+
+.desktop[data-theme="dark"] .acpOwnerTypeGroup,
+.desktop[data-theme="dark"] .acpInstallTargetGroup {
+  border-color: #514c46;
+  background: #201f1d;
+}
+
+.desktop[data-theme="dark"] .acpOwnerTypeGroup button.selected,
+.desktop[data-theme="dark"] .acpInstallTargetGroup button.selected {
+  color: #ffffff;
+  background: #3f3c38;
+  box-shadow: inset 0 0 0 1px #6a655f;
+}
+
+.acpInlineActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.acpRouteNote {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.acpModelLocalStatus {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.acpModelLocalStatus > svg {
+  color: var(--text-muted);
+}
+
+.acpModelLocalStatus div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.acpModelLocalStatus strong,
+.acpModelLocalStatus span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acpModelLocalStatus strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 820;
+}
+
+.acpModelLocalStatus span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.acpChannelRows {
+  display: grid;
+  gap: 8px;
+}
+
+.acpChannelRows label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.acpChannelRows span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 780;
+}
+
+.acpChannelRows input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
 .acpAccessToggles {
   display: grid;
   gap: 10px;
@@ -14306,30 +15128,6 @@ button {
   margin: 0;
 }
 
-.acpHostedAgentList > div {
-  grid-template-columns: 38px minmax(0, 1fr);
-  padding: 8px 0;
-  border-top: 1px solid var(--border-soft);
-}
-
-.acpHostedAgentList > div:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-
-.acpHostedAgentList .agentAvatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 8px;
-  font-size: 18px;
-}
-
-.acpHostedAgentList span {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
 .acpHostedAgentEmpty {
   min-height: 74px;
   display: grid;
@@ -14340,87 +15138,15 @@ button {
   text-align: center;
 }
 
-.phoneTabs,
-.agentTabs,
-.wikiTabs {
-  gap: 4px;
-  height: var(--top-control-height);
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #f1efeb;
-}
-
-.phoneTabs button,
-.agentTabs button,
-.wikiTabs button {
-  height: 30px;
-  border: 0;
-  border-radius: 6px;
-  color: var(--text-muted);
-  background: transparent;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.phoneTabs button.selected,
-.agentTabs button.selected,
-.wikiTabs button.selected {
-  color: var(--text);
-  background: #ffffff;
-  box-shadow: inset 0 0 0 1px var(--border-soft);
-}
-
-.themeToggle {
-  display: inline-flex;
-  gap: 4px;
-  margin-top: 14px;
-  padding: 4px;
-  border-radius: 8px;
-  background: #e9e5e0;
-}
-
-.themeToggle button {
-  height: 32px;
-  min-width: 92px;
-  border-radius: 7px;
-  color: var(--text-muted);
-  background: transparent;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.themeToggle button.selected {
-  color: var(--accent-ink);
-  background: var(--accent);
-}
-
-.themeToggle.compact {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  width: 100%;
-  margin-top: 0;
-}
-
-.themeToggle.compact button {
-  min-width: 0;
-}
-
 .settingsDesignPanel {
   width: 100%;
 }
 
-.desktop[data-theme="dark"] .phoneTabs,
-.desktop[data-theme="dark"] .agentTabs,
-.desktop[data-theme="dark"] .wikiTabs,
 .desktop[data-theme="dark"] .designTabs {
   border-color: #514c46;
   background: #201f1d;
 }
 
-.desktop[data-theme="dark"] .phoneTabs button.selected,
-.desktop[data-theme="dark"] .agentTabs button.selected,
-.desktop[data-theme="dark"] .wikiTabs button.selected,
 .desktop[data-theme="dark"] .designTabs .selected,
 .desktop[data-theme="dark"] .assistantTabs button.selected {
   color: #ffffff;
@@ -15718,6 +16444,10 @@ button {
     border-left: 0;
   }
 
+  .assistantResizeHandle {
+    display: none;
+  }
+
   .assistantPanelCollapsed {
     border-top: 0;
     border-left: 1px solid var(--border);
@@ -15806,13 +16536,24 @@ button {
     justify-content: flex-start;
   }
 
-	  .accessStatusGrid {
-	    grid-template-columns: repeat(2, minmax(0, 1fr));
-	  }
-
+	  .agentMailReadiness,
 	  .wikiSourceMetrics,
 	  .wikiSourceFormGrid {
 	    grid-template-columns: 1fr;
+	  }
+
+	  .domainOption {
+	    grid-template-columns: auto auto minmax(0, 1fr);
+	  }
+
+	  .domainOption code {
+	    grid-column: 3;
+	    max-width: 100%;
+	  }
+
+	  .domainSettingsFooter {
+	    align-items: flex-start;
+	    flex-direction: column;
 	  }
 
 	  .wikiSourceHeaderActions,
@@ -15828,11 +16569,16 @@ button {
 
 	  .wikiSourceRow,
 	  .chatSessionRows:not(.bulkEditing) .wikiSourceRow {
-	    grid-template-columns: minmax(190px, 1fr) minmax(92px, 0.24fr) minmax(86px, 0.18fr) minmax(76px, 0.18fr);
+	    grid-template-columns: minmax(190px, 1fr) minmax(92px, 0.24fr) minmax(86px, 0.18fr) var(--table-action-column-width);
 	  }
 
-	  .wikiSourceRow > span:nth-child(4) {
-	    display: none;
+	  .wikiSourceExpandedDetail {
+	    padding: 0 12px 16px;
+	  }
+
+	  .wikiSourceDetailActions {
+	    align-items: stretch;
+	    flex-direction: column;
 	  }
 
 	  .credentialSummary {
@@ -15866,7 +16612,7 @@ button {
   }
 
   .wikiToolbar {
-    grid-template-columns: 44px minmax(0, 1fr) 112px;
+    grid-template-columns: 44px minmax(0, 1fr) 112px 44px;
   }
 
   .wikiSelectField {
@@ -15874,25 +16620,10 @@ button {
   }
 
   .agentDirectoryResultRow,
-  .appDirectoryResultRow,
-  .chatSessionRows:not(.bulkEditing) .agentDirectoryResultRow,
-  .chatSessionRows:not(.bulkEditing) .appDirectoryResultRow {
-    grid-template-columns: minmax(190px, 1fr) minmax(110px, 0.28fr) minmax(100px, 0.2fr) var(--table-action-column-width);
-  }
-
-  .agentDirectoryResultRow > span:nth-child(4),
-  .appDirectoryResultRow > span:nth-child(4) {
-    display: none;
-  }
-
   .skillDirectoryResultRow,
+  .chatSessionRows:not(.bulkEditing) .agentDirectoryResultRow,
   .chatSessionRows:not(.bulkEditing) .skillDirectoryResultRow {
-    grid-template-columns: minmax(210px, 1fr) minmax(120px, 0.24fr) minmax(86px, 0.16fr) var(--table-action-column-width);
-  }
-
-  .skillDirectoryResultRow > span:nth-child(3),
-  .skillDirectoryResultRow > span:nth-child(4) {
-    display: none;
+    grid-template-columns: minmax(160px, 0.78fr) minmax(128px, 0.44fr) var(--table-action-column-width);
   }
 
   .credentialRow .button {
@@ -15960,17 +16691,6 @@ button {
 
   .dashboardWidget.tableauEmbedWidget {
     grid-column: auto;
-  }
-
-  .phoneAssistantRow {
-    grid-template-columns: 1fr;
-    gap: 5px;
-    align-items: start;
-    padding: 12px 18px;
-  }
-
-  .phoneAssistantRowHead {
-    display: none;
   }
 
   .phoneInboxToolbar,
@@ -16138,6 +16858,33 @@ button {
 
   .wikiSelectField {
     grid-column: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .agentDirectoryResultRow,
+  .chatSessionRows:not(.bulkEditing) .agentDirectoryResultRow,
+  .skillDirectoryResultRow,
+  .chatSessionRows:not(.bulkEditing) .skillDirectoryResultRow {
+    grid-template-columns: minmax(0, 1fr) var(--table-action-column-width);
+  }
+
+  .workboardRowCard,
+  .workboardRows:not(.bulkEditing) .workboardRowCard {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+  }
+
+  .workboardRows.bulkEditing .workboardRowCard {
+    grid-template-columns: 28px 38px minmax(0, 1fr) auto;
+  }
+
+  .workboardRowDescription,
+  .workboardRowDetails {
+    display: none;
+  }
+
+  .workboardRowTime {
+    justify-self: end;
   }
 }
 

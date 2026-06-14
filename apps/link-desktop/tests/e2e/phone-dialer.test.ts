@@ -10,25 +10,22 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, "../..");
 const targetNumber = process.env.LINK_DESKTOP_LIVE_CALL_TARGET || "+14158663106";
 const previewCallerNumber = "+14155550100";
-const dialerTemplates = ["Standard Dialer", "Sales Dialer", "Support Dialer"];
 
-test("mocked E2E places the target call through every dialer template", async () => {
+test("mocked E2E places the target call through the merged dialer builder", async () => {
   const port = await freePort();
   const preview = await startPreview(port);
   const browser = await launchChromium();
 
   try {
-    for (const templateName of dialerTemplates) {
-      const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
-      try {
-        const call = await placeMockedCall(page, `http://127.0.0.1:${port}/?previewAuth=ready&phoneE2E=ready`, templateName);
-        assert.equal(call.destinationNumber, targetNumber);
-        assert.equal(call.callerNumber, previewCallerNumber);
-        assert.equal(call.audio, true);
-        assert.equal(call.remoteElement, "link-phone-remote-audio");
-      } finally {
-        await page.close();
-      }
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    try {
+      const call = await placeMockedCall(page, `http://127.0.0.1:${port}/?previewAuth=ready&phoneE2E=ready`);
+      assert.equal(call.destinationNumber, targetNumber);
+      assert.equal(call.callerNumber, previewCallerNumber);
+      assert.equal(call.audio, true);
+      assert.equal(call.remoteElement, "link-phone-remote-audio");
+    } finally {
+      await page.close();
     }
   } finally {
     await browser.close();
@@ -60,59 +57,40 @@ test("live E2E places one real target call from the Electron softphone", { skip:
   try {
     const page = await app.firstWindow();
     await page.waitForLoadState("domcontentloaded");
-    const liveTemplates = process.env.LINK_DESKTOP_LIVE_CALL_ALL_DIALERS === "1"
-      ? dialerTemplates
-      : [process.env.LINK_DESKTOP_LIVE_CALL_DIALER || "Standard Dialer"];
-    for (const templateName of liveTemplates) {
-      await activateDialerTemplate(page, templateName);
-      await openAssistantPhone(page);
-      await assertPreCallModules(page, templateName);
-      await dialAndClickCall(page, targetNumber);
-      await page.waitForFunction(() => {
-        return Boolean(document.querySelector(".linkSoftphoneActions") || document.querySelector(".linkSoftphoneAgentInvite"));
-      }, undefined, { timeout: 20_000 });
-      await assertInCallModules(page, templateName);
+    await openAssistantPhone(page);
+    await assertPreCallModules(page);
+    await dialAndClickCall(page, targetNumber);
+    await page.waitForFunction(() => {
+      return Boolean(document.querySelector(".linkSoftphoneActions") || document.querySelector(".linkSoftphoneAgentInvite"));
+    }, undefined, { timeout: 20_000 });
+    await assertInCallModules(page);
 
-      await page.waitForTimeout(Number(process.env.LINK_DESKTOP_LIVE_CALL_SECONDS || 5) * 1000);
-      await hangUpIfPossible(page);
-      await assertPostCallModules(page, templateName);
-      await page.waitForTimeout(1750);
-    }
+    await page.waitForTimeout(Number(process.env.LINK_DESKTOP_LIVE_CALL_SECONDS || 5) * 1000);
+    await hangUpIfPossible(page);
+    await assertPostCallModules(page);
+    await page.waitForTimeout(1750);
   } finally {
     await closeElectron(app);
   }
 });
 
-async function placeMockedCall(page: Page, url: string, templateName: string) {
+async function placeMockedCall(page: Page, url: string) {
   await page.goto(url, { waitUntil: "networkidle" });
-  await activateDialerTemplate(page, templateName);
   await openAssistantPhone(page);
-  await assertPreCallModules(page, templateName);
+  await assertPreCallModules(page);
   await dialAndClickCall(page, targetNumber);
   await page.waitForFunction(() => {
     const state = (window as typeof window & { __linkPhoneE2E?: { calls?: Array<Record<string, unknown>> } }).__linkPhoneE2E;
     return Boolean(state?.calls?.some((call) => call.type === "newCall"));
   });
-  await assertInCallModules(page, templateName);
+  await assertInCallModules(page);
   const call = await page.evaluate(() => {
     const state = (window as typeof window & { __linkPhoneE2E?: { calls?: Array<Record<string, unknown>> } }).__linkPhoneE2E;
     return state?.calls?.find((call) => call.type === "newCall") ?? {};
   });
   await hangUpIfPossible(page);
-  await assertPostCallModules(page, templateName);
+  await assertPostCallModules(page);
   return call;
-}
-
-async function activateDialerTemplate(page: Page, templateName: string) {
-  await page.locator('button.railButton[title="Settings"]').click();
-  await page.getByRole("tab", { name: "Dialer" }).click();
-  const card = page.locator(".dialerTemplateCard").filter({ hasText: templateName });
-  await card.waitFor({ state: "visible" });
-  await card.locator("button").last().click();
-  await page.waitForFunction((name) => {
-    const activeCard = document.querySelector(".dialerTemplateCard.active");
-    return activeCard?.textContent?.includes(String(name));
-  }, templateName);
 }
 
 async function openAssistantPhone(page: Page) {
@@ -141,28 +119,17 @@ async function hangUpIfPossible(page: Page) {
   }
 }
 
-async function assertPreCallModules(page: Page, templateName: string) {
-  await assertSidebarModules(page, {
-    "Standard Dialer": [],
-    "Sales Dialer": ["CRM Data", "Contact Search"],
-    "Support Dialer": ["CRM Data", "Queue Panel"],
-  }[templateName] ?? []);
+async function assertPreCallModules(page: Page) {
+  await assertSidebarModules(page, ["Contact Preview"]);
 }
 
-async function assertInCallModules(page: Page, templateName: string) {
-  await assertSidebarModules(page, {
-    "Standard Dialer": ["Call Timer"],
-    "Sales Dialer": ["Call Recording", "Call Timer", "Voicemail Drop"],
-    "Support Dialer": ["Warm Transfer", "Call Recording", "Live Transcription", "Call Timer"],
-  }[templateName] ?? []);
+async function assertInCallModules(page: Page) {
+  await assertSidebarModules(page, ["Live Transcription", "Call Recording", "Call Timer"]);
+  await page.locator(".linkSoftphoneCallTimer").waitFor({ state: "visible", timeout: 10_000 });
 }
 
-async function assertPostCallModules(page: Page, templateName: string) {
-  await assertSidebarModules(page, {
-    "Standard Dialer": [],
-    "Sales Dialer": ["Call Notes", "Dispositions", "Call Analytics"],
-    "Support Dialer": ["Call Notes", "Dispositions"],
-  }[templateName] ?? []);
+async function assertPostCallModules(page: Page) {
+  await assertSidebarModules(page, ["Call Notes", "Salesforce Notes Sync", "Dispositions", "Call Analytics"]);
 }
 
 async function assertSidebarModules(page: Page, moduleNames: string[]) {

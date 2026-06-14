@@ -80,6 +80,7 @@ const actionIconMap = {
   transfer: ArrowRightLeft,
   end: PhoneOff,
   speaker: Volume2,
+  agent: Bot,
   dial: Hash,
   record: CircleDot,
 } as const;
@@ -88,10 +89,8 @@ const featureIconMap = {
   notes: StickyNote,
   "salesforce-notes-sync": Database,
   crm: Database,
-  recording: CircleDot,
   transcription: AudioWaveform,
   dispositions: ClipboardList,
-  "call-timer": Timer,
   analytics: BarChart3,
 } as const;
 
@@ -114,6 +113,7 @@ export function LinkSoftphone({
   openPhoneContacts,
   connectors,
   initialDialNumber = "",
+  initialDialNumberRequestId = 0,
   previewMode = false,
   previewPhase = "pre-call",
 }: {
@@ -125,6 +125,7 @@ export function LinkSoftphone({
   openPhoneContacts: () => void;
   connectors: ConnectorStatus[];
   initialDialNumber?: string;
+  initialDialNumberRequestId?: number;
   previewMode?: boolean;
   previewPhase?: DialerFeaturePhase;
 }) {
@@ -168,6 +169,7 @@ export function LinkSoftphone({
     const byId = new Map(dialerActions.map((action) => [action.id, action]));
     return config.actions.map((id) => byId.get(id)).filter(Boolean);
   }, [config.actions]);
+  const showAgentInviteAction = config.actions.includes("agent");
   const enabledFeatureIds = useMemo(() => new Set(config.enabledFeatures), [config.enabledFeatures]);
   const visiblePhaseFeatures = useMemo(
     () => dialerFeatures.filter((feature) => feature.phase === currentPhase && enabledFeatureIds.has(feature.id)),
@@ -202,7 +204,7 @@ export function LinkSoftphone({
   useEffect(() => {
     if (!initialDialNumber || isInCall) return;
     setDialString(normalizeDialString(initialDialNumber));
-  }, [initialDialNumber, isInCall]);
+  }, [initialDialNumber, initialDialNumberRequestId, isInCall]);
 
   useEffect(() => {
     return () => {
@@ -219,13 +221,6 @@ export function LinkSoftphone({
     }
     if (callState !== "active") stopDurationTimer();
   }, [callState, previewMode]);
-
-  useEffect(() => {
-    if (previewMode) return;
-    if (callState === "active" && enabledFeatureIds.has("recording") && Boolean(featureSetting("recording", "recording-auto", false))) {
-      setIsRecording(true);
-    }
-  }, [callState, config.featureSettings, enabledFeatureIds, previewMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -558,6 +553,9 @@ export function LinkSoftphone({
         setIsRecording((current) => !current);
         setStatusText(isRecording ? "Recording stopped" : "Recording marked");
         break;
+      case "agent":
+        void inviteAssistantToCall();
+        break;
       case "transfer":
         setStatusText("Choose a transfer target from the connected directory.");
         break;
@@ -648,34 +646,6 @@ export function LinkSoftphone({
             <em>{provider}</em>
           </div>
           <p>{ready ? "Contact, account, history, and open opportunities will preview from Salesforce for the entered number." : "Connect Salesforce MCP to preview contact data for the entered number."}</p>
-        </>
-      );
-    }
-
-    if (feature.id === "call-timer") {
-      return (
-        <div className="linkSoftphoneModuleRow">
-          <span>Duration</span>
-          <strong>{duration}</strong>
-          <em>{String(featureSetting("call-timer", "timer-alert", "None"))}</em>
-        </div>
-      );
-    }
-
-    if (feature.id === "recording") {
-      return (
-        <>
-          <div className="linkSoftphoneModuleRow">
-            <span>Status</span>
-            <strong>{isRecording ? "Recording" : "Ready"}</strong>
-            <em>{String(featureSetting("recording", "recording-storage", "Telnyx Cloud"))}</em>
-          </div>
-          {isInCall && (
-            <button className="linkSoftphoneModuleButton" type="button" onClick={() => handleAction("record")}>
-              <CircleDot size={13} />
-              {isRecording ? "Stop Recording" : "Start Recording"}
-            </button>
-          )}
         </>
       );
     }
@@ -843,6 +813,14 @@ export function LinkSoftphone({
           </section>
         )}
 
+        {isInCall && !isIncoming && (
+          <div className="linkSoftphoneCallTimer" aria-label="Call duration">
+            <Timer size={15} />
+            <span>Duration</span>
+            <strong>{duration}</strong>
+          </div>
+        )}
+
         {(showKeypad || (previewMode && currentPhase === "pre-call")) && currentPhase !== "post-call" && (
           <div className="linkSoftphoneKeypad" aria-label={isInCall ? "DTMF keypad" : "Dial pad"}>
             {dialpadKeys.map((key) => (
@@ -867,7 +845,7 @@ export function LinkSoftphone({
           </div>
         )}
 
-	        {isInCall && !isIncoming && (
+	        {isInCall && !isIncoming && showAgentInviteAction && (
 	          <section className="linkSoftphoneAgentInvite" aria-label="Invite AI agent">
 	            <div>
 	              <span>AI agent</span>
@@ -896,7 +874,7 @@ export function LinkSoftphone({
             {orderedActions.map((action) => {
               if (!action) return null;
               const Icon = actionIconMap[action.id as keyof typeof actionIconMap] ?? Hash;
-              const selected = (action.id === "mute" && isMuted) || (action.id === "hold" && isHeld) || (action.id === "speaker" && isSpeakerOn);
+              const selected = (action.id === "mute" && isMuted) || (action.id === "hold" && isHeld) || (action.id === "speaker" && isSpeakerOn) || (action.id === "record" && isRecording);
               return (
                 <button
                   key={action.id}

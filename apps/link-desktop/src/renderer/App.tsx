@@ -10,6 +10,7 @@ import {
   Check,
   ChevronDown,
   Clock,
+  Cloud,
   Component,
   Download,
   ExternalLink,
@@ -17,13 +18,16 @@ import {
   Flag,
   FolderOpen,
   Github as GithubIcon,
+  Globe,
   Grid2X2,
   Grid2X2Plus,
+  Grid3X3,
   Home,
   Inbox,
   Info,
   Keyboard,
   LayoutDashboard,
+  Link2,
   List,
   LogOut,
   Mail,
@@ -32,6 +36,7 @@ import {
   MonitorPlay,
   Moon,
   MoreHorizontal,
+  Palette,
   Pencil,
   Phone,
   PhoneCall,
@@ -165,6 +170,28 @@ import { createDefaultDialerConfig, type DialerConfig } from "./phone/dialer-con
 import { LinkSoftphone } from "./phone/softphone.js";
 
 type AppIcon = ComponentType<{ size?: number; className?: string }>;
+
+function TelnyxLinkIcon({ size = 24, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 44.25 40"
+      fill="currentColor"
+      focusable="false"
+      preserveAspectRatio="xMidYMid meet"
+    >
+      <path d="M10.4,12.63h6.21l2.97-5.61c.51-.96,1.46-1.53,2.55-1.53h0c1.09,0,2.04.57,2.55,1.53l2.96,5.61h6.21l-4.33-8.18c-1.45-2.75-4.29-4.45-7.4-4.45s-5.94,1.71-7.4,4.45l-4.33,8.18Z" />
+      <path d="M16.25,19.18v14.56s2.82,0,2.82,0c1.31-.01,2.41-.98,2.63-2.24.02-.15.04-.29.04-.45v-8.69c0-.93.36-1.8,1.02-2.45.65-.65,1.52-1.01,2.45-1.02,0,0,0,0,0,0h12.2s0-5.49,0-5.49h-15.38c-3.19,0-5.78,2.59-5.78,5.78Z" />
+      <path d="M.6,31.16c-.2.42-.34.82-.43,1.22-.36,1.54-.15,3.13.6,4.47.59,1.07,1.48,1.91,2.55,2.43.74.36,1.61.72,2.49.72h16.31c3.24,0,5.88-2.64,5.88-5.88v-14.46h-2.79s0,0,0,0h0s0,0,0,0c0,0,0,0,0,0-1.48,0-2.68,1.21-2.68,2.69v8.71c0,.2-.02.4-.05.59-.29,1.62-1.71,2.86-3.41,2.86h-3.07s-.1,0-.1,0h-7.39c-.71,0-1.36-.37-1.73-.99-.39-.65-.41-1.45-.05-2.12l6.2-11.73h-6.21S.8,30.77.8,30.77c-.07.12-.13.24-.19.38Z" />
+      <path d="M40.92,39.28c1.08-.52,1.96-1.36,2.55-2.43.75-1.35.96-2.94.6-4.47-.09-.4-.23-.79-.43-1.22-.06-.14-.13-.26-.19-.37l-5.89-11.12h-6.21s6.2,11.73,6.2,11.73c.36.67.34,1.46-.05,2.12-.37.62-1.02.99-1.73.99h-7.02c-.05.94-.3,1.83-.71,2.63,0,0,0,0,0,0h0c-.62,1.22-1.61,2.22-2.82,2.86h13.21c.88,0,1.75-.37,2.49-.72Z" />
+      <path d="M6.84,18.89h7.33s1.32,0,1.32,0c.1-2.38,1.48-4.43,3.46-5.49H6.84v5.49Z" />
+    </svg>
+  );
+}
+
 function ScribesWaveformIcon({ size = 24, className }: { size?: number; className?: string }) {
   return (
     <svg
@@ -193,7 +220,7 @@ type SkillMarkdownLoadState =
   | { status: "ready"; result: SkillMarkdownResult }
   | { status: "error"; message: string };
 type PhoneViewTab = "numbers" | "calls" | "contacts" | "assistants" | "inbox";
-type SettingsTab = "auth" | "plugins" | "contacts" | "assistants" | "numbers" | "agents" | "speak" | "dialer" | "design" | "wiki";
+type SettingsTab = "auth" | "plugins" | "agentmail" | "contacts" | "assistants" | "numbers" | "dialer" | "domains" | "design" | "wiki";
 type WikiSourceDraft = {
   id: string;
   type: WikiDocumentationSourceType;
@@ -210,6 +237,10 @@ type PageSectionTabGroup<T extends string> = {
   title: string;
   tabs: readonly PageSectionTab<T>[];
 };
+const pageSectionSidebarDefaultWidth = 142;
+const pageSectionSidebarMinWidth = 118;
+const pageSectionSidebarMaxWidth = 220;
+const pageSectionSidebarSnapThreshold = 10;
 
 function PageSectionSidebar<T extends string>({
   tabs,
@@ -228,6 +259,65 @@ function PageSectionSidebar<T extends string>({
   onSelect: (tab: T) => void;
   label: string;
 }) {
+  const sidebarRef = useRef<HTMLElement | null>(null);
+  const sidebarDragRef = useRef<{
+    startX: number;
+    startWidth: number;
+    shell: HTMLElement | null;
+    lastWidth: number;
+  } | null>(null);
+
+  function setSidebarWidth(width: number) {
+    const clampedWidth = Math.min(pageSectionSidebarMaxWidth, Math.max(pageSectionSidebarMinWidth, Math.round(width)));
+    const snappedWidth = Math.abs(clampedWidth - pageSectionSidebarDefaultWidth) <= pageSectionSidebarSnapThreshold
+      ? pageSectionSidebarDefaultWidth
+      : clampedWidth;
+    const shell = sidebarRef.current?.closest<HTMLElement>(".pageSectionShell");
+    shell?.style.setProperty("--page-section-sidebar-width", `${snappedWidth}px`);
+    return snappedWidth;
+  }
+
+  function resetSidebarWidth() {
+    const shell = sidebarRef.current?.closest<HTMLElement>(".pageSectionShell");
+    shell?.style.removeProperty("--page-section-sidebar-width");
+  }
+
+  function startSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
+    const shell = sidebarRef.current?.closest<HTMLElement>(".pageSectionShell") ?? null;
+    const startWidth = sidebarRef.current?.getBoundingClientRect().width ?? pageSectionSidebarDefaultWidth;
+    sidebarDragRef.current = {
+      startX: event.clientX,
+      startWidth,
+      shell,
+      lastWidth: startWidth,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function resizeSidebar(event: ReactPointerEvent<HTMLDivElement>) {
+    const drag = sidebarDragRef.current;
+    if (!drag) return;
+    const width = drag.startWidth + event.clientX - drag.startX;
+    const clampedWidth = Math.min(pageSectionSidebarMaxWidth, Math.max(pageSectionSidebarMinWidth, Math.round(width)));
+    drag.lastWidth = clampedWidth;
+    drag.shell?.style.setProperty("--page-section-sidebar-width", `${clampedWidth}px`);
+  }
+
+  function stopSidebarResize() {
+    const drag = sidebarDragRef.current;
+    if (!drag) return;
+    if (Math.abs(drag.lastWidth - pageSectionSidebarDefaultWidth) <= pageSectionSidebarSnapThreshold) {
+      drag.shell?.style.removeProperty("--page-section-sidebar-width");
+    }
+    sidebarDragRef.current = null;
+  }
+
+  function adjustSidebarWidth(delta: number) {
+    const currentWidth = sidebarRef.current?.getBoundingClientRect().width ?? pageSectionSidebarDefaultWidth;
+    setSidebarWidth(currentWidth + delta);
+  }
+
   const renderTabButton = ([id, tabLabel, Icon]: PageSectionTab<T>) => (
     <button
       key={id}
@@ -242,21 +332,48 @@ function PageSectionSidebar<T extends string>({
   );
 
   return (
-    <aside className="pageSectionSidebar" role="tablist" aria-label={label}>
-      {heading && (
-        <div className="pageSectionSidebarHeading">
-          {HeadingIcon && <HeadingIcon size={18} />}
-          <span>{heading}</span>
-        </div>
-      )}
-      {groups
-        ? groups.map((group) => (
-          <div className="pageSectionSidebarGroup" key={group.title}>
-            <div className="pageSectionSidebarGroupTitle">{group.title}</div>
-            {group.tabs.map(renderTabButton)}
+    <aside className="pageSectionSidebar" ref={sidebarRef}>
+      <div className="pageSectionSidebarTabs" role="tablist" aria-label={label}>
+        {heading && (
+          <div className="pageSectionSidebarHeading">
+            {HeadingIcon && <HeadingIcon size={24} />}
+            <span>{heading}</span>
           </div>
-        ))
-        : tabs?.map(renderTabButton)}
+        )}
+        {groups
+          ? groups.map((group) => (
+            <div className="pageSectionSidebarGroup" key={group.title}>
+              <div className="pageSectionSidebarGroupTitle">{group.title}</div>
+              {group.tabs.map(renderTabButton)}
+            </div>
+          ))
+          : tabs?.map(renderTabButton)}
+      </div>
+      <div
+        className="pageSectionSidebarResizeHandle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize submenu"
+        title="Drag to resize. Double-click to reset."
+        tabIndex={0}
+        onDoubleClick={resetSidebarWidth}
+        onPointerDown={startSidebarResize}
+        onPointerMove={resizeSidebar}
+        onPointerUp={stopSidebarResize}
+        onPointerCancel={stopSidebarResize}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            adjustSidebarWidth(-10);
+          } else if (event.key === "ArrowRight") {
+            event.preventDefault();
+            adjustSidebarWidth(10);
+          } else if (event.key === "Home" || event.key === "Enter") {
+            event.preventDefault();
+            resetSidebarWidth();
+          }
+        }}
+      />
     </aside>
   );
 }
@@ -296,6 +413,21 @@ interface ActiveAgentSelection {
 
 type TableRowLifecycleAction = "archive" | "delete";
 
+type PhoneCallNumberRollup = PhoneCallHistoryRow & {
+  lastCall: PhoneCallHistoryRow;
+  calls: PhoneCallHistoryRow[];
+  agentNames: string[];
+  directions: PhoneCallHistoryRow["direction"][];
+  statuses: PhoneCallHistoryRow["status"][];
+  totalDurationSeconds: number;
+  answeredCount: number;
+  missedCount: number;
+  voicemailCount: number;
+  failedCount: number;
+  recordingCount: number;
+  transcriptionCount: number;
+};
+
 function readStoredIdList(storageKey: string) {
   if (typeof window === "undefined") return [];
   try {
@@ -312,6 +444,75 @@ function sortChatSessions(sessions: ChatSession[]) {
     if (pinnedCompare !== 0) return pinnedCompare;
     return Date.parse(right.updatedAt || "") - Date.parse(left.updatedAt || "");
   });
+}
+
+function formatCallDuration(seconds?: number) {
+  if (!seconds || seconds <= 0) return "0s";
+  const wholeSeconds = Math.round(seconds);
+  const minutes = Math.floor(wholeSeconds / 60);
+  const remainder = wholeSeconds % 60;
+  if (minutes <= 0) return `${wholeSeconds}s`;
+  return `${minutes}m ${remainder}s`;
+}
+
+function callTimestampMs(call: PhoneCallHistoryRow) {
+  const timestamp = call.startedAt ? Date.parse(call.startedAt) : NaN;
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function phoneCallNumberKey(call: PhoneCallHistoryRow) {
+  const compactNumber = call.number.replace(/[^\d+]/g, "");
+  return compactNumber ? `number:${compactNumber}` : `call:${call.id}`;
+}
+
+function uniquePhoneCallValues<T extends string>(values: T[]) {
+  return values.filter((value, index, all) => all.indexOf(value) === index);
+}
+
+function rollupPhoneCallsByNumber(calls: PhoneCallHistoryRow[]): PhoneCallNumberRollup[] {
+  const buckets = new Map<string, PhoneCallHistoryRow[]>();
+  calls.forEach((call) => {
+    const key = phoneCallNumberKey(call);
+    buckets.set(key, [...(buckets.get(key) ?? []), call]);
+  });
+
+  return [...buckets.entries()]
+    .map(([id, bucket]) => {
+      const sortedCalls = [...bucket].sort((left, right) => callTimestampMs(right) - callTimestampMs(left));
+      const lastCall = sortedCalls[0] ?? bucket[0];
+      const agentNames = uniquePhoneCallValues(sortedCalls.map((call) => call.agentName).filter(Boolean));
+      const directions = uniquePhoneCallValues(sortedCalls.map((call) => call.direction));
+      const statuses = uniquePhoneCallValues(sortedCalls.map((call) => call.status));
+      const totalDurationSeconds = sortedCalls.reduce((total, call) => total + (call.durationSeconds ?? 0), 0);
+      return {
+        ...lastCall,
+        id,
+        lastCall,
+        calls: sortedCalls,
+        agentNames,
+        directions,
+        statuses,
+        agentName: agentNames.length > 1 ? `${agentNames.length} agents` : lastCall.agentName,
+        totalDurationSeconds,
+        answeredCount: sortedCalls.filter((call) => call.status === "answered").length,
+        missedCount: sortedCalls.filter((call) => call.status === "missed").length,
+        voicemailCount: sortedCalls.filter((call) => call.status === "voicemail").length,
+        failedCount: sortedCalls.filter((call) => call.status === "failed").length,
+        recordingCount: sortedCalls.filter((call) => call.recordingUrl || call.recordingId).length,
+        transcriptionCount: sortedCalls.filter((call) => call.transcriptionText || call.transcriptionId).length,
+      };
+    })
+    .sort((left, right) => callTimestampMs(right.lastCall) - callTimestampMs(left.lastCall));
+}
+
+function phoneCallRollupSummary(rollup: PhoneCallNumberRollup) {
+  const parts = [
+    rollup.answeredCount ? `${rollup.answeredCount} answered` : "",
+    rollup.missedCount ? `${rollup.missedCount} missed` : "",
+    rollup.voicemailCount ? `${rollup.voicemailCount} voicemail` : "",
+    rollup.failedCount ? `${rollup.failedCount} failed` : "",
+  ].filter(Boolean);
+  return parts.join(" · ") || "No completed calls";
 }
 
 function TableRowLifecycleActions({
@@ -403,23 +604,195 @@ function BulkSelectCell({
 function TableRefreshButton({
   onClick,
   disabled = false,
+  busy = false,
   label = "Refresh table",
 }: {
   onClick: () => void | Promise<void>;
   disabled?: boolean;
+  busy?: boolean;
   label?: string;
 }) {
   return (
-    <button
+    <IconCircleButton
       className="iconButton agentFilterButton tableRefreshButton"
+      onClick={() => void onClick()}
+      disabled={disabled || busy}
+      label={label}
+    >
+      <RefreshCw size={16} className={busy ? "spinning" : ""} />
+    </IconCircleButton>
+  );
+}
+
+function IconCircleButton({
+  label,
+  title = label,
+  className = "",
+  selected = false,
+  disabled = false,
+  onClick,
+  children,
+}: {
+  label: string;
+  title?: string;
+  className?: string;
+  selected?: boolean;
+  disabled?: boolean;
+  onClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      className={`${className}${selected ? " selected" : ""}`.trim()}
       type="button"
       aria-label={label}
-      title={label}
-      onClick={() => void onClick()}
+      title={title}
+      onClick={onClick}
       disabled={disabled}
     >
-      <RefreshCw size={16} />
+      {children}
     </button>
+  );
+}
+
+type PageToolbarSortOption<T extends string = string> = {
+  value: T;
+  label: string;
+};
+
+function PageToolbar<T extends string = string>({
+  filterActive = false,
+  filterLabel,
+  onFilter,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder,
+  sortValue,
+  sortOptions,
+  onSortChange,
+  editActive = false,
+  editLabel,
+  onEdit,
+  refreshLabel,
+  onRefresh,
+  refreshBusy = false,
+  refreshDisabled = false,
+}: {
+  filterActive?: boolean;
+  filterLabel: string;
+  onFilter: () => void;
+  searchValue: string;
+  onSearchChange: (value: string) => void;
+  searchPlaceholder: string;
+  sortValue?: T;
+  sortOptions?: PageToolbarSortOption<T>[];
+  onSortChange?: (value: T) => void;
+  editActive?: boolean;
+  editLabel?: string;
+  onEdit?: () => void;
+  refreshLabel: string;
+  onRefresh: () => void | Promise<void>;
+  refreshBusy?: boolean;
+  refreshDisabled?: boolean;
+}) {
+  return (
+    <div className="chatSearchRow pageToolbar">
+      <IconCircleButton
+        className="iconButton agentFilterButton"
+        label={filterLabel}
+        selected={filterActive}
+        onClick={onFilter}
+      >
+        <SlidersHorizontal size={16} />
+      </IconCircleButton>
+      <div className="explorerSearch compactSearch">
+        <Search size={16} />
+        <input value={searchValue} onChange={(event) => onSearchChange(event.target.value)} placeholder={searchPlaceholder} />
+      </div>
+      {sortValue && sortOptions && onSortChange && (
+        <label className="wikiSelectField settingsDirectorySort">
+          <select value={sortValue} onChange={(event) => onSortChange(event.target.value as T)}>
+            {sortOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      {editLabel && onEdit && (
+        <IconCircleButton
+          className="iconButton agentFilterButton"
+          label={editLabel}
+          selected={editActive}
+          onClick={onEdit}
+        >
+          <Pencil size={16} />
+        </IconCircleButton>
+      )}
+      <TableRefreshButton onClick={onRefresh} busy={refreshBusy} disabled={refreshDisabled} label={refreshLabel} />
+    </div>
+  );
+}
+
+function DirectoryTable({
+  ariaLabel,
+  className = "",
+  rowClassName = "",
+  bulkEditing = false,
+  columns,
+  children,
+}: {
+  ariaLabel: string;
+  className?: string;
+  rowClassName?: string;
+  bulkEditing?: boolean;
+  columns: ReactNode[];
+  children: ReactNode;
+}) {
+  return (
+    <div className={`chatSessionRows directoryTable ${className}${bulkEditing ? " bulkEditing" : ""}`.trim()} role="table" aria-label={ariaLabel}>
+      <div className={`chatResultRow directoryResultRow ${rowClassName} chatResultRowHead`.trim()} role="row">
+        {columns.map((column, index) => (
+          <Fragment key={index}>{column}</Fragment>
+        ))}
+      </div>
+      <div className="chatResultRows" role="rowgroup">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function DetailPageHeader({
+  title,
+  subtitle,
+  onBack,
+  backLabel = "Back",
+  status,
+  action,
+}: {
+  title: string;
+  subtitle?: string;
+  onBack?: () => void;
+  backLabel?: string;
+  status?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <header className="chatDetailHeader detailPageHeader">
+      {onBack && (
+        <IconCircleButton className="chatSessionOpenButton back" label={backLabel} onClick={onBack}>
+          <ArrowLeft size={16} />
+        </IconCircleButton>
+      )}
+      <div>
+        <h1>{title}</h1>
+        {subtitle && <p>{subtitle}</p>}
+      </div>
+      <div className="detailPageHeaderActions">
+        {status}
+        {action}
+      </div>
+    </header>
   );
 }
 
@@ -529,8 +902,8 @@ const navItems: { id: ViewId; label: string; icon: AppIcon }[] = [
   { id: "calendar", label: "Calendar", icon: CalendarDays },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "skills", label: "Skills", icon: Zap },
-  { id: "apps", label: "Apps", icon: Grid2X2Plus },
   { id: "wiki", label: "Wiki", icon: BookOpen },
+  { id: "apps", label: "Apps", icon: Grid2X2Plus },
 ];
 
 const linkGettingStartedAgentId = "c4de5f6a-e2e9-4568-9611-80cd35b483f7";
@@ -601,6 +974,11 @@ type SessionPreferenceMap = Record<string, boolean>;
 
 const draftSessionPreferenceKey = "__draft__";
 const designSystemSessionStorageKey = "telnyx-link-design-system-sessions";
+const assistantPanelWidthStorageKey = "telnyx-link-assistant-panel-width";
+const assistantPanelMinWidth = 340;
+const assistantPanelMaxWidth = 720;
+const mainWorkspaceMinWidth = 520;
+const assistantPanelSnapThreshold = 24;
 
 function readDesignSystemSessionPreferences(): SessionPreferenceMap {
   if (typeof window === "undefined") return {};
@@ -613,6 +991,13 @@ function readDesignSystemSessionPreferences(): SessionPreferenceMap {
   } catch {
     return {};
   }
+}
+
+function readAssistantPanelWidth() {
+  if (typeof window === "undefined") return null;
+  const stored = Number.parseInt(window.localStorage.getItem(assistantPanelWidthStorageKey) ?? "", 10);
+  if (!Number.isFinite(stored)) return null;
+  return Math.min(assistantPanelMaxWidth, Math.max(assistantPanelMinWidth, stored));
 }
 
 type EdgeDeployStage = "idle" | "needs_url" | "previewing" | "preview_ready" | "selecting_folder" | "deploying" | "deployed" | "failed";
@@ -652,17 +1037,22 @@ export function App() {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("workspace-acme");
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [newSessionDraftOpen, setNewSessionDraftOpen] = useState(false);
+  const [newAppSessionRequestId, setNewAppSessionRequestId] = useState(0);
   const [selectedWorkId, setSelectedWorkId] = useState("");
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [archiveRefreshKey, setArchiveRefreshKey] = useState(0);
   const [railExpanded, setRailExpanded] = useState(false);
   const [assistantMode, setAssistantMode] = useState<"chat" | "phone">("chat");
   const [assistantCollapsed, setAssistantCollapsed] = useState(false);
+  const [assistantPanelWidth, setAssistantPanelWidth] = useState<number | null>(() => readAssistantPanelWidth());
+  const [assistantPanelResizing, setAssistantPanelResizing] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [, setPhoneTab] = useState<PhoneViewTab>("calls");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("auth");
   const [widgetLibraryOpen, setWidgetLibraryOpen] = useState(false);
   const [linkedPhoneNumber, setLinkedPhoneNumber] = useState("");
+  const [phoneDialTarget, setPhoneDialTarget] = useState("");
+  const [phoneDialTargetRequestId, setPhoneDialTargetRequestId] = useState(0);
   const [activeDialerConfig, setActiveDialerConfig] = useState<DialerConfig>(() => createDefaultDialerConfig());
   const [telnyxCredentialReady, setTelnyxCredentialReady] = useState(false);
   const [liteLlmCredentialReady, setLiteLlmCredentialReady] = useState(false);
@@ -706,6 +1096,17 @@ export function App() {
     "--accent-soft": `color-mix(in srgb, ${primaryColor} 18%, transparent)`,
     "--accent-ink": readableInkColor(primaryColor),
   }) as CSSProperties, [primaryColor]);
+  const appSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const assistantPanelWidthRef = useRef<number | null>(assistantPanelWidth);
+  const appSurfaceStyle = useMemo(() => (
+    assistantPanelWidth === null ? undefined : ({
+      "--assistant-panel-width": `${assistantPanelWidth}px`,
+    }) as CSSProperties
+  ), [assistantPanelWidth]);
+
+  useEffect(() => {
+    assistantPanelWidthRef.current = assistantPanelWidth;
+  }, [assistantPanelWidth]);
 
   useEffect(() => {
     readFirstInstallDate();
@@ -739,6 +1140,71 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem("telnyx-link-chat-model-route", chatModelMode);
   }, [chatModelMode]);
+
+  function assistantPanelWidthBounds() {
+    const surfaceWidth = appSurfaceRef.current?.getBoundingClientRect().width ?? window.innerWidth;
+    const maxWidth = Math.max(assistantPanelMinWidth, Math.min(assistantPanelMaxWidth, surfaceWidth - mainWorkspaceMinWidth));
+    return { min: assistantPanelMinWidth, max: maxWidth };
+  }
+
+  function defaultAssistantPanelWidth() {
+    const surfaceWidth = appSurfaceRef.current?.getBoundingClientRect().width ?? window.innerWidth;
+    return clampAssistantPanelWidth(surfaceWidth / 3);
+  }
+
+  function clampAssistantPanelWidth(width: number) {
+    const bounds = assistantPanelWidthBounds();
+    return Math.min(bounds.max, Math.max(bounds.min, width));
+  }
+
+  function snappedAssistantPanelWidth(width: number) {
+    const clamped = clampAssistantPanelWidth(width);
+    const defaultWidth = defaultAssistantPanelWidth();
+    return Math.abs(clamped - defaultWidth) <= assistantPanelSnapThreshold ? null : clamped;
+  }
+
+  function persistAssistantPanelWidth(width: number | null) {
+    if (width === null) window.localStorage.removeItem(assistantPanelWidthStorageKey);
+    else window.localStorage.setItem(assistantPanelWidthStorageKey, String(Math.round(width)));
+  }
+
+  function resizeAssistantPanelBy(delta: number) {
+    const current = assistantPanelWidthRef.current ?? document.querySelector<HTMLElement>(".assistantPanel:not(.assistantPanelCollapsed)")?.getBoundingClientRect().width ?? assistantPanelMinWidth;
+    const nextWidth = snappedAssistantPanelWidth(current + delta);
+    assistantPanelWidthRef.current = nextWidth;
+    setAssistantPanelWidth(nextWidth);
+    persistAssistantPanelWidth(nextWidth);
+  }
+
+  function startAssistantPanelResize(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (assistantCollapsed) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = assistantPanelWidthRef.current ?? event.currentTarget.parentElement?.getBoundingClientRect().width ?? assistantPanelMinWidth;
+    let nextWidth: number | null = snappedAssistantPanelWidth(startWidth);
+    setAssistantPanelResizing(true);
+    document.body.classList.add("assistantPanelResizing");
+
+    function handlePointerMove(pointerEvent: PointerEvent) {
+      pointerEvent.preventDefault();
+      nextWidth = snappedAssistantPanelWidth(startWidth + startX - pointerEvent.clientX);
+      assistantPanelWidthRef.current = nextWidth;
+      setAssistantPanelWidth(nextWidth);
+    }
+
+    function handlePointerUp() {
+      setAssistantPanelResizing(false);
+      document.body.classList.remove("assistantPanelResizing");
+      persistAssistantPanelWidth(nextWidth);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+  }
 
   async function refresh() {
     const [
@@ -814,7 +1280,9 @@ export function App() {
   }
 
   async function refreshSessionTablesThenAll() {
-    setChatSessions(await linkApi.listChatSessions());
+    const chatList = await linkApi.listChatSessions();
+    setChatSessions(chatList);
+    setSelectedSessionId((current) => current && chatList.some((session) => session.id === current) ? current : chatList[0]?.id ?? "");
     await refresh();
   }
 
@@ -875,6 +1343,16 @@ export function App() {
     setSelectedSessionId("");
     setView("chats");
     setNewSessionDraftOpen(true);
+    void refresh();
+  }
+
+  function openNewAppChatSession() {
+    setAssistantMode("chat");
+    setAssistantCollapsed(false);
+    setSelectedSessionId("");
+    setView("chats");
+    setNewSessionDraftOpen(true);
+    setNewAppSessionRequestId((current) => current + 1);
     void refresh();
   }
 
@@ -1068,12 +1546,6 @@ export function App() {
     setView("chats");
   }
 
-  function openAgentSetupSettings() {
-    setSettingsTab("agents");
-    setAssistantCollapsed(true);
-    setView("settings");
-  }
-
   const signedIn = Boolean(accountStatus?.signedIn && !signedOutLocally);
 
   useEffect(() => {
@@ -1174,7 +1646,11 @@ export function App() {
           />
         )}
         <main className="mainPane">
-          <div className={`appSurface ${assistantCollapsed ? "assistantCollapsed" : ""}`}>
+          <div
+            className={`appSurface ${assistantCollapsed ? "assistantCollapsed" : ""} ${assistantPanelResizing ? "assistantResizing" : ""}`}
+            ref={appSurfaceRef}
+            style={appSurfaceStyle}
+          >
             <div className="pageSurface">
               {!selectedArtifact && view === "onboarding" && onboarding && (
                 <OnboardingView
@@ -1233,6 +1709,7 @@ export function App() {
               {!selectedArtifact && view === "agents" && (
                 <AgentsView
                   agents={agents}
+                  connectors={connectors}
                   skills={skills}
                   refresh={refresh}
                   setView={setView}
@@ -1240,8 +1717,8 @@ export function App() {
                   setBookmarkedAgentIds={setBookmarkedAgentIds}
                   activeAgent={activeAgent}
                   setActiveAgent={setActiveAgent}
-                  openAgentSetup={openAgentSetupSettings}
                   startSkillBuilderChat={startSkillBuilderChat}
+                  openTerminal={() => setTerminalOpen(true)}
                 />
               )}
               {!selectedArtifact && view === "workboard" && (
@@ -1300,8 +1777,14 @@ export function App() {
                   setTab={setPhoneTab}
                   refresh={refresh}
                   startManagedSkillSetupChat={startManagedSkillSetupChat}
+                  openSettingsTab={(nextTab) => {
+                    setSettingsTab(nextTab);
+                    setView("settings");
+                  }}
                   startEmailDraftChat={startEmailDraftChat}
-                  openNewCall={() => {
+                  openNewCall={(phoneNumber) => {
+                    if (phoneNumber) setPhoneDialTarget(phoneNumber);
+                    setPhoneDialTargetRequestId((current) => current + 1);
                     setAssistantMode("phone");
                     setAssistantCollapsed(false);
                   }}
@@ -1329,6 +1812,7 @@ export function App() {
 	                  skillSearchRequest=""
 	                  shareExplorerResultToAgent={shareExplorerResultToAgent}
 	                  setView={setView}
+	                  openNewAppChatSession={openNewAppChatSession}
 	                  onEdgePreviewReady={(preview) => {
 	                    setEdgePreviewSurface(preview);
 	                    setView("chats");
@@ -1356,12 +1840,15 @@ export function App() {
               setMode={setAssistantMode}
               collapsed={assistantCollapsed}
               setCollapsed={setAssistantCollapsed}
+              onResizeStart={startAssistantPanelResize}
+              onResizeStep={resizeAssistantPanelBy}
               skills={skills}
               agents={agents}
               bookmarkedAgentIds={bookmarkedAgentIds}
               activeAgent={activeAgent}
               newSessionDraftOpen={newSessionDraftOpen}
               setNewSessionDraftOpen={setNewSessionDraftOpen}
+              newAppSessionRequestId={newAppSessionRequestId}
               createNewChatSession={createNewChatSession}
               selectedChatAgentId={selectedChatAgentId}
               setSelectedChatAgentId={setSelectedChatAgentId}
@@ -1383,6 +1870,8 @@ export function App() {
               setChatModelMode={setChatModelMode}
               linkedPhoneNumber={linkedPhoneNumber}
               setLinkedPhoneNumber={setLinkedPhoneNumber}
+              phoneDialTarget={phoneDialTarget}
+              phoneDialTargetRequestId={phoneDialTargetRequestId}
               telnyxApiReady={telnyxCredentialReady || connectors.some((connector) => connector.id === "telnyx" && (connector.status === "connected" || connector.status === "signed_in"))}
               activeDialerConfig={activeDialerConfig}
               connectors={connectors}
@@ -1418,7 +1907,7 @@ function AuthGate({
     <main className="authGate">
       <section className="authGateCard" aria-label="Telnyx Okta sign in">
         <div className="authGateIcon">
-          <BookOpen size={34} strokeWidth={1.7} aria-hidden="true" />
+          <img src="./triforce-26.png" alt="" aria-hidden="true" />
         </div>
         <div>
           <h1>Telnyx Link</h1>
@@ -2145,7 +2634,7 @@ function OnboardingView({
     },
     {
       id: "publisher",
-      label: "Publisher/VPN",
+      label: "Add Data Source",
       ready: Boolean(publisherReadiness?.ready),
       detail: publisherReadiness?.message ?? "Publisher readiness has not loaded yet.",
       action: "Wiki",
@@ -2493,7 +2982,9 @@ function Rail({
   return (
     <nav className="rail" aria-label="Primary" data-expanded={expanded}>
       <button className="railButton brandButton" title="Telnyx Link" onClick={() => setView("chats")}>
-        <span className="railIconSlot"><img src="./telnyx-link-logo.png" alt="" aria-hidden="true" /></span>
+        <span className="railIconSlot">
+          <TelnyxLinkIcon />
+        </span>
         <span className="railTooltip" role="tooltip">
           Telnyx Link
         </span>
@@ -2524,7 +3015,6 @@ function Rail({
         {accountMenuOpen && (
           <div className="accountMenu" role="menu">
             <div className="accountMenuHeader">
-              <div className="accountAvatar">{accountAvatar}</div>
               <div>
                 <strong>{signedIn ? "Signed in as" : "Signed out"}</strong>
                 <small>{accountLabel}</small>
@@ -3418,6 +3908,7 @@ function ExplorerView({
   externalQuery,
   externalSource,
   externalSort = "az",
+  refreshKey = 0,
   hideSearch = false,
   docSourcesOnly = false,
   onShareResult,
@@ -3427,6 +3918,7 @@ function ExplorerView({
   externalQuery?: string;
   externalSource?: ExplorerSourceTab | "all";
   externalSort?: "az" | "za";
+  refreshKey?: number;
   hideSearch?: boolean;
   docSourcesOnly?: boolean;
   onShareResult?: (result: ExplorerResult) => Promise<void>;
@@ -3471,7 +3963,7 @@ function ExplorerView({
 
   useEffect(() => {
     void search();
-  }, [selectedWorkspace?.id, externalQuery, externalSource]);
+  }, [selectedWorkspace?.id, externalQuery, externalSource, refreshKey]);
 
   useEffect(() => {
     if (!availableSourceTabs.some((tab) => tab.id === sourceTab)) {
@@ -3567,11 +4059,13 @@ function HelpCenterConsole({
   question,
   setQuestion,
   sort,
+  refreshKey = 0,
 }: {
   selectedWorkspace?: WorkspaceSummary;
   question: string;
   setQuestion: (value: string) => void;
   sort: "az" | "za";
+  refreshKey?: number;
 }) {
   const [answer, setAnswer] = useState<KnowledgeAgentAskResponse | null>(null);
   const [relatedSources, setRelatedSources] = useState<ExplorerResult[]>([]);
@@ -3618,7 +4112,12 @@ function HelpCenterConsole({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [selectedWorkspace?.id, trimmedQuestion]);
+  }, [selectedWorkspace?.id, trimmedQuestion, refreshKey]);
+
+  useEffect(() => {
+    if (!refreshKey || !answer || !trimmedQuestion || answerBusy) return;
+    void askQuestion();
+  }, [refreshKey]);
 
   async function askQuestion(nextQuestion = question) {
     const prompt = nextQuestion.trim();
@@ -3797,7 +4296,6 @@ function HelpCenterConsole({
               <div>
                 <h3>No related sources yet</h3>
                 <p>Enter a Help Center question to search support and developer documentation alongside the Knowledge Agent answer.</p>
-                <small>Related sources stay visible because Knowledge Agent citations may be empty.</small>
               </div>
             </section>
           )}
@@ -3939,6 +4437,8 @@ function ChatsView({
   const [hiddenSessionIds, setHiddenSessionIds] = useState<string[]>(() => readStoredIdList("telnyx-link-hidden-chat-session-ids"));
   const [sessionBulkEdit, setSessionBulkEdit] = useState(false);
   const [selectedSessionRowIds, setSelectedSessionRowIds] = useState<string[]>([]);
+  const [refreshingChats, setRefreshingChats] = useState(false);
+  const [chatRefreshStatus, setChatRefreshStatus] = useState("");
   const workspaceById = useMemo(() => new Map(workspaces.map((workspace) => [workspace.id, workspace])), [workspaces]);
   const runtimeFailurePattern = /No agent runtime returned a response|AIDA is selected, but no live agent runtime returned a response|Runtime detail:/i;
   const getSessionMeta = (session: ChatSession, workspace?: WorkspaceSummary) => {
@@ -4457,6 +4957,20 @@ function ChatsView({
     setSessionBulkEdit(false);
   }
 
+  async function refreshChatsFromButton() {
+    if (refreshingChats) return;
+    setRefreshingChats(true);
+    setChatRefreshStatus("");
+    try {
+      await refreshTables();
+      setChatRefreshStatus(`Chats refreshed. ${filteredSessions.length} visible.`);
+    } catch (error) {
+      setChatRefreshStatus(error instanceof Error ? `Unable to refresh chats: ${error.message}` : "Unable to refresh chats.");
+    } finally {
+      setRefreshingChats(false);
+    }
+  }
+
   function openSessionDetails(sessionId: string) {
     selectSession(sessionId);
     setDetailSessionId(sessionId);
@@ -4571,8 +5085,13 @@ function ChatsView({
         >
           <Pencil size={16} />
         </button>
-        <TableRefreshButton onClick={refreshTables} label="Refresh chats" />
+        <TableRefreshButton onClick={refreshChatsFromButton} busy={refreshingChats} label="Refresh chats" />
       </div>
+      {chatRefreshStatus && (
+        <div className={chatRefreshStatus.startsWith("Unable") ? "assistantNotice warning chatRefreshNotice" : "assistantNotice chatRefreshNotice"} aria-live="polite">
+          <p>{chatRefreshStatus}</p>
+        </div>
+      )}
       {sessionBulkEdit && (
         <BulkEditControls
           active={sessionBulkEdit}
@@ -4608,7 +5127,7 @@ function ChatsView({
       <div className={`chatSessionRows ${sessionBulkEdit ? "bulkEditing" : ""}`} role="table" aria-label="Chat sessions">
         <div className="chatResultRow chatResultRowHead" role="row">
           <span className="bulkSelectCell" role="columnheader" aria-label="Select sessions" />
-          <span role="columnheader">Session Name</span>
+          <span role="columnheader">Session</span>
           <span role="columnheader">Agent</span>
           <span role="columnheader">Last</span>
           <span role="columnheader" aria-label="Open session" />
@@ -4635,11 +5154,23 @@ type DriveFileRow = {
 type DriveArchivedSessionRow = {
   id: string;
   kind: "archived-session";
+  path: string;
   sessionId: string;
   sessionTitle: string;
   agentName: string;
   messageCount: number;
   archivedAt: string;
+};
+
+type DriveChatSessionRow = {
+  id: string;
+  kind: "chat-session";
+  path: string;
+  sessionId: string;
+  sessionTitle: string;
+  agentName: string;
+  messageCount: number;
+  updatedAt: string;
 };
 
 type DriveFolderRow = {
@@ -4665,10 +5196,41 @@ type DriveScribesArtifactRow = {
   artifact: ScribesSession["artifacts"][number];
 };
 
-type DriveRow = DriveFileRow | DriveArchivedSessionRow | DriveFolderRow | DriveScribesSessionRow | DriveScribesArtifactRow;
+type DriveRow = DriveFileRow | DriveArchivedSessionRow | DriveChatSessionRow | DriveFolderRow | DriveScribesSessionRow | DriveScribesArtifactRow;
 
 function driveSafeSlug(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "untitled";
+}
+
+function normalizeDrivePath(path: string) {
+  const trimmed = path.trim() || "~/Link/";
+  const withRoot = trimmed.startsWith("~/Link") ? trimmed : `~/Link/${trimmed.replace(/^\/+/, "")}`;
+  return withRoot.endsWith("/") || /\.[a-z0-9]+$/i.test(withRoot) ? withRoot : `${withRoot}/`;
+}
+
+function driveParentPath(path: string) {
+  const normalized = normalizeDrivePath(path).replace(/\/$/, "");
+  if (normalized === "~/Link") return "";
+  const index = normalized.lastIndexOf("/");
+  return index <= "~/Link".length ? "~/Link/" : `${normalized.slice(0, index + 1)}`;
+}
+
+function drivePathName(path: string) {
+  const normalized = normalizeDrivePath(path).replace(/\/$/, "");
+  if (normalized === "~/Link") return "Link";
+  return normalized.split("/").filter(Boolean).pop() || "Link";
+}
+
+function driveBreadcrumbs(path: string) {
+  const normalized = normalizeDrivePath(path);
+  const parts = normalized.replace(/^~\/Link\/?/, "").split("/").filter(Boolean);
+  return [
+    { label: "Link", path: "~/Link/" },
+    ...parts.map((part, index) => ({
+      label: part,
+      path: `~/Link/${parts.slice(0, index + 1).join("/")}/`,
+    })),
+  ];
 }
 
 function DriveView({
@@ -4692,6 +5254,7 @@ function DriveView({
   const [driveBulkEdit, setDriveBulkEdit] = useState(false);
   const [selectedDriveRowIds, setSelectedDriveRowIds] = useState<string[]>([]);
   const [driveQuery, setDriveQuery] = useState("");
+  const [currentDriveFolder, setCurrentDriveFolder] = useState("~/Link/");
   const [driveFiltersOpen, setDriveFiltersOpen] = useState(false);
   const [scribesSessions, setScribesSessions] = useState<ScribesSession[]>([]);
 
@@ -4722,6 +5285,7 @@ function DriveView({
       { id: "folder:apps-publish-intents", kind: "folder", path: "~/Link/apps/publish-intents/", owner: "Link App Publisher", contents: "Review, version, rollback, and deployment records", updated: "Managed" },
       { id: "folder:agents", kind: "folder", path: "~/Link/agents/", owner: "Agent Control Plane", contents: "Active agents, saved agents, and setup context", updated: "Synced" },
       { id: "folder:chats", kind: "folder", path: "~/Link/chats/", owner: "Link", contents: `${sessions.length} ${sessions.length === 1 ? "session" : "sessions"} and generated outputs`, updated: "Local" },
+      { id: "folder:drive", kind: "folder", path: "~/Link/drive/", owner: "Link", contents: "Generated files and local workspace artifacts", updated: "Local" },
       { id: "folder:artifacts", kind: "folder", path: "~/Link/drive/artifacts/", owner: "Agents", contents: "Files generated from assistant sessions", updated: "Local" },
       { id: "folder:scribes", kind: "folder", path: "~/Link/scribes/", owner: "Scribes", contents: `${scribesLabel}, models, and generated notes`, updated: "Local" },
       { id: "folder:scribes-transcripts", kind: "folder", path: "~/Link/scribes/transcripts/", owner: "Scribes", contents: "Dictation and meeting transcripts", updated: "Local" },
@@ -4736,6 +5300,7 @@ function DriveView({
     .map((session) => ({
       id: `archived-session:${session.id}`,
       kind: "archived-session" as const,
+      path: `~/Link/archive/chats/${driveSafeSlug(session.title)}.chat`,
       sessionId: session.id,
       sessionTitle: session.title,
       agentName: formatChatAgentName(sessionSelectedAgentName(session) || activeAgent?.displayName || "Link"),
@@ -4743,6 +5308,19 @@ function DriveView({
       archivedAt: session.archivedAt || session.updatedAt,
     }))
     .sort((left, right) => String(right.archivedAt).localeCompare(String(left.archivedAt))), [activeAgent?.displayName, sessions]);
+  const chatSessionRows = useMemo<DriveChatSessionRow[]>(() => sessions
+    .filter((session) => !session.archivedAt)
+    .map((session) => ({
+      id: `chat-session:${session.id}`,
+      kind: "chat-session" as const,
+      path: `~/Link/chats/${driveSafeSlug(session.title)}.chat`,
+      sessionId: session.id,
+      sessionTitle: session.title,
+      agentName: formatChatAgentName(sessionSelectedAgentName(session) || activeAgent?.displayName || "Link"),
+      messageCount: session.messages.length,
+      updatedAt: session.updatedAt,
+    }))
+    .sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt))), [activeAgent?.displayName, sessions]);
   const artifactRows = useMemo<DriveFileRow[]>(() => {
     const hidden = new Set(hiddenDriveRowIds);
     return sessions
@@ -4784,52 +5362,59 @@ function DriveView({
       return String(rightUpdated).localeCompare(String(leftUpdated));
     });
   }, [scribesSessions]);
-  const rows: DriveRow[] = [...folderRows, ...archivedSessionRows, ...artifactRows, ...scribesRows];
+  const rows: DriveRow[] = [...folderRows, ...chatSessionRows, ...archivedSessionRows, ...artifactRows, ...scribesRows];
+  const currentFolder = normalizeDrivePath(currentDriveFolder);
+  const driveAtRoot = currentFolder === "~/Link/";
+  const driveCrumbs = driveBreadcrumbs(currentFolder);
   const filteredRows = rows.filter((row) => {
     const term = driveQuery.trim().toLowerCase();
-    if (!term) return true;
+    const rowPath = driveRowPath(row);
+    if (!term) return rowPath !== currentFolder && driveParentPath(rowPath) === currentFolder;
     if (row.kind === "folder") return `${row.path} ${row.owner} ${row.contents} ${row.updated}`.toLowerCase().includes(term);
-    if (row.kind === "archived-session") return `~/Link/archive/chats/ ${row.sessionTitle} ${row.agentName} archived chat session ${row.messageCount} messages`.toLowerCase().includes(term);
+    if (row.kind === "archived-session") return `${row.path} ${row.sessionTitle} ${row.agentName} archived chat session ${row.messageCount} messages`.toLowerCase().includes(term);
+    if (row.kind === "chat-session") return `${row.path} ${row.sessionTitle} ${row.agentName} chat session ${row.messageCount} messages`.toLowerCase().includes(term);
     if (row.kind === "scribes-session") return `${row.path} ${row.session.title} ${row.session.transcriptText} ${row.session.provider} Scribes transcript`.toLowerCase().includes(term);
     if (row.kind === "scribes-artifact") return `${row.artifact.path} ${row.artifact.title} ${row.artifact.kind} ${row.session.title} Scribes artifact`.toLowerCase().includes(term);
-    return `${row.artifact.filename} ${row.agentName} ${row.sessionTitle}`.toLowerCase().includes(term);
+    return `${driveRowPath(row)} ${row.artifact.filename} ${row.agentName} ${row.sessionTitle}`.toLowerCase().includes(term);
   });
 
   function openDriveRow(row: DriveRow) {
-    if (row.kind === "folder") setDriveQuery(row.path);
-    else if (row.kind === "archived-session") openSession(row.sessionId);
+    if (row.kind === "folder") {
+      setCurrentDriveFolder(row.path);
+      setDriveQuery("");
+    } else if (row.kind === "archived-session" || row.kind === "chat-session") openSession(row.sessionId);
     else if (row.kind === "scribes-session" || row.kind === "scribes-artifact") openScribes();
     else openArtifact(row.artifact);
   }
 
-  function driveRowName(row: DriveRow) {
-    if (row.kind === "folder") return row.path;
-    if (row.kind === "archived-session") return `~/Link/archive/chats/${row.sessionTitle}`;
-    if (row.kind === "scribes-session") return row.path;
-    if (row.kind === "scribes-artifact") return row.artifact.path;
-    return row.artifact.filename;
+  function openDriveFolder(path: string) {
+    setCurrentDriveFolder(path);
+    setDriveQuery("");
   }
 
-  function driveRowOwner(row: DriveRow) {
-    if (row.kind === "folder") return row.owner;
-    if (row.kind === "scribes-session" || row.kind === "scribes-artifact") return "Scribes";
-    return row.agentName;
+  function driveRowPath(row: DriveRow) {
+    if (row.kind === "folder") return row.path;
+    if (row.kind === "archived-session" || row.kind === "chat-session") return row.path;
+    if (row.kind === "scribes-session") return row.path;
+    if (row.kind === "scribes-artifact") return row.artifact.path;
+    return `~/Link/drive/artifacts/${row.artifact.filename}`;
+  }
+
+  function driveRowName(row: DriveRow) {
+    if (row.kind === "folder") return drivePathName(row.path);
+    if (row.kind === "archived-session" || row.kind === "chat-session") return row.sessionTitle;
+    if (row.kind === "scribes-session") return drivePathName(row.path);
+    if (row.kind === "scribes-artifact") return drivePathName(row.artifact.path);
+    return row.artifact.filename;
   }
 
   function driveRowContents(row: DriveRow) {
     if (row.kind === "folder") return row.contents;
+    if (row.kind === "chat-session") return `${row.messageCount} ${row.messageCount === 1 ? "message" : "messages"} in chat`;
     if (row.kind === "archived-session") return `${row.messageCount} ${row.messageCount === 1 ? "message" : "messages"} in archived chat`;
     if (row.kind === "scribes-session") return `${row.session.sessionType} transcript · ${sttProviderLabel(row.session.provider)}`;
     if (row.kind === "scribes-artifact") return `${formatScribesArtifactKind(row.artifact.kind)} · ${row.session.title}`;
     return row.sessionTitle;
-  }
-
-  function driveRowUpdated(row: DriveRow) {
-    if (row.kind === "folder") return row.updated;
-    if (row.kind === "archived-session") return compactRelativeTime(row.archivedAt);
-    if (row.kind === "scribes-session") return compactRelativeTime(row.session.updatedAt);
-    if (row.kind === "scribes-artifact") return compactRelativeTime(row.artifact.updatedAt);
-    return compactRelativeTime(row.createdAt);
   }
 
   function hideDriveRow(row: DriveFileRow) {
@@ -4863,29 +5448,19 @@ function DriveView({
           <h1>Drive</h1>
         </div>
       </header>
-      <div className="chatSearchRow">
-        <button
-          className={`iconButton agentFilterButton ${driveFiltersOpen ? "selected" : ""}`}
-          aria-label={driveFiltersOpen ? "Hide file filters" : "Show file filters"}
-          title={driveFiltersOpen ? "Hide file filters" : "Show file filters"}
-          onClick={() => setDriveFiltersOpen((open) => !open)}
-        >
-          <SlidersHorizontal size={16} />
-        </button>
-        <div className="explorerSearch compactSearch">
-          <Search size={16} />
-          <input value={driveQuery} onChange={(event) => setDriveQuery(event.target.value)} placeholder="Search files, agents, sessions, or archive" />
-        </div>
-        <button
-          className={`iconButton agentFilterButton ${driveBulkEdit ? "selected" : ""}`}
-          aria-label={driveBulkEdit ? "Exit bulk edit" : "Edit files"}
-          title={driveBulkEdit ? "Exit bulk edit" : "Edit files"}
-          onClick={toggleDriveBulkEdit}
-        >
-          <Pencil size={16} />
-        </button>
-        <TableRefreshButton onClick={refreshDriveRows} label="Refresh files" />
-      </div>
+      <PageToolbar
+        filterActive={driveFiltersOpen}
+        filterLabel={driveFiltersOpen ? "Hide file filters" : "Show file filters"}
+        onFilter={() => setDriveFiltersOpen((open) => !open)}
+        searchValue={driveQuery}
+        onSearchChange={setDriveQuery}
+        searchPlaceholder="Search files, agents, sessions, or archive"
+        editActive={driveBulkEdit}
+        editLabel={driveBulkEdit ? "Exit bulk edit" : "Edit files"}
+        onEdit={toggleDriveBulkEdit}
+        refreshLabel="Refresh files"
+        onRefresh={refreshDriveRows}
+      />
       {driveBulkEdit && (
         <BulkEditControls
           active={driveBulkEdit}
@@ -4897,19 +5472,52 @@ function DriveView({
       )}
       {driveFiltersOpen && (
         <div className="chatFilterBar" role="group" aria-label="File filters">
-          <span className="chatFilterCount">{filteredRows.length} items</span>
+          <span className="chatFilterCount">{filteredRows.length} items in {driveQuery.trim() ? "search" : currentFolder}</span>
         </div>
       )}
-      <div className={`chatSessionRows driveFileRows ${driveBulkEdit ? "bulkEditing" : ""}`} role="table" aria-label="Link workspace files and folders">
-        <div className="chatResultRow driveResultRow chatResultRowHead" role="row">
-          <span className="bulkSelectCell" role="columnheader" aria-label="Select files" />
-          <span className="driveFileHeaderCell" role="columnheader">Path</span>
-          <span className="driveAgentHeaderCell" role="columnheader">Owner</span>
-          <span className="driveSessionHeaderCell" role="columnheader">Contents</span>
-          <span className="driveCreatedHeaderCell" role="columnheader">Updated</span>
-          <span className="driveOpenHeaderCell" role="columnheader" aria-label="Open file" />
-        </div>
-        <div className="chatResultRows" role="rowgroup">
+      <div className="drivePathBar" aria-label="Current Drive folder">
+        {!driveAtRoot && (
+          <IconCircleButton
+            className="drivePathBackButton"
+            label="Go to parent folder"
+            onClick={() => {
+              const parent = driveParentPath(currentFolder) || "~/Link/";
+              openDriveFolder(parent);
+            }}
+          >
+            <ArrowLeft size={16} />
+          </IconCircleButton>
+        )}
+        <nav className="driveBreadcrumbs" aria-label="Drive path">
+          {driveCrumbs.map((crumb, index) => (
+            <Fragment key={crumb.path}>
+              {index > 0 && <span aria-hidden="true">/</span>}
+              <button
+                className={index === 0 ? "driveHomeCrumb" : undefined}
+                type="button"
+                onClick={() => openDriveFolder(crumb.path)}
+                aria-current={crumb.path === currentFolder ? "page" : undefined}
+                aria-label={index === 0 ? "Go to Drive home" : undefined}
+                title={index === 0 ? "Drive home" : undefined}
+              >
+                {index === 0 ? <Home size={16} /> : crumb.label}
+              </button>
+            </Fragment>
+          ))}
+        </nav>
+      </div>
+      <DirectoryTable
+        className="driveFileRows"
+        rowClassName="driveResultRow"
+        bulkEditing={driveBulkEdit}
+        ariaLabel="Link workspace files and folders"
+        columns={[
+          <span className="bulkSelectCell" role="columnheader" aria-label="Select files" />,
+          <span className="driveFileHeaderCell" role="columnheader">Name</span>,
+          <span className="driveSessionHeaderCell" role="columnheader">Contents</span>,
+          <span className="driveOpenHeaderCell" role="columnheader" aria-label="Open file" />,
+        ]}
+      >
           {filteredRows.map((row) => (
             <div
               className={`chatResultRow driveResultRow ${row.kind === "folder" ? "driveFolderRow" : ""}`}
@@ -4947,7 +5555,6 @@ function DriveView({
                 {row.kind === "folder" ? <FolderOpen size={15} /> : <FileText size={15} />}
                 <span>{driveRowName(row)}</span>
               </button>
-              <span role="cell">{driveRowOwner(row)}</span>
               {row.kind === "artifact" ? (
                 <button
                   className="driveSessionCell"
@@ -4964,32 +5571,29 @@ function DriveView({
               ) : (
                 <span role="cell">{driveRowContents(row)}</span>
               )}
-              <span role="cell">{driveRowUpdated(row)}</span>
-              <button
+              <IconCircleButton
                 className="chatSessionOpenButton"
-                type="button"
                 onClick={(event) => {
                   event.stopPropagation();
                   openDriveRow(row);
                 }}
-                aria-label={row.kind === "folder" ? `Show ${row.path}` : `Open ${driveRowName(row)}`}
-                title={row.kind === "folder" ? "Show folder" : row.kind === "archived-session" ? "Open archived session" : "Open file"}
+                label={row.kind === "folder" ? `Open folder ${driveRowName(row)}` : `Open ${driveRowName(row)}`}
+                title={row.kind === "folder" ? "Open folder" : row.kind === "archived-session" ? "Open archived session" : "Open file"}
               >
                 <ArrowRight size={16} />
-              </button>
+              </IconCircleButton>
             </div>
           ))}
-        </div>
         {filteredRows.length === 0 && (
           <div className="tableEmptyState" role="row">
             <EmptyState
               title="No Drive items found"
-              body="Try another search term or filter."
+              body={driveQuery.trim() ? "Try another search term or filter." : "This folder is empty."}
               icon={FolderOpen}
             />
           </div>
         )}
-      </div>
+      </DirectoryTable>
     </section>
   );
 }
@@ -5065,12 +5669,15 @@ function AssistantPanel({
   setMode,
   collapsed,
   setCollapsed,
+  onResizeStart,
+  onResizeStep,
   skills,
   agents,
   bookmarkedAgentIds,
   activeAgent,
   newSessionDraftOpen,
   setNewSessionDraftOpen,
+  newAppSessionRequestId,
   createNewChatSession,
   selectedChatAgentId,
   setSelectedChatAgentId,
@@ -5089,6 +5696,8 @@ function AssistantPanel({
   setChatModelMode,
   linkedPhoneNumber,
   setLinkedPhoneNumber,
+  phoneDialTarget,
+  phoneDialTargetRequestId,
   telnyxApiReady,
   activeDialerConfig,
   connectors,
@@ -5102,12 +5711,15 @@ function AssistantPanel({
   setMode: (mode: "chat" | "phone") => void;
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
+  onResizeStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onResizeStep: (delta: number) => void;
   skills: SkillMetadata[];
   agents: AgentSummary[];
   bookmarkedAgentIds: string[];
   activeAgent: ActiveAgentSelection | null;
   newSessionDraftOpen: boolean;
   setNewSessionDraftOpen: (open: boolean) => void;
+  newAppSessionRequestId: number;
   createNewChatSession: (draft?: NewChatSessionDraft) => Promise<void>;
   selectedChatAgentId: string;
   setSelectedChatAgentId: (id: string) => void;
@@ -5126,6 +5738,8 @@ function AssistantPanel({
   setChatModelMode: (mode: string) => void;
   linkedPhoneNumber: string;
   setLinkedPhoneNumber: (phoneNumber: string) => void;
+  phoneDialTarget: string;
+  phoneDialTargetRequestId: number;
   telnyxApiReady: boolean;
   activeDialerConfig: DialerConfig;
   connectors: ConnectorStatus[];
@@ -5171,7 +5785,6 @@ function AssistantPanel({
   const [refreshingNewSessionBots, setRefreshingNewSessionBots] = useState(false);
   const [refreshingModelCatalog, setRefreshingModelCatalog] = useState(false);
   const [phoneAssistants, setPhoneAssistants] = useState<PhoneAssistantOption[]>([]);
-  const [phoneDialTarget, setPhoneDialTarget] = useState("");
   const [installedSkillKeys, setInstalledSkillKeys] = useState<string[]>(() => readInstalledAgentSkillKeys());
   const [sessionSkillSelections, setSessionSkillSelections] = useState<Record<string, string>>({});
   const assistantAttachMenuRef = useRef<HTMLDivElement | null>(null);
@@ -5585,7 +6198,7 @@ function AssistantPanel({
       const workflowPrefix = createSkillMode
         ? skillPublishMode === "repo"
           ? "Skill publishing workflow: help this Telnyx user turn repeated agent work into a SKILL.md package, capture inputs, source of truth, expected output, repeated checks, human checkpoints, test fixture, owner, reviewers, and approval gates, then prepare a branch and reviewable PR for https://github.com/team-telnyx/telnyx-clawdbot-skills."
-          : "Local skill workflow: help this Telnyx user turn repeated agent work into a SKILL.md package that is only installed for their agents and hosted locally in the Electron app. Capture inputs, source of truth, expected output, repeated checks, human checkpoints, test fixture, owner, reviewers, and approval gates. Do not prepare a GitHub PR unless the user switches the skill publish target to the shared skills repository."
+          : "Local skill workflow: help this Telnyx user turn repeated agent work into a SKILL.md package that is only installed for their agents and hosted locally in Link. Capture inputs, source of truth, expected output, repeated checks, human checkpoints, test fixture, owner, reviewers, and approval gates. Do not prepare a GitHub PR unless the user switches the skill publish target to the shared skills repository."
           : deployAppMode
             ? buildEdgeAppSystemInstruction(edgeAppSlug, useLinkDesignSystemForSession)
             : "";
@@ -5977,8 +6590,8 @@ function AssistantPanel({
     }
   }
 
-	  function toggleDeployAppMode(enabled: boolean) {
-	    setDeployAppMode(enabled);
+  function toggleDeployAppMode(enabled: boolean) {
+    setDeployAppMode(enabled);
 	    if (enabled) {
 	      setCreateSkillMode(false);
 	      setEdgeDeployStage("idle");
@@ -5994,6 +6607,18 @@ function AssistantPanel({
 	      setVoiceInputStatus("");
 	    }
 	  }
+
+  useEffect(() => {
+    if (!newAppSessionRequestId) return;
+    setMode("chat");
+    setAssistantAttachMenuOpen(false);
+    setAssistantRuntimeMenuOpen(false);
+    setAssistantSkillPickerOpen(false);
+    setNewSessionDraftOpen(true);
+    setNewSessionTitleDraft("New app");
+    selectSession("");
+    toggleDeployAppMode(true);
+  }, [newAppSessionRequestId]);
 
 	  function buildEdgeAppResumePrompt(slug: string, lastUserRequest: string) {
 	    return [
@@ -6315,8 +6940,8 @@ function AssistantPanel({
             className="assistantRailButton"
             type="button"
             onClick={() => openAssistantMode("phone")}
-            aria-label="Open Phone assistant"
-            title="Phone"
+            aria-label="Open Call assistant"
+            title="Call"
           >
             <Phone size={17} />
           </button>
@@ -6327,10 +6952,28 @@ function AssistantPanel({
 
   return (
     <aside className={`assistantPanel ${mode === "phone" ? "phoneMode" : ""}`} aria-label="Assistant">
+      <button
+        className="assistantResizeHandle"
+        type="button"
+        aria-label="Resize assistant sidebar"
+        aria-orientation="vertical"
+        title="Resize sidebar"
+        onPointerDown={onResizeStart}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            onResizeStep(24);
+          }
+          if (event.key === "ArrowRight") {
+            event.preventDefault();
+            onResizeStep(-24);
+          }
+        }}
+      />
       <div className="assistantPanelTop">
         <div className="assistantTabs">
           <button className={mode === "chat" ? "selected" : ""} onClick={() => setMode("chat")}><MessageSquare size={15} />Chat</button>
-          <button className={mode === "phone" ? "selected" : ""} onClick={() => setMode("phone")}><Phone size={15} />Phone</button>
+          <button className={mode === "phone" ? "selected" : ""} onClick={() => setMode("phone")}><Phone size={15} />Call</button>
         </div>
       </div>
       {mode === "chat" ? (
@@ -6489,11 +7132,6 @@ function AssistantPanel({
                         <ArchiveIcon size={15} />
                         <span>Archive chat</span>
                       </button>
-                      <div className="assistantSessionMenuDivider" />
-                      <button role="menuitem" type="button" onClick={openSelectedSessionInChat}>
-                        <MessageSquare size={15} />
-                        <span>Open in Chat</span>
-                      </button>
                     </div>
                   )}
                 </div>
@@ -6572,10 +7210,11 @@ function AssistantPanel({
                       title="Add context"
                       aria-label="Add context"
                       aria-expanded={assistantAttachMenuOpen}
-                      onClick={() => {
-                        refreshInstalledSkills();
-                        setAssistantAttachMenuOpen((open) => !open);
-                      }}
+	                      onClick={() => {
+	                        refreshInstalledSkills();
+	                        setAssistantRuntimeMenuOpen(false);
+	                        setAssistantAttachMenuOpen((open) => !open);
+	                      }}
                     >
 	                      <Plus size={16} />
 	                    </button>
@@ -6603,7 +7242,7 @@ function AssistantPanel({
                               }}
                             >
                               <span>Only my agents</span>
-                              <small>Hosted locally in this Electron app.</small>
+                              <small>Hosted locally in Link.</small>
                             </button>
                             <button
                               type="button"
@@ -6758,14 +7397,17 @@ function AssistantPanel({
                     )}
 	                  </div>
                   <div className="assistantRuntimeMenuRoot" ref={assistantRuntimeMenuRef}>
-                    <button
-                      className="iconButton assistantRuntimeTrigger"
-                      type="button"
-                      title="Chat settings"
-                      aria-label="Chat settings"
-                      aria-expanded={assistantRuntimeMenuOpen}
-                      onClick={() => setAssistantRuntimeMenuOpen((open) => !open)}
-                    >
+	                    <button
+	                      className="iconButton assistantRuntimeTrigger"
+	                      type="button"
+	                      title="Chat settings"
+	                      aria-label="Chat settings"
+	                      aria-expanded={assistantRuntimeMenuOpen}
+	                      onClick={() => {
+	                        setAssistantAttachMenuOpen(false);
+	                        setAssistantRuntimeMenuOpen((open) => !open);
+	                      }}
+	                    >
                       <Settings size={16} />
                     </button>
                     {assistantRuntimeMenuOpen && (
@@ -6776,10 +7418,28 @@ function AssistantPanel({
                             {dataBoundaryLabel(selectedModelRoute?.dataBoundary)}
                           </span>
                         </div>
-                        <div className="assistantRuntimeBar" aria-label="Active model route">
-                          <label>
-                            <span><SlidersHorizontal size={14} aria-hidden="true" />Runtime route</span>
-                            <select value={modelMode} onChange={(event) => setChatModelMode(event.target.value)} aria-label="Model route">
+	                        <div className="assistantRuntimeBar" aria-label="Active model route">
+	                          <label>
+	                            <span><Bot size={14} aria-hidden="true" />Agent</span>
+	                            <select value={selectedChatAgent?.id ?? ""} onChange={(event) => setSelectedChatAgentId(event.target.value)} aria-label="Session agent">
+	                              {chatAgents.map((agent) => (
+	                                <option key={agent.id} value={agent.id}>
+	                                  {chatAgentOptionLabel(agent)}
+	                                </option>
+	                              ))}
+	                            </select>
+	                          </label>
+	                          <label>
+	                            <span><ShieldCheck size={14} aria-hidden="true" />Approval mode</span>
+	                            <select value={acceptMode} onChange={(event) => setAcceptMode(event.target.value as typeof acceptMode)} aria-label="Approval mode">
+	                              <option value="auto">Auto Accept</option>
+	                              <option value="review">Ask before actions</option>
+	                              <option value="manual">Manual only</option>
+	                            </select>
+	                          </label>
+	                          <label>
+	                            <span><SlidersHorizontal size={14} aria-hidden="true" />Runtime route</span>
+	                            <select value={modelMode} onChange={(event) => setChatModelMode(event.target.value)} aria-label="Model route">
                               {aiModelRoutes.map((route) => (
                                 <option key={route.id} value={route.id} disabled={!route.available}>
                                   {route.label}{route.available ? "" : " (setup required)"}
@@ -6967,6 +7627,7 @@ function AssistantPanel({
           setView={setView}
           openPhoneContacts={openPhoneContacts}
           initialDialNumber={phoneDialTarget}
+          initialDialNumberRequestId={phoneDialTargetRequestId}
           connectors={connectors}
         />
       )}
@@ -7193,6 +7854,7 @@ function buildToolStudioPrompt(draft: ToolStudioDraft, agentName?: string) {
 
 function AgentsView({
   agents,
+  connectors,
   skills,
   refresh,
   setView,
@@ -7200,10 +7862,11 @@ function AgentsView({
   setBookmarkedAgentIds,
   activeAgent,
   setActiveAgent,
-  openAgentSetup,
   startSkillBuilderChat,
+  openTerminal,
 }: {
   agents: AgentSummary[];
+  connectors: ConnectorStatus[];
   skills: SkillMetadata[];
   refresh: () => Promise<void>;
   setView: (view: ViewId) => void;
@@ -7211,8 +7874,8 @@ function AgentsView({
   setBookmarkedAgentIds: (ids: string[] | ((current: string[]) => string[])) => void;
   activeAgent: ActiveAgentSelection | null;
   setActiveAgent: (agent: ActiveAgentSelection | null) => void;
-  openAgentSetup: () => void;
   startSkillBuilderChat: (prompt: string) => Promise<void>;
+  openTerminal: () => void;
 }) {
   type AgentViewTab = "personal" | "squads" | "telnyx" | "skills";
   const [tab, setTab] = useState<"personal" | "squads" | "telnyx" | "skills">("personal");
@@ -7226,6 +7889,7 @@ function AgentsView({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [acpAuth, setAcpAuth] = useState<AgentControlPlaneAuthStatus | null>(null);
   const [acpBusy, setAcpBusy] = useState(false);
+  const [agentSetupOpen, setAgentSetupOpen] = useState(false);
   const [hostedAgents, setHostedAgents] = useState<HostedAgentSummary[]>([]);
   const [agentError, setAgentError] = useState("");
   const [agentLoadRecoverable, setAgentLoadRecoverable] = useState(false);
@@ -7370,7 +8034,11 @@ function AgentsView({
     ]);
     if (sectionFilter === "all" || sectionFilter === "you") {
       for (const agent of filteredHostedAgents) {
-        grouped.get("you")?.push({ id: `hosted:${agent.id}`, section: "you", category: "Personal", agent });
+        grouped.get("you")?.push({ id: `hosted:${agent.id}`, section: "you", category: "You", agent });
+      }
+      for (const agent of filteredAgents) {
+        if (!bookmarkedAgentIdSet.has(agent.id)) continue;
+        grouped.get("you")?.push({ id: `saved:${agent.id}`, section: "you", category: agent.squad || formatSourceLabel(agent.source), agent });
       }
     }
     if (sectionFilter === "all" || sectionFilter === "team") {
@@ -7382,7 +8050,8 @@ function AgentsView({
       { id: "you" as const, title: "You", rows: grouped.get("you") ?? [] },
       { id: "team" as const, title: "Team", rows: grouped.get("team") ?? [] },
     ].filter((section) => sectionFilter === "all" || section.id === sectionFilter);
-  }, [filteredAgents, filteredHostedAgents, sectionFilter]);
+  }, [bookmarkedAgentIdSet, filteredAgents, filteredHostedAgents, sectionFilter]);
+  const agentDirectoryRows = useMemo(() => agentDirectorySections.flatMap((section) => section.rows), [agentDirectorySections]);
   const installedSkillRows = useMemo(() => {
     const term = query.trim().toLowerCase();
     const rows = installedSkillKeys.map((key) => {
@@ -7503,7 +8172,7 @@ function AgentsView({
   async function openAddAgentFlow() {
     setAgentError("");
     setAgentLoadRecoverable(false);
-    openAgentSetup();
+    setAgentSetupOpen(true);
   }
 
   async function sendAgent(agent: AgentSummary) {
@@ -7745,10 +8414,15 @@ function AgentsView({
     skills: ["Skills", Zap],
   } satisfies Record<AgentViewTab, [string, AppIcon]>;
   const [agentHeadingTitle] = agentSectionHeading[tab];
-  const agentHeaderAction = tab === "personal" ? (
+  const agentHeaderAction = agentSetupOpen ? (
+    <button className="button secondary" type="button" onClick={() => setAgentSetupOpen(false)}>
+      <ArrowLeft size={15} />
+      Back to Agents
+    </button>
+  ) : tab === "personal" ? (
     <button className="button primary" onClick={() => void openAddAgentFlow()} disabled={acpBusy}>
       <Plus size={15} />
-      Add Agent
+      New Agent
     </button>
   ) : tab === "skills" ? (
     <button className="button primary" onClick={() => setCreateToolOpen((open) => !open)}>
@@ -7757,13 +8431,8 @@ function AgentsView({
     </button>
   ) : null;
 
-  function agentRowMeta(agent: HostedAgentSummary | AgentSummary) {
-    return [agent.type, agent.status].filter(Boolean).join(" - ") || "Agent";
-  }
-
-  function renderAgentDirectoryRow(row: (typeof agentDirectorySections)[number]["rows"][number]) {
+  function renderAgentDirectoryRow(row: (typeof agentDirectoryRows)[number]) {
     const agent = row.agent;
-    const bookmarked = bookmarkedAgentIdSet.has(agent.id);
     return (
       <div
         className="chatResultRow directoryResultRow agentDirectoryResultRow"
@@ -7780,25 +8449,8 @@ function AgentsView({
       >
         <span className="directoryNameCell" role="cell">
           <strong>{agent.displayName}</strong>
-          <small>{agent.description || "No description saved."}</small>
         </span>
         <span role="cell">{row.category}</span>
-        <span role="cell">{agentRowMeta(agent)}</span>
-        <span className="directoryRowActions" role="cell">
-          {row.section === "team" && (
-            <button
-              className={`iconButton bookmarkButton ${bookmarked ? "selected" : ""}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                toggleBookmark(agent.id);
-              }}
-              title={bookmarked ? "Remove bookmark" : "Bookmark agent"}
-              aria-label={bookmarked ? `Remove ${agent.displayName} bookmark` : `Bookmark ${agent.displayName}`}
-            >
-              <Star size={15} />
-            </button>
-          )}
-        </span>
         <button
           className="chatSessionOpenButton"
           type="button"
@@ -7815,26 +8467,20 @@ function AgentsView({
     );
   }
 
-  function renderAgentDirectoryTable(section: (typeof agentDirectorySections)[number]) {
+  function renderAgentDirectoryTable() {
     return (
-      <section className="agentDirectorySection" aria-label={`${section.title} agents`} key={section.id}>
-        <div className="agentDirectorySectionHeader">
-          <h2>{section.title}</h2>
-          <span>{section.rows.length} {section.rows.length === 1 ? "agent" : "agents"}</span>
-        </div>
-        <div className="chatSessionRows directoryTable agentDirectoryTable" role="table" aria-label={`${section.title} agents`}>
+      <section className={`agentDirectorySection ${agentDirectoryRows.length === 0 ? "empty" : ""}`} aria-label="Agents">
+        <div className="chatSessionRows directoryTable agentDirectoryTable" role="table" aria-label="Agents">
           <div className="chatResultRow directoryResultRow agentDirectoryResultRow chatResultRowHead" role="row">
             <span role="columnheader">Agent</span>
-            <span role="columnheader">Group</span>
-            <span role="columnheader">Runtime</span>
-            <span role="columnheader">Saved</span>
+            <span role="columnheader">Owner</span>
             <span role="columnheader" aria-label="Open agent" />
           </div>
           <div className="chatResultRows" role="rowgroup">
-            {section.rows.map(renderAgentDirectoryRow)}
-            {section.rows.length === 0 && (
+            {agentDirectoryRows.map(renderAgentDirectoryRow)}
+            {agentDirectoryRows.length === 0 && (
               <div className="tableEmptyState" role="row">
-                <EmptyState title={`No ${section.title.toLowerCase()} agents found`} body="Try another search term or filter." icon={Bot} />
+                <EmptyState title="No agents found" body="Try another search term or filter." icon={Bot} />
               </div>
             )}
           </div>
@@ -7844,7 +8490,7 @@ function AgentsView({
   }
 
   const selectedAgentRow = selectedAgentDetailId
-    ? agentDirectorySections.flatMap((section) => section.rows).find((row) => row.id === selectedAgentDetailId)
+    ? agentDirectoryRows.find((row) => row.id === selectedAgentDetailId)
     : undefined;
   const selectedAgentDetail = selectedAgentRow?.agent;
   const selectedAgentCapabilities = selectedAgentDetail && "capabilities" in selectedAgentDetail ? selectedAgentDetail.capabilities : [];
@@ -7864,6 +8510,18 @@ function AgentsView({
             <h1>{selectedAgentDetail.displayName}</h1>
             <p>{selectedAgentDetail.description || "No description saved."}</p>
           </div>
+          {"source" in selectedAgentDetail && (
+            <button
+              className={`button secondary ${bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? "selected" : ""}`}
+              type="button"
+              title={bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? "Remove saved agent" : "Save agent"}
+              aria-label={bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? `Remove ${selectedAgentDetail.displayName} from saved agents` : `Save ${selectedAgentDetail.displayName}`}
+              onClick={() => toggleBookmark(selectedAgentDetail.id)}
+            >
+              <Star size={14} fill={bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? "currentColor" : "none"} />
+              {bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? "Saved" : "Save"}
+            </button>
+          )}
         </header>
         <section className="chatDetailSurface">
           <div className="chatReviewTabs directoryDetailTabs" role="tablist" aria-label="Agent details">
@@ -7886,9 +8544,10 @@ function AgentsView({
           </div>
           {selectedAgentDetailTab === "overview" && (
             <div className="chatResultDetails directoryDetailPanel">
-              <div><strong>Group</strong><span>{selectedAgentRow.category}</span></div>
+              <div><strong>Owner</strong><span>{selectedAgentRow.category}</span></div>
               <div><strong>Runtime</strong><span>{selectedAgentDetail.type || "Agent"}</span></div>
               <div><strong>Status</strong><span>{formatStatusLabel(selectedAgentDetail.status || "available")}</span></div>
+              {"source" in selectedAgentDetail && <div><strong>Saved</strong><span>{bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? "Yes" : "No"}</span></div>}
               <div><strong>Source</strong><span>{formatSourceLabel(selectedAgentSource)}</span></div>
               {selectedAgentVisibility && <div><strong>Visibility</strong><span>{formatVisibilityLabel(selectedAgentVisibility)}</span></div>}
             </div>
@@ -7903,7 +8562,7 @@ function AgentsView({
           )}
           {selectedAgentDetailTab === "settings" && (
             <div className="directoryDetailPanel">
-              {selectedAgentRow.section === "you" ? (
+              {!("source" in selectedAgentDetail) ? (
                 <div className="agentAppearanceEditor detailAppearanceEditor">
                   <button className="button secondary compactButton" type="button" onClick={() => setAgentAppearanceOpenId((current) => current === selectedAgentDetail.id ? "" : selectedAgentDetail.id)}>
                     <Pencil size={13} />
@@ -7932,10 +8591,12 @@ function AgentsView({
                 <button
                   className={`button secondary ${bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? "selected" : ""}`}
                   type="button"
+                  title={bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? "Remove saved agent" : "Save agent"}
+                  aria-label={bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? `Remove ${selectedAgentDetail.displayName} from saved agents` : `Save ${selectedAgentDetail.displayName}`}
                   onClick={() => toggleBookmark(selectedAgentDetail.id)}
                 >
-                  <Star size={14} />
-                  {bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? "Bookmarked" : "Bookmark"}
+                  <Star size={14} fill={bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? "currentColor" : "none"} />
+                  {bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? "Saved" : "Save"}
                 </button>
               )}
               {(selectedAgentSource === "slack" || selectedAgentDetail.type === "slack") && (
@@ -7995,14 +8656,15 @@ function AgentsView({
           }}
           label="Agent sections"
         />
-        <div className="pageSectionMain">
+        <div className={`pageSectionMain ${agentSetupOpen ? "agentSetupPageSectionMain" : ""}`}>
           <header className="pageHeader">
-            <h1>Agents</h1>
-            <button className="button primary" onClick={() => void openAddAgentFlow()} disabled={acpBusy}>
-              <Plus size={15} />
-              Add Agent
-            </button>
+            <h1>{agentSetupOpen ? "Agent Setup" : "Agents"}</h1>
+            {agentHeaderAction}
           </header>
+      {agentSetupOpen ? (
+        <AgentControlPlaneSetupPanel connectors={connectors} refresh={refresh} openTerminal={openTerminal} />
+      ) : (
+      <>
       {!(tab === "skills" && createToolOpen) && (
       <div className="agentControls">
         <button
@@ -8291,12 +8953,12 @@ function AgentsView({
                 </button>
                 <button className="button primary" type="button" onClick={() => void openAddAgentFlow()} disabled={acpBusy}>
                   <Plus size={14} />
-                  Add Agent
+                  New Agent
                 </button>
               </div>
             </div>
           ) : agentError ? <div className="errorBanner">{agentError}</div> : null}
-          {agentDirectorySections.map(renderAgentDirectoryTable)}
+          {renderAgentDirectoryTable()}
         </section>
         )}
         {tab === "squads" && (
@@ -8324,8 +8986,8 @@ function AgentsView({
                             <button
                               className={`iconButton bookmarkButton ${bookmarkedAgentIdSet.has(agent.id) ? "selected" : ""}`}
                               onClick={() => toggleBookmark(agent.id)}
-                              title={bookmarkedAgentIdSet.has(agent.id) ? "Remove bookmark" : "Bookmark agent"}
-                              aria-label={bookmarkedAgentIdSet.has(agent.id) ? `Remove ${agent.displayName} bookmark` : `Bookmark ${agent.displayName}`}
+                              title={bookmarkedAgentIdSet.has(agent.id) ? "Remove saved agent" : "Save agent"}
+                              aria-label={bookmarkedAgentIdSet.has(agent.id) ? `Remove ${agent.displayName} from saved agents` : `Save ${agent.displayName}`}
                             >
                               <Star size={15} />
                             </button>
@@ -8380,8 +9042,8 @@ function AgentsView({
                   <button
                     className={`iconButton bookmarkButton ${bookmarkedAgentIdSet.has(agent.id) ? "selected" : ""}`}
                     onClick={() => toggleBookmark(agent.id)}
-                    title={bookmarkedAgentIdSet.has(agent.id) ? "Remove bookmark" : "Bookmark agent"}
-                    aria-label={bookmarkedAgentIdSet.has(agent.id) ? `Remove ${agent.displayName} bookmark` : `Bookmark ${agent.displayName}`}
+                    title={bookmarkedAgentIdSet.has(agent.id) ? "Remove saved agent" : "Save agent"}
+                    aria-label={bookmarkedAgentIdSet.has(agent.id) ? `Remove ${agent.displayName} from saved agents` : `Save ${agent.displayName}`}
                   >
                     <Star size={15} />
                   </button>
@@ -8438,6 +9100,8 @@ function AgentsView({
         )}
         </>
       )}
+      </>
+      )}
         </div>
       </div>
     </section>
@@ -8491,6 +9155,9 @@ function WorkboardView({
   const [hostedTaskAgents, setHostedTaskAgents] = useState<HostedAgentSummary[]>([]);
   const [boardLayout, setBoardLayout] = useState<"rows" | "columns">("rows");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [taskBulkEdit, setTaskBulkEdit] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [bulkTaskStatus, setBulkTaskStatus] = useState<WorkboardStatus>("needs_review");
   const [dragTargetStatus, setDragTargetStatus] = useState<WorkboardStatus | null>(null);
   const [pointerDraggingCardId, setPointerDraggingCardId] = useState("");
   const [hiddenTaskIds, setHiddenTaskIds] = useState<string[]>(() => [
@@ -8593,6 +9260,10 @@ function WorkboardView({
       return matchesStatus && (!term || searchable.includes(term));
     });
   }, [hiddenTaskIds, snapshot?.cards, query, statusFilter]);
+
+  useEffect(() => {
+    setSelectedTaskIds((current) => current.filter((id) => filteredCards.some((card) => card.id === id)));
+  }, [filteredCards]);
 
   function selectedAssignee(agentId: string) {
     return taskAssignees.find((agent) => agent.id === agentId);
@@ -8704,6 +9375,36 @@ function WorkboardView({
     return "No session";
   }
 
+  function workboardActorForCard(card: WorkboardCard) {
+    const assignedAgent = taskAssigneeForCard(card);
+    const assigneeValue = card.assigneeId || assignedAgent?.id || card.assigneeName || card.assignee || "";
+    const directoryAgent = agents.find((agent) =>
+      agent.id === assigneeValue ||
+      agent.displayName === card.assigneeName ||
+      agent.displayName === card.assignee,
+    ) as (AgentSummary & { avatarUrl?: string; imageUrl?: string; logoUrl?: string }) | undefined;
+    const hostedAgent = hostedTaskAgents.find((agent) =>
+      agent.id === assigneeValue ||
+      agent.displayName === card.assigneeName ||
+      agent.displayName === card.assignee,
+    ) as (HostedAgentSummary & { avatarUrl?: string; imageUrl?: string; logoUrl?: string }) | undefined;
+    const isSelf = assignedAgent?.source === "link" || card.assigneeId?.startsWith("self:");
+    const label = assignedAgent?.label || card.assigneeName || card.assignee || directoryAgent?.displayName || hostedAgent?.displayName || card.provider;
+    const imageUrl = isSelf
+      ? accountStatus?.avatarUrl
+      : directoryAgent?.avatarUrl || directoryAgent?.imageUrl || directoryAgent?.logoUrl || hostedAgent?.avatarUrl || hostedAgent?.imageUrl || hostedAgent?.logoUrl;
+    return { label, imageUrl };
+  }
+
+  function renderWorkboardActorIcon(card: WorkboardCard) {
+    const actor = workboardActorForCard(card);
+    return (
+      <div className="workboardRowIcon" title={actor.label} aria-label={actor.label}>
+        {actor.imageUrl ? <img src={actor.imageUrl} alt="" /> : <span>{initialsFromIdentity(actor.label)}</span>}
+      </div>
+    );
+  }
+
   function hideTask(card: WorkboardCard) {
     const key = `${card.provider}:${card.boardId}:${card.id}`;
     setHiddenTaskIds((current) => {
@@ -8711,6 +9412,54 @@ function WorkboardView({
       window.localStorage.setItem("telnyx-link-hidden-task-ids", JSON.stringify(next));
       return next;
     });
+  }
+
+  function toggleTaskBulkEdit() {
+    setTaskBulkEdit((active) => !active);
+    setSelectedTaskIds([]);
+  }
+
+  function setTaskSelected(cardId: string, selected: boolean) {
+    setSelectedTaskIds((current) => selected ? current.includes(cardId) ? current : [...current, cardId] : current.filter((id) => id !== cardId));
+  }
+
+  function selectedTaskCards() {
+    const selected = new Set(selectedTaskIds);
+    return filteredCards.filter((card) => selected.has(card.id));
+  }
+
+  async function moveSelectedTasks() {
+    const cards = selectedTaskCards();
+    if (cards.length === 0) return;
+    setBusy(true);
+    setError("");
+    try {
+      let nextSnapshot = snapshot;
+      for (const card of cards) {
+        if (card.status === bulkTaskStatus) continue;
+        nextSnapshot = await linkApi.updateWorkboardCard({
+          provider: card.provider,
+          boardId: card.boardId,
+          preferredAgentType,
+          cardId: card.id,
+          status: bulkTaskStatus,
+          autoDispatch: false,
+        });
+      }
+      if (nextSnapshot) setSnapshot(nextSnapshot);
+      setSelectedTaskIds([]);
+      setTaskBulkEdit(false);
+    } catch (moveError) {
+      setError(String(moveError instanceof Error ? moveError.message : moveError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function hideSelectedTasks() {
+    selectedTaskCards().forEach(hideTask);
+    setSelectedTaskIds([]);
+    setTaskBulkEdit(false);
   }
 
   async function load(nextProvider = provider, nextBoardId = boardId, silent = false) {
@@ -8983,7 +9732,7 @@ function WorkboardView({
         <div className="headerActions">
           <button className="button primary" onClick={() => setCreateOpen((open) => !open)} aria-expanded={createOpen}>
             <Plus size={15} />
-            Create Task
+            New Task
           </button>
         </div>
       </header>
@@ -9000,6 +9749,14 @@ function WorkboardView({
         >
           <SlidersHorizontal size={16} />
         </button>
+        <button
+          className={`iconButton agentFilterButton ${taskBulkEdit ? "selected" : ""}`}
+          aria-label={taskBulkEdit ? "Exit bulk task edit" : "Edit tasks"}
+          title={taskBulkEdit ? "Exit bulk task edit" : "Edit tasks"}
+          onClick={toggleTaskBulkEdit}
+        >
+          <Check size={16} />
+        </button>
         <div className="explorerSearch compactSearch">
           <Search size={16} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search cards, labels, assignees, or diagnostics" />
@@ -9008,6 +9765,35 @@ function WorkboardView({
           <RefreshCw size={16} />
         </button>
       </div>
+
+      {taskBulkEdit && (
+        <div className="bulkEditControls workboardBulkEditControls" aria-label="Bulk task actions">
+          <span>{selectedTaskIds.length} selected</span>
+          <label className="workboardBulkStatus">
+            <span>Move to</span>
+            <select value={bulkTaskStatus} onChange={(event) => setBulkTaskStatus(event.target.value as WorkboardStatus)}>
+              {columns.map((status) => (
+                <option key={status} value={status}>{formatStatusLabel(status)}</option>
+              ))}
+            </select>
+          </label>
+          <button className="button secondary" type="button" onClick={() => void moveSelectedTasks()} disabled={selectedTaskIds.length === 0 || busy}>
+            <ArrowRight size={14} />
+            Move
+          </button>
+          <button className="button secondary" type="button" onClick={hideSelectedTasks} disabled={selectedTaskIds.length === 0}>
+            <ArchiveIcon size={14} />
+            Archive
+          </button>
+          <button className="button danger" type="button" onClick={hideSelectedTasks} disabled={selectedTaskIds.length === 0}>
+            <Trash2 size={14} />
+            Delete
+          </button>
+          <button className="button ghost" type="button" onClick={toggleTaskBulkEdit}>
+            Cancel
+          </button>
+        </div>
+      )}
 
       {filtersOpen && <div className="workboardToolbar">
         <label className="agentFilter">
@@ -9069,13 +9855,13 @@ function WorkboardView({
       </div>}
 
       {createOpen && (
-        <div className="workboardCreate" aria-label="Create task">
+        <div className="workboardCreate" aria-label="New task">
           <div className="workboardCreateHeader">
             <div>
-              <strong>Create task</strong>
+              <strong>New task</strong>
               <small>Add a clear outcome for the selected board.</small>
             </div>
-            <button className="iconButton" onClick={() => setCreateOpen(false)} aria-label="Close create task form">
+            <button className="iconButton" onClick={() => setCreateOpen(false)} aria-label="Close new task form">
               <X size={16} />
             </button>
           </div>
@@ -9191,7 +9977,7 @@ function WorkboardView({
       )}
 
       {boardLayout === "rows" ? (
-        <div className="workboardRows">
+        <div className={`workboardRows ${taskBulkEdit ? "bulkEditing" : ""}`}>
           {columns.map((status) => {
             const cards = filteredCards.filter((card) => card.status === status);
             return (
@@ -9227,22 +10013,24 @@ function WorkboardView({
                       onPointerUp={(event) => void finishCardPointerDrag(event)}
                       onPointerCancel={cancelCardPointerDrag}
                     >
-                      <div className="workboardRowIcon"><Users size={17} /></div>
-                      <div className="workboardRowBody">
+                      <BulkSelectCell
+                        active={taskBulkEdit}
+                        checked={selectedTaskIds.includes(card.id)}
+                        label={`Select ${card.title}`}
+                        onChange={(selected) => setTaskSelected(card.id, selected)}
+                      />
+                      {renderWorkboardActorIcon(card)}
+                      <div className="workboardRowTitle">
                         <div className="connectorTitle">
                           <strong>{card.title}</strong>
                         </div>
-                        {card.body && <p>{card.body}</p>}
-                        <div className="workboardMeta">
-                          {cardAssigneeLabel(card) && <span><Users size={12} />{cardAssigneeLabel(card)}</span>}
-                          <span><Clock size={12} />{relativeDate(card.updatedAt)}</span>
-                          <span>{String(card.priority)}</span>
-                          <span><MessageSquare size={12} />{cardSessionStateLabel(card)}</span>
-                        </div>
-                        <div className="tagList">
-                          {card.labels.slice(0, 5).map((label) => <span key={label}>{label}</span>)}
-                        </div>
                       </div>
+                      <p className="workboardRowDescription">{card.body || "No description"}</p>
+                      <div className="workboardRowDetails">
+                        <span>{String(card.priority)}</span>
+                        {card.labels.slice(0, 2).map((label) => <span key={label}>{label}</span>)}
+                      </div>
+                      <time className="workboardRowTime" dateTime={card.updatedAt}>{relativeDate(card.updatedAt)}</time>
                       <div className="workboardRowActions">
                         <button className="iconButton" onClick={() => void openCardTaskSession(card)} aria-label={`Open task session for ${card.title}`} title="Open task session">
                           <MessageSquare size={14} />
@@ -9435,8 +10223,32 @@ function isFutureCalendarEvent(event: GoogleCalendarEvent, nowMs = Date.now()) {
   return event.status !== "past" && (endMs === null || endMs >= nowMs);
 }
 
-function calendarEventStatusLabel(event: GoogleCalendarEvent) {
-  return event.status === "live" ? "live" : "future";
+function calendarEventJoinUrl(event: GoogleCalendarEvent) {
+  return event.meetUrl || "";
+}
+
+function calendarEventDayKey(event: GoogleCalendarEvent) {
+  const startMs = calendarEventStartMs(event);
+  if (startMs === null) return "";
+  const date = new Date(startMs);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function calendarDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function calendarMonthCells(anchor: Date) {
+  const year = anchor.getFullYear();
+  const month = anchor.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const leadingDays = firstDay.getDay();
+  const totalCells = Math.ceil((leadingDays + daysInMonth) / 7) * 7;
+  return Array.from({ length: totalCells }, (_, index) => {
+    const day = index - leadingDays + 1;
+    return day >= 1 && day <= daysInMonth ? new Date(year, month, day) : null;
+  });
 }
 
 function CalendarView({
@@ -9452,6 +10264,7 @@ function CalendarView({
 }) {
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [calendarViewMode, setCalendarViewMode] = useState<"list" | "calendar">("list");
   const [selectedEventId, setSelectedEventId] = useState("");
   const [actionStatus, setActionStatus] = useState("");
   const [calendarEvents, setCalendarEvents] = useState<GoogleCalendarEvent[]>([]);
@@ -9484,6 +10297,18 @@ function CalendarView({
     .filter((event) => isFutureCalendarEvent(event))
     .sort((first, second) => (calendarEventStartMs(first) ?? Number.MAX_SAFE_INTEGER) - (calendarEventStartMs(second) ?? Number.MAX_SAFE_INTEGER));
   const selectedEvent = selectedEventId ? visibleEvents.find((event) => event.id === selectedEventId) : undefined;
+  const monthAnchor = useMemo(() => new Date(), []);
+  const monthLabel = useMemo(() => new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(monthAnchor), [monthAnchor]);
+  const monthCells = useMemo(() => calendarMonthCells(monthAnchor), [monthAnchor]);
+  const eventsByDay = useMemo(() => {
+    const map = new Map<string, GoogleCalendarEvent[]>();
+    futureVisibleEvents.forEach((event) => {
+      const key = calendarEventDayKey(event);
+      if (!key) return;
+      map.set(key, [...(map.get(key) ?? []), event]);
+    });
+    return map;
+  }, [futureVisibleEvents]);
 
   async function refreshCalendarEvents() {
     if (!calendarReady) {
@@ -9616,20 +10441,20 @@ function CalendarView({
     };
   }, [inviteModalEvent, inviteBotId, linkTrainingSessionEvent.id]);
 
-  function startMeeting(event: GoogleCalendarEvent) {
+  function openEventDetail(event: GoogleCalendarEvent) {
     setSelectedEventId(event.id);
-    setActionStatus(event.id === linkTrainingSessionEvent.id ? "Opening Link training scheduler." : `Opening ${event.title} from Google Calendar.`);
-    if (event.meetUrl) window.open(event.meetUrl, "_blank");
+    setActionStatus(event.id === linkTrainingSessionEvent.id ? "Selected Link training scheduler." : `Selected ${event.title}.`);
   }
 
-  function startCall(event: GoogleCalendarEvent) {
+  function joinCalendarEvent(event: GoogleCalendarEvent) {
     setSelectedEventId(event.id);
-    if (!linkedPhoneNumber) {
-      setActionStatus("Choose a Telnyx number on the Phone page before starting calls from Calendar.");
-      setView("phone");
+    const joinUrl = calendarEventJoinUrl(event);
+    if (!joinUrl) {
+      setActionStatus("No meeting link is saved for this event.");
       return;
     }
-    setActionStatus(`Starting call from ${linkedPhoneNumber} to ${event.phone ?? "the meeting contact"}.`);
+    setActionStatus(event.id === linkTrainingSessionEvent.id ? "Opening Link training scheduler." : `Opening ${event.title} meeting link.`);
+    window.open(joinUrl, "_blank");
   }
 
   function openInviteBot(event: GoogleCalendarEvent) {
@@ -9678,104 +10503,186 @@ function CalendarView({
     }
   }
 
-  function toggleEvent(event: GoogleCalendarEvent) {
-    setSelectedEventId((current) => current === event.id ? "" : event.id);
-    setActionStatus(currentEventActionLabel(event));
-  }
-
-  function currentEventActionLabel(event: GoogleCalendarEvent) {
-    return event.id === linkTrainingSessionEvent.id ? "Selected Link training scheduler." : `Selected ${event.title}.`;
-  }
-
   function renderCalendarEvent(event: GoogleCalendarEvent) {
-    const expanded = selectedEvent?.id === event.id;
     const trainingSession = event.id === linkTrainingSessionEvent.id;
-    const eventInvites = meetingInvites.filter((invite) => invite.eventId === event.id);
-    const joinLabel = trainingSession ? "Booking" : event.meetUrl ? "Meet" : event.phone ? "Phone" : "None";
+    const joinUrl = calendarEventJoinUrl(event);
     return (
-      <Fragment key={event.id}>
-        <div
-          className={`chatResultRow calendarResultRow ${expanded ? "expanded" : ""} ${trainingSession ? "sample" : ""}`}
-          role="row"
-          tabIndex={0}
-          onClick={() => toggleEvent(event)}
-          onKeyDown={(keyboardEvent) => {
-            if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
-              keyboardEvent.preventDefault();
-              toggleEvent(event);
-            }
-          }}
-        >
-          <span className="calendarEventNameCell" role="cell">
-            <strong>{event.title}</strong>
-            <small>{event.notes || "No description saved."}</small>
-          </span>
-          <span role="cell">
-            <strong>{calendarEventDateLabel(event)}</strong>
-            <small>{calendarEventTimeLabel(event)}</small>
-          </span>
-          <span role="cell">{event.attendees || "No attendees"}</span>
-          <span className="calendarJoinCell" role="cell">
-            <Badge tone={event.status === "live" ? "success" : "warning"}>{calendarEventStatusLabel(event)}</Badge>
-            <small>{joinLabel}</small>
-          </span>
+      <div
+        className={`chatResultRow calendarResultRow ${trainingSession ? "sample" : ""}`}
+        key={event.id}
+        role="row"
+        tabIndex={0}
+        onClick={() => openEventDetail(event)}
+        onKeyDown={(keyboardEvent) => {
+          if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
+            keyboardEvent.preventDefault();
+            openEventDetail(event);
+          }
+        }}
+      >
+        <span className="calendarEventNameCell" role="cell">
+          <span className="calendarEventPrimary">{event.title}</span>
+        </span>
+        <span className="calendarEventDateCell" role="cell">
+          <span className="calendarEventPrimary">{calendarEventDateLabel(event)}</span>
+          <small>{calendarEventTimeLabel(event)}</small>
+        </span>
+        <span className="calendarJoinCell" role="cell">
           <button
-            className="chatSessionOpenButton"
+            className="button secondary calendarJoinButton"
             type="button"
+            disabled={!joinUrl}
             onClick={(clickEvent) => {
               clickEvent.stopPropagation();
-              toggleEvent(event);
+              joinCalendarEvent(event);
             }}
-            aria-label={expanded ? `Collapse ${event.title}` : `Expand ${event.title}`}
-            title={expanded ? "Collapse event" : "Expand event"}
           >
-            <ChevronDown size={16} />
+            <ExternalLink size={14} />
+            Join
           </button>
-        </div>
-        {expanded && (
-          <div className="calendarEventInlineDetails calendarTableDetails" role="row">
-            <div className="calendarDetailBlock">
-              <strong>Event description</strong>
-              <p>{event.notes || "No description saved for this event."}</p>
+        </span>
+        <button
+          className="chatSessionOpenButton"
+          type="button"
+          onClick={(clickEvent) => {
+            clickEvent.stopPropagation();
+            openEventDetail(event);
+          }}
+          aria-label={`Open ${event.title}`}
+          title="Open event"
+        >
+          <ArrowRight size={16} />
+        </button>
+      </div>
+    );
+  }
+
+  function renderMeetingInvites(event: GoogleCalendarEvent) {
+    const eventInvites = meetingInvites.filter((invite) => invite.eventId === event.id);
+    if (eventInvites.length === 0) return null;
+    return (
+      <div className="meetingInviteList" aria-label="Meeting bot invites">
+        {eventInvites.map((invite) => (
+          <div className="meetingInviteRow" key={invite.id}>
+            <div>
+              <strong>{invite.botName}</strong>
+              <small>{invite.identity?.email || "AgentMail identity pending"}</small>
+              {invite.blockers.length > 0 && <small>{invite.blockers.join(" ")}</small>}
             </div>
-            <div className="phoneButtonRow">
-              <button className="button primary" onClick={() => startMeeting(event)} disabled={!event.meetUrl}>
-                <Play size={15} />
-                {trainingSession ? "Schedule session" : "Start meeting"}
+            <span className={`meetingInviteStatus ${invite.status}`}>{meetingInviteStatusLabel(invite.status)}</span>
+            {invite.status === "scheduled" && (
+              <button className="iconButton" type="button" title="Cancel live join" aria-label={`Cancel ${invite.botName} live join`} onClick={() => void cancelMeetingInvite(invite)}>
+                <X size={14} />
               </button>
-              <button className="button secondary" onClick={() => startCall(event)} disabled={!event.phone || trainingSession}>
-                <PhoneCall size={15} />
-                Start call
-              </button>
-              <button className="button secondary" onClick={() => openInviteBot(event)} disabled={trainingSession || !calendarReady}>
-                <Bot size={15} />
-                Invite bot
-              </button>
-            </div>
-            <small>{trainingSession ? "This opens Pete's Google Calendar booking page." : linkedPhoneNumber ? `Calls start from ${linkedPhoneNumber}.` : "Select a Telnyx number on Phone to place calls from Calendar."}</small>
-            {eventInvites.length > 0 && (
-              <div className="meetingInviteList" aria-label="Meeting bot invites">
-                {eventInvites.map((invite) => (
-                  <div className="meetingInviteRow" key={invite.id}>
-                    <div>
-                      <strong>{invite.botName}</strong>
-                      <small>{invite.identity?.email || "AgentMail identity pending"}</small>
-                      {invite.blockers.length > 0 && <small>{invite.blockers.join(" ")}</small>}
-                    </div>
-                    <span className={`meetingInviteStatus ${invite.status}`}>{meetingInviteStatusLabel(invite.status)}</span>
-                    {invite.status === "scheduled" && (
-                      <button className="iconButton" type="button" title="Cancel live join" aria-label={`Cancel ${invite.botName} live join`} onClick={() => void cancelMeetingInvite(invite)}>
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
             )}
-            {actionStatus && expanded && <div className="assistantNotice"><p>{actionStatus}</p></div>}
           </div>
-        )}
-      </Fragment>
+        ))}
+      </div>
+    );
+  }
+
+  function renderInviteModal() {
+    if (!inviteModalEvent) return null;
+    return (
+      <MeetingBotInviteModal
+        event={inviteModalEvent}
+        bots={meetingBots}
+        selectedBotId={inviteBotId}
+        setSelectedBotId={setInviteBotId}
+        liveJoin={inviteLiveJoin}
+        setLiveJoin={setInviteLiveJoin}
+        sendUpdates={inviteSendUpdates}
+        setSendUpdates={setInviteSendUpdates}
+        preflight={invitePreflight}
+        loading={invitePreflightLoading}
+        busy={inviteBusy}
+        error={inviteError}
+        onClose={() => setInviteModalEvent(null)}
+        onSubmit={() => void submitMeetingBotInvite()}
+      />
+    );
+  }
+
+  function renderCalendarMonth() {
+    const todayKey = calendarDateKey(new Date());
+    return (
+      <div className="calendarMonthView" aria-label={`${monthLabel} calendar`}>
+        <header className="calendarMonthHeader">
+          <strong>{monthLabel}</strong>
+        </header>
+        <div className="calendarMonthWeekdays" aria-hidden="true">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}
+        </div>
+        <div className="calendarMonthGrid" role="grid" aria-label={`${monthLabel} monthly calendar`}>
+          {monthCells.map((date, index) => {
+            if (!date) return <div className="calendarMonthDay empty" key={`empty-${index}`} role="gridcell" />;
+            const key = calendarDateKey(date);
+            const dayEvents = eventsByDay.get(key) ?? [];
+            return (
+              <div className={`calendarMonthDay ${key === todayKey ? "today" : ""}`} key={key} role="gridcell">
+                <span className="calendarMonthDate">{date.getDate()}</span>
+                <div className="calendarMonthEvents">
+                  {dayEvents.slice(0, 3).map((event) => (
+                    <button className="calendarMonthEvent" key={event.id} type="button" onClick={() => openEventDetail(event)}>
+                      {event.title}
+                    </button>
+                  ))}
+                  {dayEvents.length > 3 && <span className="calendarMonthMore">+{dayEvents.length - 3} more</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (selectedEvent) {
+    const trainingSession = selectedEvent.id === linkTrainingSessionEvent.id;
+    const joinUrl = calendarEventJoinUrl(selectedEvent);
+    return (
+      <section className="content calendarView calendarDetailView canonicalChat">
+        <header className="pageHeader">
+          <div className="detailTitleCluster">
+            <button className="iconButton" type="button" onClick={() => setSelectedEventId("")} aria-label="Back to calendar">
+              <ArrowLeft size={19} />
+            </button>
+            <div>
+              <h1>{selectedEvent.title}</h1>
+              <span>{calendarEventDateLabel(selectedEvent)} · {calendarEventTimeLabel(selectedEvent)}</span>
+            </div>
+          </div>
+          <button className="button primary" type="button" disabled={!joinUrl} onClick={() => joinCalendarEvent(selectedEvent)}>
+            <ExternalLink size={15} />
+            Join
+          </button>
+        </header>
+
+        <section className="calendarDetailSurface" aria-label={`${selectedEvent.title} details`}>
+          <div className="calendarDetailGrid">
+            <div><strong>When</strong><span>{calendarEventDateLabel(selectedEvent)} · {calendarEventTimeLabel(selectedEvent)}</span></div>
+            <div><strong>People</strong><span>{selectedEvent.attendees || "No attendees"}</span></div>
+            <div><strong>Meeting link</strong><span>{joinUrl || "No meeting link saved"}</span></div>
+          </div>
+          <div className="calendarDetailBlock">
+            <strong>Event description</strong>
+            <p>{selectedEvent.notes || "No description saved for this event."}</p>
+          </div>
+          <div className="phoneButtonRow">
+            <button className="button primary" type="button" disabled={!joinUrl} onClick={() => joinCalendarEvent(selectedEvent)}>
+              <ExternalLink size={15} />
+              {trainingSession ? "Open booking link" : "Join"}
+            </button>
+            <button className="button secondary" type="button" onClick={() => openInviteBot(selectedEvent)} disabled={trainingSession || !calendarReady}>
+              <Bot size={15} />
+              Invite bot
+            </button>
+          </div>
+          {renderMeetingInvites(selectedEvent)}
+          {actionStatus && <div className="assistantNotice"><p>{actionStatus}</p></div>}
+        </section>
+        {renderInviteModal()}
+      </section>
     );
   }
 
@@ -9797,7 +10704,7 @@ function CalendarView({
           }}
         >
           <Plus size={15} />
-          Add Event
+          New Event
         </button>
       </header>
 
@@ -9842,62 +10749,57 @@ function CalendarView({
       <section className="agentDirectorySection calendarDirectorySection" aria-label="Google Calendar events">
         <div className="agentDirectorySectionHeader calendarDirectorySectionHeader">
           <h2>Upcoming</h2>
-          <span>{futureVisibleEvents.length} {futureVisibleEvents.length === 1 ? "event" : "events"}</span>
-        </div>
-        <div className="chatSessionRows directoryTable calendarEventTable" role="table" aria-label="Google Calendar events">
-          <div className="chatResultRow directoryResultRow calendarResultRow chatResultRowHead" role="row">
-            <span role="columnheader">Event</span>
-            <span role="columnheader">When</span>
-            <span role="columnheader">People</span>
-            <span role="columnheader">Join</span>
-            <span role="columnheader" aria-label="Open event" />
-          </div>
-          <div className="chatResultRows" role="rowgroup">
-            {futureVisibleEvents.map(renderCalendarEvent)}
-            {calendarReady && loadingEvents && (
-              <div className="tableEmptyState" role="row">
-                <EmptyState title="Loading events" body="Loading Google Calendar events..." icon={CalendarDays} />
-              </div>
-            )}
-            {calendarReady && calendarError && (
-              <div className="tableEmptyState" role="row">
-                <EmptyState title="Calendar unavailable" body={calendarError} icon={CalendarDays} />
-              </div>
-            )}
-            {calendarReady && !loadingEvents && !calendarError && futureVisibleEvents.length === 0 && (
-              <div className="tableEmptyState" role="row">
-                <EmptyState
-                  title={calendarQuery ? "No events found" : "No upcoming Google Calendar events found"}
-                  body={calendarQuery
-                    ? "Try another search term or filter."
-                    : calendarEvents.length > 0
-                      ? `${calendarEvents.length} calendar events loaded, but none are upcoming after filtering.`
-                      : "Google Calendar is connected, but Link did not receive any events from your primary calendar for the next 180 days. Refresh or reconnect Google Workspace from Settings > Pairings if this looks wrong."}
-                  icon={CalendarDays}
-                />
-              </div>
-            )}
+          <div className="calendarViewToggle" role="group" aria-label="Calendar view">
+            <button className={calendarViewMode === "list" ? "active" : ""} type="button" onClick={() => setCalendarViewMode("list")}>
+              <List size={14} />
+              List
+            </button>
+            <button className={calendarViewMode === "calendar" ? "active" : ""} type="button" onClick={() => setCalendarViewMode("calendar")}>
+              <CalendarDays size={14} />
+              Calendar
+            </button>
           </div>
         </div>
+        {calendarViewMode === "list" ? (
+          <div className="chatSessionRows directoryTable calendarEventTable" role="table" aria-label="Google Calendar events">
+            <div className="chatResultRow directoryResultRow calendarResultRow chatResultRowHead" role="row">
+              <span role="columnheader">Event</span>
+              <span role="columnheader">When</span>
+              <span role="columnheader">Join</span>
+              <span role="columnheader" aria-label="Open event" />
+            </div>
+            <div className="chatResultRows" role="rowgroup">
+              {futureVisibleEvents.map(renderCalendarEvent)}
+              {calendarReady && loadingEvents && (
+                <div className="tableEmptyState" role="row">
+                  <EmptyState title="Loading events" body="Loading Google Calendar events..." icon={CalendarDays} />
+                </div>
+              )}
+              {calendarReady && calendarError && (
+                <div className="tableEmptyState" role="row">
+                  <EmptyState title="Calendar unavailable" body={calendarError} icon={CalendarDays} />
+                </div>
+              )}
+              {calendarReady && !loadingEvents && !calendarError && futureVisibleEvents.length === 0 && (
+                <div className="tableEmptyState" role="row">
+                  <EmptyState
+                    title={calendarQuery ? "No events found" : "No upcoming Google Calendar events found"}
+                    body={calendarQuery
+                      ? "Try another search term or filter."
+                      : calendarEvents.length > 0
+                        ? `${calendarEvents.length} calendar events loaded, but none are upcoming after filtering.`
+                        : "Google Calendar is connected, but Link did not receive any events from your primary calendar for the next 180 days. Refresh or reconnect Google Workspace from Settings > Auth if this looks wrong."}
+                    icon={CalendarDays}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          renderCalendarMonth()
+        )}
       </section>
-      {inviteModalEvent && (
-        <MeetingBotInviteModal
-          event={inviteModalEvent}
-          bots={meetingBots}
-          selectedBotId={inviteBotId}
-          setSelectedBotId={setInviteBotId}
-          liveJoin={inviteLiveJoin}
-          setLiveJoin={setInviteLiveJoin}
-          sendUpdates={inviteSendUpdates}
-          setSendUpdates={setInviteSendUpdates}
-          preflight={invitePreflight}
-          loading={invitePreflightLoading}
-          busy={inviteBusy}
-          error={inviteError}
-          onClose={() => setInviteModalEvent(null)}
-          onSubmit={() => void submitMeetingBotInvite()}
-        />
-      )}
+      {renderInviteModal()}
     </section>
   );
 }
@@ -10073,6 +10975,7 @@ function PhoneView({
   setTab,
   refresh,
   startManagedSkillSetupChat,
+  openSettingsTab,
   startEmailDraftChat = async () => {},
   openNewCall = () => {},
   standaloneInbox = false,
@@ -10089,8 +10992,9 @@ function PhoneView({
   setTab: (tab: PhoneViewTab) => void;
   refresh: () => Promise<void>;
   startManagedSkillSetupChat: (skill: { label: string; query: string; connectorName: string }) => Promise<void>;
+  openSettingsTab?: (tab: SettingsTab) => void;
   startEmailDraftChat?: (prompt: string) => Promise<void>;
-  openNewCall?: () => void;
+  openNewCall?: (phoneNumber?: string) => void;
   standaloneInbox?: boolean;
   hideSectionSidebar?: boolean;
   hideHeader?: boolean;
@@ -10106,6 +11010,11 @@ function PhoneView({
   const [selectedAssistantTab, setSelectedAssistantTab] = useState<"overview" | "phone" | "settings">("overview");
   const [numbers, setNumbers] = useState<PhoneNumberOption[]>([]);
   const [selectedNumber, setSelectedNumber] = useState<PhoneNumberOption | null>(null);
+  const [selectedNumberDetailId, setSelectedNumberDetailId] = useState("");
+  const [numberQuery, setNumberQuery] = useState("");
+  const [numberFiltersOpen, setNumberFiltersOpen] = useState(false);
+  const [numberTypeFilter, setNumberTypeFilter] = useState("all");
+  const [numberSortMode, setNumberSortMode] = useState<"az" | "za" | "type">("az");
   const [dialNumber, setDialNumber] = useState("");
   const [callQuery, setCallQuery] = useState("");
   const [callFiltersOpen, setCallFiltersOpen] = useState(false);
@@ -10113,6 +11022,8 @@ function PhoneView({
   const [callDirectionFilter, setCallDirectionFilter] = useState("all");
   const [callStatusFilter, setCallStatusFilter] = useState("all");
   const [callHistoryRows, setCallHistoryRows] = useState<PhoneCallHistoryRow[]>([]);
+  const [selectedCallDetailId, setSelectedCallDetailId] = useState("");
+  const [selectedCallDetailTab, setSelectedCallDetailTab] = useState<"overview" | "recording" | "transcription">("overview");
   const [loadingCallHistory, setLoadingCallHistory] = useState(false);
   const [hiddenCallIds, setHiddenCallIds] = useState<string[]>(() => readStoredIdList("telnyx-link-hidden-call-ids"));
   const [callBulkEdit, setCallBulkEdit] = useState(false);
@@ -10120,14 +11031,15 @@ function PhoneView({
   const [contactQuery, setContactQuery] = useState("");
   const [contactSource, setContactSource] = useState("all");
   const [contactFiltersOpen, setContactFiltersOpen] = useState(false);
+  const [contactSortMode, setContactSortMode] = useState<"az" | "za" | "source">("az");
   const [expandedContactId, setExpandedContactId] = useState("");
   const [googleContacts, setGoogleContacts] = useState<GoogleContact[]>([]);
   const [loadingGoogleContacts, setLoadingGoogleContacts] = useState(false);
   const [googleContactsError, setGoogleContactsError] = useState("");
   const [inboxQuery, setInboxQuery] = useState("");
   const [inboxFiltersOpen, setInboxFiltersOpen] = useState(false);
+  const [inboxRecipientFilter, setInboxRecipientFilter] = useState<"all" | "direct" | "group">("all");
   const [inboxThreads, setInboxThreads] = useState<GoogleInboxThreadSummary[]>([]);
-  const [readInboxThreads, setReadInboxThreads] = useState<GoogleInboxThreadSummary[]>([]);
   const [selectedInboxThreadId, setSelectedInboxThreadId] = useState("");
   const [selectedInboxThread, setSelectedInboxThread] = useState<GoogleInboxThread | null>(null);
   const [inboxConnectedOverride, setInboxConnectedOverride] = useState(false);
@@ -10177,6 +11089,7 @@ function PhoneView({
     !link.connectorIds.some((connectorId) => connectedContactSourceIds.has(connectorId)),
   );
   const addContactSkillLink = visibleContactSkillLinks[0] ?? contactManagedSkillLinks[0];
+  const contactPluginReady = googleContactsReady || contactManagedSkillLinks.some((link) => link.connectorIds.some((connectorId) => connectedContactSourceIds.has(connectorId)));
   const selectedContactSource = contactSources.find((source) => source.id === contactSource);
   const contactSourceMatches = (sourceId: string, selectedSourceId: string) => {
     if (selectedSourceId === "all") return true;
@@ -10205,23 +11118,84 @@ function PhoneView({
     });
   }, [assistantQuery, assistantStatusFilter, phoneAssistants]);
   const selectedAssistant = phoneAssistants.find((assistant) => assistant.id === selectedAssistantId) ?? null;
-  const filteredCallRows = callHistoryRows.filter((call) => {
-    if (hiddenCallIds.includes(call.id)) return false;
+  const callRollups = useMemo(() => {
+    const hiddenIds = new Set(hiddenCallIds);
+    return rollupPhoneCallsByNumber(callHistoryRows.filter((call) => !hiddenIds.has(call.id)));
+  }, [callHistoryRows, hiddenCallIds]);
+  const filteredCallRollups = callRollups.filter((call) => {
     const term = callQuery.trim().toLowerCase();
-    const matchesQuery = !term || `${call.contact} ${call.number} ${call.agentName} ${call.direction} ${call.status}`.toLowerCase().includes(term);
-    const matchesAgent = callAgentFilter === "all" || call.agentId === callAgentFilter;
-    const matchesDirection = callDirectionFilter === "all" || call.direction === callDirectionFilter;
-    const matchesStatus = callStatusFilter === "all" || call.status === callStatusFilter;
+    const searchText = [
+      call.contact,
+      call.number,
+      call.agentName,
+      call.direction,
+      call.status,
+      ...call.agentNames,
+      ...call.directions,
+      ...call.statuses,
+      ...call.calls.flatMap((entry) => [entry.callSessionId ?? "", entry.callLegId ?? "", entry.callControlId ?? "", entry.transcriptionText ?? ""]),
+    ].join(" ");
+    const matchesQuery = !term || searchText.toLowerCase().includes(term);
+    const matchesAgent = callAgentFilter === "all" || call.calls.some((entry) => entry.agentId === callAgentFilter);
+    const matchesDirection = callDirectionFilter === "all" || call.directions.includes(callDirectionFilter as PhoneCallHistoryRow["direction"]);
+    const matchesStatus = callStatusFilter === "all" || call.statuses.includes(callStatusFilter as PhoneCallHistoryRow["status"]);
     return matchesQuery && matchesAgent && matchesDirection && matchesStatus;
   });
+  const selectedCallDetail = selectedCallDetailId ? callRollups.find((call) => call.id === selectedCallDetailId) : undefined;
+  const numberTypeOptions = useMemo(() => {
+    const types = numbers
+      .map((number) => number.type || "Number")
+      .filter((type, index, all) => all.indexOf(type) === index)
+      .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
+    return ["all", ...types];
+  }, [numbers]);
+  const filteredNumbers = useMemo(() => {
+    const query = numberQuery.trim().toLowerCase();
+    return numbers
+      .filter((number) => {
+        const type = number.type || "Number";
+        const matchesType = numberTypeFilter === "all" || type === numberTypeFilter;
+        const searchText = [
+          number.phoneNumber,
+          number.countryCode,
+          number.locality,
+          number.region,
+          type,
+          number.status,
+          number.connectionId,
+          number.messagingProfileId,
+          number.emergencyAddressId,
+          ...(number.features ?? []),
+          ...(number.tags ?? []),
+        ].join(" ");
+        return matchesType && (!query || searchText.toLowerCase().includes(query));
+      })
+      .sort((left, right) => {
+        if (numberSortMode === "type") return (left.type || "Number").localeCompare(right.type || "Number", undefined, { sensitivity: "base" }) || left.phoneNumber.localeCompare(right.phoneNumber);
+        return numberSortMode === "za"
+          ? right.phoneNumber.localeCompare(left.phoneNumber)
+          : left.phoneNumber.localeCompare(right.phoneNumber);
+      });
+  }, [numberQuery, numberSortMode, numberTypeFilter, numbers]);
+  const selectedNumberDetail = selectedNumberDetailId ? numbers.find((number) => (number.id || number.phoneNumber) === selectedNumberDetailId) : undefined;
+  const selectedCallRecordings = selectedCallDetail?.calls.filter((call) => call.recordingUrl || call.recordingId) ?? [];
+  const selectedCallTranscripts = selectedCallDetail?.calls.filter((call) => call.transcriptionText || call.transcriptionId) ?? [];
   const visibleInboxThreads = useMemo(() => {
     const hidden = new Set(hiddenInboxThreadIds);
-    return inboxThreads.filter((thread) => !hidden.has(thread.threadId));
-  }, [hiddenInboxThreadIds, inboxThreads]);
-  const visibleReadInboxThreads = useMemo(() => {
-    const hidden = new Set(hiddenInboxThreadIds);
-    return readInboxThreads.filter((thread) => !hidden.has(thread.threadId));
-  }, [hiddenInboxThreadIds, readInboxThreads]);
+    return inboxThreads.filter((thread) => {
+      if (hidden.has(thread.threadId)) return false;
+      if (inboxRecipientFilter === "all") return true;
+      return (thread.recipientType || "group") === inboxRecipientFilter;
+    });
+  }, [hiddenInboxThreadIds, inboxRecipientFilter, inboxThreads]);
+  const inboxRecipientCounts = useMemo(() => inboxThreads.reduce(
+    (counts, thread) => {
+      if (hiddenInboxThreadIds.includes(thread.threadId)) return counts;
+      const type = thread.recipientType === "direct" ? "direct" : "group";
+      return { ...counts, [type]: counts[type] + 1 };
+    },
+    { direct: 0, group: 0 },
+  ), [hiddenInboxThreadIds, inboxThreads]);
   const telnyxBotContacts = [
     {
       id: "telnyx-link-bot",
@@ -10253,11 +11227,18 @@ function PhoneView({
     detail: string;
     connected?: boolean;
   }[] = [...telnyxBotContacts, ...googleContacts];
-  const filteredContacts = contactDirectory.filter((contact) => {
-    const matchesQuery = `${contact.name} ${contact.role} ${contact.phone} ${contact.detail}`.toLowerCase().includes(contactQuery.toLowerCase());
-    const matchesSource = contactSourceMatches(contact.source, contactSource);
-    return matchesQuery && matchesSource;
-  });
+  const filteredContacts = contactDirectory
+    .filter((contact) => {
+      const matchesQuery = `${contact.name} ${contact.role} ${contact.phone} ${contact.detail}`.toLowerCase().includes(contactQuery.toLowerCase());
+      const matchesSource = contactSourceMatches(contact.source, contactSource);
+      return matchesQuery && matchesSource;
+    })
+    .sort((left, right) => {
+      if (contactSortMode === "source") return left.source.localeCompare(right.source, undefined, { sensitivity: "base" }) || left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+      return contactSortMode === "za"
+        ? right.name.localeCompare(left.name, undefined, { sensitivity: "base" })
+        : left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+    });
 
   async function refreshCredentialStatus() {
     const groups = await linkApi.listCredentials();
@@ -10330,9 +11311,27 @@ function PhoneView({
     window.localStorage.setItem("telnyx-link-dismissed-contact-skill-prompts", JSON.stringify(dismissedContactSkillIds));
   }, [dismissedContactSkillIds]);
 
+  async function refreshGoogleContacts() {
+    if (!googleContactsReady) {
+      setGoogleContacts([]);
+      setGoogleContactsError("");
+      return;
+    }
+    setLoadingGoogleContacts(true);
+    setGoogleContactsError("");
+    try {
+      setGoogleContacts(await linkApi.listGoogleContacts());
+    } catch (err) {
+      setGoogleContacts([]);
+      setGoogleContactsError(err instanceof Error ? err.message : "Unable to load Google contacts.");
+    } finally {
+      setLoadingGoogleContacts(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
-    async function refreshGoogleContacts() {
+    async function refreshGoogleContactsForTab() {
       if (tab !== "contacts" || !googleContactsReady) {
         setGoogleContacts([]);
         setGoogleContactsError("");
@@ -10352,7 +11351,7 @@ function PhoneView({
         if (!cancelled) setLoadingGoogleContacts(false);
       }
     }
-    void refreshGoogleContacts();
+    void refreshGoogleContactsForTab();
     return () => {
       cancelled = true;
     };
@@ -10363,7 +11362,6 @@ function PhoneView({
     async function refreshInboxThreads() {
       if (tab !== "inbox" || !inboxReady) {
         setInboxThreads([]);
-        setReadInboxThreads([]);
         setSelectedInboxThreadId("");
         setSelectedInboxThread(null);
         setInboxError("");
@@ -10372,20 +11370,15 @@ function PhoneView({
       setLoadingInbox(true);
       setInboxError("");
       try {
-        const [threads, readThreads] = await Promise.all([
-          linkApi.listGoogleInboxThreads({ query: inboxQuery, maxResults: 20 }),
-          linkApi.listGoogleInboxThreads({ query: inboxReadQuery(inboxQuery), maxResults: 20 }),
-        ]);
+        const threads = await linkApi.listGoogleInboxThreads({ query: inboxQuery, maxResults: 20 });
         if (!cancelled) {
           setInboxThreads(threads);
-          setReadInboxThreads(readThreads);
-          const knownThreadIds = new Set([...threads, ...readThreads].map((thread) => thread.threadId));
+          const knownThreadIds = new Set(threads.map((thread) => thread.threadId));
           setSelectedInboxThreadId((current) => current && knownThreadIds.has(current) ? current : "");
         }
       } catch (err) {
         if (!cancelled) {
           setInboxThreads([]);
-          setReadInboxThreads([]);
           setInboxError(err instanceof Error ? err.message : "Unable to load Google Inbox threads.");
         }
       } finally {
@@ -10439,15 +11432,11 @@ function PhoneView({
       await linkApi.connectGoogleInboxWithGog();
       setInboxConnectedOverride(true);
       await refresh();
-      const [threads, readThreads] = await Promise.all([
-        linkApi.listGoogleInboxThreads({ query: inboxQuery, maxResults: 20 }),
-        linkApi.listGoogleInboxThreads({ query: inboxReadQuery(inboxQuery), maxResults: 20 }),
-      ]);
+      const threads = await linkApi.listGoogleInboxThreads({ query: inboxQuery, maxResults: 20 });
       setInboxThreads(threads);
-      setReadInboxThreads(readThreads);
       setSelectedInboxThreadId("");
       setSelectedInboxThread(null);
-      setInboxStatus("Google Inbox connected. Link can read threads and save drafts, but cannot send from Electron.");
+      setInboxStatus("Google Inbox connected. Link can read threads and save drafts. Sending happens in Gmail.");
     } catch (err) {
       setInboxError(err instanceof Error ? err.message : "Unable to connect Google Inbox.");
       setInboxStatus("");
@@ -10464,24 +11453,19 @@ function PhoneView({
     setLoadingInbox(true);
     setInboxError("");
     try {
-      const [threads, readThreads] = await Promise.all([
-        linkApi.listGoogleInboxThreads({ query: inboxQuery, maxResults: 20 }),
-        linkApi.listGoogleInboxThreads({ query: inboxReadQuery(inboxQuery), maxResults: 20 }),
-      ]);
+      const threads = await linkApi.listGoogleInboxThreads({ query: inboxQuery, maxResults: 20 });
       setInboxThreads(threads);
-      setReadInboxThreads(readThreads);
       setSelectedInboxThreadId("");
       setSelectedInboxThread(null);
       setInboxStatus(
         threads.length
-          ? `Loaded ${threads.length} unread inbox thread${threads.length === 1 ? "" : "s"} and ${readThreads.length} read thread${readThreads.length === 1 ? "" : "s"}.`
+          ? `Loaded ${threads.length} unread inbox thread${threads.length === 1 ? "" : "s"}.`
           : inboxQuery.trim()
             ? "No unread inbox messages matched this search."
             : "Inbox connected. 0 unread messages.",
       );
     } catch (err) {
       setInboxThreads([]);
-      setReadInboxThreads([]);
       setSelectedInboxThreadId("");
       setInboxError(err instanceof Error ? err.message : "Unable to search Google Inbox.");
     } finally {
@@ -10496,18 +11480,28 @@ function PhoneView({
       await refreshPhoneAssistants();
     } else if (tab === "calls") {
       await refreshPhoneCallHistory();
+    } else if (tab === "contacts") {
+      await refreshGoogleContacts();
     } else if (tab === "numbers" && telnyxApiReady) {
       await refreshAccountNumbers();
     }
     await refresh();
   }
 
-  function hideCallRow(call: PhoneCallHistoryRow) {
+  function hideCallRow(call: PhoneCallNumberRollup) {
     setHiddenCallIds((current) => {
-      const next = current.includes(call.id) ? current : [...current, call.id];
+      const hiddenIds = new Set(current);
+      call.calls.forEach((entry) => hiddenIds.add(entry.id));
+      const next = [...hiddenIds];
       window.localStorage.setItem("telnyx-link-hidden-call-ids", JSON.stringify(next));
       return next;
     });
+    if (selectedCallDetailId === call.id) setSelectedCallDetailId("");
+  }
+
+  function openCallDetails(callId: string) {
+    setSelectedCallDetailId(callId);
+    setSelectedCallDetailTab("overview");
   }
 
   function setCallRowSelected(callId: string, selected: boolean) {
@@ -10521,7 +11515,7 @@ function PhoneView({
 
   function hideSelectedCallRows() {
     const selectedIds = new Set(selectedCallRowIds);
-    filteredCallRows.filter((call) => selectedIds.has(call.id)).forEach(hideCallRow);
+    filteredCallRollups.filter((call) => selectedIds.has(call.id)).forEach(hideCallRow);
     setSelectedCallRowIds([]);
     setCallBulkEdit(false);
   }
@@ -10579,7 +11573,7 @@ function PhoneView({
         ? await linkApi.updateGoogleInboxDraft({ ...draftInput, draftId: savedInboxDraft.draftId })
         : await linkApi.createGoogleInboxDraft(draftInput);
       setSavedInboxDraft(draft);
-      setInboxStatus("Saved to Gmail Drafts. Link still cannot send this message from Electron.");
+      setInboxStatus("Saved to Gmail Drafts. Sending happens in Gmail.");
     } catch (err) {
       setInboxError(err instanceof Error ? err.message : "Unable to save Gmail draft.");
     } finally {
@@ -10629,21 +11623,18 @@ function PhoneView({
 	            openThread();
 	          }
 	        }}
-	        aria-label={`Open inbox thread ${thread.subject || "Untitled"}`}
+        aria-label={`Open inbox thread ${thread.subject || "Untitled"}`}
       >
         <span className="phoneInboxFromCell" role="cell">
-          {thread.from || "Unknown sender"}
+          <strong>{thread.from || "Unknown sender"}</strong>
         </span>
         <span className="phoneInboxSubjectCell" role="cell">
-          <strong>{thread.subject || "No subject"}</strong>
-          <small>{thread.snippet || "No preview available."}</small>
+          <strong>{thread.subject || "(No subject)"}</strong>
+          {thread.snippet && <small>{thread.snippet}</small>}
         </span>
-        <span role="cell">{thread.date || "No date"}</span>
-        <span role="cell">
-          <em>{thread.unread ? "Unread" : "Read"}</em>
-        </span>
-	        <button
-	          className="chatSessionOpenButton"
+        <span className="phoneInboxDateCell" role="cell">{thread.date || "No date"}</span>
+        <button
+          className="chatSessionOpenButton"
 	          type="button"
 	          onClick={(event) => {
 	            event.stopPropagation();
@@ -10661,6 +11652,12 @@ function PhoneView({
   useEffect(() => {
     if (tab === "numbers" && telnyxApiReady) void refreshAccountNumbers();
   }, [tab, telnyxApiReady]);
+
+  useEffect(() => {
+    if (selectedNumberDetailId && !numbers.some((number) => (number.id || number.phoneNumber) === selectedNumberDetailId)) {
+      setSelectedNumberDetailId("");
+    }
+  }, [numbers, selectedNumberDetailId]);
 
   async function refreshAccountNumbers() {
     setBusy(true);
@@ -10687,8 +11684,8 @@ function PhoneView({
     setLinkedPhoneNumber(selectedNumber?.phoneNumber ?? "");
   }, [selectedNumber, setLinkedPhoneNumber]);
 
-  function dismissContactSkillPrompt(id: string) {
-    setDismissedContactSkillIds((current) => current.includes(id) ? current : [...current, id]);
+  function openNumberDetails(number: PhoneNumberOption) {
+    setSelectedNumberDetailId(number.id || number.phoneNumber);
   }
 
   const phoneSectionHeading = {
@@ -10702,19 +11699,40 @@ function PhoneView({
   const showSectionSidebar = !standaloneInbox && !hideSectionSidebar;
   const sectionParent = headerParent ?? (standaloneInbox ? "Link" : "Calls");
   const phoneHeaderAction = tab === "calls" ? (
-    <button className="button primary" type="button" onClick={openNewCall}>
+    <button className="button primary" type="button" onClick={() => openNewCall()}>
       <Plus size={15} />
       New Call
     </button>
   ) : tab === "inbox" ? (
     <button className="button primary" type="button" onClick={() => void startInboxDraftEmailChat()}>
       <Plus size={15} />
-      Draft Email
+      New Email
     </button>
   ) : tab === "numbers" ? (
     <button className="button primary" type="button" onClick={() => window.open("https://portal.telnyx.com/#/app/numbers/my-numbers", "_blank")}>
       Open Telnyx Portal
     </button>
+  ) : tab === "contacts" ? (
+    <div className="headerActions contactHeaderActions">
+      {!contactPluginReady && (
+        <>
+          <button className="button secondary" type="button" onClick={() => openSettingsTab?.("auth") ?? setView("settings")}>
+            Auth
+          </button>
+          <button className="button secondary" type="button" onClick={() => openSettingsTab?.("plugins") ?? setView("settings")}>
+            Plugins
+          </button>
+        </>
+      )}
+      <button
+        className="button primary contactAddButton"
+        type="button"
+        onClick={() => void startManagedSkillSetupChat(addContactSkillLink)}
+      >
+        <Plus size={15} />
+        Add Contact
+      </button>
+    </div>
   ) : null;
 
   return (
@@ -10734,7 +11752,7 @@ function PhoneView({
           />
         )}
         <div className="pageSectionMain">
-          {!hideHeader && <PageSectionHeader parent={sectionParent} title={phoneHeadingTitle} action={phoneHeaderAction} />}
+          {!hideHeader && !(tab === "calls" && selectedCallDetail) && !(tab === "numbers" && selectedNumberDetail) && <PageSectionHeader parent={sectionParent} title={phoneHeadingTitle} action={phoneHeaderAction} />}
 
       {tab === "inbox" && selectedInboxThreadId && (
         <section className="phoneInboxTable phoneContentTable phoneInboxDetailScreen" aria-label="Selected inbox thread">
@@ -10846,7 +11864,7 @@ function PhoneView({
             <div className="phoneSetupAlert inboxSetupAlert">
               <div>
                 <strong>Connect Google Inbox to read threads and save Gmail drafts.</strong>
-                <p>Link uses gog with an app-level no-send guard. Drafts are saved to Gmail Drafts, and sending happens only in Gmail outside Electron.</p>
+                <p>Link uses gog with an app-level no-send guard. Drafts are saved to Gmail Drafts, and sending happens only in Gmail.</p>
               </div>
               <button
                 className="runtimeSettingsButton"
@@ -10879,7 +11897,7 @@ function PhoneView({
                   onKeyDown={(event) => {
                     if (event.key === "Enter") void searchInboxThreads();
                   }}
-                  placeholder="Search unread messages, senders, subjects, or snippets"
+                  placeholder="Search inbox messages, senders, subjects, or snippets"
                   disabled={!inboxReady}
                 />
               </div>
@@ -10890,6 +11908,14 @@ function PhoneView({
           {inboxFiltersOpen && (
             <div className="chatFilterBar phoneInboxFilterBar" role="group" aria-label="Inbox filters">
               <span className="chatFilterCount">{visibleInboxThreads.length} unread threads</span>
+              <label className="agentFilter">
+                <span>Recipient</span>
+                <select value={inboxRecipientFilter} onChange={(event) => setInboxRecipientFilter(event.target.value as "all" | "direct" | "group")}>
+                  <option value="all">All unread</option>
+                  <option value="direct">My alias ({inboxRecipientCounts.direct})</option>
+                  <option value="group">Group alias ({inboxRecipientCounts.group})</option>
+                </select>
+              </label>
               <button
                 className="button secondary"
                 type="button"
@@ -10909,16 +11935,11 @@ function PhoneView({
           )}
 
           <div className="phoneInboxShell">
-            <div className="phoneInboxSectionHeader">
-              <span>Unread</span>
-              <small>{visibleInboxThreads.length} unread</small>
-            </div>
             <div className="chatSessionRows directoryTable phoneInboxThreadList phoneInboxRows" role="table" aria-label="Unread inbox threads">
               <div className="chatResultRow directoryResultRow phoneInboxRow phoneInboxRowHead chatResultRowHead" role="row">
                 <span role="columnheader">From</span>
                 <span role="columnheader">Subject</span>
-                <span role="columnheader">Last</span>
-                <span role="columnheader">Status</span>
+                <span role="columnheader">Date</span>
                 <span role="columnheader" aria-label="Open thread" />
               </div>
               <div className="chatResultRows" role="rowgroup">
@@ -10929,56 +11950,22 @@ function PhoneView({
                   <span className="phoneInboxSubjectCell" role="cell">
                     <strong>
                     {loadingInbox
-                      ? "Checking unread messages..."
+                      ? "Checking inbox messages..."
                       : inboxReady
                         ? inboxQuery.trim()
-                          ? "No unread messages match this search."
+                          ? "No unread inbox messages match this search."
                           : "Inbox connected. 0 unread messages."
-                        : "Connect Google Inbox to load unread messages."}
+                        : "Connect Google Inbox to load messages."}
                     </strong>
                     <small>
                     {inboxReady
-                      ? "Link can read threads and save Gmail drafts. Sending stays outside Electron."
+                      ? "Link shows unread Gmail threads only. Use filters to separate direct mail from group-alias mail."
                       : "Link can read Gmail threads and save drafts after the Inbox connector is connected."}
                     </small>
-                  </span>
-                  <span role="cell">{inboxReady ? "Now" : "Not connected"}</span>
-                  <span role="cell">
-                    <em>{inboxReady ? "Connected" : "Setup"}</em>
-                  </span>
-                  <span className="phoneInboxOpenCell" role="cell" aria-hidden="true" />
-                </div>
-              )}
-              </div>
-            </div>
-
-            <div className="phoneInboxSectionHeader">
-              <span>Everything else</span>
-              <small>{visibleReadInboxThreads.length} read</small>
-            </div>
-            <div className="chatSessionRows directoryTable phoneInboxThreadList phoneInboxRows phoneInboxReadRows" role="table" aria-label="Read inbox threads">
-              <div className="chatResultRow directoryResultRow phoneInboxRow phoneInboxRowHead chatResultRowHead" role="row">
-                <span role="columnheader">From</span>
-                <span role="columnheader">Subject</span>
-                <span role="columnheader">Last</span>
-                <span role="columnheader">Status</span>
-                <span role="columnheader" aria-label="Open thread" />
-              </div>
-              <div className="chatResultRows" role="rowgroup">
-              {visibleReadInboxThreads.map(renderInboxThreadRow)}
-              {visibleReadInboxThreads.length === 0 && (
-                <div className="chatResultRow directoryResultRow phoneInboxRow phoneInboxConnectedRow" role="row">
-                  <span className="phoneInboxFromCell" role="cell">Google Inbox</span>
-                  <span className="phoneInboxSubjectCell" role="cell">
-                    <strong>{loadingInbox ? "Checking read messages..." : "No read messages found."}</strong>
-                    <small>Read Gmail messages will appear here when Link finds matching threads.</small>
-                  </span>
-                  <span role="cell">{inboxReady ? "Now" : "Not connected"}</span>
-                  <span role="cell">
-                    <em>{inboxReady ? "Read" : "Setup"}</em>
-                  </span>
-                  <span className="phoneInboxOpenCell" role="cell" aria-hidden="true" />
-                </div>
+	                  </span>
+	                  <span className="phoneInboxDateCell" role="cell">{inboxReady ? "Today" : "Not connected"}</span>
+	                  <span className="phoneInboxOpenCell" role="cell" aria-hidden="true" />
+	                </div>
               )}
               </div>
             </div>
@@ -11151,87 +12138,61 @@ function PhoneView({
       )}
 
       {tab === "contacts" && (
-        <section className="phoneContactTable phoneContentTable" aria-label="Connected contacts">
-          <header className="phoneNumberTableHeader">
-            <div className="tabPageActionBar">
-              <button
-                className="button primary contactAddButton"
-                type="button"
-                onClick={() => void startManagedSkillSetupChat(addContactSkillLink)}
-              >
-                <Plus size={15} />
-                Add Contact
-              </button>
-            </div>
-          </header>
-          <div className="phoneContactControls">
-            <div className="contactSearchControls">
+        <>
+          <div className="chatSearchRow phoneContactSearchRow">
               <button
                 className={`iconButton agentFilterButton ${contactFiltersOpen || contactSource !== "all" ? "selected" : ""}`}
                 type="button"
-                aria-label="Filter contacts"
-                title={selectedContactSource ? `Source: ${selectedContactSource.label}` : "Filter contacts"}
+              aria-label={contactFiltersOpen ? "Hide contact filters" : "Show contact filters"}
+              title={selectedContactSource ? `Source: ${selectedContactSource.label}` : contactFiltersOpen ? "Hide contact filters" : "Show contact filters"}
                 onClick={() => setContactFiltersOpen((open) => !open)}
               >
-                <SlidersHorizontal size={18} />
+              <SlidersHorizontal size={16} />
               </button>
-              <label className="componentField">
-                <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="Search connected contacts..." />
-              </label>
+            <div className="explorerSearch compactSearch">
+              <Search size={16} />
+              <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="Search contacts, numbers, sources, or roles" />
             </div>
-            {contactFiltersOpen && (
-              <div className="contactFilterPanel" role="group" aria-label="Contact source filters">
+            <label className="wikiSelectField settingsDirectorySort">
+              <select value={contactSortMode} onChange={(event) => setContactSortMode(event.target.value as "az" | "za" | "source")}>
+                <option value="az">A-Z</option>
+                <option value="za">Z-A</option>
+                <option value="source">Source</option>
+              </select>
+            </label>
+            <TableRefreshButton onClick={refreshPhoneTableThenAll} disabled={loadingGoogleContacts} label="Refresh contacts" />
+          </div>
+          {contactFiltersOpen && (
+            <div className="chatFilterBar phoneContactFilterBar" role="group" aria-label="Contact source filters">
+              <span className="chatFilterCount">{filteredContacts.length} contacts</span>
+              <label className="agentFilter">
+                <span>Source</span>
+                <select
+                  value={contactSource}
+                  onChange={(event) => {
+                    setContactSource(event.target.value);
+                    setContactFiltersOpen(false);
+                  }}
+                >
                 {[{ id: "all", label: "All sources" }, ...contactSources].map((source) => (
-                  <button
+                  <option
                     key={source.id}
-                    className={contactSource === source.id ? "selected" : ""}
-                    type="button"
-                    onClick={() => {
-                      setContactSource(source.id);
-                      setContactFiltersOpen(false);
-                    }}
+                    value={source.id}
                   >
                     {source.label}
-                  </button>
+                  </option>
                 ))}
-              </div>
-            )}
-            {visibleContactSkillLinks.length > 0 && (
-              <div className="contactMcpLinks" aria-label="Connect contact MCPs through managed skills">
-                {visibleContactSkillLinks.map((link) => (
-                  <article className="contactMcpLink" key={link.id}>
-                    <button
-                      className="contactMcpDismiss"
-                      type="button"
-                      onClick={() => dismissContactSkillPrompt(link.id)}
-                      aria-label={`Dismiss ${link.label}`}
-                      title={`Dismiss ${link.label}`}
-                    >
-                      <X size={14} />
-                    </button>
-                    <span>
-                      <strong>{link.label}</strong>
-                      <small>Connect contact sync through Skills.</small>
-                    </span>
-                    <button
-                      className="contactMcpEnable"
-                      type="button"
-                      onClick={() => void startManagedSkillSetupChat(link)}
-                    >
-                      <Zap size={14} />
-                      Connect
-                    </button>
-                  </article>
-                ))}
-              </div>
-            )}
-          </div>
+                </select>
+              </label>
+            </div>
+          )}
+          <section className="phoneContactTable phoneContentTable" aria-label="Connected contacts">
           <div className="contactResults phoneContactRows" role="table" aria-label="Connected contacts">
             <div className="phoneContactRow phoneContactRowHead" role="row">
               <span role="columnheader">Contact</span>
               <span role="columnheader">Number</span>
               <span role="columnheader">Source</span>
-              <span role="columnheader">Status</span>
+              <span role="columnheader" aria-label="Open contact" />
             </div>
             {filteredContacts.map((contact) => {
               const source = contactSources.find((item) => item.id === contact.source || item.connectorIds.includes(contact.source));
@@ -11241,24 +12202,33 @@ function PhoneView({
               const selected = dialNumber === contact.phone;
               return (
                 <div className={`contactResult ${expanded ? "expanded" : ""} ${selected ? "selected" : ""}`} key={contact.id}>
-                  <button
+                  <div
                     className="contactResultMain"
-                    onClick={() => setExpandedContactId((current) => current === contact.id ? "" : contact.id)}
                     title={connected ? `Show ${contact.name}` : `Connect ${source?.label ?? contact.source} first`}
+                    role="row"
                   >
-                    <span>
+                    <span role="cell">
                       <strong>{contact.name}</strong>
                       <small>{contact.role}</small>
                     </span>
-                    <span>{contact.phone || "No callable number"}</span>
-                    <span>{source?.label ?? contact.source}</span>
-                    <span className="contactResultActions">
-                      <em className={callable ? "contactSourceBadge connected" : "contactSourceBadge"}>{callable ? "Callable" : "setup needed"}</em>
-                      <ChevronDown size={18} />
-                    </span>
-                  </button>
+                    <span role="cell">{contact.phone || "No callable number"}</span>
+                    <span role="cell">{source?.label ?? contact.source}</span>
+                    <button
+                      className="chatSessionOpenButton"
+                      type="button"
+                      onClick={() => setExpandedContactId((current) => current === contact.id ? "" : contact.id)}
+                      aria-label={`Open ${contact.name} contact details`}
+                      title="Open details"
+                    >
+                      <ArrowRight size={16} />
+                    </button>
+                  </div>
                   {expanded && (
                     <div className="contactResultDetails">
+                      <div>
+                        <strong>Status</strong>
+                        <span>{callable ? "Callable" : "Setup needed"}</span>
+                      </div>
                       <div>
                         <strong>Source detail</strong>
                         <span>{contact.detail}</span>
@@ -11292,171 +12262,455 @@ function PhoneView({
             )}
           </div>
         </section>
+        </>
       )}
 
       {tab === "calls" && (
-        <>
-          <div className="chatSearchRow phoneCallSearchRow">
-            <button
-              className={`iconButton agentFilterButton ${callFiltersOpen || callAgentFilter !== "all" || callDirectionFilter !== "all" || callStatusFilter !== "all" ? "selected" : ""}`}
-              type="button"
-              aria-label={callFiltersOpen ? "Hide call filters" : "Show call filters"}
-              title={callFiltersOpen ? "Hide call filters" : "Show call filters"}
-              onClick={() => setCallFiltersOpen((open) => !open)}
-            >
-              <SlidersHorizontal size={16} />
-            </button>
-            <div className="explorerSearch compactSearch">
-              <Search size={16} />
-              <input
-                value={callQuery}
-                onChange={(event) => setCallQuery(event.target.value)}
-                placeholder="Search calls, numbers, contacts, or agents"
-              />
-            </div>
-            <button
-              className={`iconButton agentFilterButton ${callBulkEdit ? "selected" : ""}`}
-              type="button"
-              aria-label={callBulkEdit ? "Exit bulk edit" : "Edit calls"}
-              title={callBulkEdit ? "Exit bulk edit" : "Edit calls"}
-              onClick={toggleCallBulkEdit}
-            >
-              <Pencil size={16} />
-            </button>
-            <TableRefreshButton onClick={refreshPhoneTableThenAll} disabled={loadingCallHistory} label="Refresh calls" />
-          </div>
-          {callBulkEdit && (
-            <BulkEditControls
-              active={callBulkEdit}
-              selectedCount={selectedCallRowIds.length}
-              onToggle={toggleCallBulkEdit}
-              onArchive={hideSelectedCallRows}
-              onDelete={hideSelectedCallRows}
-            />
-          )}
-          {callFiltersOpen && (
-            <div className="chatFilterBar phoneCallFilterBar" role="group" aria-label="Call filters">
-              <span className="chatFilterCount">{filteredCallRows.length} calls</span>
-              <label className="agentFilter">
-                <span>Agent</span>
-                <select value={callAgentFilter} onChange={(event) => setCallAgentFilter(event.target.value)}>
-                  <option value="all">All agents</option>
-                  {callAgentOptions.map((agent) => <option key={agent.id} value={agent.id}>{agent.label}</option>)}
-                </select>
-              </label>
-              <label className="agentFilter">
-                <span>Direction</span>
-                <select value={callDirectionFilter} onChange={(event) => setCallDirectionFilter(event.target.value)}>
-                  <option value="all">All directions</option>
-                  <option value="inbound">Inbound</option>
-                  <option value="outbound">Outbound</option>
-                </select>
-              </label>
-              <label className="agentFilter">
-                <span>Status</span>
-                <select value={callStatusFilter} onChange={(event) => setCallStatusFilter(event.target.value)}>
-                  <option value="all">All statuses</option>
-                  <option value="answered">Answered</option>
-                  <option value="missed">Missed</option>
-                  <option value="voicemail">Voicemail</option>
-                  <option value="failed">Failed</option>
-                </select>
-              </label>
-            </div>
-          )}
-          <section className={`phoneCallsTable phoneContentTable ${callBulkEdit ? "bulkEditing" : ""}`} aria-label="Recent calls">
-            <div className={`phoneCallRows ${filteredCallRows.length === 0 ? "empty" : ""}`} role="table" aria-label="Recent calls">
-              <div className="phoneCallRow phoneCallRowHead" role="row">
-                <span className="bulkSelectCell" role="columnheader" aria-label="Select calls" />
-                <span role="columnheader">Contact</span>
-                <span role="columnheader">Number</span>
-                <span role="columnheader">Agent</span>
-                <span role="columnheader">Time</span>
-                <span role="columnheader">Status</span>
+        selectedCallDetail ? (
+          <section className="content phoneCallDetailView chatDetailView">
+            <header className="pageHeader phoneCallDetailHeader">
+              <div className="chatDetailTitleGroup">
+                <button
+                  className="iconButton chatDetailBackButton"
+                  type="button"
+                  onClick={() => setSelectedCallDetailId("")}
+                  aria-label="Back to calls"
+                  title="Back to calls"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                <h1>{selectedCallDetail.contact}</h1>
+                <p>{selectedCallDetail.number} · {selectedCallDetail.calls.length} {selectedCallDetail.calls.length === 1 ? "call" : "calls"} · Last {selectedCallDetail.time}</p>
               </div>
-              {filteredCallRows.map((call) => (
-                <div className="phoneCallRow" role="row" key={call.id}>
-                  <BulkSelectCell
-                    active={callBulkEdit}
-                    checked={selectedCallRowIds.includes(call.id)}
-                    label={`Select ${call.contact} call`}
-                    onChange={(checked) => setCallRowSelected(call.id, checked)}
-                  />
-                  <strong role="cell">{call.contact}</strong>
-                  <span role="cell">{call.number}</span>
-                  <span role="cell">{call.agentName}</span>
-                  <span role="cell">{call.time}</span>
-                  <span role="cell"><em>{call.status}</em></span>
-                </div>
-              ))}
-              {filteredCallRows.length === 0 && (
-                <div className="tableEmptyState" role="row">
-                  <EmptyState
-                    title={loadingCallHistory ? "Loading call history..." : callQuery.trim() || callAgentFilter !== "all" || callDirectionFilter !== "all" || callStatusFilter !== "all" ? "No calls found" : "No call history yet"}
-                    body={loadingCallHistory ? "Pulling recent Telnyx call detail records." : callQuery.trim() || callAgentFilter !== "all" || callDirectionFilter !== "all" || callStatusFilter !== "all" ? "Try another search term or filter." : "Recent Telnyx account calls will appear here after call detail records are available."}
-                    icon={Phone}
-                  />
+              <div className="headerActions phoneCallDetailActions">
+                <Badge tone={selectedCallDetail.status === "answered" ? "success" : selectedCallDetail.status === "failed" ? "danger" : "warning"}>{selectedCallDetail.status}</Badge>
+                <button className="button primary" type="button" onClick={() => openNewCall(selectedCallDetail.number)}>
+                  <Plus size={15} />
+                  New Call
+                </button>
+              </div>
+            </header>
+            <section className="chatDetailSurface phoneCallDetailSurface" aria-label={`${selectedCallDetail.contact} call details`}>
+              <div className="chatReviewTabs phoneCallReviewTabs" role="tablist" aria-label={`${selectedCallDetail.contact} call details`}>
+                {(["overview", "recording", "transcription"] as const).map((detailTab) => (
+                  <button
+                    key={detailTab}
+                    className={selectedCallDetailTab === detailTab ? "selected" : ""}
+                    type="button"
+                    onClick={() => setSelectedCallDetailTab(detailTab)}
+                    aria-selected={selectedCallDetailTab === detailTab}
+                    role="tab"
+                  >
+                    {detailTab === "overview" && <PhoneCall size={16} />}
+                    {detailTab === "recording" && <MonitorPlay size={16} />}
+                    {detailTab === "transcription" && <FileText size={16} />}
+                    <span>{detailTab === "overview" ? "Overview" : detailTab === "recording" ? "Recording" : "Transcription"}</span>
+                  </button>
+                ))}
+              </div>
+              {selectedCallDetailTab === "overview" && (
+                <div className="phoneCallDetailPane compact">
+                  <div className="phoneCallDataTable phoneCallSnapshotTable" role="table" aria-label="Number snapshot">
+                    <div className="phoneCallDataRow phoneCallDataRowHead" role="row">
+                      <span role="columnheader">Metric</span>
+                      <span role="columnheader">Value</span>
+                      <span role="columnheader">Detail</span>
+                    </div>
+                    <div className="phoneCallDataRow" role="row">
+                      <strong role="cell">Outcome</strong>
+                      <span role="cell"><em className={selectedCallDetail.status}>{selectedCallDetail.status}</em></span>
+                      <span role="cell">{phoneCallRollupSummary(selectedCallDetail)}</span>
+                    </div>
+                    <div className="phoneCallDataRow" role="row">
+                      <strong role="cell">Number</strong>
+                      <span role="cell">{selectedCallDetail.number}</span>
+                      <span role="cell">{selectedCallDetail.direction} · Last {selectedCallDetail.time}</span>
+                    </div>
+                    <div className="phoneCallDataRow" role="row">
+                      <strong role="cell">Calls</strong>
+                      <span role="cell">{selectedCallDetail.calls.length}</span>
+                      <span role="cell">Total duration {formatCallDuration(selectedCallDetail.totalDurationSeconds)}</span>
+                    </div>
+                    <div className="phoneCallDataRow" role="row">
+                      <strong role="cell">Agents</strong>
+                      <span role="cell">{selectedCallDetail.agentName}</span>
+                      <span role="cell">{selectedCallDetail.agentNames.join(", ")}</span>
+                    </div>
+                    <div className="phoneCallDataRow" role="row">
+                      <strong role="cell">Evidence</strong>
+                      <span role="cell">{selectedCallDetail.recordingCount} recordings</span>
+                      <span role="cell">{selectedCallDetail.transcriptionCount} transcripts · {selectedCallDetail.statuses.join(", ")}</span>
+                    </div>
+                  </div>
+                  <div className="phoneCallDataTable phoneCallHistoryTable" role="table" aria-label="Call history">
+                    <div className="phoneCallDataRow phoneCallDataRowHead" role="row">
+                      <span role="columnheader">Last</span>
+                      <span role="columnheader">Direction</span>
+                      <span role="columnheader">Status</span>
+                      <span role="columnheader">Agent</span>
+                      <span role="columnheader">Duration</span>
+                      <span role="columnheader">Session</span>
+                    </div>
+                    {selectedCallDetail.calls.map((call) => (
+                      <div className="phoneCallDataRow" role="row" key={call.id}>
+                        <strong role="cell">{call.startedAt ? new Date(call.startedAt).toLocaleString() : call.time}</strong>
+                        <span role="cell">{call.direction}</span>
+                        <span role="cell"><em className={call.status}>{call.status}</em></span>
+                        <span role="cell">{call.agentName}</span>
+                        <span role="cell">{formatCallDuration(call.durationSeconds)}</span>
+                        <span role="cell">{call.callSessionId || call.callLegId || call.callControlId || call.id}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
-            </div>
+              {selectedCallDetailTab === "recording" && (
+                <div className="phoneCallDetailPane compact">
+                  <div className="phoneCallDataTable phoneCallArtifactTable" role="table" aria-label="Call recordings">
+                    <div className="phoneCallDataRow phoneCallDataRowHead" role="row">
+                      <span role="columnheader">Last</span>
+                      <span role="columnheader">Recording ID</span>
+                      <span role="columnheader">Session</span>
+                      <span role="columnheader" aria-label="Open recording" />
+                    </div>
+                    {selectedCallRecordings.map((call) => (
+                      <div className="phoneCallDataRow" role="row" key={call.id}>
+                        <strong role="cell">{call.startedAt ? new Date(call.startedAt).toLocaleString() : call.time}</strong>
+                        <span role="cell">{call.recordingId || "Not returned"}</span>
+                        <span role="cell">{call.callSessionId || call.callLegId || call.callControlId || call.id}</span>
+                        <span role="cell">
+                        {call.recordingUrl && (
+                          <button className="button secondary" type="button" onClick={() => window.open(call.recordingUrl, "_blank")}>
+                            <ExternalLink size={15} />
+                            Open
+                          </button>
+                        )}
+                        </span>
+                      </div>
+                    ))}
+                    {selectedCallRecordings.length === 0 && (
+                      <div className="phoneCallDataRow phoneCallEmptyRow" role="row">
+                        <span role="cell">No recording metadata has been returned for calls to this number.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {selectedCallDetailTab === "transcription" && (
+                <div className="phoneCallDetailPane compact">
+                  <div className="phoneCallDataTable phoneCallTranscriptTable" role="table" aria-label="Call transcriptions">
+                    <div className="phoneCallDataRow phoneCallDataRowHead" role="row">
+                      <span role="columnheader">Last</span>
+                      <span role="columnheader">Agent</span>
+                      <span role="columnheader">Transcription ID</span>
+                      <span role="columnheader">Transcript</span>
+                    </div>
+                    {selectedCallTranscripts.map((call) => (
+                      <div className="phoneCallDataRow" role="row" key={call.id}>
+                        <strong role="cell">{call.startedAt ? new Date(call.startedAt).toLocaleString() : call.time}</strong>
+                        <span role="cell">{call.agentName}</span>
+                        <span role="cell">{call.transcriptionId || "Not returned"}</span>
+                        <span className="phoneCallTranscriptCell" role="cell">{call.transcriptionText || "Transcript metadata was returned, but no transcript text was included."}</span>
+                      </div>
+                    ))}
+                    {selectedCallTranscripts.length === 0 && (
+                      <div className="phoneCallDataRow phoneCallEmptyRow" role="row">
+                        <span role="cell">No transcript metadata has been returned for calls to this number.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
           </section>
-        </>
+        ) : (
+          <>
+            <div className="chatSearchRow phoneCallSearchRow">
+              <button
+                className={`iconButton agentFilterButton ${callFiltersOpen || callAgentFilter !== "all" || callDirectionFilter !== "all" || callStatusFilter !== "all" ? "selected" : ""}`}
+                type="button"
+                aria-label={callFiltersOpen ? "Hide call filters" : "Show call filters"}
+                title={callFiltersOpen ? "Hide call filters" : "Show call filters"}
+                onClick={() => setCallFiltersOpen((open) => !open)}
+              >
+                <SlidersHorizontal size={16} />
+              </button>
+              <div className="explorerSearch compactSearch">
+                <Search size={16} />
+                <input
+                  value={callQuery}
+                  onChange={(event) => setCallQuery(event.target.value)}
+                  placeholder="Search calls, numbers, contacts, or agents"
+                />
+              </div>
+              <button
+                className={`iconButton agentFilterButton ${callBulkEdit ? "selected" : ""}`}
+                type="button"
+                aria-label={callBulkEdit ? "Exit bulk edit" : "Edit calls"}
+                title={callBulkEdit ? "Exit bulk edit" : "Edit calls"}
+                onClick={toggleCallBulkEdit}
+              >
+                <Pencil size={16} />
+              </button>
+              <TableRefreshButton onClick={refreshPhoneTableThenAll} disabled={loadingCallHistory} label="Refresh calls" />
+            </div>
+            {callBulkEdit && (
+              <BulkEditControls
+                active={callBulkEdit}
+                selectedCount={selectedCallRowIds.length}
+                onToggle={toggleCallBulkEdit}
+                onArchive={hideSelectedCallRows}
+                onDelete={hideSelectedCallRows}
+              />
+            )}
+            {callFiltersOpen && (
+              <div className="chatFilterBar phoneCallFilterBar" role="group" aria-label="Call filters">
+                <span className="chatFilterCount">{filteredCallRollups.length} numbers</span>
+                <label className="agentFilter">
+                  <span>Agent</span>
+                  <select value={callAgentFilter} onChange={(event) => setCallAgentFilter(event.target.value)}>
+                    <option value="all">All agents</option>
+                    {callAgentOptions.map((agent) => <option key={agent.id} value={agent.id}>{agent.label}</option>)}
+                  </select>
+                </label>
+                <label className="agentFilter">
+                  <span>Direction</span>
+                  <select value={callDirectionFilter} onChange={(event) => setCallDirectionFilter(event.target.value)}>
+                    <option value="all">All directions</option>
+                    <option value="inbound">Inbound</option>
+                    <option value="outbound">Outbound</option>
+                  </select>
+                </label>
+                <label className="agentFilter">
+                  <span>Status</span>
+                  <select value={callStatusFilter} onChange={(event) => setCallStatusFilter(event.target.value)}>
+                    <option value="all">All statuses</option>
+                    <option value="answered">Answered</option>
+                    <option value="missed">Missed</option>
+                    <option value="voicemail">Voicemail</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                </label>
+              </div>
+            )}
+            <section className={`phoneCallsTable phoneContentTable ${callBulkEdit ? "bulkEditing" : ""}`} aria-label="Recent calls">
+              <div className={`phoneCallRows ${filteredCallRollups.length === 0 ? "empty" : ""}`} role="table" aria-label="Recent calls">
+                <div className="phoneCallRow phoneCallRowHead" role="row">
+                  <span className="bulkSelectCell" role="columnheader" aria-label="Select calls" />
+                  <span role="columnheader">Contact</span>
+                  <span role="columnheader">Number</span>
+                  <span role="columnheader">Agent</span>
+                  <span role="columnheader">Last</span>
+                  <span role="columnheader">Status</span>
+                  <span role="columnheader" aria-label="Open call" />
+                </div>
+                {filteredCallRollups.map((call) => (
+                  <div className="phoneCallRow" role="row" key={call.id}>
+                    <BulkSelectCell
+                      active={callBulkEdit}
+                      checked={selectedCallRowIds.includes(call.id)}
+                      label={`Select ${call.contact} call rollup`}
+                      onChange={(checked) => setCallRowSelected(call.id, checked)}
+                    />
+                    <strong className="phoneCallContactCell" role="cell">
+                      {call.contact}
+                      <small>{call.calls.length} {call.calls.length === 1 ? "call" : "calls"}</small>
+                    </strong>
+                    <span role="cell">{call.number}</span>
+                    <span role="cell">{call.agentName}</span>
+                    <span role="cell">{call.time}</span>
+                    <span role="cell"><em>{phoneCallRollupSummary(call)}</em></span>
+                    <button
+                      className="chatSessionOpenButton"
+                      type="button"
+                      onClick={() => openCallDetails(call.id)}
+                      aria-label={`Open ${call.contact} call details`}
+                      title="Open details"
+                    >
+                      <ArrowRight size={16} />
+                    </button>
+                  </div>
+                ))}
+                {filteredCallRollups.length === 0 && (
+                  <div className="tableEmptyState" role="row">
+                    <EmptyState
+                      title={loadingCallHistory ? "Loading call history..." : callQuery.trim() || callAgentFilter !== "all" || callDirectionFilter !== "all" || callStatusFilter !== "all" ? "No calls found" : "No call history yet"}
+                      body={loadingCallHistory ? "Pulling recent Telnyx call detail records." : callQuery.trim() || callAgentFilter !== "all" || callDirectionFilter !== "all" || callStatusFilter !== "all" ? "Try another search term or filter." : "Recent Telnyx account calls will roll up by phone number here after call detail records are available."}
+                      icon={Phone}
+                    />
+                  </div>
+                )}
+              </div>
+            </section>
+          </>
+        )
       )}
 
 	      {error && <div className="errorBanner">{error}</div>}
 
       {tab === "numbers" && (
-        <>
-        {!telnyxApiReady && (
-          <div className="phoneSetupAlert">
-            <div>
-              <strong>Add your Telnyx API key to show your account numbers.</strong>
-              <p>Add your Telnyx API key in Settings. Link uses your key to load active numbers from your Telnyx account so you can choose which number should work inside the app.</p>
-            </div>
-            <button className="runtimeSettingsButton" type="button" onClick={() => setView("settings")}>
-              <Settings size={14} />
-              Add Telnyx API key
-            </button>
-          </div>
-        )}
-
-        <section className="phoneNumberTable phoneContentTable" aria-label="Telnyx account numbers">
-          <div className="phoneNumberRows" role="table" aria-label="Active Telnyx numbers">
-            <div className="phoneNumberRow phoneNumberRowHead" role="row">
-              <span role="columnheader">Number</span>
-              <span role="columnheader">Location</span>
-              <span role="columnheader">Type</span>
-              <span role="columnheader">Features</span>
-              <span role="columnheader">Status</span>
-            </div>
-            {numbers.map((number) => {
-              const selected = selectedNumber?.phoneNumber === number.phoneNumber;
-              return (
+        selectedNumberDetail ? (
+          <section className="content phoneNumberDetailView chatDetailView">
+            <header className="pageHeader phoneCallDetailHeader">
+              <div className="chatDetailTitleGroup">
                 <button
-                  className={`phoneNumberRow ${selected ? "selected" : ""}`}
-                  key={number.phoneNumber}
-                  onClick={() => {
-                    setSelectedNumber(number);
-                    setLinkedPhoneNumber(number.phoneNumber);
-                  }}
-                  role="row"
+                  className="iconButton chatDetailBackButton"
+                  type="button"
+                  onClick={() => setSelectedNumberDetailId("")}
+                  aria-label="Back to numbers"
                 >
-                  <strong role="cell">{number.phoneNumber}</strong>
-                  <span role="cell">{[number.locality, number.region, number.countryCode].filter(Boolean).join(", ") || "Telnyx account"}</span>
-                  <span role="cell">{number.type || "Number"}</span>
-                  <span role="cell">{number.features.length > 0 ? number.features.join(", ") : "Active"}</span>
-                  <span role="cell"><em>{selected ? "Linked" : "Available"}</em></span>
+                  <ArrowLeft size={16} />
                 </button>
-              );
-            })}
-            {numbers.length === 0 && (
-              <div className="phoneNumberEmpty">
-                {telnyxApiReady && !busy ? "No active Telnyx numbers found for this account." : "Add a Telnyx API key to load your numbers."}
+                <div>
+                  <h1>{selectedNumberDetail.phoneNumber}</h1>
+                  <p>{[selectedNumberDetail.locality, selectedNumberDetail.region, selectedNumberDetail.countryCode].filter(Boolean).join(", ") || "Telnyx account number"}</p>
+                </div>
+              </div>
+              <div className="headerActions phoneCallDetailActions">
+                <Badge tone={selectedNumber?.phoneNumber === selectedNumberDetail.phoneNumber ? "success" : "default"}>
+                  {selectedNumber?.phoneNumber === selectedNumberDetail.phoneNumber ? "Linked" : "Available"}
+                </Badge>
+                <button
+                  className="button primary"
+                  type="button"
+                  onClick={() => {
+                    setSelectedNumber(selectedNumberDetail);
+                    setLinkedPhoneNumber(selectedNumberDetail.phoneNumber);
+                  }}
+                >
+                  Use number
+                </button>
+              </div>
+            </header>
+            <section className="chatDetailSurface phoneNumberDetailSurface" aria-label={`${selectedNumberDetail.phoneNumber} number details`}>
+              <div className="phoneCallDataTable phoneNumberSnapshotTable" role="table" aria-label="Number snapshot">
+                <div className="phoneCallDataRow phoneCallDataRowHead" role="row">
+                  <span role="columnheader">Field</span>
+                  <span role="columnheader">Value</span>
+                </div>
+                {[
+                  ["Phone number", selectedNumberDetail.phoneNumber],
+                  ["Telnyx ID", selectedNumberDetail.id || "Not returned"],
+                  ["Status", selectedNumberDetail.status || "Active"],
+                  ["Type", selectedNumberDetail.type || "Number"],
+                  ["Location", [selectedNumberDetail.locality, selectedNumberDetail.region, selectedNumberDetail.countryCode].filter(Boolean).join(", ") || "Telnyx account"],
+                  ["Features", selectedNumberDetail.features.length > 0 ? selectedNumberDetail.features.join(", ") : "None returned"],
+                  ["Voice connection", selectedNumberDetail.connectionId || "Not assigned"],
+                  ["Messaging profile", selectedNumberDetail.messagingProfileId || "Not assigned"],
+                  ["Emergency address", selectedNumberDetail.emergencyAddressId || "Not assigned"],
+                  ["Monthly cost", selectedNumberDetail.monthlyCost || "Not returned"],
+                  ["Upfront cost", selectedNumberDetail.upfrontCost || "Not returned"],
+                  ["Tags", selectedNumberDetail.tags?.length ? selectedNumberDetail.tags.join(", ") : "None"],
+                  ["Created", selectedNumberDetail.createdAt || "Not returned"],
+                  ["Updated", selectedNumberDetail.updatedAt || "Not returned"],
+                ].map(([label, value]) => (
+                  <div className="phoneCallDataRow" role="row" key={label}>
+                    <strong role="cell">{label}</strong>
+                    <span role="cell">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </section>
+        ) : (
+          <>
+            {!telnyxApiReady && (
+              <div className="phoneSetupAlert">
+                <div>
+                  <strong>Add your Telnyx API key to show your account numbers.</strong>
+                  <p>Add your Telnyx API key in Settings. Link uses your key to load active numbers from your Telnyx account so you can choose which number should work inside the app.</p>
+                </div>
+                <button className="runtimeSettingsButton" type="button" onClick={() => setView("settings")}>
+                  <Settings size={14} />
+                  Add Telnyx API key
+                </button>
               </div>
             )}
-          </div>
-        </section>
-        </>
+            <div className="chatSearchRow phoneNumberSearchRow">
+              <button
+                className={`iconButton agentFilterButton ${numberFiltersOpen || numberTypeFilter !== "all" ? "selected" : ""}`}
+                type="button"
+                aria-label={numberFiltersOpen ? "Hide number filters" : "Show number filters"}
+                title={numberFiltersOpen ? "Hide number filters" : "Show number filters"}
+                onClick={() => setNumberFiltersOpen((open) => !open)}
+              >
+                <SlidersHorizontal size={16} />
+              </button>
+              <div className="explorerSearch compactSearch">
+                <Search size={16} />
+                <input
+                  value={numberQuery}
+                  onChange={(event) => setNumberQuery(event.target.value)}
+                  placeholder="Search numbers, locations, features, or IDs"
+                />
+              </div>
+              <label className="wikiSelectField settingsDirectorySort">
+                <select value={numberSortMode} onChange={(event) => setNumberSortMode(event.target.value as "az" | "za" | "type")}>
+                  <option value="az">A-Z</option>
+                  <option value="za">Z-A</option>
+                  <option value="type">Type</option>
+                </select>
+              </label>
+              <TableRefreshButton onClick={refreshPhoneTableThenAll} disabled={busy} label="Refresh numbers" />
+            </div>
+            {numberFiltersOpen && (
+              <div className="chatFilterBar phoneNumberFilterBar" role="group" aria-label="Number filters">
+                <span className="chatFilterCount">{filteredNumbers.length} numbers</span>
+                <label className="agentFilter">
+                  <span>Type</span>
+                  <select value={numberTypeFilter} onChange={(event) => setNumberTypeFilter(event.target.value)}>
+                    {numberTypeOptions.map((type) => (
+                      <option key={type} value={type}>{type === "all" ? "All types" : type}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
+
+            <section className="phoneNumberTable phoneContentTable" aria-label="Telnyx account numbers">
+              <div className="phoneNumberRows" role="table" aria-label="Active Telnyx numbers">
+                <div className="phoneNumberRow phoneNumberRowHead" role="row">
+                  <span role="columnheader">Number</span>
+                  <span role="columnheader">Location</span>
+                  <span role="columnheader">Type</span>
+                  <span role="columnheader">Features</span>
+                  <span role="columnheader">Status</span>
+                  <span role="columnheader" aria-label="Open number" />
+                </div>
+                {filteredNumbers.map((number) => {
+                  const selected = selectedNumber?.phoneNumber === number.phoneNumber;
+                  return (
+                    <div className={`phoneNumberRow ${selected ? "selected" : ""}`} key={number.id || number.phoneNumber} role="row">
+                      <strong role="cell">{number.phoneNumber}</strong>
+                      <span role="cell">{[number.locality, number.region, number.countryCode].filter(Boolean).join(", ") || "Telnyx account"}</span>
+                      <span role="cell">{number.type || "Number"}</span>
+                      <span role="cell">{number.features.length > 0 ? number.features.join(", ") : "Active"}</span>
+                      <span role="cell"><em>{selected ? "Linked" : number.status || "Available"}</em></span>
+                      <button
+                        className="chatSessionOpenButton"
+                        type="button"
+                        onClick={() => openNumberDetails(number)}
+                        aria-label={`Open ${number.phoneNumber} number details`}
+                        title="Open details"
+                      >
+                        <ArrowRight size={16} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {filteredNumbers.length === 0 && (
+                  <div className="tableEmptyState" role="row">
+                    <EmptyState
+                      title={busy ? "Loading numbers..." : numberQuery.trim() || numberTypeFilter !== "all" ? "No numbers found" : "No active numbers"}
+                      body={busy ? "Pulling active phone numbers from the connected Telnyx account." : numberQuery.trim() || numberTypeFilter !== "all" ? "Try another search term or filter." : telnyxApiReady ? "No active Telnyx numbers were returned for this account." : "Add a Telnyx API key to load your account numbers."}
+                      icon={PhoneCall}
+                    />
+                  </div>
+                )}
+              </div>
+            </section>
+          </>
+        )
       )}
 
         </div>
@@ -11469,11 +12723,6 @@ function replySubject(subject: string) {
   const trimmed = subject.trim();
   if (!trimmed) return "Re:";
   return /^re:/i.test(trimmed) ? trimmed : `Re: ${trimmed}`;
-}
-
-function inboxReadQuery(query: string) {
-  const trimmed = query.replace(/\bis:(?:read|unread)\b|\blabel:unread\b/gi, "").trim();
-  return trimmed ? `${trimmed} is:read` : "is:read";
 }
 
 function buildInboxDraftPrompt(thread: GoogleInboxThread) {
@@ -12274,6 +13523,7 @@ function WikiView({
   skillSearchRequest,
   shareExplorerResultToAgent,
   setView,
+  openNewAppChatSession,
   onEdgePreviewReady,
 }: {
   initialTab?: WikiTab | undefined;
@@ -12289,6 +13539,7 @@ function WikiView({
   skillSearchRequest: string;
   shareExplorerResultToAgent: (result: ExplorerResult) => Promise<void>;
   setView: (view: ViewId) => void;
+  openNewAppChatSession: () => void;
   onEdgePreviewReady: (preview: EdgePreviewSurface) => void;
 }) {
   const [tab, setTab] = useState<WikiTab>(initialTab ?? "support");
@@ -12307,12 +13558,13 @@ function WikiView({
   const [expandedSkillNames, setExpandedSkillNames] = useState<string[]>([]);
   const [skillMarkdownByName, setSkillMarkdownByName] = useState<Record<string, SkillMarkdownLoadState>>({});
   const [result, setResult] = useState("");
-  const [publishMenuOpen, setPublishMenuOpen] = useState(false);
   const [publishAppOpen, setPublishAppOpen] = useState(false);
   const [publishBusy, setPublishBusy] = useState(false);
   const [appActionBusyId, setAppActionBusyId] = useState("");
   const [localDraftApps, setLocalDraftApps] = useState<LinkLocalEdgeDraftApp[]>([]);
   const [localDraftBusy, setLocalDraftBusy] = useState(false);
+  const [wikiRefreshing, setWikiRefreshing] = useState(false);
+  const [wikiRefreshKey, setWikiRefreshKey] = useState(0);
   const [wikiDocumentationSources, setWikiDocumentationSources] = useState<WikiDocumentationSource[]>([]);
   const [publishDraft, setPublishDraft] = useState<PublishAppDraft>({
     name: "",
@@ -12336,12 +13588,6 @@ function WikiView({
   const [skillDeploymentTarget, setSkillDeploymentTarget] = useState<ArtifactDeploymentTarget>("local-only");
   const [artifactDeployments, setArtifactDeployments] = useState<ArtifactDeploymentRecord[]>([]);
   const [deploymentBusyId, setDeploymentBusyId] = useState("");
-  const publishMenuRef = useRef<HTMLDivElement | null>(null);
-  const publishOptions = [
-    { label: "App", detail: "Build and deploy an Edge-hosted app with your bot.", icon: Grid2X2Plus, tab: "apps" },
-    { label: "Doc", detail: "Build a local bot page, runbook, or source bundle.", icon: BookOpen, tab: "wiki", sourceTab: "support" },
-    { label: "Automation", detail: "Build a scheduled workflow owned by your bot.", icon: Bot, tab: "apps" },
-  ] as const;
   const [installedSkillKeys, setInstalledSkillKeys] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -12414,8 +13660,19 @@ function WikiView({
     setTab(initialTab ?? "support");
   }, [initialTab]);
 
+  async function refreshWikiDocumentationSources() {
+    try {
+      const sources = await linkApi.listWikiSources();
+      setWikiDocumentationSources(sources);
+      return sources;
+    } catch {
+      setWikiDocumentationSources([]);
+      return [];
+    }
+  }
+
   useEffect(() => {
-    void linkApi.listWikiSources().then(setWikiDocumentationSources).catch(() => setWikiDocumentationSources([]));
+    void refreshWikiDocumentationSources();
   }, []);
 
   useEffect(() => {
@@ -12447,14 +13704,6 @@ function WikiView({
     setSelectedAppDetailId("");
     setSelectedAppDetailTab("overview");
   }, [tab]);
-
-	  useEffect(() => {
-	    function closePublishMenu(event: MouseEvent) {
-	      if (!publishMenuRef.current?.contains(event.target as Node)) setPublishMenuOpen(false);
-	    }
-	    if (publishMenuOpen) document.addEventListener("mousedown", closePublishMenu);
-	    return () => document.removeEventListener("mousedown", closePublishMenu);
-	  }, [publishMenuOpen]);
 
 	  async function refreshLocalDraftApps() {
 	    setLocalDraftBusy(true);
@@ -12490,9 +13739,9 @@ function WikiView({
     );
   }
 
-  async function loadSkillMarkdown(skillName: string) {
+  async function loadSkillMarkdown(skillName: string, force = false) {
     const current = skillMarkdownByName[skillName];
-    if (current?.status === "loading" || current?.status === "ready") return;
+    if (!force && (current?.status === "loading" || current?.status === "ready")) return;
     setSkillMarkdownByName((items) => ({ ...items, [skillName]: { status: "loading" } }));
     try {
       const markdown = await linkApi.getSkillMarkdown(skillName);
@@ -12505,21 +13754,38 @@ function WikiView({
     }
   }
 
-  function startPublishing(option: (typeof publishOptions)[number]) {
-    setTab(option.tab === "apps" ? "apps" : option.sourceTab);
-    setSelectedSkill(`Publish ${option.label}`);
-    setPublishMenuOpen(false);
-    if (option.label === "App") {
-      setPublishAppOpen(true);
-      setResult("");
-      return;
+  async function refreshActiveWikiPage() {
+    if (wikiRefreshing) return;
+    setWikiRefreshing(true);
+    setResult("");
+    try {
+      await refreshWikiDocumentationSources();
+      if (activePage === "apps") {
+        await Promise.all([
+          refreshLocalDraftApps(),
+          refreshPublishedApps(),
+          refreshArtifactDeployments(),
+        ]);
+        setResult("Apps refreshed.");
+      } else if (activePage === "skills") {
+        await refreshArtifactDeployments();
+        const cachedSkillNames = [
+          ...new Set([
+            ...expandedSkillNames,
+            selectedSkillDetailName,
+          ].filter(Boolean)),
+        ];
+        await Promise.all(cachedSkillNames.map((skillName) => loadSkillMarkdown(skillName, true)));
+        setResult(cachedSkillNames.length ? "Skills and cached skill details refreshed." : "Skills refreshed.");
+      } else {
+        setWikiRefreshKey((key) => key + 1);
+        setResult(`${activeWikiSourceTab.label} refreshed.`);
+      }
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : "Unable to refresh Wiki.");
+    } finally {
+      setWikiRefreshing(false);
     }
-    setResult(JSON.stringify({
-      status: "draft",
-      type: option.label.toLowerCase(),
-      source: activeAgent?.displayName ?? "local bot",
-      next: "Choose the local bot asset, owner, approval policy, and target audience before publishing to Wiki.",
-    }, null, 2));
   }
 
   function skillWithLocalStats(skill: SkillMetadata): SkillMetadata {
@@ -12705,9 +13971,6 @@ function WikiView({
 
   function renderSkillButton(skill: SkillMetadata) {
     const trackedSkill = skillWithLocalStats(skill);
-    const installed = activeAgent ? installedSkillKeys.includes(`${activeAgent.id}:${trackedSkill.name}`) : false;
-    const downloadCount = trackedSkill.downloadCount ?? trackedSkill.installCount ?? 0;
-    const deployment = deploymentForArtifact("skill", trackedSkill.skillId ?? rendererSkillRegistryId(trackedSkill));
     return (
       <div
         key={trackedSkill.name}
@@ -12724,38 +13987,8 @@ function WikiView({
       >
         <span className="directoryNameCell" role="cell">
           <strong>{trackedSkill.name}</strong>
-          <small>{trackedSkill.description}</small>
-          {renderDeploymentChip(deployment)}
         </span>
         <span role="cell">{trackedSkill.team}</span>
-        <span role="cell">{trackedSkill.product ?? trackedSkill.language ?? "Workflow"}</span>
-        <span role="cell">{formatCompactCount(trackedSkill.starCount)} stars / {formatCompactCount(downloadCount)} installs</span>
-        <span className="directoryRowActions" role="cell">
-          <button
-            className={`iconButton bookmarkButton skillInstallIconButton ${trackedSkill.starredByActor ? "selected" : ""}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              void toggleSkillStar(trackedSkill);
-            }}
-            type="button"
-            title={trackedSkill.starredByActor ? "Unstar skill" : "Star skill"}
-            aria-label={trackedSkill.starredByActor ? `Unstar ${trackedSkill.name}` : `Star ${trackedSkill.name}`}
-          >
-            <Star size={15} fill={trackedSkill.starredByActor ? "currentColor" : "none"} />
-          </button>
-          <button
-            className={`iconButton bookmarkButton skillInstallIconButton ${installed ? "selected" : ""}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              void installSkill(trackedSkill);
-            }}
-            type="button"
-            title={installed ? "Skill installed" : "Install skill"}
-            aria-label={installed ? `${trackedSkill.name} installed` : `Install ${trackedSkill.name}`}
-          >
-            <Plus size={15} />
-          </button>
-        </span>
         <button
           className="chatSessionOpenButton"
           type="button"
@@ -13186,12 +14419,11 @@ function WikiView({
   }
 
   function renderLocalDraftAppRow(app: LinkLocalEdgeDraftApp) {
-    const sourceLabel = app.sourceSubdir || app.directory.split("/").slice(-2).join("/");
     const rowId = `local:${app.id}`;
     const deployment = deploymentForArtifact("app", appArtifactIdFromSlug(app.slug));
     return (
       <div
-        className="chatResultRow directoryResultRow appDirectoryResultRow"
+        className="chatResultRow directoryResultRow appDirectoryResultRow personalAppDirectoryResultRow"
         role="row"
         key={rowId}
         tabIndex={0}
@@ -13205,11 +14437,8 @@ function WikiView({
       >
         <span className="directoryNameCell" role="cell">
           <strong>{app.name}</strong>
-          <small>{app.description || `${app.slug}.apidev.telnyx.com`}</small>
         </span>
-        <span role="cell">{sourceLabel}</span>
         <span role="cell">{renderDeploymentChip(deployment)}</span>
-        <span role="cell">{formatSkillUpdatedAt(app.updatedAt)}</span>
         <button
           className="chatSessionOpenButton"
           type="button"
@@ -13231,7 +14460,7 @@ function WikiView({
     const deployment = deploymentForArtifact("app", app.id) ?? deploymentForArtifact("app", appArtifactIdFromSlug(app.slug));
     return (
       <div
-        className="chatResultRow directoryResultRow appDirectoryResultRow"
+        className="chatResultRow directoryResultRow appDirectoryResultRow teamAppDirectoryResultRow"
         role="row"
         key={rowId}
         tabIndex={0}
@@ -13245,7 +14474,6 @@ function WikiView({
       >
         <span className="directoryNameCell" role="cell">
           <strong>{app.name}</strong>
-          <small>{app.description || app.audience}</small>
         </span>
         <span role="cell">{app.ownerSquad}</span>
         <span role="cell">{renderDeploymentChip(deployment)}</span>
@@ -13319,6 +14547,7 @@ function WikiView({
             </div>
             {selectedAppDetailTab === "overview" && selectedLocalApp && (
               <div className="chatResultDetails directoryDetailPanel">
+                <div><strong>Description</strong><span>{selectedLocalApp.description || "No description saved."}</span></div>
                 <div><strong>Status</strong><span>Draft</span></div>
                 <div><strong>Data boundary</strong><span>{renderDeploymentChip(selectedDeployment)}</span></div>
                 <div><strong>Slug</strong><span>{selectedLocalApp.slug}.apidev.telnyx.com</span></div>
@@ -13329,6 +14558,7 @@ function WikiView({
             )}
             {selectedAppDetailTab === "overview" && selectedPublishedApp && (
               <div className="chatResultDetails directoryDetailPanel">
+                <div><strong>Description</strong><span>{selectedPublishedApp.description || "No description saved."}</span></div>
                 <div><strong>Status</strong><span>{formatStatusLabel(selectedPublishedApp.status)}</span></div>
                 <div><strong>Data boundary</strong><span>{renderDeploymentChip(selectedDeployment)}</span></div>
                 <div><strong>Owner</strong><span>{selectedPublishedApp.ownerSquad}</span></div>
@@ -13337,6 +14567,7 @@ function WikiView({
                 <div><strong>Access</strong><span>{selectedPublishedApp.access.toUpperCase()}</span></div>
                 <div><strong>Risk</strong><span>{selectedPublishedApp.riskLevel}</span></div>
                 <div><strong>Type</strong><span>{formatPublishedAppType(selectedPublishedApp.appType)}</span></div>
+                <div><strong>Updated</strong><span>{formatSkillUpdatedAt(selectedPublishedApp.updatedAt)}</span></div>
               </div>
             )}
             {selectedAppDetailTab === "source" && selectedLocalApp && (
@@ -13419,17 +14650,15 @@ function WikiView({
     return (
       <div className="marketplaceView embeddedMarketplace appDirectoryList">
 	        {renderPublishAppPanel()}
-	        <section className="appDirectorySection" aria-label="Personal apps">
+        <section className={`appDirectorySection ${filteredLocalDraftApps.length === 0 ? "empty" : ""}`} aria-label="Personal apps">
             <div className="appDirectorySectionHeader">
               <h2>Personal</h2>
 	              <span className="appDirectorySectionCount">{filteredLocalDraftApps.length} {filteredLocalDraftApps.length === 1 ? "APP" : "APPS"}</span>
             </div>
 	          <div className="chatSessionRows directoryTable appDirectoryTable" role="table" aria-label="Personal apps">
-              <div className="chatResultRow directoryResultRow appDirectoryResultRow chatResultRowHead" role="row">
+              <div className="chatResultRow directoryResultRow appDirectoryResultRow personalAppDirectoryResultRow chatResultRowHead" role="row">
                 <span role="columnheader">App</span>
-                <span role="columnheader">Source</span>
                 <span role="columnheader">Status</span>
-                <span role="columnheader">Updated</span>
                 <span role="columnheader" aria-label="Open app" />
               </div>
               <div className="chatResultRows" role="rowgroup">
@@ -13442,13 +14671,13 @@ function WikiView({
               </div>
             </div>
 	        </section>
-	        <section className="appDirectorySection" aria-label="Team apps">
+	        <section className={`appDirectorySection ${filteredApps.length === 0 ? "empty" : ""}`} aria-label="Team apps">
             <div className="appDirectorySectionHeader">
               <h2>Team</h2>
 	              <span className="appDirectorySectionCount">{filteredApps.length} {filteredApps.length === 1 ? "APP" : "APPS"}</span>
             </div>
           <div className="chatSessionRows directoryTable appDirectoryTable" role="table" aria-label="Team apps">
-            <div className="chatResultRow directoryResultRow appDirectoryResultRow chatResultRowHead" role="row">
+            <div className="chatResultRow directoryResultRow appDirectoryResultRow teamAppDirectoryResultRow chatResultRowHead" role="row">
               <span role="columnheader">App</span>
               <span role="columnheader">Owner</span>
               <span role="columnheader">Status</span>
@@ -13516,6 +14745,7 @@ function WikiView({
                 <div><strong>Team</strong><span>{trackedSkill.team}</span></div>
                 <div><strong>Product</strong><span>{trackedSkill.product ?? "Workflow"}</span></div>
                 <div><strong>Language</strong><span>{trackedSkill.language ?? "Skill"}</span></div>
+                <div><strong>Stats</strong><span>{formatCompactCount(trackedSkill.starCount)} stars / {formatCompactCount(downloadCount)} installs</span></div>
                 <div><strong>Data boundary</strong><span>{renderDeploymentChip(skillDeployment)}</span></div>
                 <div><strong>Target</strong><span>{skillDeployment ? deploymentTargetLabel(skillDeployment.target) : "Keep Local"}</span></div>
                 <div><strong>Source</strong><span>{trackedSkill.source || "Local registry"}</span></div>
@@ -13581,10 +14811,7 @@ function WikiView({
         <div className="chatSessionRows directoryTable skillDirectoryTable" role="table" aria-label="Skills">
           <div className="chatResultRow directoryResultRow skillDirectoryResultRow chatResultRowHead" role="row">
             <span role="columnheader">Skill</span>
-            <span role="columnheader">Team</span>
-            <span role="columnheader">Type</span>
-            <span role="columnheader">Stats</span>
-            <span role="columnheader">Actions</span>
+            <span role="columnheader">Owner</span>
             <span role="columnheader" aria-label="Open skill" />
           </div>
           <div className="chatResultRows" role="rowgroup">
@@ -13605,7 +14832,7 @@ function WikiView({
   function renderDocsSourceTab(source: WikiSourceConfig) {
     const externalSource = source.externalSource;
     if (externalSource === "support") {
-      return <HelpCenterConsole selectedWorkspace={selectedWorkspace} question={query} setQuestion={setQuery} sort={sort} />;
+      return <HelpCenterConsole selectedWorkspace={selectedWorkspace} question={query} setQuestion={setQuery} sort={sort} refreshKey={wikiRefreshKey} />;
     }
 
     return (
@@ -13615,6 +14842,7 @@ function WikiView({
         externalQuery={query}
         externalSource={externalSource}
         externalSort={sort}
+        refreshKey={wikiRefreshKey}
         hideSearch
         docSourcesOnly
         onShareResult={shareExplorerResultToAgent}
@@ -13641,43 +14869,25 @@ function WikiView({
     wiki: ["Wiki", BookOpen],
   } satisfies Record<WikiPage, [string, AppIcon]>;
   const [wikiHeadingTitle] = wikiSectionMeta[activePage];
+  const wikiRefreshLabel = activePage === "apps"
+    ? "Refresh apps"
+    : activePage === "skills"
+      ? "Refresh skills"
+      : `Refresh ${activeWikiSourceTab.label}`;
   const wikiHeaderAction = (
     <div className="headerActions wikiHeaderActions" aria-label="Wiki actions">
       {activePage === "apps" && (
-        <>
-          <button className="button secondary" type="button" onClick={() => void importLocalDraftApp()} disabled={localDraftBusy}>
-            <Upload size={15} />
-            Import
-          </button>
-          <TableRefreshButton onClick={refreshLocalDraftApps} disabled={localDraftBusy} label="Refresh apps" />
-        </>
-      )}
-      <div className="publishMenuWrap" ref={publishMenuRef}>
-        <button className="button primary" onClick={() => setPublishMenuOpen((open) => !open)} aria-expanded={publishMenuOpen} aria-haspopup="menu">
-          <Plus size={15} />
-          Create
+        <button className="button secondary" type="button" onClick={() => void importLocalDraftApp()} disabled={localDraftBusy || wikiRefreshing}>
+          <Upload size={15} />
+          Import
         </button>
-        {publishMenuOpen && (
-          <div className="publishMenu" role="menu" aria-label="Build from local bot">
-            <div className="publishMenuHeader">
-              <strong>Build from local bot</strong>
-              <small>Select what this bot should package for Telnyx employees.</small>
-            </div>
-            {publishOptions.map((option) => {
-              const Icon = option.icon;
-              return (
-                <button key={option.label} role="menuitem" onClick={() => startPublishing(option)}>
-                  <Icon size={16} />
-                  <span>
-                    <strong>{option.label}</strong>
-                    <small>{option.detail}</small>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      )}
+      {activePage === "apps" && (
+        <button className="button primary" type="button" onClick={openNewAppChatSession}>
+          <Plus size={15} />
+          New App
+        </button>
+      )}
     </div>
   );
 
@@ -13690,7 +14900,10 @@ function WikiView({
           <PageSectionSidebar
             heading="Wiki"
             headingIcon={BookOpen}
-            tabs={wikiNavigationTabs.map((source) => [source.id, source.label, source.icon] as const)}
+            groups={[{
+              title: "SOURCES",
+              tabs: wikiNavigationTabs.map((source) => [source.id, source.label, source.icon] as const),
+            }]}
             activeTab={tab}
             onSelect={setTab}
             label="Wiki sections"
@@ -13741,6 +14954,7 @@ function WikiView({
             <option value="za">Z-A</option>
           </select>
         </label>
+        <TableRefreshButton onClick={refreshActiveWikiPage} busy={wikiRefreshing} label={wikiRefreshLabel} />
       </div>
       <div className="wikiHubContent">
         {tabContent()}
@@ -13805,6 +15019,64 @@ function wikiSourceTypeDisplay(type: WikiDocumentationSourceType) {
   return "Guru";
 }
 
+function wikiSourceConnectionType(type: WikiDocumentationSourceType) {
+  if (type === "github") return "Git";
+  if (type === "mcp" || type === "pylon" || type === "guru") return "MCP";
+  if (type === "telnyx_support" || type === "telnyx_developers") return "API";
+  if (type === "okf") return "OKF";
+  return "Other";
+}
+
+function settingsProviderLogoClass(id: string) {
+  if (id === "telnyx" || id.startsWith("telnyx-")) return "telnyx";
+  if (id.startsWith("google-")) return "google";
+  if (id === "github") return "github";
+  if (id === "slack") return "slack";
+  return "default";
+}
+
+function SettingsProviderLogoMark({ id, label }: { id: string; label: string }) {
+  if (id === "telnyx" || id.startsWith("telnyx-")) {
+    return <TelnyxLinkIcon size={35} />;
+  }
+  if (id.startsWith("google-")) {
+    return <span className="settingsProviderLogoMark google">G</span>;
+  }
+  if (id === "github") {
+    return <GithubIcon size={30} strokeWidth={2.1} />;
+  }
+  if (id === "slack") {
+    return <Slack size={29} strokeWidth={2.1} />;
+  }
+  if (id === "agentmail") {
+    return <Mail size={29} strokeWidth={2.1} />;
+  }
+  if (id === "linear") {
+    return <SquareTerminal size={29} strokeWidth={2.1} />;
+  }
+  if (id === "litellm" || id === "knowledge-agent") {
+    return <Bot size={29} strokeWidth={2.1} />;
+  }
+  if (id === "hindsight") {
+    return <ArchiveIcon size={29} strokeWidth={2.1} />;
+  }
+  if (id === "tableau-widgets") {
+    return <Grid2X2 size={29} strokeWidth={2.1} />;
+  }
+  if (id === "mcp-proxy" || id.startsWith("mcp-")) {
+    return <Plug size={29} strokeWidth={2.1} />;
+  }
+  return <span className="settingsProviderLogoMark">{initialsFromIdentity(label)}</span>;
+}
+
+function SettingsProviderLogo({ group }: { group: CredentialGroupStatus }) {
+  return <SettingsProviderLogoMark id={group.id} label={group.label} />;
+}
+
+function SettingsConnectorLogo({ connector }: { connector: ConnectorStatus }) {
+  return <SettingsProviderLogoMark id={connector.id} label={connector.name} />;
+}
+
 function SettingsView({
   connectors,
   tools,
@@ -13841,10 +15113,14 @@ function SettingsView({
 	  const [selectedSettingsDetailTab, setSelectedSettingsDetailTab] = useState<"overview" | "details" | "actions">("overview");
 	  const [wikiSources, setWikiSources] = useState<WikiDocumentationSource[]>([]);
 	  const [wikiSourceDraft, setWikiSourceDraft] = useState<WikiSourceDraft>(() => emptyWikiSourceDraft());
+	  const [wikiSourceEditorOpen, setWikiSourceEditorOpen] = useState(false);
 	  const [wikiSourceStatus, setWikiSourceStatus] = useState("");
 	  const [wikiSourceBusy, setWikiSourceBusy] = useState("");
+	  const [toolDomainMode, setToolDomainMode] = useState<"internal" | "workspace" | "custom">("internal");
+	  const [customToolDomain, setCustomToolDomain] = useState("");
+	  const [toolDomainStatus, setToolDomainStatus] = useState("");
 	  const visibleCredentials = useMemo(
-    () => credentials.filter((group) => group.id !== "agent-control-plane" && group.id !== "mcp-proxy"),
+    () => credentials.filter((group) => !["agent-control-plane", "mcp-proxy", "guru", "pylon"].includes(group.id)),
     [credentials],
   );
   const requiredCredentials = useMemo(
@@ -13852,18 +15128,31 @@ function SettingsView({
     [visibleCredentials],
   );
   const settingsTabHeading = {
-    auth: ["Pairings", ShieldCheck],
-    plugins: ["Plugins", Plug],
+    auth: ["Auth", ShieldCheck],
+    plugins: ["Plugins", Link2],
+	    agentmail: ["Email", Mail],
     contacts: ["Contacts", Users],
     assistants: ["Voice AI", Bot],
     numbers: ["Numbers", PhoneCall],
-    agents: ["Agent Setup", Bot],
-	    speak: ["Speech", Mic],
-	    dialer: ["Dialer Builder", Keyboard],
-	    design: ["Tool Design", Grid2X2],
-	    wiki: ["Sources", Plug],
+	    dialer: ["Dialer Builder", Grid3X3],
+	    domains: ["Domains", Globe],
+	    design: ["App Design", Palette],
+	    wiki: ["Wiki", BookOpen],
 	  } satisfies Record<typeof tab, [string, AppIcon]>;
   const [settingsHeadingTitle] = settingsTabHeading[tab];
+  const settingsHeaderAction = tab === "dialer" ? dialerBuilderActions : tab === "wiki" ? (
+    <button
+      className="button primary"
+      type="button"
+      onClick={() => {
+        setWikiSourceDraft(emptyWikiSourceDraft());
+        setWikiSourceEditorOpen(true);
+      }}
+    >
+      <Plus size={15} />
+      New Source
+    </button>
+  ) : null;
 	  async function refreshCredentials() {
 	    setCredentials(await linkApi.listCredentials());
 	  }
@@ -13896,6 +15185,8 @@ function SettingsView({
 	    setWikiSourceStatus("");
 	    setWikiSourceBusy("");
 	    setWikiSourceDraft(emptyWikiSourceDraft());
+	    setWikiSourceEditorOpen(false);
+	    setToolDomainStatus("");
 	  }, [tab]);
 
   const googleWorkspaceConnected = connectors.some((connector) =>
@@ -13940,6 +15231,7 @@ function SettingsView({
 	      setWikiSources(sources);
 	      setWikiSourceStatus(wikiSourceDraft.id ? "Wiki source updated." : "Wiki source added.");
 	      setWikiSourceDraft(emptyWikiSourceDraft(wikiSourceDraft.type));
+	      setWikiSourceEditorOpen(false);
 	    } catch (error) {
 	      setWikiSourceStatus(error instanceof Error ? error.message : "Wiki source could not be saved.");
 	    } finally {
@@ -13952,7 +15244,10 @@ function SettingsView({
 	    setWikiSourceStatus("");
 	    try {
 	      setWikiSources(await linkApi.deleteWikiSource(source.id));
-	      if (wikiSourceDraft.id === source.id) setWikiSourceDraft(emptyWikiSourceDraft(source.type === "mcp" || source.type === "okf" ? source.type : "github"));
+	      if (wikiSourceDraft.id === source.id) {
+	        setWikiSourceDraft(emptyWikiSourceDraft(source.type === "mcp" || source.type === "okf" ? source.type : "github"));
+	        setWikiSourceEditorOpen(false);
+	      }
 	      setWikiSourceStatus(`${source.label} removed.`);
 	    } catch (error) {
 	      setWikiSourceStatus(error instanceof Error ? error.message : "Wiki source could not be removed.");
@@ -13967,6 +15262,7 @@ function SettingsView({
 	    try {
 	      setWikiSources(await linkApi.resetWikiSources());
 	      setWikiSourceDraft(emptyWikiSourceDraft());
+	      setWikiSourceEditorOpen(false);
 	      setWikiSourceStatus("Wiki sources reset to Telnyx defaults.");
 	    } catch (error) {
 	      setWikiSourceStatus(error instanceof Error ? error.message : "Wiki sources could not be reset.");
@@ -14001,6 +15297,7 @@ function SettingsView({
 	      setWikiSources(sources);
 	      setWikiSourceStatus(`${label} added to Wiki sources.`);
 	      setWikiSourceDraft(emptyWikiSourceDraft("okf"));
+	      setWikiSourceEditorOpen(false);
 	    } catch (error) {
 	      setWikiSourceStatus(error instanceof Error ? error.message : "OKF source could not be added.");
 	    } finally {
@@ -14066,46 +15363,26 @@ function SettingsView({
   }
 
   function renderAuthTab() {
-    const query = settingsQuery.trim().toLowerCase();
-    const sortedCredentials = [...requiredCredentials].sort((left, right) => {
-      if (settingsSortMode === "status") {
-        const statusCompare = Number(credentialConnected(right)) - Number(credentialConnected(left));
-        if (statusCompare !== 0) return statusCompare;
-      }
-      const nameCompare = left.label.localeCompare(right.label, undefined, { sensitivity: "base" });
-      return settingsSortMode === "za" ? -nameCompare : nameCompare;
-    });
-    const filteredCredentials = sortedCredentials.filter((group) => {
-      const connected = credentialConnected(group);
-      const matchesStatus =
-        settingsStatusFilter === "all" ||
-        (settingsStatusFilter === "connected" && connected) ||
-        (settingsStatusFilter === "needs_setup" && !connected);
-      const matchesQuery =
-        !query ||
-        `${group.label} ${group.id} ${group.help} ${group.fields.map((field) => field.name).join(" ")}`.toLowerCase().includes(query);
-      return matchesStatus && matchesQuery;
-    });
+    const authCredentials = [...requiredCredentials].sort(compareCredentialGroups);
     const selectedGroupId = selectedSettingsDetailId.startsWith("auth:") ? selectedSettingsDetailId.slice(5) : "";
-    const selectedGroup = requiredCredentials.find((group) => group.id === selectedGroupId);
-    if (selectedGroup) {
-      const selectedFields = visibleCredentialFields(selectedGroup);
-      const connected = credentialConnected(selectedGroup);
+    const selectedGroup = authCredentials.find((group) => group.id === selectedGroupId);
+    function renderAuthCredentialDetail(group: CredentialGroupStatus, connected: boolean) {
+      const selectedFields = visibleCredentialFields(group);
       return (
-        <div className="settingsDirectoryDetail embeddedDirectoryDetailView">
+        <div className="settingsDirectoryDetail embeddedDirectoryDetailView settingsAuthDetailView">
           <header className="directoryEmbeddedDetailHeader">
             <button className="button ghost" type="button" onClick={() => setSelectedSettingsDetailId("")}>
               <ArrowLeft size={16} />
               Auth
             </button>
             <div>
-              <h2>{selectedGroup.label}</h2>
-              <p>{credentialHelpCopy(selectedGroup)}</p>
+              <h2>{group.label}</h2>
+              <p>{credentialHelpCopy(group)}</p>
             </div>
             <Badge tone={connected ? "success" : "warning"}>{connected ? "Connected" : "Needs setup"}</Badge>
           </header>
-          <section className="chatDetailSurface">
-            <div className="chatDetailTabs directoryDetailTabs" role="tablist" aria-label={`${selectedGroup.label} credential details`}>
+          <section className="chatDetailSurface" aria-label={`${group.label} credential details`}>
+            <div className="chatDetailTabs directoryDetailTabs" role="tablist" aria-label={`${group.label} credential details`}>
               {(["overview", "details", "actions"] as const).map((detailTab) => (
                 <button
                   key={detailTab}
@@ -14129,7 +15406,7 @@ function SettingsView({
                 </div>
                 <div>
                   <strong>Source</strong>
-                  <span>{selectedGroup.id}</span>
+                  <span>{group.id}</span>
                 </div>
               </div>
             )}
@@ -14137,7 +15414,7 @@ function SettingsView({
               <div className="settingsCredentialDetailPanel">
                 <CredentialGroupCards
                   connectors={connectors}
-                  groups={[selectedGroup]}
+                  groups={[group]}
                   setGroups={setCredentials}
                   onSaved={async () => {
                     await refresh();
@@ -14158,32 +15435,32 @@ function SettingsView({
       );
     }
 
+    if (selectedGroup) {
+      return renderAuthCredentialDetail(selectedGroup, credentialConnected(selectedGroup));
+    }
+
     return (
       <div className="setupSettingsPanel settingsDirectoryPanel">
-        {renderSettingsDirectoryToolbar("Search auth, providers, keys, or setup notes", `${filteredCredentials.length} credentials`)}
-        <div className="chatSessionRows directoryTable settingsDirectoryTable" role="table" aria-label="Authentication credentials">
+        <div className="chatSessionRows directoryTable settingsDirectoryTable settingsAuthDirectoryTable" role="table" aria-label="Authentication credentials">
           <div className="chatResultRow directoryResultRow settingsDirectoryResultRow chatResultRowHead" role="row">
             <span role="columnheader">Name</span>
-            <span role="columnheader">Type</span>
             <span role="columnheader">Status</span>
-            <span role="columnheader">Fields</span>
             <span role="columnheader" aria-label="Open credential" />
           </div>
           <div className="chatResultRows">
-            {filteredCredentials.map((group) => {
+            {authCredentials.map((group) => {
               const connected = credentialConnected(group);
-              const visibleFields = visibleCredentialFields(group);
               return (
                 <div className="chatResultRow directoryResultRow settingsDirectoryResultRow" role="row" key={group.id}>
-                  <span className="directoryNameCell" role="cell">
+                  <span className="directoryNameCell settingsProviderNameCell" role="cell">
+                    <span className={`settingsProviderLogoBox ${settingsProviderLogoClass(group.id)}`} aria-hidden="true">
+                      <SettingsProviderLogo group={group} />
+                    </span>
                     <strong>{group.label}</strong>
-                    <small>{credentialHelpCopy(group)}</small>
                   </span>
-                  <span role="cell">{group.id}</span>
                   <span role="cell">
                     <Badge tone={connected ? "success" : "warning"}>{connected ? "Connected" : "Needs setup"}</Badge>
                   </span>
-                  <span role="cell">{visibleFields.length ? `${visibleFields.filter((field) => field.configured).length}/${visibleFields.length}` : "Managed"}</span>
                   <span className="directoryRowActions" role="cell">
                     <button
                       className="chatSessionOpenButton"
@@ -14200,8 +15477,8 @@ function SettingsView({
                 </div>
               );
             })}
-            {filteredCredentials.length === 0 && (
-              <div className="phoneNumberEmpty">No authentication settings match this search.</div>
+            {authCredentials.length === 0 && (
+              <div className="phoneNumberEmpty">No authentication settings available.</div>
             )}
           </div>
         </div>
@@ -14309,7 +15586,6 @@ function SettingsView({
             <span role="columnheader">Name</span>
             <span role="columnheader">Type</span>
             <span role="columnheader">Status</span>
-            <span role="columnheader">Tools</span>
             <span role="columnheader" aria-label="Open plugin" />
           </div>
           <div className="chatResultRows">
@@ -14317,15 +15593,16 @@ function SettingsView({
               const connected = connector.status === "connected" || connector.status === "signed_in";
               return (
                 <div className="chatResultRow directoryResultRow settingsDirectoryResultRow" role="row" key={connector.id}>
-                  <span className="directoryNameCell" role="cell">
+                  <span className="directoryNameCell settingsProviderNameCell" role="cell">
+                    <span className={`settingsProviderLogoBox ${settingsProviderLogoClass(connector.id)}`} aria-hidden="true">
+                      <SettingsConnectorLogo connector={connector} />
+                    </span>
                     <strong>{connector.name}</strong>
-                    <small>{connector.description}</small>
                   </span>
                   <span role="cell">{connectorTypeLabel(connector)}</span>
                   <span role="cell">
                     <Badge tone={connected ? "success" : "warning"}>{connected ? "Connected" : "Needs setup"}</Badge>
                   </span>
-                  <span role="cell">{settingsConnectorTools(connector).length}</span>
                   <span className="directoryRowActions" role="cell">
                     <button
                       className="chatSessionOpenButton"
@@ -14351,56 +15628,222 @@ function SettingsView({
     );
   }
 
+  function renderAgentMailSettingsTab() {
+    const agentMailCredential = credentials.find((group) => group.id === "agentmail");
+    const agentMailConnector = connectors.find((connector) => connector.id === "agentmail");
+    const connected = agentMailCredential ? credentialGroupConnected(agentMailCredential, connectors, googleWorkspaceConnected) : agentMailConnector?.status === "connected";
+    const apiKeyConfigured = Boolean(agentMailCredential?.fields.some((field) => field.name === "AGENTMAIL_API_KEY" && field.configured));
+    const domainField = agentMailCredential?.fields.find((field) => field.name === "AGENTMAIL_DOMAIN");
+
+    return (
+      <div className="agentMailSettingsPanel">
+        <section className="accessCard agentMailSettingsCard">
+          <div className="accessCardHeader">
+            <div className="accessCardTitle">
+              <span className="accessIcon"><Mail size={18} /></span>
+              <div>
+                <h3>Email account</h3>
+                <p>Connect AgentMail so agents can receive deterministic inbox identities for meetings and agent workflows.</p>
+              </div>
+            </div>
+            <Badge tone={connected ? "success" : "warning"}>{connected ? "Connected" : "Needs setup"}</Badge>
+          </div>
+          <div className="agentMailReadiness">
+            <div>
+              <span>API key</span>
+              <strong>{apiKeyConfigured ? "Configured" : "Missing"}</strong>
+            </div>
+            <div>
+              <span>Inbox domain</span>
+              <strong>{domainField?.configured ? "Custom" : "AgentMail default"}</strong>
+            </div>
+            <div>
+              <span>Agent identity</span>
+              <strong>{connected ? "Ready" : "Blocked"}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="accessCard agentMailCredentialPanel">
+          <div className="wikiSourceEditorHeader">
+            <div>
+              <h3>Connection</h3>
+              <p>Save an AgentMail API key and optionally set the domain used for agent inboxes.</p>
+            </div>
+          </div>
+          {agentMailCredential ? (
+            <CredentialGroupCards
+              connectors={connectors}
+              groups={[agentMailCredential]}
+              setGroups={setCredentials}
+              onSaved={async () => {
+                await refresh();
+                await refreshCredentials();
+              }}
+            />
+          ) : (
+            <div className="phoneNumberEmpty">AgentMail credentials are not available in this build.</div>
+          )}
+        </section>
+      </div>
+    );
+  }
+
+  function renderDomainsSettingsTab() {
+    const domainOptions = [
+      {
+        id: "internal",
+        label: "Internal Telnyx domain",
+        value: "Managed by Telnyx",
+        description: "Keep published tools on the private Telnyx-hosted domain.",
+      },
+      {
+        id: "workspace",
+        label: "Workspace domain",
+        value: "tools.telnyx.com",
+        description: "Publish approved tools to the workspace domain your team owns.",
+      },
+      {
+        id: "custom",
+        label: "Custom domain",
+        value: customToolDomain.trim() || "tools.example.com",
+        description: "Use a verified domain for tools that should not use the internal Telnyx domain.",
+      },
+    ] satisfies { id: typeof toolDomainMode; label: string; value: string; description: string }[];
+    const selectedOption = domainOptions.find((option) => option.id === toolDomainMode) ?? domainOptions[0];
+
+    return (
+      <div className="settingsDomainsPanel">
+        <section className="accessCard domainsSettingsCard">
+          <div className="accessCardHeader">
+            <div className="accessCardTitle">
+              <span className="accessIcon"><Globe size={18} /></span>
+              <div>
+                <h3>Tool domains</h3>
+                <p>Choose where published Link tools resolve instead of the internal Telnyx domain.</p>
+              </div>
+            </div>
+            <Badge tone={toolDomainMode === "internal" ? "default" : "success"}>{toolDomainMode === "internal" ? "Internal" : "Custom publish"}</Badge>
+          </div>
+
+          <div className="domainOptionList" role="radiogroup" aria-label="Tool publication domain">
+            {domainOptions.map((option) => (
+              <label key={option.id} className={`domainOption ${toolDomainMode === option.id ? "selected" : ""}`}>
+                <input
+                  type="radio"
+                  name="tool-domain"
+                  checked={toolDomainMode === option.id}
+                  onChange={() => {
+                    setToolDomainMode(option.id);
+                    setToolDomainStatus("");
+                  }}
+                />
+                <span className="domainOptionIcon"><Globe size={18} /></span>
+                <span className="domainOptionCopy">
+                  <strong>{option.label}</strong>
+                  <small>{option.description}</small>
+                </span>
+                <code>{option.value}</code>
+              </label>
+            ))}
+          </div>
+
+          {toolDomainMode === "custom" && (
+            <label className="domainCustomField">
+              <span>Custom domain</span>
+              <input
+                value={customToolDomain}
+                onChange={(event) => {
+                  setCustomToolDomain(event.target.value);
+                  setToolDomainStatus("");
+                }}
+                placeholder="tools.example.com"
+              />
+            </label>
+          )}
+
+          <div className="domainSettingsFooter">
+            <p>Selected domain: <strong>{selectedOption.value}</strong></p>
+            <button
+              className="button primary"
+              type="button"
+              onClick={() => setToolDomainStatus(`${selectedOption.label} selected for tool publishing.`)}
+              disabled={toolDomainMode === "custom" && !customToolDomain.trim()}
+            >
+              <Save size={14} />
+              Save domain
+            </button>
+          </div>
+          {toolDomainStatus && <p className="wikiSourceStatus">{toolDomainStatus}</p>}
+        </section>
+      </div>
+    );
+  }
+
 
 	  function renderWikiSettingsTab() {
-	    const sortedSources = [...wikiSources].sort((left, right) => {
+	    const activeWikiSources = wikiSources.filter((source) => source.enabled).sort((left, right) => {
 	      const telnyxCompare = Number(right.configuredBy === "telnyx") - Number(left.configuredBy === "telnyx");
 	      if (telnyxCompare !== 0) return telnyxCompare;
 	      return left.label.localeCompare(right.label, undefined, { sensitivity: "base" });
 	    });
-	    const userSources = wikiSources.filter((source) => source.configuredBy !== "telnyx");
-	    const enabledSources = wikiSources.filter((source) => source.enabled);
-	    const githubCredential = credentials.find((group) => group.id === "github");
-	    const githubReady = githubCredential ? credentialConnected(githubCredential) : false;
 	    const targetLabel = wikiSourceDraft.type === "github" ? "Repository" : wikiSourceDraft.type === "mcp" ? "MCP endpoint" : wikiSourceDraft.type === "okf" ? "OKF bundle" : "Target";
 	    const targetPlaceholder = wikiSourceDraft.type === "github" ? "team-telnyx/link or https://github.com/team/repo" : wikiSourceDraft.type === "mcp" ? "https://mcp.example.com" : wikiSourceDraft.type === "okf" ? "/path/to/knowledge.zip" : "Source URL or connector target";
 	    const canChangeWikiSourceType = !wikiSourceDraft.id || ["github", "mcp", "okf"].includes(wikiSourceDraft.type);
+	    const selectedWikiSourceId = selectedSettingsDetailId.startsWith("wiki:") ? selectedSettingsDetailId.slice(5) : "";
+
+	    function renderWikiSourceDetail(source: WikiDocumentationSource) {
+	      return (
+	        <div className="wikiSourceExpandedDetail" role="row">
+	          <section className="chatDetailSurface" aria-label={`${source.label} Wiki source details`}>
+	            <header className="settingsAuthExpandedHeader">
+	              <div>
+	                <strong>{source.label}</strong>
+	                <p>{source.description || "No description saved."}</p>
+	              </div>
+	              <Badge tone={source.enabled ? (source.status === "connected" ? "success" : "warning") : "default"}>{source.enabled ? source.status.replace("_", " ") : "Disabled"}</Badge>
+	            </header>
+	            <div className="chatResultDetails directoryDetailPanel">
+	              <div>
+	                <strong>Connection</strong>
+	                <span>{wikiSourceConnectionType(source.type)}</span>
+	              </div>
+	              <div>
+	                <strong>Source type</strong>
+	                <span>{wikiSourceTypeDisplay(source.type)}</span>
+	              </div>
+	              <div>
+	                <strong>Target</strong>
+	                <span>{source.target}</span>
+	              </div>
+	              <div>
+	                <strong>Owner</strong>
+	                <span>{source.configuredBy === "telnyx" ? "Telnyx" : "You"}</span>
+	              </div>
+	            </div>
+	            <div className="directoryDetailPanel wikiSourceDetailActions">
+	              <button className="button secondary" type="button" onClick={() => {
+	                setWikiSourceDraft(wikiSourceDraftFromSource(source));
+	                setWikiSourceEditorOpen(true);
+	              }}>
+	                <Pencil size={15} />
+	                Edit source
+	              </button>
+	              <button className="button ghost" type="button" onClick={() => void deleteWikiSource(source)} disabled={wikiSourceBusy === source.id}>
+	                <Trash2 size={15} />
+	                Remove source
+	              </button>
+	            </div>
+	          </section>
+	        </div>
+	      );
+	    }
 
 	    return (
 	      <div className="wikiSettingsPanel">
-	        <section className="accessCard wikiSourceSummary">
-	          <div className="accessCardHeader">
-	            <div className="accessCardTitle">
-	              <span className="accessIcon"><BookOpen size={18} /></span>
-	              <div>
-	                <h3>Wiki sources</h3>
-	                <p>Choose which Wiki sections appear, rename them, and pick icons from the Link icon library.</p>
-	              </div>
-	            </div>
-	            <div className="wikiSourceHeaderActions">
-	              <button className="button secondary" type="button" onClick={() => void pairGitHubForWiki()} disabled={wikiSourceBusy === "github-auth" || githubReady}>
-	                <GithubIcon />
-	                {githubReady ? "GitHub paired" : "Pair GitHub"}
-	              </button>
-	              <button className="button secondary" type="button" onClick={() => void uploadOkfWikiSource()} disabled={wikiSourceBusy === "okf"}>
-	                <Upload size={14} />
-	                Upload OKF
-	              </button>
-	              <button className="button ghost" type="button" onClick={() => void resetWikiSources()} disabled={wikiSourceBusy === "reset"}>
-	                <RefreshCw size={14} />
-	                Reset
-	              </button>
-	            </div>
-	          </div>
-	          <div className="wikiSourceMetrics">
-	            <div><span>Total</span><strong>{wikiSources.length}</strong></div>
-	            <div><span>Enabled</span><strong>{enabledSources.length}</strong></div>
-	            <div><span>User</span><strong>{userSources.length}</strong></div>
-	            <div><span>GitHub</span><strong>{githubReady ? "Paired" : "Missing"}</strong></div>
-	          </div>
-	          {wikiSourceStatus && <p className="wikiSourceStatus">{wikiSourceStatus}</p>}
-	        </section>
+	        {wikiSourceStatus && <p className="wikiSourceStatus">{wikiSourceStatus}</p>}
 
+	        {wikiSourceEditorOpen && (
 	        <section className="accessCard wikiSourceEditor" aria-label="Add or repoint Wiki source">
 	          <form
 	            onSubmit={(event) => {
@@ -14413,12 +15856,13 @@ function SettingsView({
 	                <h3>{wikiSourceDraft.id ? "Repoint source" : "Add source"}</h3>
 	                <p>{wikiSourceDraft.id ? "Update the target and availability for this source." : "Connect a GitHub repo, MCP endpoint, or OKF bundle."}</p>
 	              </div>
-	              {wikiSourceDraft.id && (
-	                <button className="button ghost" type="button" onClick={() => setWikiSourceDraft(emptyWikiSourceDraft(wikiSourceDraft.type))}>
+	              <button className="button ghost" type="button" onClick={() => {
+	                setWikiSourceDraft(emptyWikiSourceDraft(wikiSourceDraft.type));
+	                setWikiSourceEditorOpen(false);
+	              }}>
 	                  <X size={14} />
 	                  Cancel
 	                </button>
-	              )}
 	            </div>
 	            {canChangeWikiSourceType ? (
 	              <div className="wikiSourceTypePicker" role="tablist" aria-label="Wiki source type">
@@ -14504,46 +15948,54 @@ function SettingsView({
 	            </div>
 	          </form>
 	        </section>
+	        )}
 
-	        <section className="wikiSourceTableSection" aria-label="Configured Wiki sources">
-	          <div className="chatSessionRows directoryTable wikiSourceTable" role="table" aria-label="Configured Wiki sources">
+	        <section className="wikiSourceTableSection" aria-label="Active Wiki sources">
+	          <div className="chatSessionRows directoryTable wikiSourceTable" role="table" aria-label="Active Wiki sources">
 	            <div className="chatResultRow directoryResultRow wikiSourceRow chatResultRowHead" role="row">
 	              <span role="columnheader">Source</span>
 	              <span role="columnheader">Type</span>
 	              <span role="columnheader">Status</span>
-	              <span role="columnheader">Target</span>
-	              <span role="columnheader">Actions</span>
+	              <span role="columnheader" aria-label="Open Wiki source" />
 	            </div>
 	            <div className="chatResultRows" role="rowgroup">
-	              {sortedSources.map((source) => (
-	                <div className="chatResultRow directoryResultRow wikiSourceRow" role="row" key={source.id}>
-	                  <span className="directoryNameCell wikiSourceNameCell" role="cell">
-	                    {(() => {
-	                      const SourceIcon = wikiIconForName(wikiSourceIconName(source));
-	                      return <SourceIcon size={17} />;
-	                    })()}
-	                    <span>
-	                      <strong>{source.label}</strong>
-	                      <small>{source.description}</small>
-	                    </span>
-	                  </span>
-	                  <span role="cell">{wikiSourceTypeDisplay(source.type)}</span>
-	                  <span role="cell">
-	                    <Badge tone={source.enabled ? (source.status === "connected" ? "success" : "warning") : "default"}>{source.enabled ? source.status.replace("_", " ") : "Disabled"}</Badge>
-	                  </span>
-	                  <span className="wikiSourceTargetCell" role="cell">{source.target}</span>
-	                  <span className="directoryRowActions wikiSourceRowActions" role="cell">
-	                    <>
-	                        <button className="iconButton" type="button" title="Repoint source" aria-label={`Repoint ${source.label}`} onClick={() => setWikiSourceDraft(wikiSourceDraftFromSource(source))}>
-	                          <Pencil size={15} />
+	              {activeWikiSources.map((source) => {
+	                const expanded = selectedWikiSourceId === source.id;
+	                return (
+	                  <Fragment key={source.id}>
+	                    <div className={`chatResultRow directoryResultRow wikiSourceRow ${expanded ? "expanded" : ""}`} role="row">
+	                      <span className="directoryNameCell wikiSourceNameCell" role="cell">
+	                        {(() => {
+	                          const SourceIcon = wikiIconForName(wikiSourceIconName(source));
+	                          return <SourceIcon size={17} />;
+	                        })()}
+	                        <span>
+	                          <strong>{source.label}</strong>
+	                        </span>
+	                      </span>
+	                      <span role="cell">{wikiSourceConnectionType(source.type)}</span>
+	                      <span role="cell">
+	                        <Badge tone={source.enabled ? (source.status === "connected" ? "success" : "warning") : "default"}>{source.enabled ? source.status.replace("_", " ") : "Disabled"}</Badge>
+	                      </span>
+	                      <span className="directoryRowActions wikiSourceRowActions" role="cell">
+	                        <button
+	                          className="chatSessionOpenButton"
+	                          type="button"
+	                          aria-label={`${expanded ? "Close" : "Open"} ${source.label}`}
+	                          aria-expanded={expanded}
+	                          onClick={() => setSelectedSettingsDetailId(expanded ? "" : `wiki:${source.id}`)}
+	                        >
+	                          {expanded ? <ChevronDown size={18} /> : <ArrowRight size={18} />}
 	                        </button>
-	                        <button className="iconButton" type="button" title="Remove source" aria-label={`Remove ${source.label}`} onClick={() => void deleteWikiSource(source)} disabled={wikiSourceBusy === source.id}>
-	                          <Trash2 size={15} />
-	                        </button>
-	                    </>
-	                  </span>
-	                </div>
-	              ))}
+	                      </span>
+	                    </div>
+	                    {expanded && renderWikiSourceDetail(source)}
+	                  </Fragment>
+	                );
+	              })}
+	              {activeWikiSources.length === 0 && (
+	                <div className="phoneNumberEmpty">No active Wiki sources yet.</div>
+	              )}
 	            </div>
 	          </div>
 	        </section>
@@ -14561,27 +16013,27 @@ function SettingsView({
             {
               title: "ACCOUNT",
               tabs: [
-                ["auth", "Pairings", ShieldCheck],
-                ["plugins", "Plugins", Plug],
-                ["agents", "Agents", Bot],
+                ["auth", "Auth", ShieldCheck],
+                ["plugins", "Plugins", Link2],
+                ["wiki", "Wiki", BookOpen],
               ],
             },
             {
-              title: "TELEPHONY",
+              title: "PHONE",
               tabs: [
                 ["contacts", "Contacts", Users],
-                ["dialer", "Dialer", Keyboard],
+                ["dialer", "Dialer", Grid3X3],
                 ["numbers", "Numbers", PhoneCall],
                 ["assistants", "Voice AI", Bot],
               ],
             },
             {
-              title: "LINK APP",
-	              tabs: [
-	                ["speak", "Speech", Mic],
-	                ["design", "Tool Design", Grid2X2],
-	                ["wiki", "Sources", Plug],
-	              ],
+              title: "TOOLS",
+              tabs: [
+                ["domains", "Domains", Globe],
+                ["agentmail", "Email", Mail],
+                ["design", "App Design", Palette],
+              ],
             },
           ] as const}
           activeTab={tab}
@@ -14589,10 +16041,11 @@ function SettingsView({
           label="Settings sections"
         />
         <div className="pageSectionMain">
-          <PageSectionHeader parent="Link" title={settingsHeadingTitle} />
+          <PageSectionHeader parent="Link" title={settingsHeadingTitle} action={settingsHeaderAction} />
 
           {tab === "auth" && renderAuthTab()}
           {tab === "plugins" && renderPluginsTab()}
+          {tab === "agentmail" && renderAgentMailSettingsTab()}
           {(tab === "contacts" || tab === "assistants" || tab === "numbers") && (
             <PhoneView
               connectors={connectors}
@@ -14605,19 +16058,16 @@ function SettingsView({
               }}
               refresh={refresh}
               startManagedSkillSetupChat={startManagedSkillSetupChat}
+              openSettingsTab={setTab}
               hideSectionSidebar
               hideHeader
               embedded
             />
           )}
-	          {tab === "agents" && <AgentControlPlaneSetupPanel connectors={connectors} refresh={refresh} />}
-	          {tab === "speak" && <ScribesView embedded />}
           {tab === "dialer" && (
-            <>
-              <div className="tabPageActionBar">{dialerBuilderActions}</div>
-              <DialerBuilder activeConfig={activeDialerConfig} onActiveConfigChange={setActiveDialerConfig} renderActions={setDialerBuilderActions} />
-            </>
-	          )}
+            <DialerBuilder activeConfig={activeDialerConfig} onActiveConfigChange={setActiveDialerConfig} renderActions={setDialerBuilderActions} />
+          )}
+	          {tab === "domains" && renderDomainsSettingsTab()}
 	          {tab === "design" && <DesignSystemView embedded />}
 	          {tab === "wiki" && renderWikiSettingsTab()}
 	        </div>
@@ -14629,22 +16079,41 @@ function SettingsView({
 function AgentControlPlaneSetupPanel({
   connectors,
   refresh,
+  openTerminal,
 }: {
   connectors: ConnectorStatus[];
   refresh: () => Promise<void>;
+  openTerminal: () => void;
 }) {
   const [authStatus, setAuthStatus] = useState<AgentControlPlaneAuthStatus | null>(null);
+  const [modelRuntime, setModelRuntime] = useState<LiteLlmRuntimeStatus | null>(null);
   const [runtime, setRuntime] = useState<"openclaw" | "hermes">("openclaw");
   const [draft, setDraft] = useState({
+    installTarget: "cloud" as "cloud" | "local",
     name: "",
+    ownerType: "squad" as "squad" | "individual",
     squad: "",
+    ownerIndividual: "",
     audience: "Telnyx employees",
+    description: "",
     instructions: "",
+    soulMd: "",
+    modelRoute: "auto/ask-before-cloud",
+    fallbackModelRoute: "auto/local-only",
+    byokApiKey: "",
+    cpuCores: "2",
+    memoryGi: "12",
+    storageGi: "20",
   });
   const [toolAccess, setToolAccess] = useState({
     linkTools: true,
     memory: true,
     approval: true,
+  });
+  const [chatChannels, setChatChannels] = useState({
+    slack: false,
+    telegram: false,
+    discord: false,
   });
   const [busyAction, setBusyAction] = useState("");
   const [message, setMessage] = useState("");
@@ -14654,32 +16123,88 @@ function AgentControlPlaneSetupPanel({
     .filter((connector) => connector.id !== "agent-control-plane")
     .filter((connector) => connector.status === "connected" || connector.status === "signed_in")
     .map((connector) => connector.name);
-  const profileReady = Boolean(draft.name.trim() && draft.squad.trim());
-  const instructionsReady = draft.instructions.trim().length >= 40;
-  const agentSetupDraft = useMemo(() => {
-    return {
-      name: draft.name.trim(),
-      runtime,
-      squad: draft.squad.trim(),
-      audience: draft.audience.trim() || "Telnyx employees",
-      instructions: draft.instructions.trim(),
-      access: {
-        linkTools: toolAccess.linkTools,
-        memory: toolAccess.memory,
-        requireApproval: toolAccess.approval,
-        connectedSources: connectedToolNames,
-      },
-    };
-  }, [connectedToolNames, draft.audience, draft.instructions, draft.name, draft.squad, runtime, toolAccess.approval, toolAccess.linkTools, toolAccess.memory]);
+  const connectedAccountNames = connectors
+    .filter((connector) => connector.status === "connected" || connector.status === "signed_in")
+    .map((connector) => connector.name);
+  const squadOptions = useMemo(() => {
+    const options = new Set<string>();
+    const actor = authStatus?.actor || authStatus?.userName || "";
+    for (const connector of connectors) {
+      const label = `${connector.id} ${connector.name}`.toLowerCase();
+      if (label.includes("google")) options.add("workspace.squad");
+      if (label.includes("github")) options.add("engineering.squad");
+      if (label.includes("agent-control-plane") && authStatus?.ready) options.add("agents.squad");
+    }
+    if (actor.includes("@")) options.add(`${actor.split("@")[0].replace(/[^a-z0-9]+/gi, ".").toLowerCase()}.squad`);
+    ["support.squad", "sales.squad", "ae.emea.squad", "claw.squad"].forEach((option) => options.add(option));
+    return [...options].sort((left, right) => left.localeCompare(right));
+  }, [authStatus?.actor, authStatus?.ready, authStatus?.userName, connectors]);
+  const aiModelRoutes = modelRuntime?.routes?.length ? modelRuntime.routes.filter((route) => route.available) : fallbackAiModelRoutes();
+  const primaryModelRoute = aiModelRoutes.find((route) => route.id === draft.modelRoute) ?? aiModelRoutes.find((route) => route.default) ?? aiModelRoutes[0];
+  const fallbackModelRoute = aiModelRoutes.find((route) => route.id === draft.fallbackModelRoute) ?? aiModelRoutes.find((route) => route.id !== primaryModelRoute?.id) ?? aiModelRoutes[0];
+  const localModelRoute = aiModelRoutes.find((route) => route.id === "local/default") ?? aiModelRoutes.find((route) => route.dataBoundary === "local");
+  const ownerValue = draft.ownerType === "squad" ? draft.squad.trim() : draft.ownerIndividual.trim();
+  const profileReady = Boolean(draft.name.trim() && ownerValue);
+  const personaReady = Boolean(draft.soulMd.trim() || draft.description.trim().length >= 20 || draft.instructions.trim().length >= 40);
+  const agentSetupDraft = useMemo(() => ({
+    name: draft.name.trim(),
+    runtime,
+    installTarget: draft.installTarget,
+    ownerType: draft.ownerType,
+    owner: ownerValue,
+    squad: draft.squad.trim(),
+    ownerIndividual: draft.ownerIndividual.trim(),
+    audience: draft.audience.trim() || "Telnyx employees",
+    description: draft.description.trim(),
+    instructions: draft.instructions.trim(),
+    soulMd: draft.soulMd.trim(),
+    model: {
+      primaryRoute: primaryModelRoute?.id ?? draft.modelRoute,
+      primaryModelName: primaryModelRoute?.modelName ?? draft.modelRoute,
+      fallbackRoute: fallbackModelRoute?.id ?? draft.fallbackModelRoute,
+      fallbackModelName: fallbackModelRoute?.modelName ?? draft.fallbackModelRoute,
+      dataBoundary: primaryModelRoute?.dataBoundary ?? "local",
+      localProvider: modelRuntime?.local?.provider ?? "ollama",
+      localModel: modelRuntime?.local?.model ?? "llama3.2",
+      localApiBase: modelRuntime?.local?.apiBase ?? "http://127.0.0.1:11434",
+      byokConfigured: Boolean(draft.byokApiKey.trim()),
+    },
+    local: {
+      configDirectory: `~/.telnyx-link/agents/${agentConfigSlug(draft.name || runtime)}`,
+      terminalId: "terminal-1",
+      terminalTitle: "Agent install",
+    },
+    channels: {
+      slack: chatChannels.slack,
+      telegram: chatChannels.telegram,
+      discord: chatChannels.discord,
+    },
+    resources: {
+      cpuCores: Number(draft.cpuCores) || 2,
+      memoryGi: Number(draft.memoryGi) || 12,
+      storageGi: Number(draft.storageGi) || 20,
+    },
+    access: {
+      linkTools: toolAccess.linkTools,
+      memory: toolAccess.memory,
+      requireApproval: toolAccess.approval,
+      connectedSources: connectedToolNames,
+      connectedAccounts: connectedAccountNames,
+    },
+  }), [chatChannels.discord, chatChannels.slack, chatChannels.telegram, connectedAccountNames, connectedToolNames, draft.audience, draft.byokApiKey, draft.cpuCores, draft.description, draft.fallbackModelRoute, draft.installTarget, draft.instructions, draft.memoryGi, draft.modelRoute, draft.name, draft.ownerIndividual, draft.ownerType, draft.soulMd, draft.squad, draft.storageGi, fallbackModelRoute?.id, fallbackModelRoute?.modelName, modelRuntime?.local?.apiBase, modelRuntime?.local?.model, modelRuntime?.local?.provider, ownerValue, primaryModelRoute?.dataBoundary, primaryModelRoute?.id, primaryModelRoute?.modelName, runtime, toolAccess.approval, toolAccess.linkTools, toolAccess.memory]);
 
   async function loadAgentSetupState() {
     setBusyAction("refresh");
     setError("");
     setMessage("");
     try {
-      const nextAuthStatus = await linkApi.getAgentControlPlaneAuthStatus();
+      const [nextAuthStatus, nextModelRuntime] = await Promise.all([
+        linkApi.getAgentControlPlaneAuthStatus(),
+        linkApi.getLiteLlmRuntimeStatus().catch(() => null),
+      ]);
       setAuthStatus(nextAuthStatus);
-      setMessage(nextAuthStatus.ready ? "Agent Control Plane session is ready for creating a new agent." : "");
+      setModelRuntime(nextModelRuntime);
+      if (!nextAuthStatus.ready && draft.installTarget === "cloud") setMessage(nextAuthStatus.message || "Sign in with Okta before creating an ACP agent.");
     } catch (err) {
       setError(agentControlPlaneLoadMessage(err));
     } finally {
@@ -14707,31 +16232,31 @@ function AgentControlPlaneSetupPanel({
     }
   }
 
-  async function signOut() {
-    setBusyAction("sign-out");
-    setError("");
-    setMessage("");
-    try {
-      const nextAuthStatus = await linkApi.signOutAgentControlPlane();
-      setAuthStatus(nextAuthStatus);
-      await refresh();
-      setMessage("Signed out of Agent Control Plane.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to sign out.");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
   async function openDeploymentForm() {
     setBusyAction("open");
     setError("");
     setMessage("");
     try {
       await linkApi.openAgentControlPlaneSetup({ draft: agentSetupDraft });
-      setMessage("Opened Agent Control Plane with the current setup draft.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to open Agent Control Plane setup.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function openLocalInstall() {
+    setBusyAction("local-install");
+    setError("");
+    setMessage("");
+    try {
+      const command = buildLocalAgentInstallCommand(agentSetupDraft);
+      openTerminal();
+      await linkApi.startTerminal({ terminalId: "terminal-1", title: "Agent install" }).catch(() => undefined);
+      await linkApi.writeTerminal({ terminalId: "terminal-1", text: `${command}\n` });
+      setMessage("Local agent setup command sent to the built-in terminal.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to start local agent setup in Terminal.");
     } finally {
       setBusyAction("");
     }
@@ -14741,51 +16266,122 @@ function AgentControlPlaneSetupPanel({
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
+  function updateInstallTarget(value: "cloud" | "local") {
+    setDraft((current) => ({
+      ...current,
+      installTarget: value,
+      modelRoute: value === "local" ? localModelRoute?.id ?? "local/default" : current.modelRoute,
+      fallbackModelRoute: value === "local" ? "auto/local-only" : current.fallbackModelRoute,
+    }));
+    setMessage("");
+    setError("");
+  }
+
+  function updateOwnerType(value: "squad" | "individual") {
+    setDraft((current) => ({
+      ...current,
+      ownerType: value,
+      ownerIndividual: value === "individual" && !current.ownerIndividual.trim()
+        ? authStatus?.actor || authStatus?.userName || ""
+        : current.ownerIndividual,
+    }));
+  }
+
   function updateToolAccess(key: keyof typeof toolAccess, value: boolean) {
     setToolAccess((current) => ({ ...current, [key]: value }));
   }
 
+  function updateChannel(key: keyof typeof chatChannels, value: boolean) {
+    setChatChannels((current) => ({ ...current, [key]: value }));
+  }
+
+  async function loadSoulMdFile() {
+    setError("");
+    try {
+      const openFilePicker = (window as typeof window & {
+        showOpenFilePicker?: (options?: {
+          multiple?: boolean;
+          types?: Array<{ description: string; accept: Record<string, string[]> }>;
+        }) => Promise<Array<{ getFile: () => Promise<File> }>>;
+      }).showOpenFilePicker;
+      if (!openFilePicker) throw new Error("File picker unavailable.");
+      const [handle] = await openFilePicker({
+        multiple: false,
+        types: [{ description: "SOUL.md", accept: { "text/markdown": [".md", ".markdown"], "text/plain": [".txt"] } }],
+      });
+      const file = await handle.getFile();
+      const text = await file.text();
+      setDraft((current) => ({
+        ...current,
+        soulMd: text,
+        description: current.description.trim() ? current.description : summarizeAgentDescription(text),
+      }));
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setError("SOUL.md upload is not available in this environment. Paste the file contents into the persona field instead.");
+    }
+  }
+
+  function generatePersona() {
+    const name = draft.name.trim() || "New agent";
+    const audience = draft.audience.trim() || "Telnyx employees";
+    const description = draft.description.trim() || draft.instructions.trim() || "Help users complete operational work clearly and safely.";
+    const owner = ownerValue || "the owning team";
+    updateDraft("soulMd", [
+      `# ${name}`,
+      "",
+      `You are ${name}, an AI agent owned by ${owner}. Your audience is ${audience}.`,
+      "",
+      "## Mission",
+      description,
+      "",
+      "## Operating Style",
+      "- Be direct, practical, and concise.",
+      "- Ask for missing context before taking risky action.",
+      "- Prefer source-backed answers and cite the system or tool used.",
+      "",
+      "## Boundaries",
+      "- Escalate customer-facing, write, delete, billing, and deployment actions when approval is required.",
+      "- Leave finished task work in a clear review-ready state.",
+      "- Explain blockers with the exact missing account, credential, or approval.",
+    ].join("\n"));
+  }
+
   const signedIn = Boolean(authStatus?.ready);
+  const canCreate = profileReady && personaReady && (draft.installTarget === "local" || signedIn);
 
   return (
     <div className="acpSetupPanel">
-      <section className="acpSetupHero">
-        <div className="acpSetupHeroIcon">
-          <Bot size={22} />
-        </div>
-        <div>
-          <h2>Agent Control Plane setup</h2>
-          <p>Configure the agent profile, runtime, access expectations, and deployment checklist for a new ACP agent.</p>
-        </div>
-        <div className="acpSetupHeroActions">
-          <button className="button secondary" type="button" onClick={() => void loadAgentSetupState()} disabled={Boolean(busyAction)}>
-            <RefreshCw size={14} />
-            {busyAction === "refresh" ? "Refreshing" : "Refresh"}
-          </button>
-          <button className={signedIn ? "button ghost" : "button primary"} type="button" onClick={() => void signIn()} disabled={Boolean(busyAction)}>
-            <ShieldCheck size={14} />
-            {busyAction === "sign-in" ? "Signing in" : signedIn ? "Re-auth" : "Sign in"}
-          </button>
-          {signedIn && (
-            <button className="button ghost" type="button" onClick={() => void signOut()} disabled={Boolean(busyAction)}>
-              <LogOut size={14} />
-              Sign out
+      {error && <div className="errorBanner">{error}</div>}
+      {message && (
+        <div className="infoBanner acpSetupBanner">
+          <span>{message}</span>
+          {!signedIn && draft.installTarget === "cloud" && (
+            <button className="button primary" type="button" onClick={() => void signIn()} disabled={Boolean(busyAction)}>
+              <ShieldCheck size={14} />
+              {busyAction === "sign-in" ? "Signing in" : "Sign in"}
             </button>
           )}
         </div>
-      </section>
-
-      {error && <div className="errorBanner">{error}</div>}
-      {message && <div className="infoBanner">{message}</div>}
+      )}
 
       <section className="acpSetupGrid">
         <div className="acpSetupCard acpSetupFormCard">
           <div className="acpSetupCardHeader">
             <div>
-              <span>Profile</span>
-              <h3>New agent</h3>
+              <span>Basics</span>
+              <h3>Identity and owner</h3>
             </div>
-            <Badge tone={profileReady && instructionsReady ? "success" : "warning"}>{profileReady && instructionsReady ? "Ready" : "Draft"}</Badge>
+          </div>
+          <div className="acpInstallTargetGroup" role="radiogroup" aria-label="Install target">
+            <button type="button" className={draft.installTarget === "cloud" ? "selected" : ""} onClick={() => updateInstallTarget("cloud")}>
+              <Cloud size={14} />
+              Cloud agent
+            </button>
+            <button type="button" className={draft.installTarget === "local" ? "selected" : ""} onClick={() => updateInstallTarget("local")}>
+              <SquareTerminal size={14} />
+              Local device
+            </button>
           </div>
           <div className="acpRuntimeSwitch" role="tablist" aria-label="Agent runtime">
             {(["openclaw", "hermes"] as const).map((option) => (
@@ -14805,24 +16401,146 @@ function AgentControlPlaneSetupPanel({
             <span>Agent name</span>
             <input value={draft.name} onChange={(event) => updateDraft("name", event.target.value)} placeholder="Revenue Support Triage" />
           </label>
+          <div className="acpOwnerTypeGroup" role="radiogroup" aria-label="Owner type">
+            <button type="button" className={draft.ownerType === "squad" ? "selected" : ""} onClick={() => updateOwnerType("squad")}>
+              Squad
+            </button>
+            <button type="button" className={draft.ownerType === "individual" ? "selected" : ""} onClick={() => updateOwnerType("individual")}>
+              Individual
+            </button>
+          </div>
           <div className="acpSetupFieldGrid">
             <label className="acpSetupField">
               <span>Squad</span>
-              <input value={draft.squad} onChange={(event) => updateDraft("squad", event.target.value)} placeholder="support.squad" />
+              <select value={draft.squad} onChange={(event) => updateDraft("squad", event.target.value)} disabled={draft.ownerType !== "squad"}>
+                <option value="">Select squad...</option>
+                {squadOptions.map((squad) => <option value={squad} key={squad}>{squad}</option>)}
+              </select>
+            </label>
+            <label className="acpSetupField">
+              <span>Owner individual</span>
+              <input value={draft.ownerIndividual} onChange={(event) => updateDraft("ownerIndividual", event.target.value)} placeholder={authStatus?.actor || "person@telnyx.com"} disabled={draft.ownerType !== "individual"} />
             </label>
             <label className="acpSetupField">
               <span>Audience</span>
               <input value={draft.audience} onChange={(event) => updateDraft("audience", event.target.value)} placeholder="Telnyx employees" />
             </label>
+            <label className="acpSetupField">
+              <span>Connected account context</span>
+              <input value={connectedAccountNames.length ? connectedAccountNames.join(", ") : "No connected accounts"} readOnly />
+            </label>
+          </div>
+        </div>
+
+        <div className="acpSetupCard">
+          <div className="acpSetupCardHeader">
+            <div>
+              <span>Persona</span>
+              <h3>Description and SOUL.md</h3>
+            </div>
+            <div className="acpInlineActions">
+              <button className="button secondary" type="button" onClick={generatePersona}>
+                <Zap size={14} />
+                Generate persona
+              </button>
+              <button className="button secondary" type="button" onClick={() => void loadSoulMdFile()}>
+                <Upload size={14} />
+                Upload SOUL.md
+              </button>
+            </div>
           </div>
           <label className="acpSetupField">
-            <span>Instructions</span>
+            <span>Agent description</span>
+            <input value={draft.description} onChange={(event) => updateDraft("description", event.target.value)} placeholder="One-line registry description for this agent" />
+          </label>
+          <label className="acpSetupField">
+            <span>SOUL.md or instructions</span>
             <textarea
-              value={draft.instructions}
-              onChange={(event) => updateDraft("instructions", event.target.value)}
-              placeholder="Define ownership, preferred sources, escalation rules, approval boundaries, and the exact handoff state the agent should leave work in."
+              value={draft.soulMd || draft.instructions}
+              onChange={(event) => updateDraft(draft.soulMd ? "soulMd" : "instructions", event.target.value)}
+              placeholder="Describe the agent's mission, tone, boundaries, escalation rules, preferred sources, and final handoff state."
             />
           </label>
+        </div>
+
+        <div className="acpSetupCard">
+          <div className="acpSetupCardHeader">
+            <div>
+              <span>Model</span>
+              <h3>Runtime configuration</h3>
+            </div>
+          </div>
+          <div className="acpSetupFieldGrid">
+            <label className="acpSetupField">
+              <span>Primary model route</span>
+              <select value={draft.modelRoute} onChange={(event) => updateDraft("modelRoute", event.target.value)}>
+                {aiModelRoutes.map((route) => (
+                  <option value={route.id} key={route.id}>{route.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="acpSetupField">
+              <span>Fallback model route</span>
+              <select value={draft.fallbackModelRoute} onChange={(event) => updateDraft("fallbackModelRoute", event.target.value)}>
+                {aiModelRoutes.map((route) => (
+                  <option value={route.id} key={route.id}>{route.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="acpSetupField wide">
+              <span>Bring your own key</span>
+              <input value={draft.byokApiKey} onChange={(event) => updateDraft("byokApiKey", event.target.value)} placeholder="sk-..." type="password" />
+            </label>
+          </div>
+          {primaryModelRoute && (
+            <p className="acpRouteNote">{dataBoundaryLabel(primaryModelRoute.dataBoundary)} · {primaryModelRoute.description}</p>
+          )}
+          <div className="acpModelLocalStatus">
+            <SquareTerminal size={16} />
+            <div>
+              <strong>Local models</strong>
+              <span>
+                {modelRuntime?.local
+                  ? `${modelRuntime.local.provider} ${modelRuntime.local.model} at ${modelRuntime.local.apiBase}`
+                  : "Ollama-compatible local route at http://127.0.0.1:11434"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="acpSetupCard">
+          <div className="acpSetupCardHeader">
+            <div>
+              <span>Channels</span>
+              <h3>Chat and deployment resources</h3>
+            </div>
+          </div>
+          <div className="acpChannelRows">
+            {([
+              ["slack", "Slack"],
+              ["telegram", "Telegram"],
+              ["discord", "Discord"],
+            ] as const).map(([key, label]) => (
+              <label key={key}>
+                <span>{label}</span>
+                <input type="checkbox" checked={chatChannels[key]} onChange={(event) => updateChannel(key, event.target.checked)} />
+              </label>
+            ))}
+          </div>
+          <div className="acpSetupFieldGrid acpResourceGrid">
+            <label className="acpSetupField">
+              <span>CPU cores</span>
+              <input value={draft.cpuCores} onChange={(event) => updateDraft("cpuCores", event.target.value)} inputMode="numeric" />
+            </label>
+            <label className="acpSetupField">
+              <span>Memory Gi</span>
+              <input value={draft.memoryGi} onChange={(event) => updateDraft("memoryGi", event.target.value)} inputMode="numeric" />
+            </label>
+            <label className="acpSetupField">
+              <span>Storage Gi</span>
+              <input value={draft.storageGi} onChange={(event) => updateDraft("storageGi", event.target.value)} inputMode="numeric" />
+            </label>
+          </div>
         </div>
 
         <div className="acpSetupCard">
@@ -14864,24 +16582,37 @@ function AgentControlPlaneSetupPanel({
           <div className="acpSetupCardHeader">
             <div>
               <span>Create</span>
-              <h3>New ACP agent</h3>
+              <h3>{draft.installTarget === "local" ? "Local agent" : "New ACP agent"}</h3>
             </div>
-            <Badge tone={signedIn ? "success" : "warning"}>{signedIn ? "Ready" : "Sign in"}</Badge>
+            {!signedIn && draft.installTarget === "cloud" && <Badge tone="warning">Sign in</Badge>}
           </div>
           <div className="acpCreateSummary">
-            <Bot size={22} />
+            {draft.installTarget === "local" ? <SquareTerminal size={22} /> : <Bot size={22} />}
             <div>
-              <strong>{draft.name.trim() || "New ACP agent"}</strong>
-              <small>{runtime === "openclaw" ? "OpenClaw" : "Hermes"} runtime · {draft.squad.trim() || "Squad not set"}</small>
+              <strong>{draft.name.trim() || (draft.installTarget === "local" ? "New local agent" : "New ACP agent")}</strong>
+              <small>{draft.installTarget === "local" ? "Local device" : "Telnyx ACP"} · {runtime === "openclaw" ? "OpenClaw" : "Hermes"} · {ownerValue || "Owner not set"} · {primaryModelRoute?.label ?? "Model route not set"}</small>
             </div>
           </div>
           <p className="acpCreateNote">
-            Create the agent with the selected runtime, squad, access, and safety settings.
+            {draft.installTarget === "local"
+              ? "Install this agent on this Mac with the built-in terminal. The command writes the local runtime, persona, model route, channels, resources, access, and safety settings."
+              : "Continue with this ACP configuration: owner, persona, model route, channels, resources, access, and safety settings."}
           </p>
           <div className="acpSetupActions">
-            <button className="button secondary" type="button" onClick={() => void openDeploymentForm()} disabled={!signedIn || Boolean(busyAction)}>
-              <ExternalLink size={14} />
-              {busyAction === "open" ? "Opening" : "Continue in ACP"}
+            <button className="button secondary" type="button" onClick={() => void loadAgentSetupState()} disabled={Boolean(busyAction)}>
+              <RefreshCw size={14} />
+              {busyAction === "refresh" ? "Refreshing" : "Refresh"}
+            </button>
+            <button
+              className="button primary"
+              type="button"
+              onClick={() => draft.installTarget === "local" ? void openLocalInstall() : void openDeploymentForm()}
+              disabled={!canCreate || Boolean(busyAction)}
+            >
+              {draft.installTarget === "local" ? <SquareTerminal size={14} /> : <ExternalLink size={14} />}
+              {draft.installTarget === "local"
+                ? busyAction === "local-install" ? "Opening terminal" : "Install locally in Terminal"
+                : busyAction === "open" ? "Opening" : "Continue in ACP"}
             </button>
           </div>
         </div>
@@ -14890,10 +16621,65 @@ function AgentControlPlaneSetupPanel({
   );
 }
 
-type ScribesWorkspaceTab = "dictation" | "models" | "history" | "cloud" | "tts" | "meetings" | "settings";
+function summarizeAgentDescription(text: string) {
+  const firstContentLine = text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^#+\s*/, "").trim())
+    .find((line) => line && !line.startsWith("-"));
+  return firstContentLine?.slice(0, 160) || "AI agent configured from SOUL.md.";
+}
+
+function agentConfigSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "new-agent";
+}
+
+function buildLocalAgentInstallCommand(draft: {
+  name: string;
+  runtime: "openclaw" | "hermes";
+  installTarget: "cloud" | "local";
+  owner: string;
+  model: {
+    primaryRoute: string;
+    primaryModelName: string;
+    fallbackRoute: string;
+    fallbackModelName: string;
+    localProvider: string;
+    localModel: string;
+    localApiBase: string;
+  };
+  local: {
+    configDirectory: string;
+  };
+}) {
+  const slug = agentConfigSlug(draft.name || draft.runtime);
+  const runtimeLabel = draft.runtime === "openclaw" ? "OpenClaw" : "Hermes";
+  const config = {
+    ...draft,
+    installTarget: "local",
+    generatedBy: "telnyx-link-desktop",
+    generatedAt: new Date().toISOString(),
+  };
+  return [
+    `mkdir -p "$HOME/.telnyx-link/agents/${slug}"`,
+    `cat > "$HOME/.telnyx-link/agents/${slug}/agent-config.json" <<'JSON'`,
+    JSON.stringify(config, null, 2),
+    "JSON",
+    `printf "\\nLocal ${runtimeLabel} agent config saved to $HOME/.telnyx-link/agents/${slug}/agent-config.json\\n"`,
+    `printf "Model route: ${draft.model.primaryRoute} (${draft.model.localProvider} ${draft.model.localModel} at ${draft.model.localApiBase})\\n"`,
+    `printf "Use this config with your local ${runtimeLabel} runtime from the Link terminal.\\n"`,
+  ].join("\n");
+}
+
+type ScribesWorkspaceTab = "dictation" | "speech" | "models" | "history" | "cloud" | "tts" | "meetings" | "settings";
 
 const scribesWorkspaceTabs: readonly PageSectionTab<ScribesWorkspaceTab>[] = [
   ["dictation", "Dictation", Mic],
+  ["speech", "Speech", SlidersHorizontal],
   ["models", "Models", Download],
   ["history", "History", ArchiveIcon],
   ["cloud", "Telnyx Cloud", Plug],
@@ -14902,8 +16688,8 @@ const scribesWorkspaceTabs: readonly PageSectionTab<ScribesWorkspaceTab>[] = [
   ["settings", "Settings", Settings],
 ];
 
-function ScribesView({ embedded = false }: { embedded?: boolean }) {
-  const [activeTab, setActiveTab] = useState<ScribesWorkspaceTab>(embedded ? "settings" : "dictation");
+function ScribesView() {
+  const [activeTab, setActiveTab] = useState<ScribesWorkspaceTab>("dictation");
   const [status, setStatus] = useState<ScribesStatus | null>(null);
   const [message, setMessage] = useState("");
 
@@ -14923,6 +16709,7 @@ function ScribesView({ embedded = false }: { embedded?: boolean }) {
   function renderActivePanel() {
     if (!status) return <div className="appEmptyPanel">Loading Scribes workspace...</div>;
     if (activeTab === "dictation") return <ScribesDictationPanel status={status} onRefresh={refreshScribesWorkspace} />;
+    if (activeTab === "speech") return <SpeakSettingsPanel />;
     if (activeTab === "models") return <ScribesModelsPanel />;
     if (activeTab === "history") return <ScribesHistoryPanel sessions={status.sessions} onRefresh={refreshScribesWorkspace} />;
     if (activeTab === "cloud") return <ScribesCloudPanel status={status} onRefresh={refreshScribesWorkspace} />;
@@ -14932,41 +16719,29 @@ function ScribesView({ embedded = false }: { embedded?: boolean }) {
   }
 
   return (
-    <section className={embedded ? "scribesView settingsScribesPanel" : "content scribesView canonicalChat"}>
-      {!embedded && (
-        <header className="pageHeader">
-          <div>
-            <h1>Scribes</h1>
-          </div>
-        </header>
-      )}
-      <div className={embedded ? "scribesSurface" : "pageSectionShell scribesWorkspaceShell"}>
-        {!embedded && (
-          <PageSectionSidebar
-            tabs={scribesWorkspaceTabs}
-            heading="Scribes"
-            headingIcon={ScribesWaveformIcon}
-            activeTab={activeTab}
-            onSelect={setActiveTab}
-            label="Scribes workspace sections"
-          />
-        )}
+    <section className="content scribesView">
+      <div className="pageSectionShell scribesWorkspaceShell">
+        <PageSectionSidebar
+          tabs={scribesWorkspaceTabs}
+          heading="Scribes"
+          headingIcon={ScribesWaveformIcon}
+          activeTab={activeTab}
+          onSelect={setActiveTab}
+          label="Scribes workspace sections"
+        />
         <main className="pageSectionMain scribesWorkspaceMain">
-          {!embedded && (
-            <PageSectionHeader
-              parent="Scribes"
-              title={activeLabel}
-              action={(
-                <button className="button secondary" type="button" onClick={() => void refreshScribesWorkspace()}>
-                  <RefreshCw size={14} />
-                  Refresh
-                </button>
-              )}
-            />
-          )}
+          <PageSectionHeader
+            parent=""
+            title={activeLabel}
+            action={(
+              <button className="button secondary" type="button" onClick={() => void refreshScribesWorkspace()}>
+                <RefreshCw size={14} />
+                Refresh
+              </button>
+            )}
+          />
           {status && <ScribesRouteSummary status={status} />}
           {renderActivePanel()}
-          {embedded && <SpeakSettingsPanel />}
           {message && <div className="voiceInputStatus" aria-live="polite">{message}</div>}
         </main>
       </div>
@@ -15290,7 +17065,6 @@ function ScribesTtsPanel({ status }: { status: ScribesStatus }) {
           <span>{status.settings.ttsMode === "local" ? "Pluggable local provider slot." : "Hosted voice generation through Telnyx when TELNYX_API_KEY is configured."}</span>
         </div>
       </section>
-      <SpeakSettingsPanel />
     </div>
   );
 }
@@ -15894,7 +17668,7 @@ function SpeakSettingsPanel() {
         provider: voice.provider,
       });
       if (!sample.audioBase64) {
-        setMessage("Sample playback is only available in the Electron app with a saved Telnyx API key.");
+        setMessage("Sample playback is only available in Link with a saved Telnyx API key.");
         return;
       }
       const nextAudio = new Audio(`data:${sample.mimeType};base64,${sample.audioBase64}`);
@@ -16468,6 +18242,7 @@ function credentialGroupConnected(group: CredentialGroupStatus, connectors: Conn
   if (group.id === "google-workspace") return googleWorkspaceConnected;
   if (group.id === "github") return group.fields.some((field) => ["GITHUB_USER_ACCESS_TOKEN", "GH_TOKEN"].includes(field.name) && field.configured);
   if (group.id === "guru") return group.fields.some((field) => ["GURU_OAUTH_REFRESH_TOKEN", "GURU_OAUTH_ACCESS_TOKEN"].includes(field.name) && field.configured);
+  if (group.id === "agentmail") return group.fields.some((field) => field.name === "AGENTMAIL_API_KEY" && field.configured);
   const matchingConnector = connectors.find((connector) => connector.id === group.id);
   if (matchingConnector?.status === "connected" || matchingConnector?.status === "signed_in") return true;
   return visibleFields.length > 0 && visibleFields.every((field) => field.configured);
@@ -16506,6 +18281,8 @@ function credentialFieldLabel(name: string) {
   if (name === "PYLON_MCP_ACCESS_TOKEN") return "Pylon MCP Access Token";
   if (name === "PYLON_MCP_REFRESH_TOKEN") return "Pylon MCP Refresh Token";
   if (name === "PYLON_MCP_TOKEN_EXPIRES_AT") return "Pylon MCP Token Expires At";
+  if (name === "AGENTMAIL_API_KEY") return "AgentMail API Key";
+  if (name === "AGENTMAIL_DOMAIN") return "AgentMail Domain";
   return name;
 }
 
@@ -16542,6 +18319,16 @@ function fallbackAiModelRoutes(): AiModelRoute[] {
       dataBoundary: "local",
       targetModel: "llama3.2",
       description: "Only uses the local Ollama-compatible model.",
+      available: true,
+    },
+    {
+      id: "local/default",
+      modelName: "local/default",
+      label: "Local: llama3.2",
+      provider: "local",
+      dataBoundary: "local",
+      targetModel: "llama3.2",
+      description: "Direct route to the locally hosted Ollama-compatible model.",
       available: true,
     },
   ];

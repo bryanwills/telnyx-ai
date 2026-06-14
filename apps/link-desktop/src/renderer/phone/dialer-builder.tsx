@@ -4,23 +4,20 @@ import {
   ArrowUp,
   AudioWaveform,
   BarChart3,
-  Check,
+  Bot,
   CircleDot,
   ClipboardList,
   Database,
   Eye,
   Hash,
-  Headphones,
   Keyboard,
   MicOff,
   Pause,
   PhoneOff,
   Save,
   Search,
-  Smartphone,
   StickyNote,
   Timer,
-  TrendingUp,
   Users,
   Volume2,
 } from "lucide-react";
@@ -31,8 +28,6 @@ import {
   cloneDialerConfig,
   dialerActions,
   dialerFeatures,
-  dialerTemplates,
-  normalizeDialerConfig,
   type DialerConfig,
   type DialerFeaturePhase,
 } from "./dialer-config.js";
@@ -42,21 +37,19 @@ const iconMap = {
   ArrowRightLeft,
   AudioWaveform,
   BarChart3,
+  Bot,
   CircleDot,
   ClipboardList,
   Database,
   Eye,
   Hash,
-  Headphones,
   Keyboard,
   MicOff,
   Pause,
   PhoneOff,
   Search,
-  Smartphone,
   StickyNote,
   Timer,
-  TrendingUp,
   Users,
   Volume2,
 } as const;
@@ -117,27 +110,6 @@ export function DialerBuilder({
     }
   }
 
-  function applyTemplate(templateId: string) {
-    const template = dialerTemplates.find((item) => item.id === templateId);
-    if (!template) return;
-    setDraft(withDefaultDialerButtonColor(normalizeDialerConfig(template, false)));
-    setStatus(`${template.name} loaded. Save to activate your changes.`);
-    setError("");
-  }
-
-  async function activateBuiltIn(templateId: string) {
-    try {
-      const state = await linkApi.activateDialerConfig(templateId);
-      const nextConfig = withDefaultDialerButtonColor(state.activeConfig);
-      setDraft(cloneDialerConfig(nextConfig));
-      onActiveConfigChange(nextConfig);
-      setStatus(`${nextConfig.name} is active.`);
-      setError("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to activate template.");
-    }
-  }
-
   const saveAndActivate = useCallback(async () => {
     try {
       const state = await linkApi.saveDialerConfig({
@@ -183,7 +155,7 @@ export function DialerBuilder({
     setDraft((current) => {
       const exists = current.actions.includes(actionId);
       if (exists && current.actions.length <= 2) return current;
-      if (!exists && current.actions.length >= 5) return current;
+      if (!exists && current.actions.length >= 6) return current;
       return {
         ...current,
         actions: exists ? current.actions.filter((id) => id !== actionId) : [...current.actions, actionId],
@@ -208,15 +180,12 @@ export function DialerBuilder({
   const selectedActions = useMemo(() => draft.actions.map((id) => dialerActions.find((action) => action.id === id)).filter(Boolean), [draft.actions]);
   const actions = useMemo(() => (
     <div className="dialerBuilderActions">
-      <button className="button secondary" type="button" onClick={() => setDraft(withDefaultDialerButtonColor(cloneDialerConfig(activeConfig)))}>
-        Reset draft
-      </button>
       <button className="button primary" type="button" onClick={() => void saveAndActivate()}>
         <Save size={15} />
         Save
       </button>
     </div>
-  ), [activeConfig, saveAndActivate]);
+  ), [saveAndActivate]);
 
   useEffect(() => {
     renderActions?.(actions);
@@ -227,28 +196,6 @@ export function DialerBuilder({
     <section className="dialerBuilder">
       {status && <div className="infoBanner">{status}</div>}
       {error && <div className="errorBanner">{error}</div>}
-
-      <div className="dialerTemplateGrid dialerTemplateStrip" aria-label="Dialer templates">
-        {dialerTemplates.map((template) => {
-          const Icon = iconFor(template.icon);
-          const selected = draft.template === template.id || draft.id === template.id;
-          const activated = activeConfig.template === template.id || activeConfig.id === template.id;
-          return (
-            <article className={`dialerTemplateCard tone-${template.tone} ${activated ? "active" : ""} ${selected ? "selected" : ""}`} key={template.id}>
-              <button type="button" onClick={() => applyTemplate(template.id)}>
-                <span className="dialerTemplateIcon"><Icon size={16} /></span>
-                <span>
-                  <strong>{template.name}</strong>
-                </span>
-              </button>
-              <button className="button ghost" type="button" onClick={() => void activateBuiltIn(template.id)}>
-                {activated ? <Check size={13} /> : <ArrowRightLeft size={13} />}
-                {activated ? "Active" : "Switch"}
-              </button>
-            </article>
-          );
-        })}
-      </div>
 
       <div className="dialerBuilderLayout">
         <section className="dialerBuilderFeatures" aria-label="Dialer feature modules">
@@ -308,7 +255,7 @@ export function DialerBuilder({
             <div className="dialerActionBuilder">
               <header>
                 <strong>Call actions</strong>
-                <small>{draft.actions.length}/5 buttons</small>
+                <small>{draft.actions.length}/6 buttons</small>
               </header>
               <div className="dialerSelectedActions">
                 {selectedActions.map((action, index) => {
@@ -329,7 +276,7 @@ export function DialerBuilder({
                 {dialerActions.filter((action) => !draft.actions.includes(action.id)).map((action) => {
                   const Icon = iconFor(action.icon);
                   return (
-                    <button key={action.id} type="button" onClick={() => toggleAction(action.id)} disabled={draft.actions.length >= 5}>
+                    <button key={action.id} type="button" onClick={() => toggleAction(action.id)} disabled={draft.actions.length >= 6}>
                       <Icon size={14} />
                       {action.label}
                     </button>

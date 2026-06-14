@@ -30,6 +30,8 @@ const auditLogger = new InMemoryAuditLogger();
 const runtime = new LinkRuntime({ auditLogger });
 const nativeFetch = globalThis.fetch.bind(globalThis);
 const stateVersion = 11;
+const defaultDialerConfigId = "link-dialer";
+const legacyDialerTemplateIds = new Set(["standard", "sales", "support"]);
 const defaultAgentControlPlaneUrl = "http://agent-control-plane.query.prod.telnyx.io:8000";
 const defaultA2aDiscoveryUrl = "http://a2a-discovery.query.prod.telnyx.io:4000";
 const defaultAuthInternalUrl = "https://auth-internal.query.prod.telnyx.io:6674";
@@ -700,14 +702,14 @@ const credentialDefinitions = [
   { id: "litellm", label: "Model Gateway", fields: ["LITELLM_BASE_URL", "LITELLM_API_KEY", "TELNYX_INFERENCE_BASE_URL", "ANTHROPIC_API_KEY"], help: "Optional managed gateway and frontier BYO settings. Local Ollama mode does not require a cloud key; Telnyx BYO uses the Telnyx API key group." },
   { id: "hindsight", label: "Hindsight", fields: ["HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"], help: "Per-user Hindsight API key plus the memory bank id used for retain operations. Link can still infer the bank from live bank selection or compatible key claims." },
   { id: "linear", label: "Linear", fields: ["LINEAR_API_KEY"], help: "Linear API key for issue and project lookup." },
-  { id: "telnyx", label: "Telnyx API Key", fields: ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"], help: "Telnyx API key for account, phone, messaging, and WebRTC token generation." },
+  { id: "telnyx", label: "Telnyx", fields: ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"], help: "Telnyx API key for account, phone, messaging, and WebRTC token generation." },
   { id: "telnyx-meet-bridge", label: "Telnyx Meet Bridge", fields: [telnyxVoiceConnectionIdField, telnyxMeetCallerIdField, telnyxMeetWebhookUrlField, telnyxMeetConversationRelayWsUrlField, linkMeetingAgentAdapterUrlField], help: "Runtime settings for Google Meet live joins. Telnyx Assistants can join by assistant id; generic agents require a public Conversation Relay wss:// URL and may use the Link hosted agent adapter URL." },
   { id: "agentmail", label: "AgentMail", fields: [agentMailApiKeyField, agentMailDomainField], help: "AgentMail creates one deterministic inbox per meeting bot. Link uses that email identity as the Calendar attendee." },
   { id: "github", label: "GitHub", fields: [githubUserAccessTokenField, githubAppClientIdField, "GH_TOKEN"], help: "Pair GitHub with a read-only Telnyx Link GitHub App so Link can access approved Telnyx repositories without asking users to create personal access tokens." },
   { id: "guru", label: "Guru", fields: [guruOAuthClientIdField, guruOAuthClientSecretField, guruOAuthScopeField, guruOAuthRedirectUriField, guruOAuthAccessTokenField, guruOAuthRefreshTokenField, guruOAuthTokenExpiresAtField, guruOAuthUserIdField], help: "Connect Guru through OAuth so Link can search Guru MCP cards after the user approves access through Guru SSO. Admins can provide the OAuth client settings through env or managed app config." },
   { id: "pylon", label: "Pylon", fields: [pylonMcpUrlField, pylonMcpClientIdField, pylonMcpAccessTokenField, pylonMcpRefreshTokenField, pylonMcpTokenExpiresAtField], help: "Connect the team-telnyx/pylon-mcp-server compatible endpoint through Pylon OAuth so Link can search tickets and create issues through user-scoped Pylon MCP access. Link blocks update_issue and update_account in v1." },
   { id: "slack", label: "Slack", fields: ["SLACK_USER_TOKEN", "SLACK_BOT_TOKEN"], help: "Slack user token discovers and DMs bot users; bot token can post where the app has access." },
-  { id: "google-workspace", label: "Google Workspace", fields: [googleWorkspaceAgentConnectionField, gogAccountField, gogKeyringPasswordField], help: "Connect Google Workspace through openclaw-itops-setup-utils/gog-setup. Link launches Google sign-in through gog and verifies Calendar and Contacts before marking this connected." },
+  { id: "google-workspace", label: "Google", fields: [googleWorkspaceAgentConnectionField, gogAccountField, gogKeyringPasswordField], help: "Connect Google Workspace through openclaw-itops-setup-utils/gog-setup. Link launches Google sign-in through gog and verifies Calendar and Contacts before marking this connected." },
   { id: "google-inbox", label: "Google Inbox", fields: [googleInboxAgentConnectionField, googleInboxVerifiedField, gogAccountField, gogKeyringPasswordField], help: "Connect Gmail through gog. Link can read inbox threads and save Gmail drafts, but blocks all Gmail send commands at the app level." },
   { id: "google-tasks", label: "Google Tasks", fields: [googleTasksAgentConnectionField, googleTasksVerifiedField, gogAccountField, gogKeyringPasswordField], help: "Connect Google Tasks through gog so Taskbox can sync, create, update, and complete Google tasks without delete or clear commands." },
 ];
@@ -2302,6 +2304,7 @@ async function sendChatMessage({ sessionId, workspaceId = "workspace-link", cont
   sessionItem.status = "active";
   sessionItem.updatedAt = new Date().toISOString();
   sessionItem.model = liveResponse.ok ? liveResponse.route : "live-runtime-unavailable";
+  await syncWorkboardTaskCompletionFromAssistant(sessionItem, responseText);
 
   addWorkspaceTab(workspaceId, {
     id: `tab-${sessionItem.id}`,
@@ -2313,6 +2316,57 @@ async function sendChatMessage({ sessionId, workspaceId = "workspace-link", cont
 
   await saveDesktopState();
   return sessionItem;
+}
+
+async function syncWorkboardTaskCompletionFromAssistant(sessionItem, responseText) {
+  const task = sessionItem?.task;
+  if (!task?.cardId || task.status === "needs_review" || task.status === "done") return;
+  if (!assistantResponseIndicatesWorkboardReviewReady(responseText)) return;
+
+  const provider = normalizeWorkboardProvider(task.provider || "local");
+  const boardId = task.boardId || "local";
+  const key = workboardTaskSessionKey(provider, boardId, task.cardId);
+  const taskSession = workboardTaskSessions.find((item) => item.key === key || item.sessionId === sessionItem.id);
+  const card = await findWorkboardCardForTask({
+    provider,
+    boardId,
+    cardId: task.cardId,
+  }).catch(() => null);
+  if (!card || normalizeWorkboardStatus(card.status) !== "in_progress") return;
+
+  await updateWorkboardCard({
+    provider: card.provider || provider,
+    boardId: card.boardId || boardId,
+    cardId: card.id,
+    status: "needs_review",
+    autoDispatch: false,
+    comment: "Agent response marked this task ready for human review.",
+  });
+
+  const now = new Date().toISOString();
+  if (taskSession) {
+    taskSession.status = "needs_review";
+    taskSession.updatedAt = now;
+  }
+  sessionItem.task = {
+    ...task,
+    provider: card.provider || provider,
+    boardId: card.boardId || boardId,
+    cardId: card.id,
+    status: "needs_review",
+  };
+  sessionItem.updatedAt = now;
+}
+
+function assistantResponseIndicatesWorkboardReviewReady(responseText) {
+  const text = String(responseText || "").toLowerCase();
+  if (!text.trim()) return false;
+  if (/\b(blocked|blocker|cannot complete|can't complete|unable to complete|needs input)\b/.test(text)) return false;
+  return (
+    /\bmov(?:e|ed|ing)\b[\s\S]{0,120}\bneeds review\b/.test(text) ||
+    /\bneeds review\b[\s\S]{0,120}\b(human|review|verification|ready)\b/.test(text) ||
+    /\b(final response|artifacts?|deliverables?|work)\b[\s\S]{0,120}\b(ready for (human )?review|complete|completed|finished)\b/.test(text)
+  );
 }
 
 async function createChatSession({
@@ -4800,7 +4854,11 @@ async function listWorkboard(input = {}) {
     const hermes = providers.find((item) => item.id === "hermes");
     if (!hermes?.available) return unavailableWorkboardSnapshot("hermes", providers, hermes?.message ?? "Hermes CLI is not available.");
     try {
-      return decorateWorkboardSnapshotWithTaskSessions(await listHermesWorkboard(input.boardId, providers));
+      const snapshot = await listHermesWorkboard(input.boardId, providers);
+      if (!input.skipReviewReconcile && await reconcileWorkboardSnapshotReviewReady(snapshot, input.preferredAgentType)) {
+        return listWorkboard({ ...input, skipReviewReconcile: true });
+      }
+      return decorateWorkboardSnapshotWithTaskSessions(snapshot);
     } catch (error) {
       return unavailableWorkboardSnapshot("hermes", providers, errorMessage(error));
     }
@@ -4810,7 +4868,11 @@ async function listWorkboard(input = {}) {
     const openclaw = providers.find((item) => item.id === "openclaw");
     if (!openclaw?.available) return unavailableWorkboardSnapshot("openclaw", providers, openclaw?.message ?? "OpenClaw CLI is not available.");
     try {
-      return decorateWorkboardSnapshotWithTaskSessions(await listOpenClawWorkboard(input.boardId, providers));
+      const snapshot = await listOpenClawWorkboard(input.boardId, providers);
+      if (!input.skipReviewReconcile && await reconcileWorkboardSnapshotReviewReady(snapshot, input.preferredAgentType)) {
+        return listWorkboard({ ...input, skipReviewReconcile: true });
+      }
+      return decorateWorkboardSnapshotWithTaskSessions(snapshot);
     } catch (error) {
       return unavailableWorkboardSnapshot("openclaw", providers, errorMessage(error));
     }
@@ -4820,13 +4882,51 @@ async function listWorkboard(input = {}) {
     const googleTasks = providers.find((item) => item.id === "google_tasks");
     if (!googleTasks?.available) return unavailableWorkboardSnapshot("google_tasks", providers, googleTasks?.message ?? "Google Tasks through gog is not available.");
     try {
-      return decorateWorkboardSnapshotWithTaskSessions(await listGoogleTasksWorkboard(input.boardId, providers));
+      const snapshot = await listGoogleTasksWorkboard(input.boardId, providers);
+      if (!input.skipReviewReconcile && await reconcileWorkboardSnapshotReviewReady(snapshot, input.preferredAgentType)) {
+        return listWorkboard({ ...input, skipReviewReconcile: true });
+      }
+      return decorateWorkboardSnapshotWithTaskSessions(snapshot);
     } catch (error) {
       return unavailableWorkboardSnapshot("google_tasks", providers, googleTasksUnavailableMessage(error));
     }
   }
 
-  return decorateWorkboardSnapshotWithTaskSessions(localWorkboardSnapshot(providers, input.boardId));
+  const snapshot = localWorkboardSnapshot(providers, input.boardId);
+  if (!input.skipReviewReconcile && await reconcileWorkboardSnapshotReviewReady(snapshot, input.preferredAgentType)) {
+    return listWorkboard({ ...input, skipReviewReconcile: true });
+  }
+  return decorateWorkboardSnapshotWithTaskSessions(snapshot);
+}
+
+async function reconcileWorkboardSnapshotReviewReady(snapshot, preferredAgentType) {
+  let changed = false;
+  for (const card of snapshot.cards || []) {
+    if (normalizeWorkboardStatus(card.status) !== "in_progress") continue;
+    const taskSession = workboardTaskSessionForCard(card);
+    if (!taskSession || taskSession.status === "needs_review" || taskSession.status === "done") continue;
+    const sessionItem = chatSessions.find((item) => item.id === taskSession.sessionId);
+    const lastAssistantMessage = [...(sessionItem?.messages || [])].reverse().find((message) => message.role === "assistant" && message.content);
+    if (!assistantResponseIndicatesWorkboardReviewReady(lastAssistantMessage?.content || "")) continue;
+
+    await updateWorkboardCard({
+      provider: card.provider,
+      boardId: card.boardId,
+      preferredAgentType,
+      cardId: card.id,
+      status: "needs_review",
+      autoDispatch: false,
+      comment: "Agent response marked this task ready for human review.",
+    });
+    const now = new Date().toISOString();
+    taskSession.status = "needs_review";
+    taskSession.updatedAt = now;
+    if (sessionItem?.task) sessionItem.task = { ...sessionItem.task, status: "needs_review" };
+    if (sessionItem) sessionItem.updatedAt = now;
+    changed = true;
+  }
+  if (changed) await saveDesktopState();
+  return changed;
 }
 
 async function createWorkboardCard(input = {}) {
@@ -5896,27 +5996,48 @@ async function listAccountPhoneNumbers() {
 async function listPhoneCallHistory(input = {}) {
   const apiKey = requireTelnyxApiKey();
   const maxResults = clampInteger(input.maxResults, 1, 100, 50);
-  const url = new URL(`${telnyxApiBaseUrl()}/v2/detail_records`);
-  url.searchParams.set("filter[record_type]", "webrtc");
-  url.searchParams.set("page[size]", String(Math.min(100, Math.max(maxResults, 25))));
-  url.searchParams.set("sort", "-created_at");
-
-  const response = await fetch(url, {
-    headers: telnyxHeaders(apiKey),
-  });
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`Telnyx call detail records returned ${response.status}: ${detail.slice(0, 500)}`);
-  }
-
-  const payload = await response.json();
+  const payload = await fetchPhoneCallHistoryRecords(apiKey, maxResults);
   return (payload.data ?? [])
     .filter(isVoiceDetailRecord)
     .map(normalizePhoneCallHistoryRow)
     .filter((row) => row.id && row.number)
     .sort((left, right) => Date.parse(right.startedAt || "") - Date.parse(left.startedAt || ""))
-    .slice(0, maxResults)
-    .map(({ startedAt: _startedAt, ...row }) => row);
+    .slice(0, maxResults);
+}
+
+async function fetchPhoneCallHistoryRecords(apiKey, maxResults) {
+  const pageSize = String(Math.min(100, Math.max(maxResults, 25)));
+  const attempts = [
+    { recordType: "webrtc", dateRange: "today" },
+    { recordType: "webrtc", dateRange: "yesterday" },
+    { recordType: "webrtc" },
+  ];
+  let lastErrorDetail = "";
+
+  for (const attempt of attempts) {
+    const url = new URL(`${telnyxApiBaseUrl()}/v2/detail_records`);
+    url.searchParams.set("filter[record_type]", attempt.recordType);
+    if (attempt.dateRange) url.searchParams.set("filter[date_range]", attempt.dateRange);
+    url.searchParams.set("page[size]", pageSize);
+
+    const response = await fetch(url, {
+      headers: telnyxHeaders(apiKey),
+    });
+    if (response.ok) return response.json();
+
+    const detail = await response.text();
+    lastErrorDetail = detail;
+    if (response.status !== 500 || !isTelnyxUnexpectedDetailRecordError(detail)) {
+      throw new Error(`Telnyx call detail records returned ${response.status}: ${detail.slice(0, 500)}`);
+    }
+  }
+
+  console.warn(`Telnyx call detail records returned a generic 500; showing empty call history. ${lastErrorDetail.slice(0, 500)}`);
+  return { data: [] };
+}
+
+function isTelnyxUnexpectedDetailRecordError(detail) {
+  return /"code"\s*:\s*"10004"/.test(String(detail || "")) || /Unexpected error/i.test(String(detail || ""));
 }
 
 async function listPhoneAssistants() {
@@ -5959,14 +6080,22 @@ async function startAiAssistantOnCall(input = {}) {
 function normalizePhoneNumberOption(number) {
   const cost = number.cost ?? number.cost_information ?? {};
   return {
+    id: number.id,
     phoneNumber: number.phone_number,
     countryCode: number.country_code ?? "",
     locality: number.locality ?? number.region_information?.locality,
     region: number.administrative_area ?? number.region_information?.region,
     type: number.phone_number_type,
+    status: number.status,
     features: number.features ?? [],
     monthlyCost: formatCost(cost.monthly_cost ?? cost.monthly ?? cost.recurring_cost),
     upfrontCost: formatCost(cost.upfront_cost ?? cost.upfront ?? cost.one_time_cost ?? cost.amount),
+    connectionId: number.connection_id ?? number.voice_settings?.connection_id ?? number.call_control_application_id,
+    messagingProfileId: number.messaging_profile_id,
+    emergencyAddressId: number.emergency_address_id,
+    tags: Array.isArray(number.tags) ? number.tags : [],
+    createdAt: number.created_at,
+    updatedAt: number.updated_at,
   };
 }
 
@@ -5985,21 +6114,50 @@ function isVoiceDetailRecord(record = {}) {
 
 function normalizePhoneCallHistoryRow(record = {}) {
   const direction = normalizeCallDirection(record.direction);
-  const from = normalizeDisplayPhone(record.from || record.cli || record.originating_number || record.source_number || record.caller_id_number);
-  const to = normalizeDisplayPhone(record.to || record.cld || record.terminating_number || record.destination_number || record.called_number);
+  const from = normalizeDisplayPhone(record.from || record.cli || record.caller_number || record.originating_number || record.source_number || record.caller_id_number);
+  const to = normalizeDisplayPhone(record.to || record.cld || record.dest_number || record.terminating_number || record.destination_number || record.called_number);
   const number = direction === "inbound" ? from || to : to || from;
   const startedAt = String(record.started_at || record.start_time || record.created_at || record.sent_at || record.completed_at || record.updated_at || "");
   const status = normalizeCallStatus(record);
+  const durationSeconds = Number(record.duration || record.duration_sec || record.duration_seconds || record.billable_seconds || record.call_sec || record.billed_sec || 0);
+  const callControlId = String(record.call_control_id || record.callControlId || record.telnyx_call_control_id || "").trim();
+  const callSessionId = String(record.call_session_id || record.callSessionId || record.session_id || "").trim();
+  const callLegId = String(record.call_leg_id || record.callLegId || record.telnyx_leg_id || record.call_id || "").trim();
+  const recordingId = String(record.recording_id || record.recordingId || record.recording_uuid || record.recordingUuid || "").trim();
+  const recordingUrl = String(record.recording_url || record.recordingUrl || record.recording_download_url || record.recordingDownloadUrl || "").trim();
+  const transcriptionId = String(record.transcription_id || record.transcriptionId || record.transcript_id || record.transcriptId || "").trim();
+  const transcriptionText = String(record.transcription_text || record.transcriptionText || record.transcript || record.transcript_text || record.transcriptText || "").trim();
+  const rawStatus = [
+    record.status,
+    record.call_status,
+    record.result,
+    record.hangup_cause,
+    record.hangup_cause_name,
+    record.disconnect_reason,
+    record.end_reason,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .join(" / ");
   return {
-    id: String(record.id || record.uuid || record.call_leg_id || record.callLegId || record.call_control_id || record.callControlId || record.call_session_id || record.callSessionId || `${direction}:${number}:${startedAt}`),
+    id: String(record.id || record.uuid || record.call_leg_id || record.callLegId || record.telnyx_leg_id || record.call_id || record.call_control_id || record.callControlId || record.telnyx_call_control_id || record.call_session_id || record.callSessionId || record.session_id || `${direction}:${number}:${startedAt}`),
     contact: record.contact_name || record.contactName || (direction === "inbound" ? "Inbound call" : "Outbound call"),
     number,
-    agentId: String(record.assistant_id || record.agent_id || record.connection_id || "telnyx"),
-    agentName: String(record.assistant_name || record.agent_name || record.connection_name || "Telnyx CDR"),
+    agentId: String(record.assistant_id || record.agent_id || record.connection_id || record.auth_username || "telnyx"),
+    agentName: String(record.assistant_name || record.agent_name || record.connection_name || record.auth_username || "Telnyx CDR"),
     direction,
     status,
     time: formatCallHistoryTime(startedAt),
     startedAt,
+    durationSeconds: Number.isFinite(durationSeconds) ? durationSeconds : 0,
+    callControlId,
+    callSessionId,
+    callLegId,
+    recordingId,
+    recordingUrl,
+    transcriptionId,
+    transcriptionText,
+    rawStatus,
   };
 }
 
@@ -6008,12 +6166,25 @@ function normalizeCallDirection(direction) {
 }
 
 function normalizeCallStatus(record = {}) {
-  const raw = String(record.status || record.call_status || record.result || record.hangup_cause || record.disconnect_reason || "").toLowerCase();
-  const duration = Number(record.duration || record.duration_sec || record.duration_seconds || record.billable_seconds || 0);
+  const statusParts = [
+    record.status,
+    record.call_status,
+    record.result,
+    record.hangup_cause,
+    record.hangup_cause_name,
+    record.disconnect_reason,
+    record.end_reason,
+  ]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+  const raw = statusParts.join(" ");
+  const duration = Number(record.duration || record.duration_sec || record.duration_seconds || record.billable_seconds || record.call_sec || record.billed_sec || 0);
+  const answeredAt = Boolean(record.answered_at || record.answeredAt || record.answer_time || record.answered_time);
   if (/voicemail/.test(raw)) return "voicemail";
   if (/missed|no[-_\s]?answer|not_answered|timeout|busy|cancel/.test(raw)) return "missed";
   if (/fail|error|reject|invalid|blocked|unallocated/.test(raw)) return "failed";
-  return duration > 0 || /answer|complete|delivered|bridged/.test(raw) ? "answered" : "answered";
+  if (/answer|complete|bridged/.test(raw)) return "answered";
+  return duration > 0 || answeredAt ? "answered" : "missed";
 }
 
 function normalizeDisplayPhone(value) {
@@ -6515,6 +6686,7 @@ async function listConnectors() {
       ? edgeComputeStatus.ready
       : connector.id === "google-inbox" ? await googleInboxConnectorReady()
       : connector.id === "google-tasks" ? await googleTasksConnectorReady()
+      : connector.id === "google-calendar" ? await googleCalendarConnectorReady()
       : isGoogleConnectorId(connector.id) ? await googleConnectorReady()
       : connectorReady(connector.id);
     const mode = connectorCredentialMode(connector);
@@ -6546,6 +6718,15 @@ function isGoogleConnectorId(id) {
 async function googleConnectorReady() {
   try {
     await verifyGoogleWorkspaceAccess();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function googleCalendarConnectorReady() {
+  try {
+    await listGoogleCalendarEvents({ maxResults: 1 });
     return true;
   } catch {
     return false;
@@ -8342,16 +8523,18 @@ function extractWebRtcToken(body) {
 function dialerCatalog(state = dialerState) {
   const builtInIds = new Set(builtInDialerConfigs().map((config) => config.id));
   const userConfigs = Array.isArray(state.userConfigs)
-    ? state.userConfigs.map((config) => normalizeDialerConfig(config)).filter((config) => !builtInIds.has(config.id))
+    ? state.userConfigs.map((config) => normalizeDialerConfig(config)).filter((config) => !builtInIds.has(config.id) && !legacyDialerTemplateIds.has(config.id))
     : [];
   return [...builtInDialerConfigs(), ...userConfigs];
 }
 
 function normalizeDialerState(input = {}) {
   const now = new Date().toISOString();
-  const userConfigs = Array.isArray(input.userConfigs) ? input.userConfigs.map((config) => normalizeDialerConfig(config)) : [];
+  const userConfigs = Array.isArray(input.userConfigs)
+    ? input.userConfigs.map((config) => normalizeDialerConfig(config)).filter((config) => !legacyDialerTemplateIds.has(config.id))
+    : [];
   const configIds = new Set([...builtInDialerConfigs().map((config) => config.id), ...userConfigs.map((config) => config.id)]);
-  const activeConfigId = configIds.has(input.activeConfigId) ? input.activeConfigId : "standard";
+  const activeConfigId = configIds.has(input.activeConfigId) && !legacyDialerTemplateIds.has(input.activeConfigId) ? input.activeConfigId : defaultDialerConfigId;
   return {
     activeConfigId,
     userConfigs,
@@ -8426,7 +8609,7 @@ function normalizeDialerConfig(input = {}) {
   return {
     id: String(source.id || fallback.id),
     name: String(source.name || fallback.name),
-    template: typeof source.template === "string" ? source.template : null,
+    template: typeof source.template === "string" && !legacyDialerTemplateIds.has(source.template) ? source.template : null,
     theme: source.theme === "light" ? "light" : "dark",
     shape: source.shape === "square" ? "square" : "rounded",
     accentColor: "green",
@@ -8436,7 +8619,7 @@ function normalizeDialerConfig(input = {}) {
     callerIdName: String(source.callerIdName || fallback.callerIdName),
     outboundNumber: String(source.outboundNumber || fallback.outboundNumber),
     enabledFeatures: [...new Set(enabledFeatures)],
-    actions: [...new Set(actions)].slice(0, 5),
+    actions: [...new Set(actions)].slice(0, 6),
     featureSettings: {
       ...sourceFeatureSettings,
       crm: {
@@ -8459,73 +8642,28 @@ function builtInDialerConfigs() {
   const createdAt = "1970-01-01T00:00:00.000Z";
   return [
     {
-      id: "standard",
-      name: "Standard Dialer",
-      template: "standard",
+      id: defaultDialerConfigId,
+      name: "Dialer",
+      template: null,
       theme: "dark",
       shape: "rounded",
       accentColor: "green",
-      fontSize: "large",
+      fontSize: "medium",
       showNumpad: true,
       showCountryPrefix: true,
       callerIdName: "My Company",
       outboundNumber: "+1 (415) 555-0100",
-      enabledFeatures: ["call-timer"],
-      actions: ["mute", "hold", "speaker", "end"],
-      featureSettings: { "call-timer": { "timer-alert": "None", "timer-position": "Center" } },
-      createdAt,
-      updatedAt: createdAt,
-      active: false,
-    },
-    {
-      id: "sales",
-      name: "Sales Dialer",
-      template: "sales",
-      theme: "dark",
-      shape: "rounded",
-      accentColor: "green",
-      fontSize: "medium",
-      showNumpad: true,
-      showCountryPrefix: true,
-      callerIdName: "Sales Team",
-      outboundNumber: "+1 (415) 555-0100",
-      enabledFeatures: ["crm", "notes", "salesforce-notes-sync", "dispositions", "recording", "call-timer", "analytics"],
-      actions: ["mute", "hold", "transfer", "end", "record"],
+      enabledFeatures: ["crm", "transcription", "recording", "notes", "salesforce-notes-sync", "dispositions", "call-timer", "analytics"],
+      actions: ["mute", "hold", "transfer", "end", "speaker", "record"],
       featureSettings: {
-        notes: { "notes-autosave": "10s", "notes-template": "BANT" },
-        "salesforce-notes-sync": { "sf-notes-sync": true, "sf-notes-target": "Contact notes" },
         crm: { "crm-provider": "Salesforce MCP", "crm-show-history": true, "crm-show-deals": true },
-        dispositions: { "dispo-required": true, "dispo-codes": "Sales (12 codes)" },
-        recording: { "recording-auto": true, "recording-announce": "Beep", "recording-storage": "Telnyx Cloud" },
-        "call-timer": { "timer-alert": "5 min", "timer-position": "Center" },
-        analytics: { "analytics-display": "Detailed" },
-      },
-      createdAt,
-      updatedAt: createdAt,
-      active: false,
-    },
-    {
-      id: "support",
-      name: "Support Dialer",
-      template: "support",
-      theme: "dark",
-      shape: "rounded",
-      accentColor: "green",
-      fontSize: "medium",
-      showNumpad: false,
-      showCountryPrefix: true,
-      callerIdName: "Support Center",
-      outboundNumber: "+1 (415) 555-0100",
-      enabledFeatures: ["transcription", "recording", "notes", "salesforce-notes-sync", "dispositions", "call-timer", "crm"],
-      actions: ["mute", "hold", "end"],
-      featureSettings: {
         transcription: { "transcription-lang": "Auto-detect", "transcription-display": "Sidebar" },
-        recording: { "recording-auto": true, "recording-announce": "Voice prompt", "recording-storage": "Telnyx Cloud" },
-        notes: { "notes-autosave": "5s", "notes-template": "Basic" },
+        recording: { "recording-auto": true, "recording-announce": "Beep", "recording-storage": "Telnyx Cloud" },
+        notes: { "notes-autosave": "10s", "notes-template": "Basic" },
         "salesforce-notes-sync": { "sf-notes-sync": true, "sf-notes-target": "Contact notes" },
-        dispositions: { "dispo-required": true, "dispo-codes": "Support (8 codes)" },
-        "call-timer": { "timer-alert": "10 min", "timer-position": "Top" },
-        crm: { "crm-provider": "Salesforce MCP", "crm-show-history": true, "crm-show-deals": false },
+        dispositions: { "dispo-required": true, "dispo-codes": "Basic (5 codes)" },
+        "call-timer": { "timer-alert": "None", "timer-position": "Center" },
+        analytics: { "analytics-display": "Detailed" },
       },
       createdAt,
       updatedAt: createdAt,
@@ -8539,11 +8677,11 @@ function dialerFeatureIds() {
 }
 
 function dialerActionIds() {
-  return ["mute", "hold", "transfer", "end", "speaker", "dial", "record"];
+  return ["mute", "hold", "transfer", "end", "speaker", "agent", "dial", "record"];
 }
 
 function emptyDialerState() {
-  return normalizeDialerState({ activeConfigId: "standard", userConfigs: [], updatedAt: new Date().toISOString() });
+  return normalizeDialerState({ activeConfigId: defaultDialerConfigId, userConfigs: [], updatedAt: new Date().toISOString() });
 }
 
 function emptySpeakSettings() {
@@ -11341,12 +11479,12 @@ async function validateAgentControlPlaneSession(baseUrl) {
   return { ready: true };
 }
 
-async function openAgentControlPlaneSetup(_input) {
+async function openAgentControlPlaneSetup(input = {}) {
   const status = await getAgentControlPlaneAuthStatus();
   if (!status.ready) throw new Error("Sign in with Okta before adding an Agent Control Plane agent.");
 
   const parent = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
-  const setupUrl = agentControlPlaneSetupUrl();
+  const setupUrl = agentControlPlaneSetupUrl(input);
   const setupWindow = new BrowserWindow({
     width: 1180,
     height: 860,
@@ -11491,10 +11629,15 @@ function agentControlPlaneUrl() {
   return (process.env.AGENT_CONTROL_PLANE_URL || defaultAgentControlPlaneUrl).replace(/\/$/, "");
 }
 
-function agentControlPlaneSetupUrl() {
+function agentControlPlaneSetupUrl(input = {}) {
   const configured = process.env.AGENT_CONTROL_PLANE_ADD_AGENT_URL;
-  if (configured) return configured;
-  return new URL("/agents/new", `${agentControlPlaneUrl()}/`).toString();
+  const url = new URL(configured || "/agents/new", `${agentControlPlaneUrl()}/`);
+  const draft = input?.draft && typeof input.draft === "object" ? input.draft : null;
+  if (draft) {
+    url.searchParams.set("source", "link-desktop");
+    url.searchParams.set("draft", Buffer.from(JSON.stringify(draft), "utf8").toString("base64url"));
+  }
+  return url.toString();
 }
 
 function looksLikeUuid(value) {
@@ -12194,7 +12337,7 @@ async function runGoogleInboxAuth(account, gog) {
 }
 
 async function verifyGoogleInboxAccess() {
-  await listGoogleInboxThreads({ query: "in:inbox", maxResults: 1 });
+  await listGoogleInboxThreads({ query: "in:inbox is:unread", maxResults: 1 });
 }
 
 async function listGoogleInboxThreads(input = {}) {
@@ -12282,13 +12425,11 @@ function googleInboxGogCommandPath(commandArgs = []) {
 }
 
 function normalizeGoogleInboxQuery(query) {
-  const account = googleWorkspaceAccountEmail();
   const text = String(query || "").trim();
   const parts = [];
   const source = text || "";
   if (!/\bin:/i.test(source)) parts.push("in:inbox");
-  if (!/\bis:(?:read|unread)\b/i.test(source) && !/\blabel:unread\b/i.test(source)) parts.push("is:unread");
-  if (!/\b(?:to|cc|bcc|deliveredto):/i.test(source)) parts.push(`to:${account}`);
+  if (!/\bis:unread\b|\blabel:unread\b/i.test(source)) parts.push("is:unread");
   if (source) parts.push(source);
   return parts.join(" ").trim();
 }
@@ -12344,8 +12485,13 @@ function normalizeGoogleInboxThreadSummary(record, index = 0) {
   const subject = googleInboxHeader(record, "subject") || normalizeOptionalString(record?.subject ?? record?.title) || "(No subject)";
   const from = googleInboxHeader(record, "from") || normalizeOptionalString(record?.from ?? record?.sender ?? record?.author) || "Unknown sender";
   const to = googleInboxHeader(record, "to") || normalizeOptionalString(record?.to ?? record?.recipient) || "";
+  const cc = googleInboxHeader(record, "cc") || normalizeOptionalString(record?.cc) || "";
+  const deliveredTo = googleInboxHeader(record, "delivered-to") || normalizeOptionalString(record?.deliveredTo ?? record?.delivered_to) || "";
   const date = googleInboxHeader(record, "date") || normalizeOptionalString(record?.date ?? record?.time ?? record?.lastMessageAt ?? record?.internalDate) || "";
   const snippet = cleanGoogleInboxText(record?.snippet ?? record?.preview ?? record?.summary ?? record?.body ?? "");
+  const labels = normalizeGoogleInboxLabels(record);
+  const unread = Boolean(record?.unread ?? record?.isUnread ?? labels.some((label) => label.toUpperCase() === "UNREAD"));
+  const accountEmail = safeGoogleWorkspaceAccountEmail();
   return {
     id: threadId,
     threadId,
@@ -12353,10 +12499,14 @@ function normalizeGoogleInboxThreadSummary(record, index = 0) {
     subject,
     from,
     to,
+    cc,
+    deliveredTo,
+    accountEmail,
+    recipientType: googleInboxRecipientType({ to, cc, deliveredTo }, accountEmail),
     date: formatGoogleInboxDate(date),
     snippet,
-    unread: Boolean(record?.unread ?? record?.isUnread ?? normalizeGoogleInboxLabels(record).some((label) => label.toUpperCase() === "UNREAD")),
-    labels: normalizeGoogleInboxLabels(record),
+    unread,
+    labels,
     url: googleInboxThreadUrl(threadId),
   };
 }
@@ -12379,6 +12529,10 @@ function normalizeGoogleInboxThread(payload, requestedThreadId) {
     snippet: summary?.snippet || messages.map((message) => message.snippet).filter(Boolean).join(" ").slice(0, 240),
     from: summary?.from || messages[0]?.from || "",
     to: summary?.to || messages[0]?.to || "",
+    cc: summary?.cc || messages[0]?.cc || "",
+    deliveredTo: summary?.deliveredTo || "",
+    accountEmail: summary?.accountEmail || safeGoogleWorkspaceAccountEmail(),
+    recipientType: summary?.recipientType || googleInboxRecipientType({ to: summary?.to || messages[0]?.to || "", cc: summary?.cc || messages[0]?.cc || "", deliveredTo: summary?.deliveredTo || "" }, safeGoogleWorkspaceAccountEmail()),
     date: summary?.date || messages[messages.length - 1]?.date || "",
     labels: summary?.labels || [],
     unread: Boolean(summary?.unread),
@@ -12388,6 +12542,16 @@ function normalizeGoogleInboxThread(payload, requestedThreadId) {
     messages,
     url: googleInboxThreadUrl(threadId),
   };
+}
+
+function googleInboxRecipientType(record = {}, accountEmail = "") {
+  const account = String(accountEmail || "").trim().toLowerCase();
+  const visibleRecipients = [record.to, record.cc, record.bcc]
+    .flatMap(splitEmailList)
+    .map((email) => extractEmailAddress(email).toLowerCase())
+    .filter(Boolean);
+  if (account && visibleRecipients.some((email) => email === account)) return "direct";
+  return "group";
 }
 
 function normalizeGoogleInboxMessages(payload, fallbackThreadId) {
@@ -12502,13 +12666,28 @@ function cleanGoogleInboxText(value) {
 function formatGoogleInboxDate(value) {
   const text = normalizeOptionalString(value);
   if (!text) return "";
+  const todayMatch = text.match(/^today,\s*(.+)$/i);
+  if (todayMatch) return todayMatch[1].trim();
   const date = new Date(Number(text) || text);
   if (Number.isNaN(date.getTime())) return text;
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+  if (sameDay) {
+    return new Intl.DateTimeFormat(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date);
+  }
+  if (date.getFullYear() === now.getFullYear()) {
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+    }).format(date);
+  }
   return new Intl.DateTimeFormat(undefined, {
-    month: "short",
+    month: "numeric",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    year: "2-digit",
   }).format(date);
 }
 

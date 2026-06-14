@@ -48,13 +48,6 @@ export interface DialerConfig {
   active: boolean;
 }
 
-export interface DialerTemplate extends DialerConfig {
-  description: string;
-  badge: string;
-  icon: string;
-  tone: "green" | "orange" | "blue";
-}
-
 export interface DialerState {
   configs: DialerConfig[];
   activeConfig: DialerConfig;
@@ -112,18 +105,6 @@ export const dialerFeatures: DialerFeature[] = [
     ],
   },
   {
-    id: "recording",
-    name: "Call Recording",
-    description: "Record calls with compliance announcements",
-    icon: "CircleDot",
-    phase: "in-call",
-    settings: [
-      { id: "recording-auto", label: "Auto-record", type: "toggle", default: false },
-      { id: "recording-announce", label: "Announcement", type: "select", options: ["None", "Beep", "Voice prompt"], default: "Beep" },
-      { id: "recording-storage", label: "Storage", type: "select", options: ["Telnyx Cloud", "S3 Bucket", "Local"], default: "Telnyx Cloud" },
-    ],
-  },
-  {
     id: "transcription",
     name: "Live Transcription",
     description: "Real-time speech-to-text powered by Telnyx AI",
@@ -135,6 +116,29 @@ export const dialerFeatures: DialerFeature[] = [
     ],
   },
   {
+    id: "recording",
+    name: "Call Recording",
+    description: "Record calls with storage and announcement controls",
+    icon: "CircleDot",
+    phase: "in-call",
+    settings: [
+      { id: "recording-auto", label: "Auto-record", type: "toggle", default: true },
+      { id: "recording-announce", label: "Announcement", type: "select", options: ["Beep", "Voice prompt", "None"], default: "Beep" },
+      { id: "recording-storage", label: "Storage", type: "select", options: ["Telnyx Cloud"], default: "Telnyx Cloud" },
+    ],
+  },
+  {
+    id: "call-timer",
+    name: "Call Timer",
+    description: "Show call duration and alert thresholds",
+    icon: "Timer",
+    phase: "in-call",
+    settings: [
+      { id: "timer-alert", label: "Alert", type: "select", options: ["None", "5 min", "10 min"], default: "None" },
+      { id: "timer-position", label: "Position", type: "select", options: ["Center", "Top"], default: "Center" },
+    ],
+  },
+  {
     id: "dispositions",
     name: "Dispositions",
     description: "Wrap-up codes and call outcome tracking",
@@ -142,18 +146,7 @@ export const dialerFeatures: DialerFeature[] = [
     phase: "post-call",
     settings: [
       { id: "dispo-required", label: "Required after call", type: "toggle", default: true },
-      { id: "dispo-codes", label: "Code set", type: "select", options: ["Basic (5 codes)", "Sales (12 codes)", "Support (8 codes)", "Custom"], default: "Basic (5 codes)" },
-    ],
-  },
-  {
-    id: "call-timer",
-    name: "Call Timer",
-    description: "Visible timer with configurable alerts",
-    icon: "Timer",
-    phase: "in-call",
-    settings: [
-      { id: "timer-alert", label: "Alert at", type: "select", options: ["None", "2 min", "5 min", "10 min", "Custom"], default: "5 min" },
-      { id: "timer-position", label: "Position", type: "select", options: ["Top", "Center", "Bottom"], default: "Center" },
+      { id: "dispo-codes", label: "Code set", type: "select", options: ["Basic (5 codes)", "Revenue workflow (12 codes)", "Service workflow (8 codes)", "Custom"], default: "Basic (5 codes)" },
     ],
   },
   {
@@ -174,106 +167,46 @@ export const dialerActions: DialerAction[] = [
   { id: "transfer", label: "Transfer", icon: "ArrowRightLeft", style: "default" },
   { id: "end", label: "End", icon: "PhoneOff", style: "end" },
   { id: "speaker", label: "Speaker", icon: "Volume2", style: "default" },
+  { id: "agent", label: "Agent", icon: "Bot", style: "default" },
   { id: "dial", label: "Keypad", icon: "Hash", style: "default" },
   { id: "record", label: "Record", icon: "CircleDot", style: "default" },
 ];
 
 export const defaultActionIds = ["mute", "hold", "transfer", "end"];
 
-const templateTimestamp = "1970-01-01T00:00:00.000Z";
+const defaultDialerTimestamp = "1970-01-01T00:00:00.000Z";
 
-export const dialerTemplates: DialerTemplate[] = [
-  {
-    id: "standard",
-    name: "Standard Dialer",
-    description: "A clean everyday dialer for direct outbound calling.",
-    badge: "Simple",
-    icon: "Smartphone",
-    tone: "green",
-    template: "standard",
-    theme: "dark",
-    shape: "rounded",
-    accentColor: "green",
-    fontSize: "large",
-    showNumpad: true,
-    showCountryPrefix: true,
-    callerIdName: "My Company",
-    outboundNumber: "+1 (415) 555-0100",
-    enabledFeatures: ["call-timer"],
-    actions: ["mute", "hold", "speaker", "end"],
-    featureSettings: {
-      "call-timer": { "timer-alert": "None", "timer-position": "Center" },
-    },
-    createdAt: templateTimestamp,
-    updatedAt: templateTimestamp,
-    active: false,
+export const defaultDialerConfig: DialerConfig = {
+  id: "link-dialer",
+  name: "Dialer",
+  template: null,
+  theme: "dark",
+  shape: "rounded",
+  accentColor: "green",
+  fontSize: "medium",
+  showNumpad: true,
+  showCountryPrefix: true,
+  callerIdName: "My Company",
+  outboundNumber: "+1 (415) 555-0100",
+  enabledFeatures: ["crm", "transcription", "recording", "notes", "salesforce-notes-sync", "dispositions", "call-timer", "analytics"],
+  actions: ["mute", "hold", "transfer", "end", "speaker", "record"],
+  featureSettings: {
+    crm: { "crm-provider": "Salesforce MCP", "crm-show-history": true, "crm-show-deals": true },
+    transcription: { "transcription-lang": "Auto-detect", "transcription-display": "Sidebar" },
+    recording: { "recording-auto": true, "recording-announce": "Beep", "recording-storage": "Telnyx Cloud" },
+    notes: { "notes-autosave": "10s", "notes-template": "Basic" },
+    "salesforce-notes-sync": { "sf-notes-sync": true, "sf-notes-target": "Contact notes" },
+    dispositions: { "dispo-required": true, "dispo-codes": "Basic (5 codes)" },
+    "call-timer": { "timer-alert": "None", "timer-position": "Center" },
+    analytics: { "analytics-display": "Detailed" },
   },
-  {
-    id: "sales",
-    name: "Sales Dialer",
-    description: "Outbound sales workflow with CRM, notes, recording, dispositions, and analytics.",
-    badge: "Popular",
-    icon: "TrendingUp",
-    tone: "orange",
-    template: "sales",
-    theme: "dark",
-    shape: "rounded",
-    accentColor: "green",
-    fontSize: "medium",
-    showNumpad: true,
-    showCountryPrefix: true,
-    callerIdName: "Sales Team",
-    outboundNumber: "+1 (415) 555-0100",
-    enabledFeatures: ["crm", "notes", "salesforce-notes-sync", "dispositions", "recording", "call-timer", "analytics"],
-    actions: ["mute", "hold", "transfer", "end", "record"],
-    featureSettings: {
-      notes: { "notes-autosave": "10s", "notes-template": "BANT" },
-      crm: { "crm-provider": "Salesforce MCP", "crm-show-history": true, "crm-show-deals": true },
-      dispositions: { "dispo-required": true, "dispo-codes": "Sales (12 codes)" },
-      recording: { "recording-auto": true, "recording-announce": "Beep", "recording-storage": "Telnyx Cloud" },
-      "call-timer": { "timer-alert": "5 min", "timer-position": "Center" },
-      analytics: { "analytics-display": "Detailed" },
-      "salesforce-notes-sync": { "sf-notes-sync": true, "sf-notes-target": "Contact notes" },
-    },
-    createdAt: templateTimestamp,
-    updatedAt: templateTimestamp,
-    active: false,
-  },
-  {
-    id: "support",
-    name: "Support Dialer",
-    description: "Inbound support workspace with transcription, notes, and Salesforce MCP context.",
-    badge: "Recommended",
-    icon: "Headphones",
-    tone: "blue",
-    template: "support",
-    theme: "dark",
-    shape: "rounded",
-    accentColor: "green",
-    fontSize: "medium",
-    showNumpad: false,
-    showCountryPrefix: true,
-    callerIdName: "Support Center",
-    outboundNumber: "+1 (415) 555-0100",
-    enabledFeatures: ["transcription", "recording", "notes", "salesforce-notes-sync", "dispositions", "call-timer", "crm"],
-    actions: ["mute", "hold", "end"],
-    featureSettings: {
-      transcription: { "transcription-lang": "Auto-detect", "transcription-display": "Sidebar" },
-      recording: { "recording-auto": true, "recording-announce": "Voice prompt", "recording-storage": "Telnyx Cloud" },
-      notes: { "notes-autosave": "5s", "notes-template": "Basic" },
-      "salesforce-notes-sync": { "sf-notes-sync": true, "sf-notes-target": "Contact notes" },
-      dispositions: { "dispo-required": true, "dispo-codes": "Support (8 codes)" },
-      "call-timer": { "timer-alert": "10 min", "timer-position": "Top" },
-      crm: { "crm-provider": "Salesforce MCP", "crm-show-history": true, "crm-show-deals": false },
-    },
-    createdAt: templateTimestamp,
-    updatedAt: templateTimestamp,
-    active: false,
-  },
-];
+  createdAt: defaultDialerTimestamp,
+  updatedAt: defaultDialerTimestamp,
+  active: false,
+};
 
 export function createDefaultDialerConfig(): DialerConfig {
-  return normalizeDialerConfig(dialerTemplates[0], true);
+  return normalizeDialerConfig(defaultDialerConfig, true);
 }
 
 export function cloneDialerConfig(config: DialerConfig): DialerConfig {
@@ -288,7 +221,7 @@ export function cloneDialerConfig(config: DialerConfig): DialerConfig {
 }
 
 export function normalizeDialerConfig(input: Partial<DialerConfig> | null | undefined, active = false): DialerConfig {
-  const fallback = dialerTemplates[0];
+  const fallback = defaultDialerConfig;
   const validFeatureIds = new Set(dialerFeatures.map((feature) => feature.id));
   const validActionIds = new Set(dialerActions.map((action) => action.id));
   const accentValues: DialerAccentColor[] = ["green", "blue", "purple", "orange"];
@@ -311,7 +244,7 @@ export function normalizeDialerConfig(input: Partial<DialerConfig> | null | unde
     callerIdName: source.callerIdName && typeof source.callerIdName === "string" ? source.callerIdName : fallback.callerIdName,
     outboundNumber: source.outboundNumber && typeof source.outboundNumber === "string" ? source.outboundNumber : fallback.outboundNumber,
     enabledFeatures: [...new Set(features)],
-    actions: [...new Set(actions)].slice(0, 5),
+    actions: [...new Set(actions)].slice(0, 6),
     featureSettings: source.featureSettings && typeof source.featureSettings === "object" ? source.featureSettings : fallback.featureSettings,
     createdAt: source.createdAt && typeof source.createdAt === "string" ? source.createdAt : now,
     updatedAt: source.updatedAt && typeof source.updatedAt === "string" ? source.updatedAt : now,

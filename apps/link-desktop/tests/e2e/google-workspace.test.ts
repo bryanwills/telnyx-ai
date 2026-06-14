@@ -4,7 +4,7 @@ import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { _electron, type ElectronApplication, type Page } from "playwright";
 
@@ -26,16 +26,14 @@ test("Electron Google Workspace connector is Connected only after Calendar and C
     const page = await waitForFirstWindow(app);
     await page.waitForLoadState("domcontentloaded");
 
-    await openSettings(page);
-    const googleCard = page.locator(".credentialCard").filter({ hasText: "Google Workspace" });
-    await googleCard.waitFor({ state: "visible", timeout: 20_000 });
     const connectors = await page.evaluate(async () => (window as any).linkDesktop.listConnectors());
     assert.equal(connectors.find((connector: { id: string }) => connector.id === "google-calendar")?.status, "connected");
 
     await page.locator('button.railButton[title="Calendar"]').click();
-    await page.locator(".calendarEventList").waitFor({ state: "visible", timeout: 20_000 });
-    await page.locator(".calendarEventList").getByText("Google E2E customer sync", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
-    assert.match(await page.locator(".calendarEventList").textContent() ?? "", /e2e.customer@example.com/);
+    await page.locator(".calendarEventTable").waitFor({ state: "visible", timeout: 20_000 });
+    await page.locator(".calendarEventTable").getByText("Google E2E customer sync", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
+    await page.locator(".calendarResultRow").filter({ hasText: "Google E2E customer sync" }).click();
+    assert.match(await page.locator(".calendarTableDetails").textContent() ?? "", /e2e.customer@example.com/);
 
     const contacts = await page.evaluate(async () => (window as any).linkDesktop.listGoogleContacts());
     assert.equal(contacts[0]?.name, "Google E2E Contact");
@@ -61,18 +59,56 @@ test("Electron Google Workspace connector shows Connect when API access is not v
     const page = await waitForFirstWindow(app);
     await page.waitForLoadState("domcontentloaded");
 
-    await openSettings(page);
-    const googleCard = page.locator(".credentialCard").filter({ hasText: "Google Workspace" });
-    await googleCard.waitFor({ state: "visible", timeout: 20_000 });
     const connectors = await page.evaluate(async () => (window as any).linkDesktop.listConnectors());
     assert.equal(connectors.find((connector: { id: string }) => connector.id === "google-calendar")?.status, "needs_access");
 
     await page.locator('button.railButton[title="Calendar"]').click();
     await page.getByText("Connect Google Workspace to show calendar events.").waitFor({ state: "visible", timeout: 20_000 });
-    await page.locator(".calendarEventList").getByText("Schedule Link training session with Pete", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
-    assert.match(await page.locator(".calendarEventList").textContent() ?? "", /Pick a time/);
+    await page.locator(".calendarEventTable").getByText("Schedule Link training session with Pete", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
+    assert.match(await page.locator(".calendarEventTable").textContent() ?? "", /Pick a time/);
 
-    assert.doesNotMatch(await page.locator(".calendarEventList").textContent() ?? "", /Google E2E Contact/);
+    assert.doesNotMatch(await page.locator(".calendarEventTable").textContent() ?? "", /Google E2E Contact/);
+  } finally {
+    await closeElectron(app);
+    await auth.close();
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("Electron Calendar renders linked gog Calendar events without direct OAuth tokens", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "link-desktop-gog-calendar-e2e-"));
+  const fakeGogPath = path.join(tempDir, "fake-gog-calendar.cjs");
+  const fakeGogLogPath = path.join(tempDir, "fake-gog-calendar-calls.jsonl");
+  const auth = await startAgentControlPlaneMock();
+  await writeFile(fakeGogPath, fakeCalendarGogScript(), { mode: 0o700 });
+  await chmod(fakeGogPath, 0o700);
+
+  const app = await launchElectron(path.join(tempDir, "user-data"), {
+    GOG_ACCOUNT: "calendar.e2e@telnyx.com",
+    GOG_KEYRING_PASSWORD: "calendar-e2e-password",
+    LINK_DESKTOP_GOG_COMMAND: fakeGogPath,
+    FAKE_GOG_LOG: fakeGogLogPath,
+    AGENT_CONTROL_PLANE_URL: auth.baseUrl,
+  });
+
+  try {
+    const page = await waitForFirstWindow(app);
+    await page.waitForLoadState("domcontentloaded");
+
+    const connectors = await page.evaluate(async () => (window as any).linkDesktop.listConnectors());
+    assert.equal(connectors.find((connector: { id: string }) => connector.id === "google-calendar")?.status, "connected");
+
+    await page.locator('button.railButton[title="Calendar"]').click();
+    await page.locator(".calendarEventTable").waitFor({ state: "visible", timeout: 20_000 });
+    await page.locator(".calendarEventTable").getByText("Gog E2E calendar sync", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
+    const tableText = await page.locator(".calendarEventTable").textContent() ?? "";
+    assert.doesNotMatch(tableText, /gog.customer@example.com/);
+    assert.doesNotMatch(tableText, /Schedule Link training session with Pete/);
+    await page.locator(".calendarResultRow").filter({ hasText: "Gog E2E calendar sync" }).click();
+    assert.match(await page.locator(".calendarTableDetails").textContent() ?? "", /gog.customer@example.com/);
+
+    const calls = await readFakeGogCalls(fakeGogLogPath);
+    assert.ok(calls.some((call) => commandString(call).includes("calendar events primary")));
   } finally {
     await closeElectron(app);
     await auth.close();
@@ -105,8 +141,8 @@ test("Electron Calendar can invite a Telnyx Assistant bot to a Google Meet event
     await page.waitForLoadState("domcontentloaded");
 
     await page.locator('button.railButton[title="Calendar"]').click();
-    await page.locator(".calendarEventList").getByText("Google E2E customer sync", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
-    await page.locator(".calendarEventSummary").filter({ hasText: "Google E2E customer sync" }).click();
+    await page.locator(".calendarEventTable").getByText("Google E2E customer sync", { exact: true }).waitFor({ state: "visible", timeout: 20_000 });
+    await page.locator(".calendarResultRow").filter({ hasText: "Google E2E customer sync" }).click();
     await page.getByRole("button", { name: "Invite bot" }).click();
     await page.locator(".meetingInviteModal").waitFor({ state: "visible", timeout: 20_000 });
     await page.locator(".meetingInviteModal select").first().selectOption("telnyx-assistant:assistant-e2e");
@@ -186,6 +222,18 @@ async function openSettings(page: Page): Promise<void> {
   await page.locator('button.railButton[title="Settings"]').waitFor({ state: "visible", timeout: 20_000 });
   await page.locator('button.railButton[title="Settings"]').click();
   await page.locator(".credentialCard").filter({ hasText: "Google Workspace" }).waitFor({ state: "visible", timeout: 20_000 });
+}
+
+async function readFakeGogCalls(logPath: string) {
+  const text = await readFile(logPath, "utf8");
+  return text
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as { args: string[] });
+}
+
+function commandString(call: { args: string[] }) {
+  return call.args.join(" ");
 }
 
 async function startGoogleWorkspaceMock() {
@@ -374,6 +422,61 @@ function googleE2eCalendarEvent() {
       ],
     },
   };
+}
+
+function fakeCalendarGogScript() {
+  return `#!/usr/bin/env node
+const fs = require("node:fs");
+
+const args = process.argv.slice(2);
+const logPath = process.env.FAKE_GOG_LOG;
+if (logPath) fs.appendFileSync(logPath, JSON.stringify({ args }) + "\\n");
+
+function json(value) {
+  process.stdout.write(JSON.stringify(value));
+}
+
+if (args.includes("--help")) {
+  process.stdout.write("fake gog help");
+  process.exit(0);
+}
+
+const authIndex = args.indexOf("auth");
+if (authIndex >= 0 && args[authIndex + 1] === "keyring" && args[authIndex + 2] === "file") {
+  process.exit(0);
+}
+
+const calendarIndex = args.indexOf("calendar");
+if (calendarIndex >= 0 && args[calendarIndex + 1] === "events") {
+  const start = new Date(Date.now() + 60 * 60_000).toISOString();
+  const end = new Date(Date.now() + 90 * 60_000).toISOString();
+  json({
+    events: [
+      {
+        id: "gog-calendar-e2e-event",
+        title: "Gog E2E calendar sync",
+        description: "Prep call for +14155550188.",
+        start: { dateTime: start },
+        end: { dateTime: end },
+        attendees: [{ email: "gog.customer@example.com" }],
+        conferenceData: {
+          entryPoints: [
+            { entryPointType: "video", uri: "https://meet.google.com/gog-e2e" }
+          ]
+        }
+      }
+    ]
+  });
+  process.exit(0);
+}
+
+if (args.includes("contacts")) {
+  process.stderr.write("Contacts intentionally unavailable for Calendar-only gog test.");
+  process.exit(1);
+}
+
+json({});
+`;
 }
 
 async function readJsonBody(request: IncomingMessage): Promise<any> {

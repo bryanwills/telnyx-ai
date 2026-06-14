@@ -41,7 +41,7 @@ test("Electron Google Inbox reads threads and saves drafts through safe gog comm
 
     await page.locator(".phoneInboxDraftComposer textarea").fill("Thanks for the note. I can share the SIP trunking checklist and next steps here.");
     await page.getByRole("button", { name: "Save Gmail draft" }).click();
-    await page.getByText("Saved to Gmail Drafts", { exact: false }).waitFor({ state: "visible", timeout: 20_000 });
+    await waitForFakeGogCall(fakeGogLogPath, /gmail drafts create/, 20_000);
 
     const calls = await readFakeGogCalls(fakeGogLogPath);
     const gmailCalls = calls.filter((call) => call.args.includes("gmail"));
@@ -49,8 +49,9 @@ test("Electron Google Inbox reads threads and saves drafts through safe gog comm
     assert.ok(gmailCalls.some((call) => commandString(call).includes("gmail thread get")));
     assert.ok(gmailCalls.some((call) => commandString(call).includes("gmail drafts create")));
     const searchCalls = gmailCalls.filter((call) => commandString(call).includes("gmail search"));
+    assert.ok(searchCalls.every((call) => commandString(call).includes("in:inbox")));
     assert.ok(searchCalls.every((call) => commandString(call).includes("is:unread")));
-    assert.ok(searchCalls.every((call) => commandString(call).includes("to:inbox.e2e@telnyx.com")));
+    assert.ok(searchCalls.every((call) => !commandString(call).includes("to:inbox.e2e@telnyx.com")));
     for (const call of gmailCalls) {
       assert.ok(call.args.includes("--gmail-no-send"), `missing --gmail-no-send in ${commandString(call)}`);
     }
@@ -102,6 +103,16 @@ async function readFakeGogCalls(logPath: string) {
     .split("\n")
     .filter(Boolean)
     .map((line) => JSON.parse(line) as { args: string[] });
+}
+
+async function waitForFakeGogCall(logPath: string, pattern: RegExp, timeoutMs: number) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const calls = await readFakeGogCalls(logPath).catch(() => []);
+    if (calls.some((call) => pattern.test(commandString(call)))) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for fake gog command ${pattern}`);
 }
 
 function commandString(call: { args: string[] }) {
@@ -220,7 +231,8 @@ if (gmailIndex >= 0 && args[gmailIndex + 1] === "search") {
         messageId: "msg-e2e-1",
         subject: "Mock inbox request",
         from: "Mock Customer <mock@example.com>",
-        to: "inbox.e2e@telnyx.com",
+        to: "Inbox E2E <inbox.e2e@telnyx.com>",
+        deliveredTo: "inbox.e2e@telnyx.com",
         date: "2026-06-13T09:00:00.000Z",
         snippet: "Can Link draft a response for this customer?",
         labels: ["INBOX", "UNREAD"]
@@ -241,7 +253,7 @@ if (gmailIndex >= 0 && args[gmailIndex + 1] === "thread" && args[gmailIndex + 2]
         headers: [
           { name: "Subject", value: "Mock inbox request" },
           { name: "From", value: "Mock Customer <mock@example.com>" },
-          { name: "To", value: "inbox.e2e@telnyx.com" },
+          { name: "To", value: "Inbox E2E <inbox.e2e@telnyx.com>" },
           { name: "Date", value: "2026-06-13T09:00:00.000Z" }
         ],
         snippet: "Can Link draft a response for this customer?",
