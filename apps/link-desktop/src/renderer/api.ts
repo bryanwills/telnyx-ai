@@ -255,27 +255,6 @@ export interface ToolMetadata {
   outputCanBeShownExternally: boolean;
 }
 
-export interface WorkspaceTab {
-  id: string;
-  title: string;
-  kind: "chat" | "artifact" | "automation" | "approval";
-  status: "open" | "pinned" | "pending" | "complete";
-  updatedAt: string;
-}
-
-export interface WorkspaceSummary {
-  id: string;
-  name: string;
-  description: string;
-  status: "active" | "idle" | "review";
-  updatedAt: string;
-  tabs: WorkspaceTab[];
-  activeWorkIds: string[];
-  automationIds: string[];
-  fileCount: number;
-  memoryBankId?: string;
-}
-
 export interface ExplorerResult {
   id: string;
   title: string;
@@ -1704,7 +1683,6 @@ export interface LinkDesktopApi {
   getAgentControlPlaneAuthStatus(): Promise<AgentControlPlaneAuthStatus>;
   openAgentControlPlaneSetup(input?: unknown): Promise<{ url: string }>;
   listHostedAgents(): Promise<HostedAgentSummary[]>;
-  listWorkspaces(): Promise<WorkspaceSummary[]>;
   listWikiSources(): Promise<WikiDocumentationSource[]>;
   saveWikiSource(input: WikiDocumentationSourceInput): Promise<WikiDocumentationSource[]>;
   deleteWikiSource(id: string): Promise<WikiDocumentationSource[]>;
@@ -2285,7 +2263,6 @@ let previewOnboarding: OnboardingState = {
   updatedAt: now,
 };
 
-const previewWorkspaces: WorkspaceSummary[] = [];
 let previewChatSessions: ChatSession[] = [];
 const emptyWikiState: WikiState = {
   profile: {
@@ -3173,9 +3150,6 @@ const previewLinkApi: LinkDesktopApi = {
   },
   async listHostedAgents() {
     return previewAuthEnabled() ? previewHostedAgents() : [];
-  },
-  async listWorkspaces() {
-    return previewWorkspaces;
   },
   async listWikiSources() {
     previewWikiSources = mergePreviewWikiSources(previewWikiSources);

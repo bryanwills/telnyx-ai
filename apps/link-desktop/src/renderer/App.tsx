@@ -143,7 +143,6 @@ import type {
   WorkboardProvider,
   WorkboardSnapshot,
   WorkboardStatus,
-  WorkspaceSummary,
 } from "./api.js";
 import { linkApi } from "./api.js";
 import { createDefaultDialerConfig, type DialerConfig } from "./phone/dialer-config.js";
@@ -958,6 +957,7 @@ const assistantPanelMinWidth = 340;
 const assistantPanelMaxWidth = 720;
 const mainWorkspaceMinWidth = 520;
 const assistantPanelSnapThreshold = 24;
+const defaultWorkspaceId = "workspace-link";
 
 function readDesignSystemSessionPreferences(): SessionPreferenceMap {
   if (typeof window === "undefined") return {};
@@ -991,7 +991,6 @@ export function App() {
   const [skills, setSkills] = useState<SkillMetadata[]>([]);
   const [tools, setTools] = useState<ToolMetadata[]>([]);
   const [connectors, setConnectors] = useState<ConnectorStatus[]>([]);
-  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [selectedArtifact, setSelectedArtifact] = useState<ChatArtifact | null>(null);
   const [edgePreviewSurface, setEdgePreviewSurface] = useState<EdgePreviewSurface | null>(null);
@@ -1010,7 +1009,6 @@ export function App() {
   const [signedOutLocally, setSignedOutLocally] = useState(false);
   const [authGateBusy, setAuthGateBusy] = useState(false);
   const [authGateError, setAuthGateError] = useState("");
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("workspace-acme");
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [newSessionDraftOpen, setNewSessionDraftOpen] = useState(false);
   const [newAppSessionRequestId, setNewAppSessionRequestId] = useState(0);
@@ -1185,7 +1183,6 @@ export function App() {
       skillList,
       toolList,
       connectorList,
-      workspaceList,
       chatList,
       agentList,
       bankList,
@@ -1203,7 +1200,6 @@ export function App() {
       linkApi.listSkills(),
       linkApi.listTools(),
       linkApi.listConnectors(),
-      linkApi.listWorkspaces(),
       linkApi.listChatSessions(),
       linkApi.listAgents(),
       linkApi.listMemoryBanks(),
@@ -1221,7 +1217,6 @@ export function App() {
     setSkills(skillList);
     setTools(toolList);
     setConnectors(connectorList);
-    setWorkspaces(workspaceList);
     setChatSessions(chatList);
     setAgents(agentList);
     setMemoryBanks(bankList);
@@ -1239,7 +1234,6 @@ export function App() {
     setTelnyxCredentialReady(Boolean(credentialList.find((group) => group.id === "telnyx")?.fields.some((field) => field.name === "TELNYX_API_KEY" && field.configured)));
     setLiteLlmCredentialReady(Boolean(runtimeStatus.installed || runtimeStatus.telnyx.apiKeyConfigured || runtimeStatus.managedGateway.configured || runtimeStatus.frontier.anthropicConfigured));
     setSignedOutLocally(false);
-    setSelectedWorkspaceId((current) => current || workspaceList[0]?.id || "");
     setSelectedSessionId((current) => current || chatList[0]?.id || "");
   }
 
@@ -1254,7 +1248,6 @@ export function App() {
     void refresh();
   }, []);
 
-  const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? workspaces[0];
   const selectedSession = selectedSessionId ? chatSessions.find((session) => session.id === selectedSessionId) : undefined;
   const selectedWorkboardChatAgent = useMemo(() => {
     const directoryAgent = agents.find((agent) => agent.id === selectedChatAgentId);
@@ -1331,7 +1324,7 @@ export function App() {
     setAssistantMode("chat");
     if (agent.id) setSelectedChatAgentId(agent.id);
     const session = await linkApi.createChatSession({
-      workspaceId: selectedWorkspace?.id ?? "workspace-link",
+      workspaceId: defaultWorkspaceId,
       agentId: agent.id === "link-default-runtime" ? undefined : agent.id,
       agentName: agent.id === "link-default-runtime" ? undefined : agent.displayName,
       agentSource: agent.id === "link-default-runtime" ? undefined : agent.source,
@@ -1377,7 +1370,7 @@ export function App() {
     setAssistantMode("chat");
     setSelectedChatAgentId(activeAgent?.id ?? linkGettingStartedAgentId);
     const session = await linkApi.sendChatMessage({
-      workspaceId: selectedWorkspace?.id ?? "workspace-link",
+      workspaceId: defaultWorkspaceId,
       agentId: activeAgent?.id ?? linkGettingStartedAgentId,
       agentName: activeAgent?.displayName ?? linkGettingStartedAgentName,
       approvalMode: "review",
@@ -1395,7 +1388,7 @@ export function App() {
     setAssistantCollapsed(false);
     if (agent.id) setSelectedChatAgentId(agent.id);
     const session = await linkApi.sendChatMessage({
-      workspaceId: selectedWorkspace?.id ?? "workspace-link",
+      workspaceId: defaultWorkspaceId,
       agentId: agent.id === "link-default-runtime" ? undefined : agent.id,
       agentName: agent.id === "link-default-runtime" ? undefined : agent.displayName,
       agentSource: agent.id === "link-default-runtime" ? undefined : agent.source,
@@ -1425,7 +1418,7 @@ export function App() {
     if (agent.id) setSelectedChatAgentId(agent.id);
     const session = await linkApi.sendChatMessage({
       sessionId: selectedSession?.id,
-      workspaceId: selectedWorkspace?.id ?? "workspace-link",
+      workspaceId: defaultWorkspaceId,
       agentId: agent.id === "link-default-runtime" ? undefined : agent.id,
       agentName: agent.id === "link-default-runtime" ? undefined : agent.displayName,
       agentSource: agent.id === "link-default-runtime" ? undefined : agent.source,
@@ -1459,7 +1452,7 @@ export function App() {
     if (agent.id) setSelectedChatAgentId(agent.id);
     const nextSession = await linkApi.sendChatMessage({
       sessionId: session?.id,
-      workspaceId: session?.workspaceId ?? selectedWorkspace?.id ?? "workspace-link",
+      workspaceId: session?.workspaceId ?? defaultWorkspaceId,
       agentId: agent.id === "link-default-runtime" ? undefined : agent.id,
       agentName: agent.id === "link-default-runtime" ? undefined : agent.displayName,
       agentSource: agent.id === "link-default-runtime" ? undefined : agent.source,
@@ -1478,7 +1471,7 @@ export function App() {
     setAssistantMode("chat");
     setSelectedChatAgentId(linkGettingStartedAgentId);
     const session = await linkApi.sendChatMessage({
-      workspaceId: selectedWorkspace?.id ?? "workspace-link",
+      workspaceId: defaultWorkspaceId,
       agentId: linkGettingStartedAgentId,
       agentName: linkGettingStartedAgentName,
       approvalMode: "review",
@@ -1622,7 +1615,6 @@ export function App() {
               {!selectedArtifact && view === "chats" && (
                 <ChatsView
                   sessions={chatSessions}
-                  workspaces={workspaces}
                   memoryBanks={memoryBanks}
                   selectedSession={selectedSession}
 	                  selectSession={openChatSession}
@@ -1740,7 +1732,6 @@ export function App() {
                   initialTab={view === "apps" || view === "skills" ? view : undefined}
                   wikiState={wikiState}
                   skills={skills}
-                  selectedWorkspace={selectedWorkspace}
                   activeAgent={activeAgent}
                   agents={agents}
                   bookmarkedAgentIds={bookmarkedAgentIds}
@@ -1795,7 +1786,6 @@ export function App() {
               selectedChatAgentId={selectedChatAgentId}
               setSelectedChatAgentId={setSelectedChatAgentId}
               selectedSession={selectedSession}
-              selectedWorkspace={selectedWorkspace}
               setChatSessions={setChatSessions}
               updateChatSession={updateChatSession}
               selectSession={setSelectedSessionId}
@@ -3202,7 +3192,6 @@ const wikiSourceTabs: WikiSourceConfig[] = explorerSourceTabs
   .map((source) => ({ ...source, externalSource: source.id }));
 
 function ExplorerView({
-  selectedWorkspace,
   embedded = false,
   externalQuery,
   externalSource,
@@ -3212,7 +3201,6 @@ function ExplorerView({
   docSourcesOnly = false,
   onShareResult,
 }: {
-  selectedWorkspace?: WorkspaceSummary;
   embedded?: boolean;
   externalQuery?: string;
   externalSource?: ExplorerSourceTab | "all";
@@ -3245,7 +3233,7 @@ function ExplorerView({
 
   async function search() {
     setBusy(true);
-    setResults(await linkApi.searchExplorer({ query, workspaceId: selectedWorkspace?.id }));
+    setResults(await linkApi.searchExplorer({ query, workspaceId: defaultWorkspaceId }));
     setBusy(false);
   }
 
@@ -3262,7 +3250,7 @@ function ExplorerView({
 
   useEffect(() => {
     void search();
-  }, [selectedWorkspace?.id, externalQuery, externalSource, refreshKey]);
+  }, [externalQuery, externalSource, refreshKey]);
 
   useEffect(() => {
     if (!availableSourceTabs.some((tab) => tab.id === sourceTab)) {
@@ -3354,13 +3342,11 @@ const helpCenterQuestionExamples = [
 ];
 
 function HelpCenterConsole({
-  selectedWorkspace,
   question,
   setQuestion,
   sort,
   refreshKey = 0,
 }: {
-  selectedWorkspace?: WorkspaceSummary;
   question: string;
   setQuestion: (value: string) => void;
   sort: "az" | "za";
@@ -3395,7 +3381,7 @@ function HelpCenterConsole({
     }
     setSourcesBusy(true);
     const timer = window.setTimeout(() => {
-      void linkApi.searchExplorer({ query: term, workspaceId: selectedWorkspace?.id })
+      void linkApi.searchExplorer({ query: term, workspaceId: defaultWorkspaceId })
         .then((results) => {
           if (cancelled) return;
           setRelatedSources(results.filter((result) => result.source === "telnyx_support" || result.source === "telnyx_developers"));
@@ -3411,7 +3397,7 @@ function HelpCenterConsole({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [selectedWorkspace?.id, trimmedQuestion, refreshKey]);
+  }, [trimmedQuestion, refreshKey]);
 
   useEffect(() => {
     if (!refreshKey || !answer || !trimmedQuestion || answerBusy) return;
@@ -3693,7 +3679,6 @@ function MarketplaceView({ embedded = false, hideHeader = false }: { embedded?: 
 
 function ChatsView({
   sessions,
-  workspaces,
   memoryBanks,
   selectedSession,
   selectSession,
@@ -3710,7 +3695,6 @@ function ChatsView({
   refreshTables,
 }: {
   sessions: ChatSession[];
-  workspaces: WorkspaceSummary[];
   memoryBanks: MemoryBank[];
   selectedSession?: ChatSession;
   selectSession: (id: string) => void;
@@ -3738,9 +3722,8 @@ function ChatsView({
   const [selectedSessionRowIds, setSelectedSessionRowIds] = useState<string[]>([]);
   const [refreshingChats, setRefreshingChats] = useState(false);
   const [chatRefreshStatus, setChatRefreshStatus] = useState("");
-  const workspaceById = useMemo(() => new Map(workspaces.map((workspace) => [workspace.id, workspace])), [workspaces]);
   const runtimeFailurePattern = /No agent runtime returned a response|AIDA is selected, but no live agent runtime returned a response|Runtime detail:/i;
-  const getSessionMeta = (session: ChatSession, workspace?: WorkspaceSummary) => {
+  const getSessionMeta = (session: ChatSession) => {
     const messages = session.messages.filter((message) => message.role !== "system");
     const artifacts = messages.flatMap((message) => message.artifacts ?? []);
     const sources = messages.flatMap((message) => message.sources ?? []);
@@ -3765,17 +3748,11 @@ function ChatsView({
             title: "Choose an agent in the sidebar",
             body: "Select Link or a hosted Hermes/OpenClaw agent before sending the next message.",
           },
-      workspace
-        ? {
-            id: "workspace-context",
-            title: `Use ${workspace.name} context`,
-            body: "Keep follow-up work scoped to this workspace's docs, archive, and active tasks.",
-          }
-        : {
-            id: "workspace-context",
-            title: "Attach workspace context",
-            body: "Move this standalone chat into a workspace when follow-up work needs shared context.",
-          },
+      {
+        id: "session-context",
+        title: "Use session context",
+        body: "Keep follow-up work scoped to this chat's sources, archive, and active tasks.",
+      },
       {
         id: "deploy-edge-app",
         title: "Deploy to Edge Compute",
@@ -3798,11 +3775,10 @@ function ChatsView({
     sessions.forEach((session) => {
       if (hiddenSessionIds.includes(session.id)) return;
       if (session.archivedAt) return;
-      const workspace = workspaceById.get(session.workspaceId);
-      names.add(getSessionMeta(session, workspace).agentName);
+      names.add(getSessionMeta(session).agentName);
     });
     return [...names].sort((a, b) => a.localeCompare(b));
-  }, [hiddenSessionIds, sessions, workspaceById]);
+  }, [hiddenSessionIds, sessions]);
   const chatSessionTypeFilterOptions = useMemo(() => {
     const types = new Map<string, string>();
     sessions.forEach((session) => {
@@ -3822,8 +3798,7 @@ function ChatsView({
     return sortChatSessions(sessions).filter((session) => {
       if (hidden.has(session.id)) return false;
       if (session.archivedAt) return false;
-      const workspace = workspaceById.get(session.workspaceId);
-      const sessionMeta = getSessionMeta(session, workspace);
+      const sessionMeta = getSessionMeta(session);
       const sessionType = classifyChatSessionType(session);
       if (agentFilter !== "all" && sessionMeta.agentName !== agentFilter) return false;
       if (sessionTypeFilter !== "all" && sessionType.id !== sessionTypeFilter) return false;
@@ -3832,7 +3807,6 @@ function ChatsView({
         session.title,
         sessionMeta.agentName,
         sessionType.label,
-        workspace?.name,
         ...session.messages.flatMap((message) => [
           message.content,
           ...(message.sources ?? []).map((source) => `${source.title} ${source.source}`),
@@ -3841,9 +3815,8 @@ function ChatsView({
       ].filter(Boolean).join(" ").toLowerCase();
       return searchable.includes(term);
     });
-  }, [agentFilter, hiddenSessionIds, query, sessions, sessionTypeFilter, workspaceById]);
+  }, [agentFilter, hiddenSessionIds, query, sessions, sessionTypeFilter]);
   const detailSession = detailSessionId ? filteredSessions.find((session) => session.id === detailSessionId) ?? sessions.find((session) => session.id === detailSessionId) : null;
-  const detailWorkspace = detailSession ? workspaceById.get(detailSession.workspaceId) : undefined;
 	  const [edgeDeployBusy, setEdgeDeployBusy] = useState(false);
 	  const [edgeDeployResult, setEdgeDeployResult] = useState<LinkLocalEdgeDeployResult | null>(null);
 	  const [edgePreviewResult, setEdgePreviewResult] = useState<LinkLocalEdgeDeployResult | null>(null);
@@ -4107,8 +4080,8 @@ function ChatsView({
     );
   }
 
-  function renderReviewTabs(session: ChatSession, workspace?: WorkspaceSummary) {
-    const sessionMeta = getSessionMeta(session, workspace);
+  function renderReviewTabs(session: ChatSession) {
+    const sessionMeta = getSessionMeta(session);
     return (
       <div className="chatResultDetails">
         <div className="chatReviewTabs" role="tablist" aria-label={`${session.title} review`}>
@@ -4277,8 +4250,7 @@ function ChatsView({
   }
 
   function renderSessionRow(session: ChatSession) {
-    const workspace = workspaceById.get(session.workspaceId);
-    const sessionMeta = getSessionMeta(session, workspace);
+    const sessionMeta = getSessionMeta(session);
     return (
       <div
         className="chatResultRow"
@@ -4324,7 +4296,7 @@ function ChatsView({
   }
 
   if (detailSession) {
-    const sessionMeta = getSessionMeta(detailSession, detailWorkspace);
+    const sessionMeta = getSessionMeta(detailSession);
     return (
       <section className="content chatView canonicalChat chatDetailView">
         <header className="pageHeader">
@@ -4344,7 +4316,7 @@ function ChatsView({
           </div>
         </header>
         <div className="chatDetailSurface">
-          {renderReviewTabs(detailSession, detailWorkspace)}
+          {renderReviewTabs(detailSession)}
         </div>
       </section>
     );
@@ -4981,7 +4953,6 @@ function AssistantPanel({
   selectedChatAgentId,
   setSelectedChatAgentId,
   selectedSession,
-  selectedWorkspace,
   setChatSessions,
   updateChatSession,
   selectSession,
@@ -5023,7 +4994,6 @@ function AssistantPanel({
   selectedChatAgentId: string;
   setSelectedChatAgentId: (id: string) => void;
   selectedSession?: ChatSession;
-  selectedWorkspace?: WorkspaceSummary;
   setChatSessions: (updater: (current: ChatSession[]) => ChatSession[]) => void;
   updateChatSession: (input: { sessionId: string; title?: string; pinned?: boolean; archived?: boolean }) => Promise<ChatSession>;
   selectSession: (id: string) => void;
@@ -5472,7 +5442,7 @@ function AssistantPanel({
       : {
         id: optimisticSessionId,
         title: visibleContent.slice(0, 54),
-        workspaceId: selectedWorkspace?.id ?? "workspace-link",
+        workspaceId: defaultWorkspaceId,
         model: selectedChatAgent?.displayName ?? "Link",
         status: "active",
         updatedAt: optimisticCreatedAt,
@@ -5513,7 +5483,7 @@ function AssistantPanel({
       const instructionPrefix = [workflowPrefix, skillPrefix, attachmentPrefix].filter(Boolean).join("\n\n");
       const session = await linkApi.sendChatMessage({
         sessionId: selectedSession?.id,
-        workspaceId: selectedWorkspace?.id,
+        workspaceId: defaultWorkspaceId,
         content: messageContent,
         systemInstruction: instructionPrefix || undefined,
         agentId: selectedChatAgent?.id === "link-default-runtime" ? undefined : selectedChatAgent?.id,
@@ -5663,7 +5633,7 @@ function AssistantPanel({
         ].join("\n"),
         labels: ["docs", "review"],
         status: "todo",
-        workspace: selectedWorkspace?.id,
+        workspace: defaultWorkspaceId,
         autoDispatch: false,
       });
       await refresh();
@@ -12817,7 +12787,6 @@ function WikiView({
   initialTab,
   wikiState,
   skills,
-  selectedWorkspace,
   activeAgent,
   agents,
   bookmarkedAgentIds,
@@ -12833,7 +12802,6 @@ function WikiView({
   initialTab?: WikiTab | undefined;
   wikiState: WikiState | null;
   skills: SkillMetadata[];
-  selectedWorkspace?: WorkspaceSummary;
   activeAgent: ActiveAgentSelection | null;
   agents: AgentSummary[];
   bookmarkedAgentIds: string[];
@@ -14136,12 +14104,11 @@ function WikiView({
   function renderDocsSourceTab(source: WikiSourceConfig) {
     const externalSource = source.externalSource;
     if (externalSource === "support") {
-      return <HelpCenterConsole selectedWorkspace={selectedWorkspace} question={query} setQuestion={setQuery} sort={sort} refreshKey={wikiRefreshKey} />;
+      return <HelpCenterConsole question={query} setQuestion={setQuery} sort={sort} refreshKey={wikiRefreshKey} />;
     }
 
     return (
       <ExplorerView
-        selectedWorkspace={selectedWorkspace}
         embedded
         externalQuery={query}
         externalSource={externalSource}

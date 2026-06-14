@@ -81,7 +81,6 @@ contextBridge.exposeInMainWorld("linkDesktop", {
   getAgentControlPlaneAuthStatus: () => ipcRenderer.invoke("link:agent-control-plane-auth-status"),
   openAgentControlPlaneSetup: (input) => ipcRenderer.invoke("link:agent-control-plane-open-setup", input),
   listHostedAgents: () => ipcRenderer.invoke("link:list-hosted-agents"),
-  listWorkspaces: () => ipcRenderer.invoke("link:list-workspaces"),
   listWikiSources: () => ipcRenderer.invoke("link:list-wiki-sources"),
   saveWikiSource: (input) => ipcRenderer.invoke("link:save-wiki-source", input),
   deleteWikiSource: (id) => ipcRenderer.invoke("link:delete-wiki-source", id),

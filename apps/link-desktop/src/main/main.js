@@ -364,7 +364,6 @@ const customWikiSourceTypes = new Set(["github", "mcp", "okf"]);
 let connectorOverrides = {};
 let meetingBotIdentities = {};
 let meetingBotInvites = [];
-let workspaces = [];
 let chatSessions = [];
 let storedCredentials = {};
 let memoryBanks = [];
@@ -1062,7 +1061,6 @@ function registerIpc() {
   secureIpcHandle("link:agent-control-plane-auth-status", () => getAgentControlPlaneAuthStatus());
   secureIpcHandle("link:agent-control-plane-open-setup", (_event, input) => openAgentControlPlaneSetup(input));
   secureIpcHandle("link:list-hosted-agents", () => listHostedAgents());
-  secureIpcHandle("link:list-workspaces", () => listWorkspaces());
   secureIpcHandle("link:list-wiki-sources", () => listWikiSources());
   secureIpcHandle("link:save-wiki-source", (_event, input) => saveWikiSource(input));
   secureIpcHandle("link:delete-wiki-source", (_event, id) => deleteWikiSource(id));
@@ -2169,14 +2167,6 @@ async function sendChatMessage({ sessionId, workspaceId = "workspace-link", cont
   sessionItem.model = liveResponse.ok ? liveResponse.route : "live-runtime-unavailable";
   await syncWorkboardTaskCompletionFromAssistant(sessionItem, responseText);
 
-  addWorkspaceTab(workspaceId, {
-    id: `tab-${sessionItem.id}`,
-    title: sessionItem.title,
-    kind: "chat",
-    status: "open",
-    updatedAt: sessionItem.updatedAt,
-  });
-
   await saveDesktopState();
   return sessionItem;
 }
@@ -2280,13 +2270,6 @@ async function createChatSession({
   };
 
   chatSessions = [sessionItem, ...chatSessions];
-  addWorkspaceTab(workspaceId, {
-    id: `tab-${sessionItem.id}`,
-    title: sessionItem.title,
-    kind: "chat",
-    status: "open",
-    updatedAt: now,
-  });
   await saveDesktopState();
   return sessionItem;
 }
@@ -2301,21 +2284,6 @@ function sortChatSessions(sessions) {
     if (pinnedCompare !== 0) return pinnedCompare;
     return Date.parse(right.updatedAt || "") - Date.parse(left.updatedAt || "");
   });
-}
-
-function updateWorkspaceChatTab(sessionItem) {
-  workspaces = workspaces.map((workspace) => ({
-    ...workspace,
-    tabs: workspace.tabs.map((tab) => {
-      if (tab.id !== `tab-${sessionItem.id}`) return tab;
-      return {
-        ...tab,
-        title: sessionItem.title,
-        status: sessionItem.archivedAt ? "complete" : sessionItem.pinnedAt ? "pinned" : "open",
-        updatedAt: sessionItem.updatedAt,
-      };
-    }),
-  }));
 }
 
 async function updateChatSession({ sessionId, title, pinned, archived } = {}) {
@@ -2333,7 +2301,6 @@ async function updateChatSession({ sessionId, title, pinned, archived } = {}) {
   if (pinned !== undefined) sessionItem.pinnedAt = pinned ? (sessionItem.pinnedAt || now) : undefined;
   if (archived !== undefined) sessionItem.archivedAt = archived ? now : undefined;
   sessionItem.updatedAt = now;
-  updateWorkspaceChatTab(sessionItem);
   chatSessions = sortChatSessions(chatSessions);
   await saveDesktopState();
   return sessionItem;
@@ -3302,10 +3269,6 @@ function audioFileName(mimeType) {
   if (mimeType.includes("wav")) return "voice-input.wav";
   if (mimeType.includes("ogg")) return "voice-input.ogg";
   return "voice-input.webm";
-}
-
-function listWorkspaces() {
-  return workspaces;
 }
 
 async function searchExplorer({ query = "", workspaceId } = {}) {
@@ -13851,7 +13814,6 @@ async function loadDesktopState() {
     toolCatalogItems = useSavedState && Array.isArray(saved.toolCatalogItems) ? saved.toolCatalogItems.map(normalizeToolCatalogItem).filter(Boolean) : [];
     pendingToolCatalogPublishes = useSavedState && Array.isArray(saved.pendingToolCatalogPublishes) ? saved.pendingToolCatalogPublishes.map(normalizePendingToolManifest).filter(Boolean) : [];
     artifactDeployments = useSavedState && Array.isArray(saved.artifactDeployments) ? saved.artifactDeployments.map(normalizeArtifactDeploymentRecord).filter(Boolean) : [];
-    workspaces = useSavedState && Array.isArray(saved.workspaces) ? saved.workspaces : [];
     onboardingState = useSavedState && saved.onboardingState && typeof saved.onboardingState === "object" ? normalizeOnboardingState(saved.onboardingState) : emptyOnboardingState();
     dialerState = useSavedState && saved.dialerState && typeof saved.dialerState === "object" ? normalizeDialerState(saved.dialerState) : emptyDialerState();
     speakSettings = useSavedState && saved.speakSettings && typeof saved.speakSettings === "object" ? normalizeSpeakSettings(saved.speakSettings) : emptySpeakSettings();
@@ -13882,7 +13844,6 @@ async function loadDesktopState() {
     toolCatalogItems = [];
     pendingToolCatalogPublishes = [];
     artifactDeployments = [];
-    workspaces = [];
     onboardingState = emptyOnboardingState();
     dialerState = emptyDialerState();
     speakSettings = emptySpeakSettings();
@@ -13906,7 +13867,6 @@ async function saveDesktopState() {
     connectorOverrides,
     meetingBotIdentities,
     meetingBotInvites,
-    workspaces,
     chatSessions,
     memoryBanks,
     wikiState,
@@ -13972,18 +13932,6 @@ function emptyWikiState() {
     kits: [],
     sessions: [],
   };
-}
-
-function createWorkspaceTab(id, title, kind, status) {
-  return { id, title, kind, status, updatedAt: new Date().toISOString() };
-}
-
-function addWorkspaceTab(workspaceId, tab) {
-  workspaces = workspaces.map((workspace) => {
-    if (workspace.id !== workspaceId) return workspace;
-    const tabs = [tab, ...workspace.tabs.filter((item) => item.id !== tab.id)].slice(0, 8);
-    return { ...workspace, tabs, updatedAt: tab.updatedAt };
-  });
 }
 
 function createMessage(role, content, artifacts = [], sources = [], displayName = "") {

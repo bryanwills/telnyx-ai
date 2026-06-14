@@ -208,7 +208,6 @@ test("preload exposes the Link desktop IPC contract", async () => {
     "signOutAgentControlPlane",
     "getAgentControlPlaneAuthStatus",
     "listHostedAgents",
-    "listWorkspaces",
     "searchExplorer",
     "askKnowledgeAgent",
     "listChatSessions",
@@ -620,7 +619,7 @@ test("Wiki owns the tools and apps catalog", async () => {
   assert.match(app, /hostname === suffix\.slice\(1\) \|\| hostname\.endsWith\(suffix\)/);
   assert.doesNotMatch(app, /No apps found/);
   assert.match(app, /function renderDocsSourceTab/);
-  assert.match(app, /<HelpCenterConsole selectedWorkspace=\{selectedWorkspace\} question=\{query\} setQuestion=\{setQuery\} sort=\{sort\} refreshKey=\{wikiRefreshKey\} \/>/);
+  assert.match(app, /<HelpCenterConsole question=\{query\} setQuestion=\{setQuery\} sort=\{sort\} refreshKey=\{wikiRefreshKey\} \/>/);
   assert.match(app, /function HelpCenterConsole/);
   assert.match(app, /helpCenterQuestionExamples/);
   assert.match(app, /Ask Knowledge Agent/);
@@ -642,7 +641,7 @@ test("Wiki owns the tools and apps catalog", async () => {
   assert.match(styles, /\.helpCenterGuardrail\s*\{[\s\S]*?font-style:\s*italic/);
   assert.doesNotMatch(app, /Public docs endpoint/);
   assert.match(app, /linkApi\.askKnowledgeAgent\(\{ question: prompt \}\)/);
-  assert.match(app, /linkApi\.searchExplorer\(\{ query: term, workspaceId: selectedWorkspace\?\.id \}\)/);
+  assert.match(app, /linkApi\.searchExplorer\(\{ query: term, workspaceId: defaultWorkspaceId \}\)/);
   assert.match(app, /result\.source === "telnyx_support" \|\| result\.source === "telnyx_developers"/);
   assert.match(app, /No citations returned\. Use related sources before sharing externally\./);
   assert.doesNotMatch(app, /This Wiki source is not available yet\./);
@@ -653,7 +652,7 @@ test("Wiki owns the tools and apps catalog", async () => {
   assert.match(app, /type WikiTab = "apps" \| "skills" \| WikiSourceTab/);
   assert.match(app, /const wikiSourceTabs: WikiSourceConfig\[\] = explorerSourceTabs/);
   assert.match(app, /setTab\(initialTab \?\? "support"\)/);
-  assert.match(app, /\[selectedWorkspace\?\.id, externalQuery, externalSource, refreshKey\]/);
+  assert.match(app, /\[externalQuery, externalSource, refreshKey\]/);
   assert.match(app, /label:\s*"Dev Docs"/);
   assert.match(app, /label:\s*"Help Center"/);
   assert.match(app, /label:\s*"Guru"/);
@@ -882,9 +881,9 @@ test("removed desktop pages stay unwired", async () => {
   assert.doesNotMatch(app, /setView\("workspaces"\)/);
   assert.doesNotMatch(app, /TableauEmbeddedWidget|TableauEventType|document\.createElement\("tableau-viz"\)|WidgetChart/);
   assert.doesNotMatch(api, /\| "widgets"|\| "workspaces"|\| "explorer"/);
-  assert.doesNotMatch(api, /WidgetCatalogItem|WidgetTableauEmbedSpec|listWidgetCatalog|createSharedChannelDraft|listActiveWork|listAutomations/);
-  assert.doesNotMatch(main, /TABLEAU_|tableau|link:list-widget|widgetLayout|link:shared-channel-draft|link:list-active-work|link:list-automations|createActiveWork|formatSharedChannelResponse/i);
-  assert.doesNotMatch(preload, /listWidgetCatalog|createSharedChannelDraft|listActiveWork|listAutomations/);
+  assert.doesNotMatch(api, /WorkspaceSummary|WidgetCatalogItem|WidgetTableauEmbedSpec|listWorkspaces|listWidgetCatalog|createSharedChannelDraft|listActiveWork|listAutomations/);
+  assert.doesNotMatch(main, /TABLEAU_|tableau|link:list-widget|link:list-workspaces|widgetLayout|link:shared-channel-draft|link:list-active-work|link:list-automations|createActiveWork|formatSharedChannelResponse/i);
+  assert.doesNotMatch(preload, /listWorkspaces|listWidgetCatalog|createSharedChannelDraft|listActiveWork|listAutomations/);
   assert.doesNotMatch(styles, /widgetsView|dashboardWidget|workspaceGrid|artifactCard|tableauWidget/);
   assert.doesNotMatch(index, /tableau/i);
   assert.ok(!pkg.dependencies?.["@tableau/embedding-api"]);
@@ -2155,7 +2154,7 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.match(api, /archivedAt\?: string/);
   assert.match(api, /updateChatSession\(input: \{ sessionId: string; title\?: string; pinned\?: boolean; archived\?: boolean \}\): Promise<ChatSession>/);
   assert.match(main, /secureIpcHandle\("link:update-chat-session"/);
-  assert.match(main, /function updateWorkspaceChatTab/);
+  assert.doesNotMatch(main, /function updateWorkspaceChatTab/);
   assert.match(main, /sessionItem\.pinnedAt/);
   assert.doesNotMatch(styles, /\.assistantSessionContext\s*\{/);
   assert.doesNotMatch(styles, /\.assistantSessionAgent\s*\{/);
@@ -2320,7 +2319,8 @@ test("chats page uses compact session table rows and a detail review page", asyn
   const chatsViewSource = app.slice(app.indexOf("function ChatsView"), app.indexOf("function MessageArtifacts"));
   const chatResultRowHeadStyles = styles.slice(styles.indexOf(".chatResultRowHead"), styles.indexOf(".chatSessionRows"));
 
-  assert.match(app, /workspaces=\{workspaces\}/);
+  assert.doesNotMatch(app, /workspaces=\{workspaces\}/);
+  assert.doesNotMatch(app, /setWorkspaces|selectedWorkspace/);
   assert.match(app, /memoryBanks=\{memoryBanks\}/);
   assert.match(app, /openMemory=\{\(\) => setMemoryOpen\(true\)\}/);
   assert.doesNotMatch(app, /sessionsByWorkspace/);
