@@ -1,11 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { createServer as createNumberIntelligenceServer } from "../apps/number-intelligence/src/server.js";
-import { createServer as createTableauWidgetsServer } from "../apps/tableau-widgets/src/server.js";
 import { createServer as createUsageCostExplorerServer } from "../apps/usage-cost-explorer/src/server.js";
 import { createServer as createVoiceMonitorServer } from "../apps/voice-monitor/src/server.js";
 
-export type McpAppSlug = "number-intelligence" | "usage-cost-explorer" | "voice-monitor" | "tableau-widgets";
+export type McpAppSlug = "number-intelligence" | "usage-cost-explorer" | "voice-monitor";
 
 export interface McpAppDefinition {
   slug: McpAppSlug;
@@ -29,13 +28,6 @@ export const MCP_APP_DEFINITIONS: readonly McpAppDefinition[] = [
     description: "Balance, usage reports, billing groups, and guarded billing controls.",
     endpoint: "/apps/usage-cost-explorer/mcp",
     createServer: createUsageCostExplorerServer
-  },
-  {
-    slug: "tableau-widgets",
-    name: "Tableau Widgets",
-    description: "Strict-access Tableau widget catalog and normalized view data for Link.",
-    endpoint: "/apps/tableau-widgets/mcp",
-    createServer: createTableauWidgetsServer
   },
   {
     slug: "voice-monitor",

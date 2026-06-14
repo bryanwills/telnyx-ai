@@ -38,13 +38,13 @@ describe("hosted MCP Apps HTTP service", () => {
     await expect(ready.json()).resolves.toMatchObject({
       status: "ready",
       service: "mcp-apps",
-      apps: ["number-intelligence", "usage-cost-explorer", "tableau-widgets", "voice-monitor"]
+      apps: ["number-intelligence", "usage-cost-explorer", "voice-monitor"]
     });
 
     const catalog = await app.request("/apps");
     expect(catalog.status).toBe(200);
     const body = await catalog.json();
-    expect(body.apps).toHaveLength(4);
+    expect(body.apps).toHaveLength(3);
     expect(body.apps[0]).not.toHaveProperty("createServer");
   });
 
