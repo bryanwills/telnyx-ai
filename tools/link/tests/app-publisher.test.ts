@@ -522,12 +522,31 @@ test("LinkAppPublisherService creates VPN-only publish intents with preview meta
   assert.equal(result.app.latestVersion.status, "preview");
   assert.equal(result.app.versions.length, 1);
   assert.equal(result.app.latestVersion.deploymentStatus, "succeeded");
+  assert.equal(result.app.latestVersion.buildLogUrl, undefined);
   assert.equal(result.app.deployments.length, 1);
   assert.equal(result.deployment?.target, "preview");
   assert.equal(result.deployment?.status, "succeeded");
+  assert.equal(result.deployment?.logUrl, undefined);
   assert.equal(result.app.previewUrl, "https://carrier-readiness-hub.link-apps-preview.query.prod.telnyx.io");
   assert.deepEqual(result.review?.reviewers, ["messaging-ops.squad", "link-platform.squad"]);
   assert.ok(auditLogger.all().some((event) => event.eventType === "link_app.publish_intent.created"));
+});
+
+test("LinkAppPublisherService uses explicit HTTPS build log bases only", () => {
+  const service = new LinkAppPublisherService({
+    buildLogBaseUrl: "https://publisher.example.com/logs/",
+    idGenerator: () => "log-id",
+    now: () => new Date("2026-06-09T12:00:00.000Z"),
+  });
+
+  const result = service.createPublishIntent(publishInput("build-log-app"));
+
+  assert.equal(result.app.latestVersion.buildLogUrl, "https://publisher.example.com/logs/version-log-id");
+  assert.equal(result.deployment?.logUrl, "https://publisher.example.com/logs/version-log-id");
+  assert.throws(
+    () => new LinkAppPublisherService({ buildLogBaseUrl: "http://publisher.example.com/logs" }),
+    /buildLogBaseUrl must be an HTTPS URL/,
+  );
 });
 
 test("LinkAppPublisherService versions, reviews, and duplicates source refs without local secrets", () => {

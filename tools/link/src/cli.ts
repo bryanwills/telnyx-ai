@@ -40,12 +40,13 @@ try {
     const useEdgeDeployer = args.includes("--edge-deployer") || process.env.LINK_APP_PUBLISHER_DEPLOYER === "telnyx-edge";
     const enforceReviewers = args.includes("--enforce-reviewers") || process.env.LINK_APP_PUBLISHER_ENFORCE_REVIEWERS === "1";
     const requireAuthContext = args.includes("--require-auth-context") || process.env.LINK_APP_PUBLISHER_REQUIRE_AUTH_CONTEXT === "1";
+    const buildLogBaseUrl = optionValue(args, "--build-log-base-url") || process.env.LINK_APP_PUBLISHER_BUILD_LOG_BASE_URL;
     const deployer = useEdgeDeployer
       ? new TelnyxEdgeCliDeployer({
           workspaceRoot: optionValue(args, "--workspace-root") || process.env.LINK_APP_PUBLISHER_WORKSPACE_ROOT,
         })
       : undefined;
-    const service = new LinkAppPublisherService({ storagePath, deployer, enforceReviewers });
+    const service = new LinkAppPublisherService({ storagePath, deployer, enforceReviewers, buildLogBaseUrl });
     const server = createLinkAppPublisherServer(service, { requireAuth, requireAuthContext });
     const listener = await listenLinkAppPublisherServer(server, port);
     const readiness = service.readiness();
@@ -56,6 +57,7 @@ try {
     console.log(enforceReviewers ? "Reviewer policy: enforced" : "Reviewer policy: permissive");
     console.log(requireAuth ? "Auth required: Bearer, x-telnyx-auth-rev2, or x-telnyx-api-key." : "Auth disabled for local development.");
     console.log(requireAuthContext ? "Auth context: required" : "Auth context: not required");
+    if (buildLogBaseUrl) console.log(`Build logs: ${buildLogBaseUrl}`);
     console.log(httpReady ? "Readiness: ready for production publish flow" : "Readiness: not production ready; check GET /readyz");
   } else if (command === "skill-registry") {
     const port = Number(args.find((arg) => /^\d+$/.test(arg)) ?? process.env.PORT ?? 0);

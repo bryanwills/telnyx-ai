@@ -118,7 +118,7 @@ npm exec -- telnyx-link publisher-e2e-smoke ./apps/carrier-readiness \
 
 # Add --check-app-url to verify the approved VPN app URL is reachable.
 npm exec -- telnyx-link publisher-e2e-smoke ./apps/carrier-readiness \
-  --publisher-url=https://link-app-publisher.query.prod.telnyx.io \
+  --publisher-url="$LINK_APP_PUBLISHER_URL" \
   --reviewer-groups=messaging-ops.squad \
   --token="$TELNYX_AUTH_REV2" \
   --require-ready \
@@ -145,6 +145,7 @@ LINK_APP_PUBLISHER_STORAGE=/var/lib/link-app-publisher/catalog.json \
 LINK_APP_PUBLISHER_DEPLOYER=telnyx-edge \
 LINK_APP_PUBLISHER_ENFORCE_REVIEWERS=1 \
 LINK_APP_PUBLISHER_REQUIRE_AUTH_CONTEXT=1 \
+LINK_APP_PUBLISHER_BUILD_LOG_BASE_URL=https://link-app-publisher.example.com/logs \
 npm exec -- telnyx-link app-publisher 4300
 
 curl -fsS http://127.0.0.1:4300/readyz

@@ -23,7 +23,7 @@ export interface LinkAppDeployment {
   sourceRef: string;
   sourceSubdir: string;
   url?: string;
-  logUrl: string;
+  logUrl?: string;
   message: string;
   logs?: string;
   createdAt: string;
@@ -40,7 +40,7 @@ export interface LinkAppDeploymentRequest {
   buildCommand?: string;
   startCommand?: string;
   outputDir?: string;
-  logUrl: string;
+  logUrl?: string;
   createdAt: string;
 }
 
@@ -314,7 +314,7 @@ export class LinkAppPublisherService {
     this.now = options.now ?? (() => new Date());
     this.previewBaseDomain = options.previewBaseDomain ?? "link-apps-preview.query.prod.telnyx.io";
     this.vpnBaseDomain = options.vpnBaseDomain ?? "apps.telnyx.io";
-    this.buildLogBaseUrl = options.buildLogBaseUrl ?? "https://link-app-publisher.query.prod.telnyx.io/logs";
+    this.buildLogBaseUrl = normalizeOptionalHttpsUrl(options.buildLogBaseUrl, "buildLogBaseUrl");
     this.storagePath = options.storagePath;
     this.deployer = options.deployer ?? new RecordOnlyLinkAppDeployer();
     this.enforceReviewers = Boolean(options.enforceReviewers);
@@ -681,7 +681,7 @@ export class LinkAppPublisherService {
       sourceSubdir,
       status,
       submittedAt: this.timestamp(),
-      buildLogUrl: `${this.buildLogBaseUrl}/${encodeURIComponent(versionId)}`,
+      buildLogUrl: this.buildLogUrl(versionId),
     };
   }
 
@@ -704,9 +704,14 @@ export class LinkAppPublisherService {
       buildCommand: buildConfig.buildCommand,
       startCommand: buildConfig.startCommand,
       outputDir: buildConfig.outputDir,
-      logUrl: `${this.buildLogBaseUrl}/${encodeURIComponent(version.id)}`,
+      logUrl: this.buildLogUrl(version.id),
       createdAt: now,
     });
+  }
+
+  private buildLogUrl(versionId: string): string | undefined {
+    if (!this.buildLogBaseUrl) return undefined;
+    return `${this.buildLogBaseUrl}/${encodeURIComponent(versionId)}`;
   }
 
   private timestamp(): string {
@@ -1281,7 +1286,7 @@ function deploymentVersionFields(deployment: LinkAppDeployment): Partial<LinkApp
   return {
     deploymentId: deployment.id,
     deploymentStatus: deployment.status,
-    buildLogUrl: deployment.logUrl,
+    ...(deployment.logUrl ? { buildLogUrl: deployment.logUrl } : {}),
     ...(deployment.target === "preview" ? { previewUrl: url } : {}),
     ...(deployment.target === "production" ? { deployedUrl: url } : {}),
   };
@@ -1480,7 +1485,7 @@ function readStoredDeployment(value: unknown): LinkAppDeployment | null {
     sourceRef: normalizeOptionalString(value.sourceRef ?? value.source_ref) || "main",
     sourceSubdir: normalizeOptionalString(value.sourceSubdir ?? value.source_subdir) || ".",
     url: normalizeOptionalString(value.url) || undefined,
-    logUrl: normalizeOptionalString(value.logUrl ?? value.log_url) || "",
+    logUrl: normalizeOptionalString(value.logUrl ?? value.log_url) || undefined,
     message: normalizeOptionalString(value.message),
     logs: normalizeOptionalString(value.logs) || undefined,
     createdAt,
@@ -1584,6 +1589,21 @@ function normalizeRequiredString(value: unknown, label: string): string {
 
 function normalizeOptionalString(value: unknown): string {
   return typeof value === "string" ? value.trim() : value == null ? "" : String(value).trim();
+}
+
+function normalizeOptionalHttpsUrl(value: unknown, label: string): string {
+  const normalized = normalizeOptionalString(value).replace(/\/+$/, "");
+  if (!normalized) return "";
+  let url: URL;
+  try {
+    url = new URL(normalized);
+  } catch {
+    throw new Error(`${label} must be a valid HTTPS URL.`);
+  }
+  if (url.protocol !== "https:" || url.username || url.password) {
+    throw new Error(`${label} must be an HTTPS URL without embedded credentials.`);
+  }
+  return url.toString().replace(/\/+$/, "");
 }
 
 function slugify(value: string): string {

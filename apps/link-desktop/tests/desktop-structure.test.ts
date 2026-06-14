@@ -1121,7 +1121,7 @@ test("managed Link App Publisher API satisfies the desktop publish contract", as
     const publishPayload = (await publishResponse.json()) as {
       mode: string;
       app: { id: string; slug: string; status: string; access: string; previewUrl: string; sourceRepo: string };
-      version: { id: string; status: string; buildLogUrl: string };
+      version: { id: string; status: string; buildLogUrl?: string };
     };
     assert.equal(publishPayload.mode, "managed");
     assert.equal(publishPayload.app.id, "app-customer-signals-board");
@@ -1133,15 +1133,15 @@ test("managed Link App Publisher API satisfies the desktop publish contract", as
 
     const catalogResponse = await fetch(`${listener.url}/apps`, { headers: { Authorization: headers.Authorization } });
     assert.equal(catalogResponse.status, 200);
-    const catalogPayload = (await catalogResponse.json()) as { apps: Array<{ slug: string; latestVersion: { buildLogUrl: string } }> };
+    const catalogPayload = (await catalogResponse.json()) as { apps: Array<{ slug: string; latestVersion: { buildLogUrl?: string } }> };
     assert.deepEqual(catalogPayload.apps.map((app) => app.slug), ["customer-signals-board"]);
-    assert.match(catalogPayload.apps[0].latestVersion.buildLogUrl, /\/logs\/version-/);
+    assert.equal(catalogPayload.apps[0].latestVersion.buildLogUrl, undefined);
 
     const deploymentsResponse = await fetch(`${listener.url}/apps/customer-signals-board/deployments`, { headers: { Authorization: headers.Authorization } });
     assert.equal(deploymentsResponse.status, 200);
-    const deploymentsPayload = (await deploymentsResponse.json()) as { deployments: Array<{ id: string; target: string; status: string; logUrl: string }> };
+    const deploymentsPayload = (await deploymentsResponse.json()) as { deployments: Array<{ id: string; target: string; status: string; logUrl?: string }> };
     assert.deepEqual(deploymentsPayload.deployments.map((deployment) => `${deployment.target}:${deployment.status}`), ["preview:succeeded"]);
-    assert.match(deploymentsPayload.deployments[0].logUrl, /\/logs\/version-/);
+    assert.equal(deploymentsPayload.deployments[0].logUrl, undefined);
 
     const deploymentLogsResponse = await fetch(`${listener.url}/apps/customer-signals-board/deployments/${deploymentsPayload.deployments[0].id}/logs`, { headers: { Authorization: headers.Authorization } });
     assert.equal(deploymentLogsResponse.status, 200);
