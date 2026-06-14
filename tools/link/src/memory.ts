@@ -14,7 +14,7 @@ export class MemoryStorePlaceholder {
     return {
       enabled: false,
       memories: [],
-      note: "Memory is not implemented in the MVP. Future recall must be permission-aware and source-attributed.",
+      note: "Memory recall is disabled in the deterministic local runtime. Future recall must be permission-aware and source-attributed.",
     };
   }
 
@@ -22,7 +22,7 @@ export class MemoryStorePlaceholder {
     return {
       enabled: false,
       persisted: false,
-      note: "Memory writes are disabled in the MVP.",
+      note: "Memory writes are disabled in the deterministic local runtime.",
     };
   }
 }

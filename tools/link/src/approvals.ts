@@ -57,7 +57,7 @@ export function evaluateApproval({
     approverRole: approvalRequired ? "human_owner" : null,
     reason: approvalRequired
       ? "Human approval is required before this action can affect a customer-visible or high-risk surface."
-      : "No human approval is required for this mocked read-only MVP action.",
+      : "No human approval is required for this deterministic read-only local action.",
     policyMatches: uniqueMatches,
   };
 }

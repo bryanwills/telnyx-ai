@@ -133,7 +133,7 @@ export const specialistAgents: SpecialistAgentDefinition[] = [
     ),
     allowedToolCategories: ["skills"],
     riskLevel: "low",
-    customerSafeRules: ["Do not imply that a skill has used real production data in the MVP."],
+    customerSafeRules: ["Do not imply that a skill has used real production data in the deterministic local runtime."],
     handoffKeywords: ["skill", "workflow", "playbook", "wiki", "guide", "catalog"],
   },
 ];

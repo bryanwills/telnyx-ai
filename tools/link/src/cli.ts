@@ -12,7 +12,7 @@ const [command = "chat", ...args] = process.argv.slice(2);
 
 try {
   if (command === "chat") {
-    const prompt = args.join(" ") || "Help me understand what Telnyx Link can do in this MVP.";
+    const prompt = args.join(" ") || "Help me understand what Telnyx Link can do in the local runtime.";
     const result = await runtime.chat({ prompt, actorId: "dev_user" });
     console.log(result.response ?? result.finalOutput);
   } else if (command === "skill") {

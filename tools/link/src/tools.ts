@@ -99,7 +99,7 @@ export const mockedTools: LinkTool[] = [
       posted: false,
       channelId,
       text,
-      note: "MVP mock only. No Slack message was posted.",
+      note: "Deterministic local fixture. No Slack message was posted.",
     }),
   },
   readTool({
