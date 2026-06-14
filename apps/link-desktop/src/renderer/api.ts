@@ -2234,12 +2234,12 @@ function previewLiteLlmRuntimeStatus(): LiteLlmRuntimeStatus {
 }
 
 let previewCredentials: CredentialGroupStatus[] = [
-  credentials("agent-control-plane", "Agent Control Plane", "Okta sign-in creates the Agent Control Plane session Link uses for internal agents and tools. TELNYX_AUTH_REV2 is stored securely after sign-in.", ["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"]),
+  credentials("agent-control-plane", "Agent Control Plane", "Configure the Okta auth bridge URL before sign-in. TELNYX_AUTH_REV2 is stored securely after sign-in.", ["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"]),
   credentials("mcp-proxy", "Telnyx MCP Proxy", "Connect Link to team-telnyx/mcp-proxy so agents discover approved MCP servers and tools through one Telnyx registry.", ["MCP_PROXY_URL"]),
   credentials("link-app-publisher", "Link App Publisher", "Managed publisher service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY.", ["LINK_APP_PUBLISHER_URL"]),
   credentials("link-message-gateway", "Link Message Gateway", "Managed message gateway service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY.", ["LINK_MESSAGE_GATEWAY_URL"]),
   credentials("litellm", "Model Gateway", "Optional managed gateway and frontier BYO settings. Local Ollama mode does not require a cloud key; Telnyx BYO uses the Telnyx API key group.", ["LITELLM_BASE_URL", "LITELLM_API_KEY", "TELNYX_INFERENCE_BASE_URL", "ANTHROPIC_API_KEY"]),
-  credentials("hindsight", "Hindsight", "Per-user Hindsight API key plus the memory bank id used when saving archive entries.", ["HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"]),
+  credentials("hindsight", "Hindsight", "Configured Hindsight API URL, per-user API key, and optional memory bank id used when saving archive entries.", ["HINDSIGHT_API_URL", "HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"]),
   credentials("linear", "Linear", "Linear API key for issue and project lookup.", ["LINEAR_API_KEY"]),
   credentials("telnyx", "Telnyx", "Telnyx API key for account, phone, messaging, and WebRTC token generation.", ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"]),
   credentials("telnyx-meet-bridge", "Telnyx Meet Bridge", "Runtime settings for Google Meet live joins through Telnyx SIP/phone dial and Conversation Relay.", ["TELNYX_VOICE_CONNECTION_ID", "TELNYX_MEET_CALLER_ID", "TELNYX_MEET_WEBHOOK_URL", "TELNYX_MEET_CONVERSATION_RELAY_WS_URL", "LINK_MEETING_AGENT_ADAPTER_URL"]),
@@ -3730,7 +3730,7 @@ const previewLinkApi: LinkDesktopApi = {
     if (app.status === "deprecated") throw new Error("This app is deprecated and cannot be opened from Link.");
     if (!["preview", "approved", "deployed"].includes(app.status)) throw new Error("This app is not ready to open from Link.");
     const url = app.vpnUrl || app.deployedUrl || app.previewUrl;
-    if (!url) throw new Error("This app does not have a private VPN URL yet.");
+    if (!url) throw new Error("This app does not have a private app URL yet.");
     return { opened: true, url };
   },
   async getEdgeComputeStatus() {

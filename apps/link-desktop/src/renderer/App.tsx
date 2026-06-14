@@ -855,7 +855,7 @@ type SpeechRecognitionLike = {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
-const approvedPublishedAppHostSuffixes = [".query.prod.telnyx.io", ".apps.telnyx.io", ".edge.telnyx.io", ".telnyxcompute.com", ".internal.telnyx.com"];
+const approvedPublishedAppHostSuffixes = [".query.prod.telnyx.io", ".apps.telnyx.io", ".edge.telnyx.io", ".telnyxcompute.com"];
 
 function shouldSubmitComposer(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
   return event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing;
@@ -934,7 +934,7 @@ interface MarketplaceApp {
   publisher: string;
   bot: string;
   audience: string;
-  installMode: "Source handoff" | "VPN access";
+  installMode: "Source handoff" | "Private URL";
   status: "Available" | "Reviewing" | "Installed";
   description: string;
 }
@@ -3665,7 +3665,7 @@ function MarketplaceView({ embedded = false, hideHeader = false }: { embedded?: 
               </div>
               <div className="marketplaceActions">
                 <button className={app.status === "Installed" ? "button ghost" : "button secondary"}>
-                  {app.status === "Installed" ? "Installed" : app.installMode === "VPN access" ? "Open via VPN" : "Duplicate"}
+                  {app.status === "Installed" ? "Installed" : app.installMode === "Private URL" ? "Open" : "Duplicate"}
                 </button>
                 <button className="button ghost">Details</button>
               </div>
@@ -17662,7 +17662,7 @@ function agentControlPlaneLoadMessage(error: unknown) {
     .replace(/^Error:\s*/i, "")
     .trim();
   if (/fetch failed|network request failed|not reachable|timed out|AbortError/i.test(stripped)) {
-    return stripped || "Agent Control Plane is not reachable. Connect to the Telnyx VPN, verify the service URL in Settings, then retry.";
+    return stripped || "Agent Control Plane is not reachable. Verify the service URL and network access in Settings, then retry.";
   }
   return stripped || "Unable to load Agent Control Plane agents.";
 }

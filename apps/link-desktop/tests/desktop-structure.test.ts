@@ -50,7 +50,7 @@ test("desktop app carries PADR service metadata", async () => {
   assert.match(metadataScript, /action=check/);
   assert.match(metadataScript, /metadev=@\$APP_DIR\/meta-dev\.yml/);
   assert.match(readme, /npm run metadata:check/);
-  assert.match(readme, /PADR-1 Service Metadata Specification/);
+  assert.match(readme, /PADR-1 service metadata shape/);
 });
 
 test("vite builds relative assets for Electron file loading", async () => {
@@ -1554,7 +1554,8 @@ test("settings uses account phone and tools tabs with nested sections", async ()
   assert.match(app, /!\["agent-control-plane", "mcp-proxy", "guru", "pylon"\]\.includes\(group\.id\)/);
   assert.doesNotMatch(app, /connectors\.find\(\(connector\) => connector\.id === "agent-control-plane"\)/);
   assert.match(main, /id:\s*"agent-control-plane",\s*label:\s*"Agent Control Plane"[\s\S]*?fields:\s*\["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"\]/);
-  assert.match(main, /const loginUrl = authInternalAuthorizationUrl\(callbackServer\.callbackUrl, state\)/);
+  assert.match(main, /const authBaseUrl = authInternalUrl\(\)/);
+  assert.match(main, /const loginUrl = authInternalAuthorizationUrl\(callbackServer\.callbackUrl, state, authBaseUrl\)/);
   assert.match(main, /authWindow\.loadURL\(loginUrl\)/);
   assert.match(main, /title:\s*"Telnyx - Sign In"/);
   assert.match(main, /const authWebContentsIds = new Set\(\)/);
@@ -2210,7 +2211,9 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.match(main, /createAidaAgentHandoff/);
   assert.match(main, /install LiteLLM for local chat, or select an explicit Telnyx Cloud route/);
   assert.match(main, /OpenClaw or Hermes as the agent runtime/);
-  assert.match(main, /https:\/\/api-internal\.telnyx\.com\/aida\/mcp\//);
+  assert.match(main, /AIDA_MCP_URL/);
+  assert.match(main, /No AIDA_MCP_URL is configured in Link/);
+  assert.doesNotMatch(main, /https:\/\/api-[a-z]+\.telnyx\.com\/aida\/mcp\//);
   assert.doesNotMatch(main, /claude mcp add/);
   assert.doesNotMatch(main, /mcp-remote/);
   assert.match(softphone, /aria-label="Your number"/);
@@ -2598,12 +2601,25 @@ test("main process has v2 state, live-ready adapters, and Taskbox review flow", 
 
   assert.match(main, /const stateVersion = 11/);
   assert.match(main, /saved\.version === stateVersion \|\| saved\.version === 10 \|\| saved\.version === 9 \|\| saved\.version === 8 \|\| saved\.version === 7 \|\| saved\.version === 6 \|\| saved\.version === 5 \|\| saved\.version === 4/);
+  assert.match(main, /const defaultAuthInternalUrl = ""/);
+  assert.match(main, /const defaultHindsightUrl = ""/);
+  assert.match(main, /const defaultAidaMcpUrl = ""/);
   assert.match(main, /const defaultLinkAppPublisherUrl = ""/);
   assert.match(main, /const defaultSkillRegistryUrl = ""/);
   assert.match(main, /const defaultMessageGatewayUrl = ""/);
+  assert.match(main, /function configuredAuthInternalUrl\(\)/);
+  assert.match(main, /configuredInternalServiceUrl\(credentialValue\("AUTH_INTERNAL_URL"\) \|\| defaultAuthInternalUrl, "AUTH_INTERNAL_URL"\)/);
+  assert.match(main, /function configuredHindsightUrl\(\)/);
+  assert.match(main, /configuredInternalServiceUrl\(credentialValue\("HINDSIGHT_API_URL"\) \|\| defaultHindsightUrl, "HINDSIGHT_API_URL"\)/);
+  assert.match(main, /function aidaMcpUrl\(\)/);
+  assert.match(main, /configuredInternalServiceUrl\(credentialValue\(aidaMcpUrlField\) \|\| defaultAidaMcpUrl, aidaMcpUrlField\)/);
   assert.match(main, /configuredInternalServiceUrl\(credentialValue\("LINK_APP_PUBLISHER_URL"\) \|\| process\.env\.LINK_APP_PUBLISHER_URL \|\| defaultLinkAppPublisherUrl, "LINK_APP_PUBLISHER_URL"\)/);
   assert.match(main, /configuredInternalServiceUrl\(credentialValue\("LINK_SKILL_REGISTRY_URL"\) \|\| process\.env\.LINK_SKILL_REGISTRY_URL \|\| defaultSkillRegistryUrl, "LINK_SKILL_REGISTRY_URL"\)/);
   assert.match(main, /configuredInternalServiceUrl\(credentialValue\("LINK_MESSAGE_GATEWAY_URL"\) \|\| process\.env\.LINK_MESSAGE_GATEWAY_URL \|\| defaultMessageGatewayUrl, "LINK_MESSAGE_GATEWAY_URL"\)/);
+  assert.doesNotMatch(main, /auth-[a-z]+\.query\.prod\.telnyx\.io/);
+  assert.doesNotMatch(main, /api-[a-z]+\.telnyx\.com/);
+  assert.doesNotMatch(main, /\.internal\.telnyx\.com/);
+  assert.doesNotMatch(app, /\.internal\.telnyx\.com/);
   assert.match(main, /link:skill-registry-event/);
   assert.match(main, /link:list-tool-catalog/);
   assert.match(main, /link:publish-tool-manifest/);
@@ -2649,6 +2665,7 @@ test("main process has v2 state, live-ready adapters, and Taskbox review flow", 
   assert.doesNotMatch(main, /ACP identity and Tableau view entitlement/);
   assert.match(main, /LITELLM_BASE_URL/);
   assert.match(main, /HINDSIGHT_API_KEY/);
+  assert.match(main, /HINDSIGHT_API_URL/);
 
   assert.match(preload, /generateTtsSample/);
 

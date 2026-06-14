@@ -22,7 +22,7 @@ The normal setup path is the Settings page. Credential fields there are write-on
 
 The Agent Control Plane should use Okta SSO; do not put an Okta password in this file. `TELNYX_ACTOR` and `TELNYX_ON_BEHALF_OF` are optional routing hints for ACP endpoints that require explicit user or squad context.
 
-The Settings view exposes a `Sign in with Okta` action for Agent Control Plane. It opens ACP `/auth/login` in an Electron auth window and keeps the resulting ACP cookies in the Electron session. If a specific hosted agent endpoint requires a squad context, set `TELNYX_ON_BEHALF_OF` to that squad id ending in `.squad`.
+The Settings view exposes a `Sign in with Okta` action for Agent Control Plane. Configure `AUTH_INTERNAL_URL` first; Link opens that auth bridge's `/rev_a/authenticate` flow in an Electron auth window and stores the resulting Rev2 token with Electron `safeStorage`. If a specific hosted agent endpoint requires a squad context, set `TELNYX_ON_BEHALF_OF` to that squad id ending in `.squad`.
 
 GitHub pairing uses a GitHub App device flow. Users only use the GitHub card's `Connect` button: Link shows the device code in a native dialog, opens `https://github.com/login/device`, stores the returned app user token with Electron `safeStorage`, and verifies it can read `team-telnyx/link` by default. Release builds should include the public Telnyx Link GitHub App client ID in `link-desktop-config.json` next to packaged app resources, for example `{ "githubAppClientId": "..." }`. `LINK_DESKTOP_CONFIG_PATH`, `LINK_DESKTOP_CONFIG_JSON`, `LINK_GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_ID`, `GH_TOKEN`, `GITHUB_TOKEN`, and authenticated `gh` remain developer or operator fallbacks. Override the pairing check with `LINK_GITHUB_APP_VERIFY_REPO=owner/repo`.
 
@@ -39,7 +39,7 @@ Most users should connect services through Settings. Operators and developers ca
 | Development renderer | `VITE_DEV_SERVER_URL`, `LINK_DESKTOP_RENDERER` | Development-only renderer overrides. Packaged builds ignore `LINK_DESKTOP_RENDERER` and load the bundled renderer to keep the trusted preload bridge attached only to shipped app files. |
 | Request timeouts | `LINK_DESKTOP_FETCH_TIMEOUT_MS` | Default outbound `fetch` timeout is 15 seconds. Existing call-specific signals, such as long-running knowledge-agent requests, still win. |
 | GitHub | `LINK_DESKTOP_CONFIG_PATH`, `LINK_DESKTOP_CONFIG_JSON`, `LINK_GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_ID`, `LINK_GITHUB_APP_VERIFY_REPO`, `GH_TOKEN`, `GITHUB_TOKEN` | GitHub pairing verifies access to `team-telnyx/link` by default. Developer token fallbacks should stay local. |
-| Agent Control Plane | `AGENT_CONTROL_PLANE_URL`, `A2A_DISCOVERY_URL`, `AUTH_INTERNAL_URL`, `TELNYX_ACTOR`, `TELNYX_ON_BEHALF_OF`, `TELNYX_AUTH_REV2` | Prefer Okta SSO from Settings. Hosted ACP and A2A integrations have no production default in public builds; configure HTTPS service URLs explicitly. HTTP is accepted only for loopback local development endpoints. |
+| Agent Control Plane | `AGENT_CONTROL_PLANE_URL`, `A2A_DISCOVERY_URL`, `AUTH_INTERNAL_URL`, `TELNYX_ACTOR`, `TELNYX_ON_BEHALF_OF`, `TELNYX_AUTH_REV2` | Prefer Okta SSO from Settings. Auth, hosted ACP, and A2A integrations have no production default in public builds; configure HTTPS service URLs explicitly. HTTP is accepted only for loopback local development endpoints. |
 | Link App Publisher | `LINK_APP_PUBLISHER_URL`, `LINK_APP_PUBLISHER_LOCAL_FALLBACK`, `LINK_APP_PUBLISHER_DEPLOYER`, `LINK_APP_PUBLISHER_ENFORCE_REVIEWERS`, `LINK_APP_PUBLISHER_REQUIRE_AUTH_CONTEXT`, `LINK_APP_PUBLISHER_REQUIRE_PUSHED_REF` | Production-like publisher runs should require auth context, reviewer enforcement, persistent storage, and Edge deployer readiness. |
 | Link Skill Registry | `LINK_SKILL_REGISTRY_URL`, `LINK_SKILL_REGISTRY_STORAGE`, `LINK_SKILL_REGISTRY_REQUIRE_AUTH_CONTEXT` | Desktop queues local skill events when the registry is unavailable. Production registry runs should require auth context. |
 | Pylon MCP | `PYLON_MCP_URL`, `PYLON_MCP_CLIENT_ID`, `PYLON_MCP_ACCESS_TOKEN`, `PYLON_MCP_REFRESH_TOKEN`, `PYLON_MCP_TOKEN_EXPIRES_AT` | Settings should own normal OAuth setup. Link allows read tools and `create_issue`; update tools are blocked. |
@@ -48,7 +48,8 @@ Most users should connect services through Settings. Operators and developers ca
 | Guru | `GURU_OAUTH_CLIENT_ID`, `GURU_OAUTH_CLIENT_SECRET`, `GURU_OAUTH_SCOPE`, `GURU_OAUTH_REDIRECT_URI`, `GURU_OAUTH_ACCESS_TOKEN`, `GURU_OAUTH_REFRESH_TOKEN`, `GURU_OAUTH_TOKEN_EXPIRES_AT`, `GURU_USER_EMAIL`, `GURU_USER_TOKEN` | Prefer OAuth. Basic-token fields remain compatibility fallbacks. |
 | Telnyx APIs | `TELNYX_API_KEY`, `LINK_DESKTOP_LIVE_CALL_E2E`, `LINK_DESKTOP_LIVE_CALL_CONFIRM`, `LINK_DESKTOP_LIVE_CALL_SECONDS` | Live call E2E is opt-in and hangs up automatically after the configured duration. |
 | Local terminal | `LINK_DESKTOP_ENABLE_TERMINAL` | Development builds expose the built-in terminal. Packaged builds require `LINK_DESKTOP_ENABLE_TERMINAL=1` before launch because the terminal can run arbitrary local shell commands. |
-| Docs and memory adapters | `INTERCOM_ACCESS_TOKEN`, `INTERCOM_API_BASE_URL`, `INTERCOM_VERSION`, `MINTLIFY_API_KEY`, `MINTLIFY_API_BASE_URL`, `MINTLIFY_DOMAIN`, `HINDSIGHT_API_KEY`, `HINDSIGHT_API_URL`, `HINDSIGHT_BANK_ID` | If unset or unreachable, Link falls back to deterministic local data where available. |
+| Docs and memory adapters | `INTERCOM_ACCESS_TOKEN`, `INTERCOM_API_BASE_URL`, `INTERCOM_VERSION`, `MINTLIFY_API_KEY`, `MINTLIFY_API_BASE_URL`, `MINTLIFY_DOMAIN`, `HINDSIGHT_API_URL`, `HINDSIGHT_API_KEY`, `HINDSIGHT_BANK_ID` | Hindsight requires both URL and key. If other adapters are unset or unreachable, Link falls back to deterministic local data where available. |
+| AIDA | `AIDA_MCP_URL` | Optional explicit MCP endpoint for self-hosted OpenClaw/Hermes routes. Hosted runtimes can own their AIDA configuration server-side. |
 | MCP | `MCP_PROXY_URL` | Managed service adapters should fail closed or use local cached state when unavailable. |
 
 Verification:
@@ -85,7 +86,7 @@ npm run test:e2e:publisher
 
 That command builds `tools/link` plus the desktop renderer, starts a local managed Link App Publisher with auth and actor/group context required, launches Electron against it, and verifies the Apps catalog, duplicate/fork handoff, and reviewer approval path through the real preload IPC bridge. It intentionally uses the record-only deployer, so `/readyz` reports publisher reachable but not production Edge-ready.
 
-`meta-dev.yml` follows [PADR-1 Service Metadata Specification](https://platform-handbook.internal.telnyx.com/decision_record/architecture/padr-0001_service_metadata_spec/). If `meta-prod.yml` is added later, `npm run metadata:check` validates the merged dev+prod view through `infra-svc-metatool`.
+`meta-dev.yml` follows Telnyx's PADR-1 service metadata shape. If `meta-prod.yml` is added later, `npm run metadata:check` validates the merged dev+prod view through `infra-svc-metatool`.
 
 ## Current Surfaces
 

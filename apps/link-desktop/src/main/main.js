@@ -34,8 +34,9 @@ const defaultDialerConfigId = "link-dialer";
 const legacyDialerTemplateIds = new Set(["standard", "sales", "support"]);
 const defaultAgentControlPlaneUrl = "";
 const defaultA2aDiscoveryUrl = "";
-const defaultAuthInternalUrl = "https://auth-internal.query.prod.telnyx.io:6674";
-const defaultHindsightUrl = "https://api-internal.telnyx.com/hindsight";
+const defaultAuthInternalUrl = "";
+const defaultHindsightUrl = "";
+const defaultAidaMcpUrl = "";
 const defaultLinkAppPublisherUrl = "";
 const defaultSkillRegistryUrl = "";
 const defaultMessageGatewayUrl = "";
@@ -181,6 +182,7 @@ const defaultGooglePeopleApiBaseUrl = "https://people.googleapis.com/v1";
 const defaultGoogleOAuthTokenUrl = "https://oauth2.googleapis.com/token";
 const appDisplayName = "Link";
 const appIconPath = path.resolve(__dirname, "../../public/link-icon.png");
+const aidaMcpUrlField = "AIDA_MCP_URL";
 
 function desktopWorkspaceRoot() {
   return app.isPackaged ? path.join(app.getPath("userData"), "workspace") : sourceRepoRoot;
@@ -197,7 +199,6 @@ function localAppsRoot() {
 const knowledgeAgentAskUrl = "https://api.telnyx.com/v2/knowledge_agent/ask";
 const keyScopedHindsightBankId = "hindsight-key-scoped";
 const aidaAgentId = "agent-aida";
-const aidaMcpUrl = "https://api-internal.telnyx.com/aida/mcp/";
 const mcpProxyFallbackServers = [
   {
     id: "telnyx-mcp-server",
@@ -357,7 +358,7 @@ const trustedRendererWebContentsIds = new Set();
 const mediaPermissionNames = new Set(["media", "microphone"]);
 const oktaFastPassLocalAppPermissionNames = new Set(["local-network-access", "unknown"]);
 const trustedAuthHostSuffixes = [".okta.com", ".okta-emea.com", ".okta-gov.com", ".oktapreview.com", ".telnyx.com"];
-const linkAppAllowedHostSuffixes = [".query.prod.telnyx.io", ".apps.telnyx.io", ".edge.telnyx.io", ".telnyxcompute.com", ".internal.telnyx.com"];
+const linkAppAllowedHostSuffixes = [".query.prod.telnyx.io", ".apps.telnyx.io", ".edge.telnyx.io", ".telnyxcompute.com"];
 const allowedCliCommands = new Set(["hermes", "openclaw", "telnyx-edge", "telnyx-edge-dev"]);
 const wikiSourceTypes = new Set(["telnyx_support", "telnyx_developers", "guru", "pylon", "github", "mcp", "okf"]);
 const customWikiSourceTypes = new Set(["github", "mcp", "okf"]);
@@ -497,7 +498,7 @@ const connectorCatalog = [
       ["AGENT_CONTROL_PLANE_URL"],
       ["AGENT_CONTROL_PLANE_URL", "TELNYX_AUTH_REV2"],
     ],
-    requiredAccess: ["Okta SSO via auth-internal", "optional TELNYX_ACTOR", "optional TELNYX_ON_BEHALF_OF"],
+    requiredAccess: ["Configured AUTH_INTERNAL_URL for Okta sign-in", "optional TELNYX_ACTOR", "optional TELNYX_ON_BEHALF_OF"],
   },
   {
     id: "litellm",
@@ -512,8 +513,8 @@ const connectorCatalog = [
     name: "Hindsight",
     category: "Memory",
     description: "Recall and inspect long-term agent memory banks.",
-    envGroups: [["HINDSIGHT_API_KEY"], ["HINDSIGHT_API_URL", "HINDSIGHT_API_KEY"]],
-    requiredAccess: ["Per-user bank-scoped HINDSIGHT_API_KEY from Hindsight UI"],
+    envGroups: [["HINDSIGHT_API_URL", "HINDSIGHT_API_KEY"]],
+    requiredAccess: ["Configured HINDSIGHT_API_URL", "per-user bank-scoped HINDSIGHT_API_KEY from Hindsight UI"],
   },
   {
     id: "guru",
@@ -634,9 +635,9 @@ const connectorCatalog = [
     id: "aida",
     name: "AIDA",
     category: "Agent tools",
-    description: "Chat with Telnyx AIDA through OpenClaw or Hermes using the internal AIDA MCP server.",
-    envGroups: [["TELNYX_API_KEY"], ["TELNYX_AUTH_REV2"]],
-    requiredAccess: ["Telnyx API key or Okta session", "OpenClaw/Hermes agent runtime"],
+    description: "Chat with Telnyx AIDA through OpenClaw or Hermes using a configured AIDA MCP endpoint or hosted runtime route.",
+    envGroups: [[aidaMcpUrlField, "TELNYX_API_KEY"], [aidaMcpUrlField, "TELNYX_AUTH_REV2"], ["TELNYX_API_KEY"], ["TELNYX_AUTH_REV2"]],
+    requiredAccess: ["Configured AIDA_MCP_URL for self-hosted runtime routes", "Telnyx API key or Okta session", "OpenClaw/Hermes agent runtime"],
   },
   {
     id: "mcp-proxy",
@@ -689,13 +690,14 @@ const connectorCatalog = [
 ];
 
 const credentialDefinitions = [
-  { id: "agent-control-plane", label: "Agent Control Plane", fields: ["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"], help: "Okta sign-in creates the Agent Control Plane session Link uses for internal agents and tools. TELNYX_AUTH_REV2 is stored securely after sign-in." },
+  { id: "agent-control-plane", label: "Agent Control Plane", fields: ["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"], help: "Configure the Okta auth bridge URL before sign-in. TELNYX_AUTH_REV2 is stored securely after sign-in." },
   { id: "mcp-proxy", label: "Telnyx MCP Proxy", fields: ["MCP_PROXY_URL"], help: "Connect Link to team-telnyx/mcp-proxy so agents discover approved MCP servers and tools through one Telnyx registry." },
   { id: "link-app-publisher", label: "Link App Publisher", fields: ["LINK_APP_PUBLISHER_URL"], help: "Managed publisher service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY." },
   { id: "link-skill-registry", label: "Link Skill Registry", fields: ["LINK_SKILL_REGISTRY_URL"], help: "Managed skill registry service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY." },
   { id: "link-message-gateway", label: "Link Message Gateway", fields: ["LINK_MESSAGE_GATEWAY_URL"], help: "Managed message gateway service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY." },
   { id: "litellm", label: "Model Gateway", fields: ["LITELLM_BASE_URL", "LITELLM_API_KEY", "TELNYX_INFERENCE_BASE_URL", "ANTHROPIC_API_KEY"], help: "Optional managed gateway and frontier BYO settings. Local Ollama mode does not require a cloud key; Telnyx BYO uses the Telnyx API key group." },
-  { id: "hindsight", label: "Hindsight", fields: ["HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"], help: "Per-user Hindsight API key plus the memory bank id used for retain operations. Link can still infer the bank from live bank selection or compatible key claims." },
+  { id: "hindsight", label: "Hindsight", fields: ["HINDSIGHT_API_URL", "HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"], help: "Configured Hindsight API URL, per-user Hindsight API key, and optional memory bank id for retain operations. Link can still infer the bank from live bank selection or compatible key claims." },
+  { id: "aida", label: "AIDA", fields: [aidaMcpUrlField], help: "Optional AIDA MCP endpoint for self-hosted OpenClaw or Hermes runtime routes. Hosted agent routes can own this configuration server-side." },
   { id: "linear", label: "Linear", fields: ["LINEAR_API_KEY"], help: "Linear API key for issue and project lookup." },
   { id: "telnyx", label: "Telnyx", fields: ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"], help: "Telnyx API key for account, phone, messaging, and WebRTC token generation." },
   { id: "telnyx-meet-bridge", label: "Telnyx Meet Bridge", fields: [telnyxVoiceConnectionIdField, telnyxMeetCallerIdField, telnyxMeetWebhookUrlField, telnyxMeetConversationRelayWsUrlField, linkMeetingAgentAdapterUrlField], help: "Runtime settings for Google Meet live joins. Telnyx Assistants can join by assistant id; generic agents require a public Conversation Relay wss:// URL and may use the Link hosted agent adapter URL." },
@@ -871,7 +873,7 @@ function isAllowedOktaFastPassPermissionCheck(webContents, permission, ...origin
 function isTrustedOktaAuthOrigin(value) {
   const url = parseUrl(value);
   if (!url || url.protocol !== "https:") return false;
-  const configuredAuthOrigin = parseUrl(authInternalUrl())?.origin;
+  const configuredAuthOrigin = authInternalOrigin();
   if (configuredAuthOrigin && url.origin === configuredAuthOrigin) return true;
 
   const hostname = url.hostname.toLowerCase();
@@ -2315,15 +2317,19 @@ function isA2aAgentSelection(agentId, agentSource) {
 }
 
 function aidaAgentRouteInstruction(chatSettings) {
+  const endpoint = optionalAidaMcpUrl();
   return [
     `Route this conversation through AIDA using OpenClaw or Hermes as the agent runtime. ${chatSettings}`,
-    `AIDA's MCP endpoint is ${aidaMcpUrl}.`,
+    endpoint
+      ? `AIDA's configured MCP endpoint is ${endpoint}.`
+      : "No AIDA_MCP_URL is configured in Link; use a hosted runtime route that already owns AIDA tool configuration.",
     "Do not ask the user to install or configure a local MCP server.",
     "The agent runtime should use the user's Telnyx auth context and call AIDA as an internal tool.",
   ].join(" ");
 }
 
 function createAidaAgentHandoff(prompt, chatSettings) {
+  const endpoint = optionalAidaMcpUrl();
   const authState = credentialConfigured("TELNYX_API_KEY")
     ? "TELNYX_API_KEY is available to the Link main process."
     : credentialConfigured("TELNYX_AUTH_REV2")
@@ -2333,7 +2339,7 @@ function createAidaAgentHandoff(prompt, chatSettings) {
     "AIDA route selected.",
     "",
     "Link will route this request to OpenClaw/Hermes with AIDA as the target tool without requiring local MCP setup.",
-    `AIDA MCP endpoint: ${aidaMcpUrl}`,
+    endpoint ? `AIDA MCP endpoint: ${endpoint}` : "AIDA MCP endpoint is not configured in Link.",
     authState,
     chatSettings,
     "",
@@ -2344,7 +2350,7 @@ function createAidaAgentHandoff(prompt, chatSettings) {
 function liveRuntimeUnavailableMessage(aidaRoute, detail = "", a2aRoute = false) {
   const suffix = detail ? `\n\nRuntime detail: ${detail}` : "";
   if (a2aRoute) {
-    return `The selected A2A agent did not return a live response. Confirm VPN access, A2A discovery availability, and that the agent accepts Link desktop messages.${suffix}`;
+    return `The selected A2A agent did not return a live response. Verify network access, A2A discovery availability, and that the agent accepts Link desktop messages.${suffix}`;
   }
   if (aidaRoute) {
     return `AIDA is selected, but no live agent runtime returned a response. Confirm Agent Control Plane is signed in and the selected agent is deployed with chat enabled.${suffix}`;
@@ -2358,9 +2364,9 @@ function telnyxDocsRouteInstruction() {
 }
 
 function hindsightAgentCapabilityInstruction() {
-  const status = credentialConfigured("HINDSIGHT_API_KEY")
+  const status = hindsightConfigured()
     ? "Hindsight is configured for this Link install."
-    : "Hindsight can be enabled for this Link install by configuring HINDSIGHT_API_KEY.";
+    : "Hindsight can be enabled for this Link install by configuring HINDSIGHT_API_URL and HINDSIGHT_API_KEY.";
   return `${hindsightAgentCapabilityBase} ${status}`;
 }
 
@@ -4356,6 +4362,7 @@ async function listSelfHostedAgents() {
 
 function aidaAgent() {
   const available = connectorReady("aida") || connectorReady("telnyx") || connectorReady("agent-control-plane");
+  const endpoint = optionalAidaMcpUrl();
   return {
     id: aidaAgentId,
     name: "aida",
@@ -4369,10 +4376,14 @@ function aidaAgent() {
     squad: "ai",
     audience: "internal",
     origin: "aida-mcp",
-    url: aidaMcpUrl,
+    url: endpoint,
     available,
     requiresAuthentication: true,
-    updatedAt: available ? "AIDA route ready" : "Save Telnyx API key or sign in with Okta",
+    updatedAt: available
+      ? endpoint
+        ? "AIDA route ready"
+        : "AIDA auth ready; configure AIDA_MCP_URL for self-hosted runtime routing"
+      : "Save Telnyx API key or sign in with Okta",
   };
 }
 
@@ -6398,10 +6409,6 @@ function hindsightHeaders() {
     "Content-Type": "application/json",
     Authorization: `Bearer ${credentialValue("HINDSIGHT_API_KEY")}`,
   };
-}
-
-function hindsightUrl() {
-  return (credentialValue("HINDSIGHT_API_URL") || defaultHindsightUrl).replace(/\/$/, "");
 }
 
 function connectorReady(id) {
@@ -9596,7 +9603,7 @@ async function openPublishedApp(id) {
   if (app.status === "deprecated") throw new Error("This app is deprecated and cannot be opened from Link.");
   if (!isPublishedAppOpenable(app)) throw new Error("This app is not ready to open from Link.");
   const url = app.vpnUrl || app.deployedUrl || app.previewUrl;
-  if (!url) throw new Error("This app does not have a private VPN URL yet.");
+  if (!url) throw new Error("This app does not have a private app URL yet.");
   if (!isAllowedLinkAppUrl(url)) throw new Error("Refusing to open a non-approved Link app URL.");
   void openExternalBrowserUrl(url);
   auditPublisherAction("publisher.app.opened", "open_app", app.id, { url });
@@ -10672,10 +10679,11 @@ function auditPublisherAction(eventType, action, target, metadata = {}) {
 }
 
 async function signInAgentControlPlane() {
+  const authBaseUrl = authInternalUrl();
   const parent = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
   const state = crypto.randomBytes(32).toString("base64url");
   const callbackServer = await createAuthInternalCallbackServer(state);
-  const loginUrl = authInternalAuthorizationUrl(callbackServer.callbackUrl, state);
+  const loginUrl = authInternalAuthorizationUrl(callbackServer.callbackUrl, state, authBaseUrl);
   const authWindow = new BrowserWindow({
     width: 980,
     height: 760,
@@ -10790,8 +10798,8 @@ function createAuthInternalCallbackServer(expectedState) {
       const returnedState = url.searchParams.get("state");
       if (!returnedState || returnedState !== expectedState) {
         response.writeHead(400, { "Content-Type": "text/html" });
-        response.end(authCallbackHtml("Sign-in failed", "Invalid state returned by auth-internal."));
-        rejectCallback(new Error("Invalid state returned by auth-internal."));
+        response.end(authCallbackHtml("Sign-in failed", "Invalid state returned by the auth bridge."));
+        rejectCallback(new Error("Invalid state returned by the auth bridge."));
         return;
       }
 
@@ -10854,8 +10862,8 @@ function authCallbackHtml(title, message) {
 </html>`;
 }
 
-function authInternalAuthorizationUrl(callbackUrl, state) {
-  const url = new URL(`${authInternalUrl()}/rev_a/authenticate`);
+function authInternalAuthorizationUrl(callbackUrl, state, baseUrl = authInternalUrl()) {
+  const url = new URL(`${baseUrl}/rev_a/authenticate`);
   url.searchParams.set("callback_uri", callbackUrl);
   url.searchParams.set("state", state);
   return url.toString();
@@ -10869,12 +10877,12 @@ async function exchangeAuthInternalCode(code) {
   const response = await fetch(url.toString(), { method: "GET" });
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`auth-internal token exchange failed with ${response.status}: ${detail.slice(0, 300)}`);
+    throw new Error(`Auth bridge token exchange failed with ${response.status}: ${detail.slice(0, 300)}`);
   }
 
   const payload = await response.json();
   if (!payload?.access_token) {
-    throw new Error("auth-internal token exchange did not return an access token.");
+    throw new Error("Auth bridge token exchange did not return an access token.");
   }
 
   return {
@@ -10890,11 +10898,11 @@ async function getAuthInternalTar2(accessToken) {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!response.ok) {
-    throw new Error(`auth-internal TAR2 exchange failed with ${response.status}.`);
+    throw new Error(`Auth bridge TAR2 exchange failed with ${response.status}.`);
   }
 
   const tar2 = response.headers.get("Telnyx-Auth-Rev2");
-  if (!tar2) throw new Error("auth-internal did not return a Telnyx-Auth-Rev2 token.");
+  if (!tar2) throw new Error("Auth bridge did not return a Telnyx-Auth-Rev2 token.");
   return tar2;
 }
 
@@ -11076,10 +11084,10 @@ function isAllowedAgentControlPlaneSetupUrl(value) {
   } catch {
     agentControlPlaneOrigin = "";
   }
-  const authInternalOrigin = parseUrl(authInternalUrl())?.origin;
+  const configuredAuthOrigin = authInternalOrigin();
   return Boolean(
     (agentControlPlaneOrigin && target.origin === agentControlPlaneOrigin) ||
-      target.origin === authInternalOrigin ||
+      target.origin === configuredAuthOrigin ||
       isTrustedOktaAuthOrigin(value),
   );
 }
@@ -11233,8 +11241,61 @@ function unconfiguredMessageGatewayMessage() {
   return "Configure LINK_MESSAGE_GATEWAY_URL with an HTTPS Link Message Gateway endpoint before using hosted message delivery. HTTP is only allowed for loopback local development.";
 }
 
+function unconfiguredAuthInternalMessage() {
+  return "Configure AUTH_INTERNAL_URL with an HTTPS Okta auth bridge endpoint before using Agent Control Plane sign-in. HTTP is only allowed for loopback local development.";
+}
+
+function unconfiguredHindsightMessage() {
+  return "Configure HINDSIGHT_API_URL with an HTTPS Hindsight endpoint before using Archive recall or retain. HTTP is only allowed for loopback local development.";
+}
+
+function configuredAuthInternalUrl() {
+  return configuredInternalServiceUrl(credentialValue("AUTH_INTERNAL_URL") || defaultAuthInternalUrl, "AUTH_INTERNAL_URL");
+}
+
 function authInternalUrl() {
-  return (credentialValue("AUTH_INTERNAL_URL") || defaultAuthInternalUrl).replace(/\/$/, "");
+  const url = configuredAuthInternalUrl();
+  if (!url) throw new Error(unconfiguredAuthInternalMessage());
+  return url;
+}
+
+function authInternalOrigin() {
+  try {
+    const url = configuredAuthInternalUrl();
+    return parseUrl(url)?.origin || "";
+  } catch {
+    return "";
+  }
+}
+
+function configuredHindsightUrl() {
+  return configuredInternalServiceUrl(credentialValue("HINDSIGHT_API_URL") || defaultHindsightUrl, "HINDSIGHT_API_URL");
+}
+
+function hindsightUrl() {
+  const url = configuredHindsightUrl();
+  if (!url) throw new Error(unconfiguredHindsightMessage());
+  return url;
+}
+
+function hindsightConfigured() {
+  try {
+    return Boolean(credentialValue("HINDSIGHT_API_KEY") && configuredHindsightUrl());
+  } catch {
+    return false;
+  }
+}
+
+function aidaMcpUrl() {
+  return configuredInternalServiceUrl(credentialValue(aidaMcpUrlField) || defaultAidaMcpUrl, aidaMcpUrlField);
+}
+
+function optionalAidaMcpUrl() {
+  try {
+    return aidaMcpUrl();
+  } catch {
+    return "";
+  }
 }
 
 async function listCredentials() {
