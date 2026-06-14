@@ -2302,6 +2302,7 @@ function TerminalDock({ onClose }: { onClose: () => void }) {
   const activeStatus = statuses[activeTerminalId] ?? null;
   const activeOutput = outputs[activeTerminalId] ?? "";
   const activeCommand = commands[activeTerminalId] ?? "";
+  const terminalDisabled = activeStatus?.enabled === false;
 
   useEffect(() => {
     let cancelled = false;
@@ -2463,7 +2464,7 @@ function TerminalDock({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="terminalDockMeta">
-          <span>{activeStatus?.running ? "Running" : busy ? "Starting" : "Stopped"}</span>
+          <span>{terminalDisabled ? "Disabled" : activeStatus?.running ? "Running" : busy ? "Starting" : "Stopped"}</span>
           <button className="iconButton terminalCloseButton" type="button" onClick={onClose} aria-label="Close terminal" title="Close terminal">
             <X size={15} />
           </button>
@@ -2474,13 +2475,14 @@ function TerminalDock({ onClose }: { onClose: () => void }) {
         <span>{terminalPrompt(activeStatus)}</span>
         <input
           value={activeCommand}
+          disabled={terminalDisabled}
           onChange={(event) => setCommands((items) => ({ ...items, [activeTerminalId]: event.target.value }))}
           onKeyDown={(event) => {
             if (event.key !== "Enter") return;
             event.preventDefault();
             void runTerminalCommand();
           }}
-          placeholder="Run a command..."
+          placeholder={terminalDisabled ? "Terminal disabled" : "Run a command..."}
           aria-label="Terminal command"
           spellCheck={false}
           autoCapitalize="off"

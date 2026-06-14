@@ -1933,6 +1933,8 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.match(app, /linkApi\.startTerminal/);
   assert.match(app, /linkApi\.startTerminal\(\{ terminalId, title \}\)/);
   assert.match(app, /linkApi\.writeTerminal\(\{ terminalId: activeTerminalId, text: `\$\{nextCommand\}\\n` \}\)/);
+  assert.match(app, /const terminalDisabled = activeStatus\?\.enabled === false/);
+  assert.match(app, /placeholder=\{terminalDisabled \? "Terminal disabled" : "Run a command\.\.\."\}/);
   assert.match(app, /linkApi\.onTerminalOutput/);
   assert.match(app, /assistantPanelCollapsed/);
   assert.match(app, /aria-label=\{assistantCollapsed \? "Expand assistant sidebar" : "Collapse assistant sidebar"\}/);
@@ -1947,6 +1949,9 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.match(main, /function getTerminalSession\(input = \{\}, create = false\)/);
   assert.match(main, /secureIpcHandle\("link:terminal-start", \(event, input\) => startTerminalProcess\(event\.sender, input\)\)/);
   assert.match(main, /secureIpcHandle\("link:terminal-write", \(_event, input\) => writeTerminalInput\(input\)\)/);
+  assert.match(main, /function terminalEnabled\(\)/);
+  assert.match(main, /!app\.isPackaged \|\| process\.env\.LINK_DESKTOP_ENABLE_TERMINAL === "1"/);
+  assert.match(main, /Built-in terminal is disabled in packaged Link builds/);
   assert.match(main, /function startTerminalProcess/);
   assert.match(main, /terminalId: session\.id/);
   assert.match(main, /spawn\(shell, \["-i"\]/);

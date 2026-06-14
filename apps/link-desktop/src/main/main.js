@@ -8108,19 +8108,25 @@ function getTerminalSession(input = {}, create = false) {
 }
 
 function terminalSessionStatus(session) {
+  const enabled = terminalEnabled();
   const running = Boolean(session?.process && !session.process.killed && session.process.exitCode === null);
   return {
     id: session?.id || defaultTerminalId,
     title: session?.title || "Terminal 1",
+    enabled,
     running,
     pid: running ? session.process.pid : undefined,
-    shell: process.env.SHELL || "/bin/zsh",
+    shell: enabled ? process.env.SHELL || "/bin/zsh" : "",
     cwd: repoRoot,
     buffer: session?.buffer || "",
     lastExit: session?.lastExit || null,
     startedAt: session?.startedAt || null,
     updatedAt: new Date().toISOString(),
   };
+}
+
+function terminalEnabled() {
+  return !app.isPackaged || process.env.LINK_DESKTOP_ENABLE_TERMINAL === "1";
 }
 
 function getTerminalStatus(input = {}) {
@@ -8143,6 +8149,12 @@ function appendTerminalOutput(sender, session, data) {
 
 function startTerminalProcess(sender, input = {}) {
   const session = getTerminalSession(input, true);
+  if (!terminalEnabled()) {
+    session.buffer = "Built-in terminal is disabled in packaged Link builds. Set LINK_DESKTOP_ENABLE_TERMINAL=1 before launch to enable this developer tool.\n";
+    session.lastExit = null;
+    session.startedAt = null;
+    return terminalSessionStatus(session);
+  }
   if (session.process && !session.process.killed && session.process.exitCode === null) {
     return terminalSessionStatus(session);
   }
@@ -8176,6 +8188,9 @@ function startTerminalProcess(sender, input = {}) {
 }
 
 function writeTerminalInput(input = {}) {
+  if (!terminalEnabled()) {
+    throw new Error("Built-in terminal is disabled in packaged Link builds. Set LINK_DESKTOP_ENABLE_TERMINAL=1 before launch to enable it.");
+  }
   const session = getTerminalSession(input, false);
   if (!session?.process || session.process.killed || session.process.exitCode !== null) {
     throw new Error("Terminal is not running.");

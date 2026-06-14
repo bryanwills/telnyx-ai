@@ -406,6 +406,7 @@ export interface VoiceTranscriptionResult {
 export interface TerminalStatus {
   id?: string;
   title?: string;
+  enabled?: boolean;
   running: boolean;
   pid?: number;
   shell: string;
