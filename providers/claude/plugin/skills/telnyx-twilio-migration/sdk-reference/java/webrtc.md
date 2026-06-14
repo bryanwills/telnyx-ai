@@ -79,8 +79,8 @@ import com.telnyx.sdk.models.mobilepushcredentials.PushCredentialResponse;
 
 MobilePushCredentialCreateParams.CreateMobilePushCredentialRequest.Ios params = MobilePushCredentialCreateParams.CreateMobilePushCredentialRequest.Ios.builder()
     .alias("LucyIosCredential")
-    .certificate("-----BEGIN CERTIFICATE----- MIIGVDCCBTKCAQEAsNlRJVZn9ZvXcECQm65czs... -----END CERTIFICATE-----")
-    .privateKey("-----BEGIN RSA PRIVATE KEY----- MIIEpQIBAAKCAQEAsNlRJVZn9ZvXcECQm65czs... -----END RSA PRIVATE KEY-----")
+    .certificate("REPLACE_WITH_CERTIFICATE_PEM")
+    .privateKey("REPLACE_WITH_PRIVATE_KEY_PEM")
     .build();
 PushCredentialResponse pushCredentialResponse = client.mobilePushCredentials().create(params);
 ```

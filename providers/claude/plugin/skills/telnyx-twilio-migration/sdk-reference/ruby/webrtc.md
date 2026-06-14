@@ -69,8 +69,8 @@ Returns: `alias` (string), `certificate` (string), `created_at` (date-time), `id
 push_credential_response = client.mobile_push_credentials.create(
   create_mobile_push_credential_request: {
     alias: "LucyIosCredential",
-    certificate: "-----BEGIN CERTIFICATE----- MIIGVDCCBTKCAQEAsNlRJVZn9ZvXcECQm65czs... -----END CERTIFICATE-----",
-    private_key: "-----BEGIN RSA PRIVATE KEY----- MIIEpQIBAAKCAQEAsNlRJVZn9ZvXcECQm65czs... -----END RSA PRIVATE KEY-----",
+    certificate: "REPLACE_WITH_CERTIFICATE_PEM",
+    private_key: "REPLACE_WITH_PRIVATE_KEY_PEM",
     type: :ios
   }
 )

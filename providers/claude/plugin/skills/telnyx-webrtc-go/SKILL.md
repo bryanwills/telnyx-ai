@@ -97,8 +97,8 @@ Returns: `alias` (string), `certificate` (string), `created_at` (date-time), `id
 	pushCredentialResponse, err := client.MobilePushCredentials.New(context.Background(), telnyx.MobilePushCredentialNewParams{
 		OfIos: &telnyx.MobilePushCredentialNewParamsCreateMobilePushCredentialRequestIos{
 			Alias:       "LucyIosCredential",
-			Certificate: "-----BEGIN CERTIFICATE----- MIIGVDCCBTKCAQEAsNlRJVZn9ZvXcECQm65czs... -----END CERTIFICATE-----",
-			PrivateKey:  "-----BEGIN RSA PRIVATE KEY----- MIIEpQIBAAKCAQEAsNlRJVZn9ZvXcECQm65czs... -----END RSA PRIVATE KEY-----",
+			Certificate: "REPLACE_WITH_CERTIFICATE_PEM",
+			PrivateKey:  "REPLACE_WITH_PRIVATE_KEY_PEM",
 		},
 	})
 	if err != nil {

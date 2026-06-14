@@ -74,9 +74,9 @@ const pushCredentialResponse = await client.mobilePushCredentials.create({
   createMobilePushCredentialRequest: {
     alias: 'LucyIosCredential',
     certificate:
-      '-----BEGIN CERTIFICATE----- MIIGVDCCBTKCAQEAsNlRJVZn9ZvXcECQm65czs... -----END CERTIFICATE-----',
+      'REPLACE_WITH_CERTIFICATE_PEM',
     private_key:
-      '-----BEGIN RSA PRIVATE KEY----- MIIEpQIBAAKCAQEAsNlRJVZn9ZvXcECQm65czs... -----END RSA PRIVATE KEY-----',
+      'REPLACE_WITH_PRIVATE_KEY_PEM',
     type: 'ios',
   },
 });
