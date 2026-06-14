@@ -3,7 +3,7 @@
   "productName": "Link",
   "version": "0.1.0",
   "private": true,
-  "description": "Electron desktop MVP for Telnyx Link.",
+  "description": "Electron desktop shell for Telnyx Link.",
   "license": "MIT",
   "repository": {
     "type": "git",

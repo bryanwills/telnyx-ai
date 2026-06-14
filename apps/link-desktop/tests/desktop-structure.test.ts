@@ -6,6 +6,7 @@ import { createLinkAppPublisherServer, listenLinkAppPublisherServer } from "../.
 test("desktop package exposes expected local scripts", async () => {
   const pkg = JSON.parse(await readFile("package.json", "utf8")) as {
     productName: string;
+    description: string;
     license: string;
     repository: { directory?: string };
     scripts: Record<string, string>;
@@ -15,6 +16,7 @@ test("desktop package exposes expected local scripts", async () => {
   const readme = await readFile("README.md", "utf8");
 
   assert.equal(pkg.productName, "Link");
+  assert.equal(pkg.description, "Electron desktop shell for Telnyx Link.");
   assert.equal(pkg.license, "MIT");
   assert.equal(pkg.repository.directory, "apps/link-desktop");
   assert.equal(pkg.scripts.dev, "node scripts/dev.mjs");
