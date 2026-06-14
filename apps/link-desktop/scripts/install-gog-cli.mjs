@@ -28,11 +28,6 @@ for (const target of targets) {
   await installTarball(asset.browser_download_url, target.output);
 }
 
-const currentArch = process.arch === "x64" ? "amd64" : process.arch;
-const currentName = currentArch === "arm64" ? "gog-macos-arm64" : "gog-macos-amd64";
-await fs.copyFile(path.join(binDir, currentName), path.join(binDir, "gog"));
-await fs.chmod(path.join(binDir, "gog"), 0o755);
-
 console.log(`Installed gogcli ${release.tag_name} into ${binDir}`);
 
 async function latestRelease() {

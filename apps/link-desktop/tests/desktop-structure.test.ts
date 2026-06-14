@@ -9,14 +9,20 @@ test("desktop package exposes expected local scripts", async () => {
     scripts: Record<string, string>;
     overrides: Record<string, string>;
   };
+  const gogInstaller = await readFile("scripts/install-gog-cli.mjs", "utf8");
+  const readme = await readFile("README.md", "utf8");
 
   assert.equal(pkg.productName, "Link");
   assert.equal(pkg.scripts.dev, "node scripts/dev.mjs");
+  assert.equal(pkg.scripts["bundle:gog"], "node scripts/install-gog-cli.mjs");
   assert.equal(pkg.scripts.build, "vite build");
   assert.equal(pkg.scripts["metadata:check"], "scripts/check-service-metadata.sh");
   assert.equal(pkg.scripts.typecheck, "tsc --noEmit");
   assert.equal(pkg.scripts.test, "tsx --test tests/*.test.ts");
   assert.equal(pkg.overrides.uuid, "^11.1.1");
+  assert.doesNotMatch(gogInstaller, /path\.join\(binDir,\s*"gog"\)/);
+  assert.match(readme, /live-ready service adapters with deterministic local fallbacks/);
+  assert.doesNotMatch(readme, /does not connect to production systems/);
 });
 
 test("desktop app carries PADR service metadata", async () => {
