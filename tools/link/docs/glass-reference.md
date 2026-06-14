@@ -68,13 +68,12 @@ Telnyx Link is inspired by Ramp's Glass as a product pattern: an internal AI cow
 - Track whether users get value from installed skills, not just whether they opened chat.
 - Treat support requests and feature friction as product telemetry that should feed directly into Link's roadmap.
 
-## Link MVP Implications
+## Current Link Implications
 
-- The current MVP only implements backend/runtime skeletons. It should not build a desktop shell yet.
-- Future UI work should start with design tokens and components before feature-specific screens.
-- Future connector work should preserve the existing tool safety metadata and add permission modes before any real production tool access.
-- Future memory work should use explicit files, source attribution, retention rules, and permission-aware recall.
-- Future skill publishing should keep markdown skills versioned in Git and approval-reviewed.
-- Future automation work should reuse the existing approval and audit model before adding scheduling.
-- Future active-work screens should show artifacts, changes, sources, and approval status as first-class fields.
-- Future verification work should produce evidence before Link claims a task is complete.
+- The desktop shell now exists; future UI work should keep design tokens and shared components ahead of feature-specific screens.
+- Connector work should preserve tool safety metadata and add permission modes before any real production tool access.
+- Memory work should use explicit files, source attribution, retention rules, and permission-aware recall.
+- Skill publishing should keep markdown skills versioned in Git and approval-reviewed.
+- Automation work should reuse the existing approval and audit model before adding scheduling.
+- Active-work screens should show artifacts, changes, sources, and approval status as first-class fields.
+- Verification work should produce evidence before Link claims a task is complete.

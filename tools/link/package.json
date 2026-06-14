@@ -2,7 +2,7 @@
   "name": "@telnyx/link",
   "version": "0.1.0",
   "private": true,
-  "description": "Telnyx Link MVP skeleton: internal employee AI companion with mocked tools, skills, approvals, and shared-channel safety.",
+  "description": "Telnyx Link local runtime and managed-service contracts for skills, apps, approvals, and shared-channel safety.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

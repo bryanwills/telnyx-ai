@@ -1,10 +1,10 @@
 # Telnyx Link Instructions
 
-This package is the first MVP skeleton for Telnyx Link, Telnyx's internal employee AI companion.
+This package contains the local Telnyx Link runtime plus the managed-service contracts that the desktop app consumes.
 
 Preserve these boundaries:
 
-- Keep all production integrations mocked until explicitly instructed otherwise.
+- Keep the local tool runtime deterministic and mocked until a real integration has a reviewed permission, audit, and test boundary.
 - Do not add secrets, API keys, Okta config, Slack tokens, Salesforce credentials, Snowflake credentials, Datadog credentials, or Telnyx production data access.
 - Shared customer channel drafts must be customer-safe and approval-required before posting.
 - Keep customer-facing drafts separate from internal rationale, raw logs, internal links, private account notes, and internal Slack context.

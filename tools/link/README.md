@@ -2,16 +2,16 @@
 
 Telnyx Link is an AI companion for Telnyx employees. It is intended to help employees navigate customers, systems, products, incidents, internal knowledge, and workflows through a permission-aware AI operating layer.
 
-This MVP is intentionally safe and mocked. It does not call Slack, Salesforce, Google Workspace, Snowflake, Datadog, GitHub, Telnyx production APIs, or any other production system.
+This package contains the local runtime, CLI, skill loader, OKF validation, and managed-service contracts used by Link Desktop. The bundled local tool runtime is intentionally deterministic and mocked; real integrations should be added behind explicit permission, audit, and test boundaries.
 
 The product direction is inspired by Ramp's Glass as an internal AI coworker pattern. See [Glass-Inspired Product Reference](docs/glass-reference.md) for the design and systems principles to carry forward without copying third-party branding or assets.
 
-## MVP Scope
+## Current Scope
 
 - Root `Telnyx Link` agent definition
 - Specialist agent stubs and routing boundaries
 - Optional OpenAI Agents SDK graph for future live orchestration
-- Mocked tool gateway with safety metadata
+- Deterministic local tool gateway with safety metadata
 - Markdown skill loader with frontmatter validation
 - OKF bundle validation for Archive imports
 - Shared customer Slack draft workflow
@@ -49,13 +49,13 @@ Telnyx Link surfaces
      -> root Telnyx Link agent
      -> specialist agent registry
      -> markdown skills loader
-     -> mocked tool gateway
+     -> deterministic local tool gateway
      -> policy and approval model
      -> audit logger
      -> memory placeholders
 ```
 
-The OpenAI Agents SDK adapter is in `src/agents/openai-sdk.ts`. The mocked local runtime does not require an OpenAI API key. Live SDK mode should only be used after explicit authorization and environment setup.
+The OpenAI Agents SDK adapter is in `src/agents/openai-sdk.ts`. The deterministic local runtime does not require an OpenAI API key. Live SDK mode should only be used after explicit authorization and environment setup.
 
 ## Link App Publisher
 
@@ -185,7 +185,7 @@ npm exec -- telnyx-link skill-registry 4310
 curl -fsS http://127.0.0.1:4310/readyz
 ```
 
-Link Desktop defaults to `https://link-skill-registry.query.prod.telnyx.io` and can be pointed at another VPN-only deployment with `LINK_SKILL_REGISTRY_URL`. If the registry is unavailable, Desktop caches local stats and queues events for a later retry.
+Link Desktop does not bundle a hosted registry URL. Set `LINK_SKILL_REGISTRY_URL` to an approved HTTPS or loopback deployment when a managed registry is available. If the registry is unconfigured or unavailable, Desktop caches local stats and queues events for a later retry.
 
 ## Link Message Gateway
 
@@ -221,7 +221,7 @@ npm exec -- telnyx-link message-gateway 4320
 curl -fsS http://127.0.0.1:4320/readyz
 ```
 
-Link Desktop defaults to `https://link-message-gateway.query.prod.telnyx.io` and can be pointed at another VPN-only deployment with `LINK_MESSAGE_GATEWAY_URL`. If the hosted gateway is unavailable, Desktop shows a local record-only ledger fallback so development can verify envelope creation without pretending a provider-authored send occurred.
+Link Desktop does not bundle a hosted message gateway URL. Set `LINK_MESSAGE_GATEWAY_URL` to an approved HTTPS or loopback deployment when managed delivery is available. If the hosted gateway is unconfigured or unavailable, Desktop shows a local record-only ledger fallback so development can verify envelope creation without pretending a provider-authored send occurred.
 
 ## Add a Skill
 
@@ -248,7 +248,7 @@ Skill bodies should include when to use it, inputs needed, workflow steps, expec
 
 ## Add a Tool
 
-Add mocked tools in `src/tools.ts`. Every tool must declare:
+Add deterministic local tools in `src/tools.ts`. Every tool must declare:
 
 - name
 - description
@@ -272,9 +272,9 @@ In `shared_customer` mode, Link returns:
 
 Customer-facing drafts redact internal links, raw diagnostics, private records, and internal Slack channels. External posting is always approval-required.
 
-## What Is Mocked
+## Deterministic Local Tools
 
-All current tool outputs are deterministic mocks for Slack, Salesforce, Google Workspace, Guru, Linear/Jira, GitHub, Datadog, Snowflake, Telnyx account lookup, messaging logs, voice/SIP traces, network/carrier status, and billing/revenue lookup.
+The bundled local tools return deterministic fixtures for Slack, Salesforce, Google Workspace, Guru, Linear/Jira, GitHub, Datadog, Snowflake, Telnyx account lookup, messaging logs, voice/SIP traces, network/carrier status, and billing/revenue lookup. Treat them as test fixtures, not live integrations.
 
 ## Memory Placeholder
 
@@ -286,13 +286,12 @@ Memory is intentionally disabled. Future memory should include daily synthesis, 
 
 ## Next Milestones
 
-1. MVP skeleton with mocked tools and skills
-2. Real Slack internal bot in draft-only mode
-3. Real account briefing using safe internal read-only tools
-4. Mac desktop shell with SSO
-5. Skill marketplace / Armory
-6. Permission-aware memory
-7. Scheduled workflows
-8. Shared customer channel beta
-9. Windows app
-10. External customer-facing Link assistant
+1. Reviewed read-only integrations for the highest-value internal sources
+2. Draft-only internal channel bot backed by the shared-channel approval model
+3. Safe account briefing using reviewed internal read-only tools
+4. Production-managed Skill Registry and Message Gateway deployments
+5. Permission-aware memory with source attribution and retention controls
+6. Scheduled workflows with explicit approval and audit trails
+7. Shared customer channel beta
+8. Windows packaged app
+9. External customer-facing Link assistant
