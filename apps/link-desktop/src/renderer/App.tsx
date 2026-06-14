@@ -13913,7 +13913,7 @@ function WikiView({
               <div className="directoryDetailPanel directoryActionPanel">
                 <button className="button secondary" onClick={() => void openPublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id || !publisherReachable || !isPublishedAppOpenable(selectedPublishedApp)}>
                   <ExternalLink size={14} />
-                  {publisherReachable ? "Open VPN" : "Connect VPN"}
+                  {publisherReachable ? "Open App" : "Configure Publisher"}
                 </button>
                 <button className="button ghost" onClick={() => void duplicatePublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id}>
                   <FolderOpen size={14} />

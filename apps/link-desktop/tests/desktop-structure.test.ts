@@ -928,7 +928,8 @@ test("app marketplace uses the managed Link App Publisher catalog", async () => 
   assert.match(main, /secureIpcHandle\("link:publisher-readiness"/);
   assert.match(main, /function getPublisherReadiness/);
   assert.match(main, /optionalPublisherHeaders/);
-  assert.match(main, /Connect VPN/);
+  assert.match(main, /unconfiguredLinkAppPublisherMessage/);
+  assert.match(main, /Configure LINK_APP_PUBLISHER_URL/);
   assert.match(main, /function selectLocalPublishApp/);
   assert.match(main, /importLocalLinkApp/);
   assert.match(main, /extractZip/);
@@ -985,7 +986,7 @@ test("app marketplace uses the managed Link App Publisher catalog", async () => 
   assert.doesNotMatch(app, /\{renderPublisherReadiness\(\)\}/);
   assert.match(app, /publisherReadiness/);
   assert.match(app, /publisherReachable/);
-  assert.match(app, /Connect VPN/);
+  assert.match(app, /Configure Publisher/);
   assert.match(api, /interface LinkAppPublisherReadiness/);
   assert.match(api, /interface EdgeComputeStatus/);
   assert.match(api, /getPublisherReadiness/);
@@ -1046,7 +1047,7 @@ test("app marketplace uses the managed Link App Publisher catalog", async () => 
   assert.match(app, /Build a scheduled workflow/);
   assert.match(app, /aria-haspopup="menu"/);
   assert.match(app, /role="menuitem"/);
-  assert.match(app, /Open VPN/);
+  assert.match(app, /Open App/);
   assert.match(app, /Duplicate/);
   assert.match(app, /Approve/);
   assert.match(app, /Reject/);
@@ -2592,7 +2593,12 @@ test("main process has v2 state, live-ready adapters, and Taskbox review flow", 
 
   assert.match(main, /const stateVersion = 11/);
   assert.match(main, /saved\.version === stateVersion \|\| saved\.version === 10 \|\| saved\.version === 9 \|\| saved\.version === 8 \|\| saved\.version === 7 \|\| saved\.version === 6 \|\| saved\.version === 5 \|\| saved\.version === 4/);
-  assert.match(main, /defaultSkillRegistryUrl/);
+  assert.match(main, /const defaultLinkAppPublisherUrl = ""/);
+  assert.match(main, /const defaultSkillRegistryUrl = ""/);
+  assert.match(main, /const defaultMessageGatewayUrl = ""/);
+  assert.match(main, /configuredInternalServiceUrl\(credentialValue\("LINK_APP_PUBLISHER_URL"\) \|\| process\.env\.LINK_APP_PUBLISHER_URL \|\| defaultLinkAppPublisherUrl, "LINK_APP_PUBLISHER_URL"\)/);
+  assert.match(main, /configuredInternalServiceUrl\(credentialValue\("LINK_SKILL_REGISTRY_URL"\) \|\| process\.env\.LINK_SKILL_REGISTRY_URL \|\| defaultSkillRegistryUrl, "LINK_SKILL_REGISTRY_URL"\)/);
+  assert.match(main, /configuredInternalServiceUrl\(credentialValue\("LINK_MESSAGE_GATEWAY_URL"\) \|\| process\.env\.LINK_MESSAGE_GATEWAY_URL \|\| defaultMessageGatewayUrl, "LINK_MESSAGE_GATEWAY_URL"\)/);
   assert.match(main, /link:skill-registry-event/);
   assert.match(main, /link:list-tool-catalog/);
   assert.match(main, /link:publish-tool-manifest/);

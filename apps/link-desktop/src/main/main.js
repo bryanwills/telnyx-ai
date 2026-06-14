@@ -36,9 +36,9 @@ const defaultAgentControlPlaneUrl = "";
 const defaultA2aDiscoveryUrl = "";
 const defaultAuthInternalUrl = "https://auth-internal.query.prod.telnyx.io:6674";
 const defaultHindsightUrl = "https://api-internal.telnyx.com/hindsight";
-const defaultLinkAppPublisherUrl = "https://link-app-publisher.query.prod.telnyx.io";
-const defaultSkillRegistryUrl = "https://link-skill-registry.query.prod.telnyx.io";
-const defaultMessageGatewayUrl = "https://link-message-gateway.query.prod.telnyx.io";
+const defaultLinkAppPublisherUrl = "";
+const defaultSkillRegistryUrl = "";
+const defaultMessageGatewayUrl = "";
 const defaultTelnyxEdgeApiEndpoint = "https://apidev.telnyx.com";
 const localPublishInspectionContract = {
   manifestCandidates: ["link-app.yml", "link-app.yaml", "link-app.json"],
@@ -651,25 +651,25 @@ const connectorCatalog = [
     id: "link-app-publisher",
     name: "Link App Publisher",
     category: "Apps",
-    description: "Publish, review, duplicate, and open private Link apps through the managed VPN-only publisher service.",
-    envGroups: [["TELNYX_AUTH_REV2"], ["TELNYX_API_KEY"], ["LINK_APP_PUBLISHER_URL", "TELNYX_AUTH_REV2"], ["LINK_APP_PUBLISHER_URL", "TELNYX_API_KEY"]],
-    requiredAccess: ["Company VPN", "Okta Rev2 session or Telnyx API key", "optional LINK_APP_PUBLISHER_URL override"],
+    description: "Publish, review, duplicate, and open private Link apps through a configured managed publisher service.",
+    envGroups: [["LINK_APP_PUBLISHER_URL", "TELNYX_AUTH_REV2"], ["LINK_APP_PUBLISHER_URL", "TELNYX_API_KEY"]],
+    requiredAccess: ["Configured LINK_APP_PUBLISHER_URL", "Okta Rev2 session or Telnyx API key"],
   },
   {
     id: "link-skill-registry",
     name: "Link Skill Registry",
     category: "Skills",
-    description: "Track internal skill stars, installs/downloads, and runs through the managed VPN-only registry service.",
-    envGroups: [["TELNYX_AUTH_REV2"], ["TELNYX_API_KEY"], ["LINK_SKILL_REGISTRY_URL", "TELNYX_AUTH_REV2"], ["LINK_SKILL_REGISTRY_URL", "TELNYX_API_KEY"]],
-    requiredAccess: ["Company VPN", "Okta Rev2 session or Telnyx API key", "optional LINK_SKILL_REGISTRY_URL override"],
+    description: "Track internal skill stars, installs/downloads, and runs through a configured managed registry service.",
+    envGroups: [["LINK_SKILL_REGISTRY_URL", "TELNYX_AUTH_REV2"], ["LINK_SKILL_REGISTRY_URL", "TELNYX_API_KEY"]],
+    requiredAccess: ["Configured LINK_SKILL_REGISTRY_URL", "Okta Rev2 session or Telnyx API key"],
   },
   {
     id: "link-message-gateway",
     name: "Link Message Gateway",
     category: "Communications",
     description: "Create delivery envelopes for Slack, Google Chat, and A2A recipients while Link owns routing, retries, and audit state.",
-    envGroups: [["TELNYX_AUTH_REV2"], ["TELNYX_API_KEY"], ["LINK_MESSAGE_GATEWAY_URL", "TELNYX_AUTH_REV2"], ["LINK_MESSAGE_GATEWAY_URL", "TELNYX_API_KEY"]],
-    requiredAccess: ["Company VPN", "Okta Rev2 session or Telnyx API key", "Slack/Google Chat/A2A adapters configured on the hosted gateway", "optional LINK_MESSAGE_GATEWAY_URL override"],
+    envGroups: [["LINK_MESSAGE_GATEWAY_URL", "TELNYX_AUTH_REV2"], ["LINK_MESSAGE_GATEWAY_URL", "TELNYX_API_KEY"]],
+    requiredAccess: ["Configured LINK_MESSAGE_GATEWAY_URL", "Okta Rev2 session or Telnyx API key", "Slack/Google Chat/A2A adapters configured on the hosted gateway"],
   },
   {
     id: "edge-compute",
@@ -692,9 +692,9 @@ const connectorCatalog = [
 const credentialDefinitions = [
   { id: "agent-control-plane", label: "Agent Control Plane", fields: ["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"], help: "Okta sign-in creates the Agent Control Plane session Link uses for internal agents and tools. TELNYX_AUTH_REV2 is stored securely after sign-in." },
   { id: "mcp-proxy", label: "Telnyx MCP Proxy", fields: ["MCP_PROXY_URL"], help: "Connect Link to team-telnyx/mcp-proxy so agents discover approved MCP servers and tools through one Telnyx registry." },
-  { id: "link-app-publisher", label: "Link App Publisher", fields: ["LINK_APP_PUBLISHER_URL"], help: "Optional VPN-only publisher service override. Link defaults to the internal managed publisher endpoint and authenticates with Okta Rev2 or TELNYX_API_KEY." },
-  { id: "link-skill-registry", label: "Link Skill Registry", fields: ["LINK_SKILL_REGISTRY_URL"], help: "Optional VPN-only skill registry override. Link defaults to the internal managed registry endpoint and authenticates with Okta Rev2 or TELNYX_API_KEY." },
-  { id: "link-message-gateway", label: "Link Message Gateway", fields: ["LINK_MESSAGE_GATEWAY_URL"], help: "Optional VPN-only message gateway override. Link defaults to the internal managed gateway and authenticates with Okta Rev2 or TELNYX_API_KEY." },
+  { id: "link-app-publisher", label: "Link App Publisher", fields: ["LINK_APP_PUBLISHER_URL"], help: "Managed publisher service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY." },
+  { id: "link-skill-registry", label: "Link Skill Registry", fields: ["LINK_SKILL_REGISTRY_URL"], help: "Managed skill registry service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY." },
+  { id: "link-message-gateway", label: "Link Message Gateway", fields: ["LINK_MESSAGE_GATEWAY_URL"], help: "Managed message gateway service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY." },
   { id: "litellm", label: "Model Gateway", fields: ["LITELLM_BASE_URL", "LITELLM_API_KEY", "TELNYX_INFERENCE_BASE_URL", "ANTHROPIC_API_KEY"], help: "Optional managed gateway and frontier BYO settings. Local Ollama mode does not require a cloud key; Telnyx BYO uses the Telnyx API key group." },
   { id: "hindsight", label: "Hindsight", fields: ["HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"], help: "Per-user Hindsight API key plus the memory bank id used for retain operations. Link can still infer the bank from live bank selection or compatible key claims." },
   { id: "linear", label: "Linear", fields: ["LINEAR_API_KEY"], help: "Linear API key for issue and project lookup." },
@@ -1539,6 +1539,7 @@ async function flushPendingToolCatalogPublishes() {
 
 async function fetchSkillRegistryJson(pathname, init = {}) {
   const baseUrl = skillRegistryUrl();
+  if (!baseUrl) throw new Error(unconfiguredSkillRegistryMessage());
   const headers = {
     Accept: "application/json",
     ...(init.body ? { "Content-Type": "application/json" } : {}),
@@ -1551,7 +1552,7 @@ async function fetchSkillRegistryJson(pathname, init = {}) {
 }
 
 function skillRegistryUrl() {
-  return (credentialValue("LINK_SKILL_REGISTRY_URL") || process.env.LINK_SKILL_REGISTRY_URL || defaultSkillRegistryUrl).replace(/\/$/, "");
+  return configuredInternalServiceUrl(credentialValue("LINK_SKILL_REGISTRY_URL") || process.env.LINK_SKILL_REGISTRY_URL || defaultSkillRegistryUrl, "LINK_SKILL_REGISTRY_URL");
 }
 
 function skillRegistryHeaders() {
@@ -8440,8 +8441,28 @@ async function listPublishedApps() {
 }
 
 async function getMessageGatewayReadiness() {
-  const serviceUrl = messageGatewayUrl();
+  let serviceUrl = "";
+  let configurationMessage = "";
+  try {
+    serviceUrl = messageGatewayUrl();
+  } catch (error) {
+    configurationMessage = errorMessage(error);
+  }
   const authConfigured = Boolean(credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY"));
+  if (!serviceUrl) {
+    const message = configurationMessage || unconfiguredMessageGatewayMessage();
+    const checks = [{ name: "Message Gateway URL configured", ok: false, detail: message }];
+    return {
+      serviceUrl,
+      reachable: false,
+      ready: false,
+      authConfigured,
+      mode: "unconfigured",
+      checks,
+      message,
+      updatedAt: new Date().toISOString(),
+    };
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
@@ -8561,8 +8582,28 @@ async function listGatewayMessageEvents(input = {}) {
 }
 
 async function getPublisherReadiness() {
-  const serviceUrl = linkAppPublisherUrl();
+  let serviceUrl = "";
+  let configurationMessage = "";
+  try {
+    serviceUrl = linkAppPublisherUrl();
+  } catch (error) {
+    configurationMessage = errorMessage(error);
+  }
   const authConfigured = Boolean(credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY"));
+  if (!serviceUrl) {
+    const message = configurationMessage || unconfiguredLinkAppPublisherMessage();
+    const checks = [{ name: "Publisher URL configured", ok: false, detail: message }];
+    return {
+      serviceUrl,
+      reachable: false,
+      ready: false,
+      authConfigured,
+      mode: "unconfigured",
+      checks,
+      message,
+      updatedAt: new Date().toISOString(),
+    };
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {
@@ -9686,6 +9727,7 @@ function mcpProxyHeaders() {
 
 async function fetchPublisherJson(pathname, init = {}) {
   const baseUrl = linkAppPublisherUrl();
+  if (!baseUrl) throw new Error(unconfiguredLinkAppPublisherMessage());
   const headers = {
     Accept: "application/json",
     ...(init.body ? { "Content-Type": "application/json" } : {}),
@@ -9699,6 +9741,7 @@ async function fetchPublisherJson(pathname, init = {}) {
 
 async function fetchMessageGatewayJson(pathname, init = {}) {
   const baseUrl = messageGatewayUrl();
+  if (!baseUrl) throw new Error(unconfiguredMessageGatewayMessage());
   const headers = {
     Accept: "application/json",
     ...(init.body ? { "Content-Type": "application/json" } : {}),
@@ -9711,11 +9754,11 @@ async function fetchMessageGatewayJson(pathname, init = {}) {
 }
 
 function linkAppPublisherUrl() {
-  return (credentialValue("LINK_APP_PUBLISHER_URL") || process.env.LINK_APP_PUBLISHER_URL || defaultLinkAppPublisherUrl).replace(/\/$/, "");
+  return configuredInternalServiceUrl(credentialValue("LINK_APP_PUBLISHER_URL") || process.env.LINK_APP_PUBLISHER_URL || defaultLinkAppPublisherUrl, "LINK_APP_PUBLISHER_URL");
 }
 
 function messageGatewayUrl() {
-  return (credentialValue("LINK_MESSAGE_GATEWAY_URL") || process.env.LINK_MESSAGE_GATEWAY_URL || defaultMessageGatewayUrl).replace(/\/$/, "");
+  return configuredInternalServiceUrl(credentialValue("LINK_MESSAGE_GATEWAY_URL") || process.env.LINK_MESSAGE_GATEWAY_URL || defaultMessageGatewayUrl, "LINK_MESSAGE_GATEWAY_URL");
 }
 
 function publisherHeaders() {
@@ -9776,8 +9819,8 @@ function messageGatewayReadinessMessage({ ready, reachable, authConfigured, chec
   if (ready) return "Message Gateway is ready for routed Slack, Google Chat, and A2A delivery.";
   if (!reachable) {
     return authConfigured
-      ? "Cannot reach Link Message Gateway. Check VPN, DNS, or LINK_MESSAGE_GATEWAY_URL."
-      : "Cannot reach Link Message Gateway. Connect VPN and sign in with Okta or save TELNYX_API_KEY.";
+      ? "Cannot reach Link Message Gateway. Check DNS, network access, or LINK_MESSAGE_GATEWAY_URL."
+      : "Cannot reach Link Message Gateway. Configure LINK_MESSAGE_GATEWAY_URL and sign in with Okta or save TELNYX_API_KEY.";
   }
   if (status === 401 || !authConfigured) return "Sign in with Okta or save TELNYX_API_KEY before sending through Link Message Gateway.";
   const failedNames = checks.filter((check) => !check.ok).map((check) => check.name).filter(Boolean);
@@ -9789,8 +9832,8 @@ function publisherReadinessMessage({ ready, reachable, authConfigured, mode, che
   if (ready) return "Publisher is ready for production Edge publishing.";
   if (!reachable) {
     return authConfigured
-      ? "Cannot reach Link App Publisher. Check VPN, DNS, or LINK_APP_PUBLISHER_URL."
-      : "Cannot reach Link App Publisher. Connect VPN and sign in with Okta or save TELNYX_API_KEY.";
+      ? "Cannot reach Link App Publisher. Check DNS, network access, or LINK_APP_PUBLISHER_URL."
+      : "Cannot reach Link App Publisher. Configure LINK_APP_PUBLISHER_URL and sign in with Okta or save TELNYX_API_KEY.";
   }
   if (status === 401 || !authConfigured) return "Sign in with Okta or save TELNYX_API_KEY before publishing.";
   const failedNames = checks.filter((check) => !check.ok).map((check) => check.name).filter(Boolean);
@@ -11202,6 +11245,18 @@ function unconfiguredAgentControlPlaneMessage() {
 
 function unconfiguredA2aDiscoveryMessage() {
   return "Configure A2A_DISCOVERY_URL with an HTTPS A2A discovery endpoint before using discovered agents. HTTP is only allowed for loopback local development.";
+}
+
+function unconfiguredLinkAppPublisherMessage() {
+  return "Configure LINK_APP_PUBLISHER_URL with an HTTPS Link App Publisher endpoint before using the managed publisher service. HTTP is only allowed for loopback local development.";
+}
+
+function unconfiguredSkillRegistryMessage() {
+  return "Configure LINK_SKILL_REGISTRY_URL with an HTTPS Link Skill Registry endpoint before syncing managed skill and tool catalog events. HTTP is only allowed for loopback local development.";
+}
+
+function unconfiguredMessageGatewayMessage() {
+  return "Configure LINK_MESSAGE_GATEWAY_URL with an HTTPS Link Message Gateway endpoint before using hosted message delivery. HTTP is only allowed for loopback local development.";
 }
 
 function authInternalUrl() {

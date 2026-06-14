@@ -32,7 +32,7 @@ Telnyx Whisper lives under `native/telnyx-whisper` and is controlled from Settin
 
 ## Runtime Configuration
 
-Most users should connect services through Settings. Operators and developers can use these environment variables for packaged builds, smoke tests, and VPN-only service handoffs:
+Most users should connect services through Settings. Operators and developers can use these environment variables for packaged builds, smoke tests, and managed service handoffs:
 
 | Area | Variables | Notes |
 | ---- | --------- | ----- |
@@ -49,7 +49,7 @@ Most users should connect services through Settings. Operators and developers ca
 | Telnyx APIs | `TELNYX_API_KEY`, `LINK_DESKTOP_LIVE_CALL_E2E`, `LINK_DESKTOP_LIVE_CALL_CONFIRM`, `LINK_DESKTOP_LIVE_CALL_SECONDS` | Live call E2E is opt-in and hangs up automatically after the configured duration. |
 | Local terminal | `LINK_DESKTOP_ENABLE_TERMINAL` | Development builds expose the built-in terminal. Packaged builds require `LINK_DESKTOP_ENABLE_TERMINAL=1` before launch because the terminal can run arbitrary local shell commands. |
 | Docs and memory adapters | `INTERCOM_ACCESS_TOKEN`, `INTERCOM_API_BASE_URL`, `INTERCOM_VERSION`, `MINTLIFY_API_KEY`, `MINTLIFY_API_BASE_URL`, `MINTLIFY_DOMAIN`, `HINDSIGHT_API_KEY`, `HINDSIGHT_API_URL`, `HINDSIGHT_BANK_ID` | If unset or unreachable, Link falls back to deterministic local data where available. |
-| MCP | `MCP_PROXY_URL` | VPN-only service adapters should fail closed or use local cached state when unavailable. |
+| MCP | `MCP_PROXY_URL` | Managed service adapters should fail closed or use local cached state when unavailable. |
 
 Verification:
 
@@ -97,7 +97,7 @@ That command builds `tools/link` plus the desktop renderer, starts a local manag
 - Connections with connector status and Auto/Allow/Ask tool permission groups
 - Memory with Hindsight-ready banks, recall testing, and explicit refresh state
 - Wiki with personal and squad bot training kits
-- Apps publishing through the managed Link App Publisher contract, with live VPN-only API handoff and local fallback catalog state
+- Apps publishing through the managed Link App Publisher contract, with explicit service configuration and local fallback catalog state
 - Internal Design System and Settings surfaces
 
 Chat sessions, Taskbox cards, generated artifacts, saved connector state, and local app publisher state are persisted in Electron user data.
@@ -112,11 +112,11 @@ Link injects this operating guide into task monitoring chat sessions and live AC
 
 ## Link App Publisher
 
-Apps publishing is wired for the managed publisher service rather than direct Edge Compute deployment from the desktop app. The desktop bridge exposes fixed IPC methods for catalog listing, publish intents, version requests, review decisions, rollback/deprecation, duplication handoff, and opening approved VPN URLs. The publisher service owns source-ref handling, Edge Compute deployment, version history, and catalog promotion.
+Apps publishing is wired for the managed publisher service rather than direct Edge Compute deployment from the desktop app. The desktop bridge exposes fixed IPC methods for catalog listing, publish intents, version requests, review decisions, rollback/deprecation, duplication handoff, and opening approved app URLs. The publisher service owns source-ref handling, Edge Compute deployment, version history, and catalog promotion.
 
-The default service URL is `https://link-app-publisher.query.prod.telnyx.io`; set `LINK_APP_PUBLISHER_URL` only for a private test publisher. Link authenticates with the saved Okta Rev2 token or `TELNYX_API_KEY`, and only opens approved internal HTTPS app hosts.
+No publisher service URL is bundled into public builds. Set `LINK_APP_PUBLISHER_URL` to an HTTPS managed publisher endpoint, or to an HTTP loopback endpoint for local development. Link authenticates with the saved Okta Rev2 token or `TELNYX_API_KEY`, and only opens approved HTTPS app hosts.
 
-The Apps page calls `/readyz` and shows a publisher status banner. If it says `Connect VPN`, the catalog is showing local/default data and publish/open actions are not exercising the managed VPN service yet.
+The Apps page calls `/readyz` and shows a publisher status banner. If it says `Configure Publisher`, the catalog is showing local/default data and publish/open actions are not exercising a managed publisher service yet.
 
 To publish a local app, add `link-app.yml` at the app directory root, commit the app to a `team-telnyx` GitHub repo, then use Apps > Create > App > Load `link-app.yml`. Link reads the manifest locally, derives the Git remote/current commit/source subdir, and sends only that source reference to the managed publisher.
 
@@ -145,7 +145,7 @@ cd tools/link
 npm exec -- telnyx-link publish-local-app /path/to/app --dry-run
 npm exec -- telnyx-link publisher-e2e-smoke /path/to/app --publisher-url=http://127.0.0.1:4300 --dev-no-auth
 npm exec -- telnyx-link publisher-e2e-smoke /path/to/app \
-  --publisher-url=https://link-app-publisher.query.prod.telnyx.io \
+  --publisher-url="$LINK_APP_PUBLISHER_URL" \
   --reviewer-groups=messaging-ops.squad \
   --require-ready \
   --require-pushed-ref \
@@ -173,14 +173,14 @@ Managed publish mutations fail closed when the publisher is unavailable or authe
 
 For a production-like Edge handoff, start the publisher with `--edge-deployer` or `LINK_APP_PUBLISHER_DEPLOYER=telnyx-edge`. The publisher service then clones the submitted `team-telnyx` source ref, runs an allowlisted `install_command` or infers one from lockfiles, runs the manifest `build_command`, verifies `output_dir`, and runs `telnyx-edge ship` in `source_subdir`; Link Desktop still only talks to the managed publisher API. Set `LINK_APP_PUBLISHER_REQUIRE_PUSHED_REF=1` for desktop dogfood builds that should reject local-only commits before submission.
 
-The production smoke can use `--check-app-url` to verify the approved private app URL responds over the VPN. The Edge deployer also rejects deployment URLs outside approved Telnyx internal/VPN hostnames before they reach the catalog. The managed API also exposes version history, rollback, ownership transfer, and deprecation endpoints so the catalog remains operable after the first publish.
+The production smoke can use `--check-app-url` to verify the approved private app URL responds from the configured network. The Edge deployer also rejects deployment URLs outside approved HTTPS hostnames before they reach the catalog. The managed API also exposes version history, rollback, ownership transfer, and deprecation endpoints so the catalog remains operable after the first publish.
 
-For reviewer policy, start the publisher with `--enforce-reviewers` or `LINK_APP_PUBLISHER_ENFORCE_REVIEWERS=1`. Link Desktop forwards configured actor/group context so the service can require approvals from the app's reviewers or owning squad. Production publishers should also set `LINK_APP_PUBLISHER_REQUIRE_AUTH_CONTEXT=1` or pass `--require-auth-context`, which makes `/readyz` fail until API requests are required to carry actor/group context from the VPN/Okta boundary.
+For reviewer policy, start the publisher with `--enforce-reviewers` or `LINK_APP_PUBLISHER_ENFORCE_REVIEWERS=1`. Link Desktop forwards configured actor/group context so the service can require approvals from the app's reviewers or owning squad. Production publishers should also set `LINK_APP_PUBLISHER_REQUIRE_AUTH_CONTEXT=1` or pass `--require-auth-context`, which makes `/readyz` fail until API requests are required to carry actor/group context from the auth boundary.
 
 Before routing desktop users to a production publisher, verify readiness:
 
 ```bash
-curl -fsS https://link-app-publisher.query.prod.telnyx.io/readyz
+curl -fsS "$LINK_APP_PUBLISHER_URL/readyz"
 ```
 
 Readiness requires persistent catalog storage, reviewer enforcement, required auth context, Git, an installed/authenticated `telnyx-edge` CLI, and the Edge deployer mode. Local record-only mode returns `503` by design.

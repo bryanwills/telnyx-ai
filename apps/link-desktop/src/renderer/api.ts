@@ -2258,8 +2258,8 @@ function previewLiteLlmRuntimeStatus(): LiteLlmRuntimeStatus {
 let previewCredentials: CredentialGroupStatus[] = [
   credentials("agent-control-plane", "Agent Control Plane", "Okta sign-in creates the Agent Control Plane session Link uses for internal agents and tools. TELNYX_AUTH_REV2 is stored securely after sign-in.", ["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"]),
   credentials("mcp-proxy", "Telnyx MCP Proxy", "Connect Link to team-telnyx/mcp-proxy so agents discover approved MCP servers and tools through one Telnyx registry.", ["MCP_PROXY_URL"]),
-  credentials("link-app-publisher", "Link App Publisher", "Optional VPN-only publisher service override. Link defaults to the internal managed publisher endpoint and authenticates with Okta Rev2 or TELNYX_API_KEY.", ["LINK_APP_PUBLISHER_URL"]),
-  credentials("link-message-gateway", "Link Message Gateway", "Optional VPN-only message gateway override. Link defaults to the internal managed gateway and authenticates with Okta Rev2 or TELNYX_API_KEY.", ["LINK_MESSAGE_GATEWAY_URL"]),
+  credentials("link-app-publisher", "Link App Publisher", "Managed publisher service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY.", ["LINK_APP_PUBLISHER_URL"]),
+  credentials("link-message-gateway", "Link Message Gateway", "Managed message gateway service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY.", ["LINK_MESSAGE_GATEWAY_URL"]),
   credentials("litellm", "Model Gateway", "Optional managed gateway and frontier BYO settings. Local Ollama mode does not require a cloud key; Telnyx BYO uses the Telnyx API key group.", ["LITELLM_BASE_URL", "LITELLM_API_KEY", "TELNYX_INFERENCE_BASE_URL", "ANTHROPIC_API_KEY"]),
   credentials("hindsight", "Hindsight", "Per-user Hindsight API key plus the memory bank id used when saving archive entries.", ["HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"]),
   credentials("linear", "Linear", "Linear API key for issue and project lookup.", ["LINEAR_API_KEY"]),
@@ -3500,7 +3500,7 @@ const previewLinkApi: LinkDesktopApi = {
       authConfigured: false,
       mode: "preview",
       checks: [{ name: "Publisher service reachable", ok: false, detail: "Browser preview uses local sample apps." }],
-      message: "Connect VPN and open Link Desktop to publish apps.",
+      message: "Configure LINK_APP_PUBLISHER_URL and open Link Desktop to publish apps.",
       updatedAt: new Date().toISOString(),
     };
   },
