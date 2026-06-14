@@ -3169,7 +3169,7 @@ const previewLinkApi: LinkDesktopApi = {
     return agentControlPlaneAuthStatus(previewAuthEnabled());
   },
   async openAgentControlPlaneSetup(_input?: unknown) {
-    return { url: "http://agent-control-plane.query.prod.telnyx.io:8000/agents/new" };
+    throw new Error(previewAgentControlPlaneMessage);
   },
   async listHostedAgents() {
     return previewAuthEnabled() ? previewHostedAgents() : [];
@@ -4448,19 +4448,19 @@ function explorerResults(query: string): ExplorerResult[] {
 
 function agentControlPlaneAuthStatus(signedIn: boolean): AgentControlPlaneAuthStatus {
   return {
-    baseUrl: "http://agent-control-plane.query.prod.telnyx.io:8000",
+    baseUrl: "",
     authMode: "okta",
     signedIn,
-    ready: signedIn,
-    cookieCount: signedIn ? 1 : 0,
-    actorConfigured: true,
-    onBehalfOfConfigured: true,
-    actor: "preview@telnyx.com",
-    onBehalfOf: "preview.squad",
+    ready: false,
+    cookieCount: 0,
+    actorConfigured: false,
+    onBehalfOfConfigured: false,
     rev2Configured: false,
-    message: signedIn ? "Okta session is active." : "Agent Control Plane is not connected.",
+    message: previewAgentControlPlaneMessage,
   };
 }
+
+const previewAgentControlPlaneMessage = "Configure AGENT_CONTROL_PLANE_URL with an HTTPS Agent Control Plane endpoint before using hosted agents.";
 
 function previewHostedAgents(): HostedAgentSummary[] {
   return [

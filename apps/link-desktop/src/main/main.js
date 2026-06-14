@@ -32,8 +32,8 @@ const nativeFetch = globalThis.fetch.bind(globalThis);
 const stateVersion = 11;
 const defaultDialerConfigId = "link-dialer";
 const legacyDialerTemplateIds = new Set(["standard", "sales", "support"]);
-const defaultAgentControlPlaneUrl = "http://agent-control-plane.query.prod.telnyx.io:8000";
-const defaultA2aDiscoveryUrl = "http://a2a-discovery.query.prod.telnyx.io:4000";
+const defaultAgentControlPlaneUrl = "";
+const defaultA2aDiscoveryUrl = "";
 const defaultAuthInternalUrl = "https://auth-internal.query.prod.telnyx.io:6674";
 const defaultHindsightUrl = "https://api-internal.telnyx.com/hindsight";
 const defaultLinkAppPublisherUrl = "https://link-app-publisher.query.prod.telnyx.io";
@@ -941,7 +941,8 @@ function isAllowedRendererFileUrl(url) {
 }
 
 function isLoopbackHostname(hostname) {
-  return ["localhost", "127.0.0.1", "::1"].includes(hostname);
+  const normalized = String(hostname || "").toLowerCase().replace(/^\[(.*)\]$/, "$1");
+  return ["localhost", "127.0.0.1", "::1"].includes(normalized);
 }
 
 function isExternalBrowserUrl(value) {
@@ -2437,6 +2438,10 @@ async function runA2aDiscoveryChat({ agentId, agentSource, prompt, sessionItem }
   }
 
   const targetAgentId = String(agentId || "").trim();
+  const baseUrl = a2aDiscoveryUrl();
+  if (!baseUrl) {
+    return { ok: false, error: unconfiguredA2aDiscoveryMessage() };
+  }
   const knownAgent = await getA2aDiscoveryAgent(targetAgentId);
   if (!knownAgent) {
     return { ok: false, error: "Selected agent was not found in A2A discovery." };
@@ -2470,7 +2475,7 @@ async function runA2aDiscoveryChat({ agentId, agentSource, prompt, sessionItem }
       configuration: { blocking: true },
     },
   };
-  const response = await fetch(`${a2aDiscoveryUrl()}/a2a/${encodeURIComponent(targetAgentId)}/rpc`, {
+  const response = await fetch(`${baseUrl}/a2a/${encodeURIComponent(targetAgentId)}/rpc`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -6027,7 +6032,9 @@ function telnyxApiBaseUrl() {
 }
 
 async function listA2aDiscoveryAgents() {
-  const response = await fetch(`${a2aDiscoveryUrl()}/v1/agents`);
+  const baseUrl = a2aDiscoveryUrl();
+  if (!baseUrl) return [];
+  const response = await fetch(`${baseUrl}/v1/agents`);
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(`A2A discovery returned ${response.status}: ${detail.slice(0, 500)}`);
@@ -10883,8 +10890,14 @@ function escapeHtml(value) {
 }
 
 async function getAgentControlPlaneAuthStatus() {
-  const baseUrl = agentControlPlaneUrl();
-  const cookies = await agentControlPlaneCookies();
+  let baseUrl = "";
+  let configurationMessage = "";
+  try {
+    baseUrl = agentControlPlaneUrl();
+  } catch (error) {
+    configurationMessage = errorMessage(error);
+  }
+  const cookies = baseUrl ? await agentControlPlaneCookies(baseUrl) : [];
   const authCookies = cookies.filter((cookie) => cookie.name !== "oauth_state");
   const actor = process.env.TELNYX_ACTOR || "";
   const onBehalfOf = process.env.TELNYX_ON_BEHALF_OF || "";
@@ -10895,7 +10908,9 @@ async function getAgentControlPlaneAuthStatus() {
   const onBehalfOfConfigured = Boolean(onBehalfOf);
   const signedIn = Boolean(rev2Configured || authCookies.length > 0);
   const authMode = rev2Configured ? "rev2" : "okta";
-  const validation = signedIn ? await validateAgentControlPlaneSession(baseUrl) : { ready: false };
+  const validation = signedIn && baseUrl
+    ? await validateAgentControlPlaneSession(baseUrl)
+    : { ready: false, message: configurationMessage || (baseUrl ? "" : unconfiguredAgentControlPlaneMessage()) };
   const ready = Boolean(validation.ready);
   const avatarUrl = await slackProfileImageUrl(userName || actor || userId || "");
 
@@ -10922,8 +10937,14 @@ async function getAgentControlPlaneAuthStatus() {
 }
 
 async function clearAgentControlPlaneSession() {
-  const cookies = await agentControlPlaneCookies();
-  const baseUrl = agentControlPlaneUrl();
+  let baseUrl = "";
+  let cookies = [];
+  try {
+    baseUrl = agentControlPlaneUrl();
+    cookies = await agentControlPlaneCookies(baseUrl);
+  } catch {
+    cookies = [];
+  }
   await Promise.all(
     cookies.map((cookie) => {
       const protocol = cookie.secure ? "https://" : "http://";
@@ -10955,7 +10976,7 @@ async function validateAgentControlPlaneSession(baseUrl) {
   } catch {
     return {
       ready: false,
-      message: `Agent Control Plane is not reachable at ${baseUrl}. Connect to the Telnyx VPN, then sign in again if needed.`,
+      message: `Agent Control Plane is not reachable at ${baseUrl}. Verify the configured service URL and network access, then sign in again if needed.`,
     };
   }
 
@@ -10979,7 +11000,8 @@ async function validateAgentControlPlaneSession(baseUrl) {
 
 async function openAgentControlPlaneSetup(input = {}) {
   const status = await getAgentControlPlaneAuthStatus();
-  if (!status.ready) throw new Error("Sign in with Okta before adding an Agent Control Plane agent.");
+  if (!status.baseUrl) throw new Error(status.message || unconfiguredAgentControlPlaneMessage());
+  if (!status.ready) throw new Error(status.message || "Sign in with Okta before adding an Agent Control Plane agent.");
 
   const parent = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
   const setupUrl = agentControlPlaneSetupUrl(input);
@@ -11031,10 +11053,15 @@ async function openAgentControlPlaneSetup(input = {}) {
 function isAllowedAgentControlPlaneSetupUrl(value) {
   const target = parseUrl(value);
   if (!target) return false;
-  const agentControlPlaneOrigin = parseUrl(agentControlPlaneUrl())?.origin;
+  let agentControlPlaneOrigin = "";
+  try {
+    agentControlPlaneOrigin = parseUrl(agentControlPlaneUrl())?.origin || "";
+  } catch {
+    agentControlPlaneOrigin = "";
+  }
   const authInternalOrigin = parseUrl(authInternalUrl())?.origin;
   return Boolean(
-    target.origin === agentControlPlaneOrigin ||
+    (agentControlPlaneOrigin && target.origin === agentControlPlaneOrigin) ||
       target.origin === authInternalOrigin ||
       isTrustedOktaAuthOrigin(value),
   );
@@ -11042,8 +11069,11 @@ function isAllowedAgentControlPlaneSetupUrl(value) {
 
 async function listHostedAgents() {
   const status = await getAgentControlPlaneAuthStatus();
+  if (!status.baseUrl) {
+    throw new Error(status.message || unconfiguredAgentControlPlaneMessage());
+  }
   if (!status.ready) {
-    throw new Error("Sign in with Okta before listing hosted agents.");
+    throw new Error(status.message || "Sign in with Okta before listing hosted agents.");
   }
 
   let response;
@@ -11083,14 +11113,17 @@ function agentControlPlaneConnectionErrorMessage(baseUrl, error) {
   return [
     `Agent Control Plane is not reachable at ${baseUrl}.`,
     timeout ? "The request timed out." : "The network request failed.",
-    "Connect to the Telnyx VPN, verify the Agent Control Plane service URL in Settings, then retry. You can still use Add Agent to open the guided setup flow.",
+    "Verify the Agent Control Plane service URL and network access, then retry. You can still use Add Agent to open the guided setup flow.",
   ].join(" ");
 }
 
 async function getHostedAgent(agentId) {
   const status = await getAgentControlPlaneAuthStatus();
+  if (!status.baseUrl) {
+    throw new Error(status.message || unconfiguredAgentControlPlaneMessage());
+  }
   if (!status.ready) {
-    throw new Error("Sign in with Okta before loading Agent Control Plane agent details.");
+    throw new Error(status.message || "Sign in with Okta before loading Agent Control Plane agent details.");
   }
 
   const response = await fetch(`${status.baseUrl}/api/agents/${agentId}`, {
@@ -11112,24 +11145,28 @@ async function agentControlPlaneHeaders() {
   const rev2 = credentialValue("TELNYX_AUTH_REV2");
   if (rev2) headers["telnyx-auth-rev2"] = rev2;
 
-  const cookies = await agentControlPlaneCookies();
+  const cookies = await agentControlPlaneCookies().catch(() => []);
   const cookieHeader = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
   if (cookieHeader) headers.Cookie = cookieHeader;
 
   return headers;
 }
 
-async function agentControlPlaneCookies() {
-  return session.defaultSession.cookies.get({ url: agentControlPlaneUrl() });
+async function agentControlPlaneCookies(baseUrl = agentControlPlaneUrl()) {
+  if (!baseUrl) return [];
+  return session.defaultSession.cookies.get({ url: baseUrl });
 }
 
 function agentControlPlaneUrl() {
-  return (process.env.AGENT_CONTROL_PLANE_URL || defaultAgentControlPlaneUrl).replace(/\/$/, "");
+  return configuredInternalServiceUrl(process.env.AGENT_CONTROL_PLANE_URL || defaultAgentControlPlaneUrl, "AGENT_CONTROL_PLANE_URL");
 }
 
 function agentControlPlaneSetupUrl(input = {}) {
   const configured = process.env.AGENT_CONTROL_PLANE_ADD_AGENT_URL;
-  const url = new URL(configured || "/agents/new", `${agentControlPlaneUrl()}/`);
+  const baseUrl = agentControlPlaneUrl();
+  if (!baseUrl) throw new Error(unconfiguredAgentControlPlaneMessage());
+  const targetUrl = configured ? configuredInternalServiceUrl(configured, "AGENT_CONTROL_PLANE_ADD_AGENT_URL") : "/agents/new";
+  const url = new URL(targetUrl, `${baseUrl}/`);
   const draft = input?.draft && typeof input.draft === "object" ? input.draft : null;
   if (draft) {
     url.searchParams.set("source", "link-desktop");
@@ -11143,7 +11180,28 @@ function looksLikeUuid(value) {
 }
 
 function a2aDiscoveryUrl() {
-  return (process.env.A2A_DISCOVERY_URL || defaultA2aDiscoveryUrl).replace(/\/$/, "");
+  return configuredInternalServiceUrl(process.env.A2A_DISCOVERY_URL || defaultA2aDiscoveryUrl, "A2A_DISCOVERY_URL");
+}
+
+function configuredInternalServiceUrl(value, label) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const url = parseUrl(raw);
+  if (!url || !["http:", "https:"].includes(url.protocol)) {
+    throw new Error(`${label} must be an http(s) URL.`);
+  }
+  if (url.protocol === "http:" && !isLoopbackHostname(url.hostname)) {
+    throw new Error(`${label} must use HTTPS unless it points to localhost, 127.0.0.1, or [::1].`);
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
+function unconfiguredAgentControlPlaneMessage() {
+  return "Configure AGENT_CONTROL_PLANE_URL with an HTTPS Agent Control Plane endpoint before using hosted agents. HTTP is only allowed for loopback local development.";
+}
+
+function unconfiguredA2aDiscoveryMessage() {
+  return "Configure A2A_DISCOVERY_URL with an HTTPS A2A discovery endpoint before using discovered agents. HTTP is only allowed for loopback local development.";
 }
 
 function authInternalUrl() {
