@@ -21,6 +21,11 @@
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0"
   },
+  "overrides": {
+    "ethers": {
+      "ws": "8.20.1"
+    }
+  },
   "engines": {
     "node": ">=18.0.0"
   },
