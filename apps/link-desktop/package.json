@@ -4,6 +4,12 @@
   "version": "0.1.0",
   "private": true,
   "description": "Electron desktop MVP for Telnyx Link.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/team-telnyx/ai",
+    "directory": "apps/link-desktop"
+  },
   "type": "module",
   "main": "src/main/main.js",
   "scripts": {

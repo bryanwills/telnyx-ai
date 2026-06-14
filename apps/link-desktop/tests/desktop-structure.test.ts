@@ -6,6 +6,8 @@ import { createLinkAppPublisherServer, listenLinkAppPublisherServer } from "../.
 test("desktop package exposes expected local scripts", async () => {
   const pkg = JSON.parse(await readFile("package.json", "utf8")) as {
     productName: string;
+    license: string;
+    repository: { directory?: string };
     scripts: Record<string, string>;
     overrides: Record<string, string>;
   };
@@ -13,6 +15,8 @@ test("desktop package exposes expected local scripts", async () => {
   const readme = await readFile("README.md", "utf8");
 
   assert.equal(pkg.productName, "Link");
+  assert.equal(pkg.license, "MIT");
+  assert.equal(pkg.repository.directory, "apps/link-desktop");
   assert.equal(pkg.scripts.dev, "node scripts/dev.mjs");
   assert.equal(pkg.scripts["bundle:gog"], "node scripts/install-gog-cli.mjs");
   assert.equal(pkg.scripts.build, "vite build");
