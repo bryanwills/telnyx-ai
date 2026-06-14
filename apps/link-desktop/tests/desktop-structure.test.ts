@@ -60,6 +60,7 @@ test("vite builds relative assets for Electron file loading", async () => {
 test("Electron windows follow the internal app security baseline", async () => {
   const main = await readFile("src/main/main.js", "utf8");
   const index = await readFile("index.html", "utf8");
+  const readme = await readFile("README.md", "utf8");
 
   assert.match(main, /preload:\s*path\.join\(__dirname,\s*"preload\.cjs"\)/);
   assert.match(main, /contextIsolation:\s*true/);
@@ -96,6 +97,9 @@ test("Electron windows follow the internal app security baseline", async () => {
   assert.match(main, /will-navigate/);
   assert.match(main, /checkedRendererDevServerUrl/);
   assert.match(main, /isLoopbackHostname/);
+  assert.match(main, /const packagedRendererPath = path\.resolve\(__dirname,\s*"\.\.\/\.\.\/dist\/renderer\/index\.html"\)/);
+  assert.match(main, /if \(!app\.isPackaged && process\.env\.LINK_DESKTOP_RENDERER\)/);
+  assert.match(readme, /Packaged builds ignore `LINK_DESKTOP_RENDERER`/);
   assert.match(main, /shell\.openExternal/);
   assert.match(main, /async function openExternalBrowserUrl/);
   assert.match(main, /Refusing to open a non-HTTPS external URL/);

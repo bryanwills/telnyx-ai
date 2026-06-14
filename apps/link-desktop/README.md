@@ -36,6 +36,7 @@ Most users should connect services through Settings. Operators and developers ca
 
 | Area | Variables | Notes |
 | ---- | --------- | ----- |
+| Development renderer | `VITE_DEV_SERVER_URL`, `LINK_DESKTOP_RENDERER` | Development-only renderer overrides. Packaged builds ignore `LINK_DESKTOP_RENDERER` and load the bundled renderer to keep the trusted preload bridge attached only to shipped app files. |
 | Request timeouts | `LINK_DESKTOP_FETCH_TIMEOUT_MS` | Default outbound `fetch` timeout is 15 seconds. Existing call-specific signals, such as long-running knowledge-agent requests, still win. |
 | GitHub | `LINK_DESKTOP_CONFIG_PATH`, `LINK_DESKTOP_CONFIG_JSON`, `LINK_GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_ID`, `LINK_GITHUB_APP_VERIFY_REPO`, `GH_TOKEN`, `GITHUB_TOKEN` | GitHub pairing verifies access to `team-telnyx/link` by default. Developer token fallbacks should stay local. |
 | Agent Control Plane | `AGENT_CONTROL_PLANE_URL`, `A2A_DISCOVERY_URL`, `AUTH_INTERNAL_URL`, `TELNYX_ACTOR`, `TELNYX_ON_BEHALF_OF`, `TELNYX_AUTH_REV2` | Prefer Okta SSO from Settings. Use actor and squad context when ACP or publisher endpoints require it. ACP and A2A defaults currently use Telnyx internal HTTP services on explicit ports; public distribution should use TLS front doors before removing VPN/internal assumptions. |

@@ -981,9 +981,11 @@ function checkedRendererDevServerUrl() {
 }
 
 function rendererFilePath() {
-  return process.env.LINK_DESKTOP_RENDERER
-    ? path.resolve(process.cwd(), process.env.LINK_DESKTOP_RENDERER)
-    : path.resolve(__dirname, "../../dist/renderer/index.html");
+  const packagedRendererPath = path.resolve(__dirname, "../../dist/renderer/index.html");
+  if (!app.isPackaged && process.env.LINK_DESKTOP_RENDERER) {
+    return path.resolve(process.cwd(), process.env.LINK_DESKTOP_RENDERER);
+  }
+  return packagedRendererPath;
 }
 
 function isAllowedRendererNavigation(value) {
