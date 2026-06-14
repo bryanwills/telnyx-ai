@@ -81,7 +81,7 @@ import {
   YAxis,
 } from "recharts";
 import type { ComponentType, CSSProperties, DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ActiveWorkItem,
   AgentControlPlaneAuthStatus,
@@ -165,9 +165,10 @@ import type {
   WorkspaceSummary,
 } from "./api.js";
 import { linkApi } from "./api.js";
-import { DialerBuilder } from "./phone/dialer-builder.js";
 import { createDefaultDialerConfig, type DialerConfig } from "./phone/dialer-config.js";
-import { LinkSoftphone } from "./phone/softphone.js";
+
+const DialerBuilder = lazy(() => import("./phone/dialer-builder.js").then((module) => ({ default: module.DialerBuilder })));
+const LinkSoftphone = lazy(() => import("./phone/softphone.js").then((module) => ({ default: module.LinkSoftphone })));
 
 type AppIcon = ComponentType<{ size?: number; className?: string }>;
 
@@ -7621,17 +7622,19 @@ function AssistantPanel({
           </div>
         </div>
       ) : (
-        <LinkSoftphone
-          config={activeDialerConfig}
-          linkedPhoneNumber={linkedPhoneNumber}
-          setLinkedPhoneNumber={setLinkedPhoneNumber}
-          telnyxApiReady={telnyxApiReady}
-          setView={setView}
-          openPhoneContacts={openPhoneContacts}
-          initialDialNumber={phoneDialTarget}
-          initialDialNumberRequestId={phoneDialTargetRequestId}
-          connectors={connectors}
-        />
+        <Suspense fallback={<div className="softphoneLazyFallback" aria-busy="true">Loading phone</div>}>
+          <LinkSoftphone
+            config={activeDialerConfig}
+            linkedPhoneNumber={linkedPhoneNumber}
+            setLinkedPhoneNumber={setLinkedPhoneNumber}
+            telnyxApiReady={telnyxApiReady}
+            setView={setView}
+            openPhoneContacts={openPhoneContacts}
+            initialDialNumber={phoneDialTarget}
+            initialDialNumberRequestId={phoneDialTargetRequestId}
+            connectors={connectors}
+          />
+        </Suspense>
       )}
     </aside>
   );
@@ -16067,7 +16070,9 @@ function SettingsView({
             />
           )}
           {tab === "dialer" && (
-            <DialerBuilder activeConfig={activeDialerConfig} onActiveConfigChange={setActiveDialerConfig} renderActions={setDialerBuilderActions} />
+            <Suspense fallback={<div className="softphoneLazyFallback" aria-busy="true">Loading dialer builder</div>}>
+              <DialerBuilder activeConfig={activeDialerConfig} onActiveConfigChange={setActiveDialerConfig} renderActions={setDialerBuilderActions} />
+            </Suspense>
           )}
 	          {tab === "domains" && renderDomainsSettingsTab()}
 	          {tab === "design" && <DesignSystemView embedded />}

@@ -6955,6 +6955,19 @@ body.assistantPanelResizing {
   background: var(--surface);
 }
 
+.softphoneLazyFallback {
+  display: grid;
+  flex: 1;
+  min-height: 260px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 750;
+}
+
 .linkSoftphone audio {
   display: none;
 }

@@ -2864,6 +2864,12 @@ test("phone page links existing Telnyx numbers and keeps calling controls in the
   };
 
   assert.ok(pkg.dependencies["@telnyx/webrtc"]);
+  assert.match(app, /const DialerBuilder = lazy\(\(\) => import\("\.\/phone\/dialer-builder\.js"\)/);
+  assert.match(app, /const LinkSoftphone = lazy\(\(\) => import\("\.\/phone\/softphone\.js"\)/);
+  assert.doesNotMatch(app, /import \{ DialerBuilder \} from "\.\/phone\/dialer-builder\.js"/);
+  assert.doesNotMatch(app, /import \{ LinkSoftphone \} from "\.\/phone\/softphone\.js"/);
+  assert.match(app, /<Suspense fallback=\{<div className="softphoneLazyFallback" aria-busy="true">Loading phone<\/div>\}>/);
+  assert.match(styles, /\.softphoneLazyFallback\s*\{/);
   assert.match(app, /PhoneView/);
   assert.doesNotMatch(app, /<TabPageHeading icon=\{Phone\} title="Numbers" \/>/);
   assert.match(app, /tab === "numbers" && telnyxApiReady/);
