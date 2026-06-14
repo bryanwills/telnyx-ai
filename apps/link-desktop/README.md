@@ -49,7 +49,7 @@ Most users should connect services through Settings. Operators and developers ca
 | Telnyx APIs | `TELNYX_API_KEY`, `LINK_DESKTOP_LIVE_CALL_E2E`, `LINK_DESKTOP_LIVE_CALL_CONFIRM`, `LINK_DESKTOP_LIVE_CALL_SECONDS` | Live call E2E is opt-in and hangs up automatically after the configured duration. |
 | Local terminal | `LINK_DESKTOP_ENABLE_TERMINAL` | Development builds expose the built-in terminal. Packaged builds require `LINK_DESKTOP_ENABLE_TERMINAL=1` before launch because the terminal can run arbitrary local shell commands. |
 | Docs and memory adapters | `INTERCOM_ACCESS_TOKEN`, `INTERCOM_API_BASE_URL`, `INTERCOM_VERSION`, `MINTLIFY_API_KEY`, `MINTLIFY_API_BASE_URL`, `MINTLIFY_DOMAIN`, `HINDSIGHT_API_KEY`, `HINDSIGHT_API_URL`, `HINDSIGHT_BANK_ID` | If unset or unreachable, Link falls back to deterministic local data where available. |
-| MCP and widgets | `MCP_PROXY_URL`, `TABLEAU_WIDGETS_SERVICE_URL` | VPN-only service adapters should fail closed or use local cached state when unavailable. |
+| MCP | `MCP_PROXY_URL` | VPN-only service adapters should fail closed or use local cached state when unavailable. |
 
 Verification:
 

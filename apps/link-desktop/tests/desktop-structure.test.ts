@@ -108,7 +108,8 @@ test("Electron windows follow the internal app security baseline", async () => {
   assert.doesNotMatch(main, /shell\.openExternal\(device\.verification_uri\)/);
   assert.match(index, /Content-Security-Policy/);
   assert.match(index, /object-src 'none'/);
-  assert.match(index, /frame-src 'self' http:\/\/127\.0\.0\.1:\* http:\/\/localhost:\* https:\/\/\*\.online\.tableau\.com https:\/\/public\.tableau\.com https:\/\/\*\.tableau\.com https:\/\/\*\.tableauusercontent\.com/);
+  assert.match(index, /frame-src 'self' http:\/\/127\.0\.0\.1:\* http:\/\/localhost:\*/);
+  assert.doesNotMatch(index, /tableau/i);
   assert.doesNotMatch(index, /frame-src 'none'/);
   assert.match(index, /form-action 'none'/);
 });
@@ -157,10 +158,6 @@ test("preload exposes the Link desktop IPC contract", async () => {
     "listArtifactDeployments",
     "deployArtifact",
     "listTools",
-    "createSharedChannelDraft",
-    "listActiveWork",
-    "decideWork",
-    "listAutomations",
     "listConnectors",
 	    "listCredentials",
 	    "saveCredential",
@@ -174,10 +171,6 @@ test("preload exposes the Link desktop IPC contract", async () => {
 	    "connectGoogleTasksWithGog",
 	    "updateConnectorStatus",
     "getEdgeComputeStatus",
-    "listWidgetCatalog",
-    "listWidgetLayout",
-    "saveWidgetLayout",
-    "refreshWidgetData",
     "listDialerConfigs",
     "saveDialerConfig",
     "activateDialerConfig",
@@ -419,7 +412,7 @@ test("renderer includes canonical Link pages in the primary navigation", async (
   assert.doesNotMatch(navItemsSource, /\{ id: "scribes", label: "Scribes"/);
   assert.doesNotMatch(app, /<div className="railSpacer" \/>\s*\{renderRailButton\(\{ id: "apps", label: "Apps", icon: Grid2X2Plus \}\)\}/);
   assert.doesNotMatch(navItemsSource, /\{ id: "widgets", label: "Widgets"/);
-  assert.match(app, /function WidgetsView/);
+  assert.doesNotMatch(app, /function WidgetsView/);
   assert.doesNotMatch(navItemsSource, /id: "memory"/);
   assert.doesNotMatch(app, /id: "connections"/);
   assert.doesNotMatch(app, /id: "marketplace"/);
@@ -427,6 +420,9 @@ test("renderer includes canonical Link pages in the primary navigation", async (
   assert.doesNotMatch(navItemsSource, /id: "docs"/);
   assert.doesNotMatch(navItemsSource, /id: "pylon"/);
   assert.doesNotMatch(app, /id: "workspaces"/);
+  assert.doesNotMatch(app, /function WorkspacesView/);
+  assert.doesNotMatch(app, /view === "workspaces"/);
+  assert.doesNotMatch(app, /setView\("workspaces"\)/);
   assert.doesNotMatch(app, /id: "design"/);
   assert.doesNotMatch(app, /view === "design"/);
   assert.match(app, /useState<ViewId>\("chats"\)/);
@@ -832,11 +828,11 @@ test("onboarding is persisted, dismissible, and tied to setup steps", async () =
   assert.doesNotMatch(app, /Report feedback/);
   assert.match(app, /telnyx-link-internal-testing-checklist/);
   assert.match(app, /startOnboardingPromptChat/);
-  assert.match(app, /startOnboardingSharedDraft/);
+  assert.doesNotMatch(app, /startOnboardingSharedDraft/);
   assert.match(app, /getWhisperStatus/);
   assert.match(app, /getWebRtcStatus/);
   assert.match(app, /Add Data Source/);
-  assert.match(app, /Draft customer-safe update/);
+  assert.doesNotMatch(app, /Draft customer-safe update/);
   assert.doesNotMatch(app, /Customer-visible actions should land in review/);
   assert.match(app, /Finish setup/);
   assert.match(app, /icon:\s*ShieldCheck/);
@@ -864,75 +860,30 @@ test("onboarding is persisted, dismissible, and tied to setup steps", async () =
   assert.match(styles, /\.testerChecklistItem/);
 });
 
-test("widgets page exposes a report library for the home dashboard", async () => {
+test("removed desktop pages stay unwired", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
   const api = await readFile("src/renderer/api.ts", "utf8");
   const main = await readFile("src/main/main.js", "utf8");
+  const preload = await readFile("src/main/preload.cjs", "utf8");
   const index = await readFile("index.html", "utf8");
   const pkg = JSON.parse(await readFile("package.json", "utf8")) as { dependencies: Record<string, string> };
 
-  assert.match(app, /function WidgetsView/);
-  assert.match(app, /libraryOpen:\s*boolean/);
-  assert.match(app, /widgetCatalog/);
-  assert.match(app, /listWidgetCatalog/);
-  assert.match(app, /saveWidgetLayout/);
-  assert.match(app, /refreshWidgetData/);
-  assert.match(app, /WidgetChart/);
-  assert.match(app, /TableauEmbeddedWidget/);
-  assert.match(app, /TableauEventType\.FirstInteractive/);
-  assert.match(app, /TableauEventType\.SummaryDataChanged/);
-  assert.match(app, /document\.createElement\("tableau-viz"\)/);
-  assert.match(app, /ResizeObserver/);
-  assert.match(app, /LineChart/);
-  assert.match(app, /BarChart/);
-  assert.match(app, /AreaChart/);
-  assert.match(app, /No authorized widgets/);
-  assert.match(app, /icon=\{BarChart\}/);
-  assert.match(app, /Search reports/);
-  assert.match(app, /Add widget/);
-  assert.match(app, /Widget library/);
-  assert.match(app, />\s*Add Widget\s*</);
-  assert.match(app, /layoutEditing/);
-  assert.match(app, /aria-pressed=\{layoutEditing\}/);
-  assert.match(app, /layoutEditing \? "Done" : "Manage layout"/);
-  assert.match(app, /dashboardWidgets\.length >= 2 && \(/);
-  assert.match(app, /layoutEditing \? "Done" : "Manage layout"/);
-  assert.doesNotMatch(app, /Home view/);
-  assert.doesNotMatch(app, /Personal report snapshots/);
-  assert.match(app, /startWidgetDrag/);
-  assert.match(app, /allowWidgetDrop/);
-  assert.match(app, /dropWidget/);
-  assert.match(app, /draggable=\{layoutEditing\}/);
-  assert.match(app, /libraryOpen \? \(/);
-  assert.doesNotMatch(styles, /\.widgetsView \.headerActions\s*{[^}]*margin-top/s);
-  assert.match(styles, /\.widgetHomeGrid\s*\{[\s\S]*?flex:\s*1 1 auto[\s\S]*?min-height:\s*0/);
-  assert.match(styles, /\.widgetCanvas\s*\{[\s\S]*?flex:\s*1 1 auto[\s\S]*?min-height:\s*0/);
-  assert.match(styles, /\.widgetLibraryTakeover\s*{/);
-  assert.doesNotMatch(styles, /calc\(100vh - 170px\)/);
-  assert.match(styles, /\.widgetLibraryControls\s*{[^}]*grid-template-columns:\s*minmax\(260px,\s*1fr\) minmax\(320px,\s*420px\)/s);
-  assert.match(styles, /\.widgetLibraryList\s*{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(220px,\s*1fr\)\)/s);
-  assert.match(styles, /\.dashboardWidgetGrid\s*{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(220px,\s*1fr\)\)/s);
-  assert.match(styles, /@keyframes widgetJiggle/);
-  assert.match(styles, /\.dashboardWidgetGrid\.layoutEditing \.dashboardWidget/);
-  assert.match(styles, /\.dashboardWidgetGrid\.layoutEditing \.dashboardWidget\.dropTarget/);
-  assert.match(styles, /\.dashboardWidget\.tableauEmbedWidget/);
-  assert.match(styles, /\.tableauWidgetEmbed/);
-  assert.match(api, /interface WidgetTableauEmbedSpec/);
-  assert.match(api, /renderMode\?: WidgetRenderMode/);
-  assert.match(api, /standard-revenue-overview/);
-  assert.match(api, /TABLEAU_REVENUE_OVERVIEW_URL/);
-  assert.match(api, /VITE_\$\{fieldName\}/);
-  assert.match(main, /standardTableauWidgetDefinitions/);
-  assert.match(main, /TABLEAU_REVENUE_OVERVIEW_URL/);
-  assert.match(main, /standardTableauWidgetCatalog/);
-  assert.match(main, /mergeWidgetCatalog/);
-  assert.match(index, /https:\/\/\*\.online\.tableau\.com/);
-  assert.doesNotMatch(index, /frame-src 'none'/);
-  assert.match(pkg.dependencies["@tableau/embedding-api"], /\^3\./);
-  assert.match(styles, /\.widgetDataState/);
-  assert.match(styles, /\.spinning/);
-  assert.match(styles, /prefers-reduced-motion:\s*reduce/);
+  assert.doesNotMatch(app, /function WidgetsView/);
+  assert.doesNotMatch(app, /function WorkspacesView/);
+  assert.doesNotMatch(app, /view === "widgets"/);
+  assert.doesNotMatch(app, /view === "workspaces"/);
+  assert.doesNotMatch(app, /setView\("workspaces"\)/);
+  assert.doesNotMatch(app, /TableauEmbeddedWidget|TableauEventType|document\.createElement\("tableau-viz"\)|WidgetChart/);
+  assert.doesNotMatch(api, /\| "widgets"|\| "workspaces"|\| "explorer"/);
+  assert.doesNotMatch(api, /WidgetCatalogItem|WidgetTableauEmbedSpec|listWidgetCatalog|createSharedChannelDraft|listActiveWork|listAutomations/);
+  assert.doesNotMatch(main, /TABLEAU_|tableau|link:list-widget|widgetLayout|link:shared-channel-draft|link:list-active-work|link:list-automations|createActiveWork|formatSharedChannelResponse/i);
+  assert.doesNotMatch(preload, /listWidgetCatalog|createSharedChannelDraft|listActiveWork|listAutomations/);
+  assert.doesNotMatch(styles, /widgetsView|dashboardWidget|workspaceGrid|artifactCard|tableauWidget/);
+  assert.doesNotMatch(index, /tableau/i);
+  assert.ok(!pkg.dependencies?.["@tableau/embedding-api"]);
+  assert.ok(!pkg.dependencies?.recharts);
+  assert.match(app, /function ExplorerView\(\{/);
 });
 
 test("app marketplace uses the managed Link App Publisher catalog", async () => {
@@ -1788,16 +1739,16 @@ test("settings uses account phone and tools tabs with nested sections", async ()
   assert.match(styles, /\.connectorBody p,[\s\S]*?white-space:\s*normal/);
   assert.doesNotMatch(styles, /\.themeToggle\s*{/);
   assert.match(styles, /\.desktop\[data-theme="dark"\]/);
-  assert.match(styles, /\.desktop\[data-theme="dark"\] \.widgetsView/);
+  assert.doesNotMatch(styles, /\.desktop\[data-theme="dark"\] \.widgetsView/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.assistantPanel \.button/);
-  assert.match(styles, /\.desktop\[data-theme="dark"\] \.widgetCanvas/);
+  assert.doesNotMatch(styles, /\.desktop\[data-theme="dark"\] \.widgetCanvas/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.assistantChatFrame/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.workboardLayoutToggle/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.workboardCreate,[\s\S]*?\.desktop\[data-theme="dark"\] \.workboardRowCard,[\s\S]*?\.desktop\[data-theme="dark"\] \.kanbanCard/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.calendarDetailBlock,[\s\S]*?\.desktop\[data-theme="dark"\] \.meetingInviteRow,[\s\S]*?\.desktop\[data-theme="dark"\] \.chatSessionPreview,[\s\S]*?\.desktop\[data-theme="dark"\] \.chatReviewItem/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.workboardCreateField input,[\s\S]*?\.desktop\[data-theme="dark"\] \.statusControl select/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.workboardRowIcon\s*\{[\s\S]*?background:\s*#181817/);
-  assert.match(styles, /\.desktop\[data-theme="dark"\] \.iconButton,[\s\S]*?background:\s*#2d2b28/);
+  assert.match(styles, /\.desktop\[data-theme="dark"\] \.iconButton\s*\{[\s\S]*?background:\s*#2d2b28/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.workboardLayoutToggle button\.active\s*\{[\s\S]*?color:\s*var\(--text\);[\s\S]*?background:\s*#3a3835/);
   assert.doesNotMatch(styles, /\.desktop\[data-theme="dark"\] \.workboardLayoutToggle button\.active\s*\{[\s\S]*?background:\s*#f4f1ec/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.chatReviewTabs button\.selected/);
@@ -2632,9 +2583,9 @@ test("main process has v2 state, live-ready adapters, and approval-gated PR flow
   assert.match(main, /toolCatalogItems/);
   assert.match(main, /pendingToolCatalogPublishes/);
   assert.match(main, /artifactDeployments/);
-  assert.match(main, /TABLEAU_WIDGETS_SERVICE_URL/);
-  assert.match(main, /link:list-widget-catalog/);
-  assert.match(main, /widgetLayout/);
+  assert.doesNotMatch(main, /TABLEAU_WIDGETS_SERVICE_URL/);
+  assert.doesNotMatch(main, /link:list-widget-catalog/);
+  assert.doesNotMatch(main, /widgetLayout/);
   assert.match(main, /dialerState/);
   assert.match(main, /speakSettings/);
   assert.match(main, /link:list-dialer-configs/);
@@ -2667,8 +2618,8 @@ test("main process has v2 state, live-ready adapters, and approval-gated PR flow
   assert.doesNotMatch(main, /name: "Standard"/);
   assert.doesNotMatch(main, /name: "Sales"/);
   assert.doesNotMatch(main, /name: "Support"/);
-  assert.match(main, /tableauWidgetHeaders/);
-  assert.match(main, /ACP identity and Tableau view entitlement/);
+  assert.doesNotMatch(main, /tableauWidgetHeaders/);
+  assert.doesNotMatch(main, /ACP identity and Tableau view entitlement/);
   assert.match(main, /LITELLM_BASE_URL/);
   assert.match(main, /HINDSIGHT_API_KEY/);
 

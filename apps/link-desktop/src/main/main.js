@@ -13,7 +13,6 @@ import extractZip from "extract-zip";
 import {
   createDefaultToolRegistry,
   discoverSkills,
-  formatSharedChannelResponse,
   InMemoryAuditLogger,
   importLocalLinkApp,
   LinkRuntime,
@@ -348,8 +347,6 @@ const linkAppAllowedHostSuffixes = [".query.prod.telnyx.io", ".apps.telnyx.io", 
 const allowedCliCommands = new Set(["hermes", "openclaw", "telnyx-edge", "telnyx-edge-dev"]);
 const wikiSourceTypes = new Set(["telnyx_support", "telnyx_developers", "guru", "pylon", "github", "mcp", "okf"]);
 const customWikiSourceTypes = new Set(["github", "mcp", "okf"]);
-let automations = [];
-let activeWork = [];
 let connectorOverrides = {};
 let meetingBotIdentities = {};
 let meetingBotInvites = [];
@@ -370,7 +367,6 @@ let pendingToolCatalogPublishes = [];
 let artifactDeployments = [];
 let localMessageGatewayService = null;
 let onboardingState = emptyOnboardingState();
-let widgetLayout = emptyWidgetLayout();
 let dialerState = emptyDialerState();
 let speakSettings = emptySpeakSettings();
 let scribesState = emptyScribesState();
@@ -671,18 +667,6 @@ const connectorCatalog = [
     requiredAccess: ["telnyx-edge CLI", "apidev.telnyx.com endpoint", "Telnyx API key or telnyx-edge auth login"],
   },
   {
-    id: "tableau-widgets",
-    name: "Tableau Widgets",
-    category: "Analytics",
-    description: "Embed standard Tableau reports in Link and optionally refresh normalized widgets from the strict-access service.",
-    envGroups: [
-      ["TABLEAU_REVENUE_OVERVIEW_URL"],
-      ["TABLEAU_WIDGETS_SERVICE_URL", "TELNYX_AUTH_REV2"],
-      ["TABLEAU_WIDGETS_SERVICE_URL", "TELNYX_API_KEY"],
-    ],
-    requiredAccess: ["Standard Tableau view URLs", "optional strict-access service", "ACP identity and Tableau view entitlement"],
-  },
-  {
     id: "linear",
     name: "Linear",
     category: "Work tracking",
@@ -698,7 +682,6 @@ const credentialDefinitions = [
   { id: "link-app-publisher", label: "Link App Publisher", fields: ["LINK_APP_PUBLISHER_URL"], help: "Optional VPN-only publisher service override. Link defaults to the internal managed publisher endpoint and authenticates with Okta Rev2 or TELNYX_API_KEY." },
   { id: "link-skill-registry", label: "Link Skill Registry", fields: ["LINK_SKILL_REGISTRY_URL"], help: "Optional VPN-only skill registry override. Link defaults to the internal managed registry endpoint and authenticates with Okta Rev2 or TELNYX_API_KEY." },
   { id: "link-message-gateway", label: "Link Message Gateway", fields: ["LINK_MESSAGE_GATEWAY_URL"], help: "Optional VPN-only message gateway override. Link defaults to the internal managed gateway and authenticates with Okta Rev2 or TELNYX_API_KEY." },
-  { id: "tableau-widgets", label: "Tableau Widgets", fields: ["TABLEAU_WIDGETS_SERVICE_URL", "TABLEAU_REVENUE_OVERVIEW_URL", "TABLEAU_SALES_PIPELINE_URL", "TABLEAU_SUPPORT_HEALTH_URL", "TABLEAU_MESSAGING_QUALITY_URL", "TABLEAU_PRODUCT_ADOPTION_URL", "TABLEAU_CUSTOMER_USAGE_URL"], help: "URLs for standard embedded Tableau reports plus the optional strict-access widget service. Tableau controls embedded view access for each signed-in user." },
   { id: "litellm", label: "Model Gateway", fields: ["LITELLM_BASE_URL", "LITELLM_API_KEY", "TELNYX_INFERENCE_BASE_URL", "ANTHROPIC_API_KEY"], help: "Optional managed gateway and frontier BYO settings. Local Ollama mode does not require a cloud key; Telnyx BYO uses the Telnyx API key group." },
   { id: "hindsight", label: "Hindsight", fields: ["HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"], help: "Per-user Hindsight API key plus the memory bank id used for retain operations. Link can still infer the bank from live bank selection or compatible key claims." },
   { id: "linear", label: "Linear", fields: ["LINEAR_API_KEY"], help: "Linear API key for issue and project lookup." },
@@ -775,69 +758,6 @@ function defaultWikiDocumentationSources() {
     },
   ];
 }
-
-const standardTableauWidgetDefinitions = [
-  {
-    id: "standard-revenue-overview",
-    title: "Revenue overview",
-    category: "Revenue",
-    description: "Standard executive revenue, pipeline, and bookings report.",
-    cadence: "Refreshes hourly",
-    refreshTtlSeconds: 300,
-    envName: "TABLEAU_REVENUE_OVERVIEW_URL",
-    chart: { type: "bar", xField: "stage", yField: "amount", metricField: "amount", metricFormat: "currency" },
-  },
-  {
-    id: "standard-sales-pipeline",
-    title: "Sales pipeline coverage",
-    category: "Revenue",
-    description: "Standard pipeline coverage, stage health, and commit visibility.",
-    cadence: "Refreshes hourly",
-    refreshTtlSeconds: 300,
-    envName: "TABLEAU_SALES_PIPELINE_URL",
-    chart: { type: "area", xField: "week", yField: "coverage", metricField: "coverage", metricFormat: "number" },
-  },
-  {
-    id: "standard-support-health",
-    title: "Support operations health",
-    category: "Operations",
-    description: "Standard ticket volume, backlog, and response health report.",
-    cadence: "Refreshes daily",
-    refreshTtlSeconds: 900,
-    envName: "TABLEAU_SUPPORT_HEALTH_URL",
-    chart: { type: "line", xField: "day", yField: "tickets", metricField: "tickets", metricFormat: "number" },
-  },
-  {
-    id: "standard-messaging-quality",
-    title: "Messaging delivery quality",
-    category: "Operations",
-    description: "Standard delivery quality, route health, and failure trends report.",
-    cadence: "Refreshes hourly",
-    refreshTtlSeconds: 600,
-    envName: "TABLEAU_MESSAGING_QUALITY_URL",
-    chart: { type: "line", xField: "day", yField: "delivery_rate", metricField: "delivery_rate", metricFormat: "percent" },
-  },
-  {
-    id: "standard-product-adoption",
-    title: "Product adoption",
-    category: "Product",
-    description: "Standard product adoption, activation, and active account report.",
-    cadence: "Refreshes daily",
-    refreshTtlSeconds: 900,
-    envName: "TABLEAU_PRODUCT_ADOPTION_URL",
-    chart: { type: "area", xField: "week", yField: "active_accounts", metricField: "active_accounts", metricFormat: "number" },
-  },
-  {
-    id: "standard-customer-usage",
-    title: "Customer usage trends",
-    category: "Product",
-    description: "Standard usage, growth, and customer activity report.",
-    cadence: "Refreshes daily",
-    refreshTtlSeconds: 900,
-    envName: "TABLEAU_CUSTOMER_USAGE_URL",
-    chart: { type: "bar", xField: "product", yField: "usage", metricField: "usage", metricFormat: "number" },
-  },
-];
 
 function createWindow() {
   const appIcon = nativeImage.createFromPath(appIconPath);
@@ -1055,30 +975,6 @@ function registerIpc() {
   secureIpcHandle("link:list-artifact-deployments", () => listArtifactDeployments());
   secureIpcHandle("link:deploy-artifact", (_event, input) => deployArtifact(input));
   secureIpcHandle("link:list-tools", () => listTools());
-
-  secureIpcHandle("link:shared-channel-draft", (_event, input) => {
-    const work = createActiveWork({
-      title: input.title || "Shared-channel response draft",
-      subtitle: "Shared-channel draft - Pending review",
-      prompt: input.userPrompt,
-      requestedAction: input.requestedAction,
-      threadContext: input.threadContext,
-    });
-    activeWork = [work, ...activeWork];
-    addWorkspaceTab("workspace-acme", {
-      id: `tab-${work.id}`,
-      title: work.title,
-      kind: "approval",
-      status: "pending",
-      updatedAt: new Date().toISOString(),
-    });
-    void saveDesktopState();
-    return work;
-  });
-
-  secureIpcHandle("link:list-active-work", () => activeWork);
-  secureIpcHandle("link:decide-work", (_event, { id, decision }) => decideWork(id, decision));
-  secureIpcHandle("link:list-automations", () => automations);
   secureIpcHandle("link:list-connectors", () => listConnectors());
   secureIpcHandle("link:list-credentials", () => listCredentials());
   secureIpcHandle("link:save-credential", (_event, input) => saveCredential(input));
@@ -1113,10 +1009,6 @@ function registerIpc() {
     return listConnectors();
   });
 
-  secureIpcHandle("link:list-widget-catalog", () => listWidgetCatalog());
-  secureIpcHandle("link:list-widget-layout", () => listWidgetLayout());
-  secureIpcHandle("link:save-widget-layout", (_event, input) => saveWidgetLayout(input));
-  secureIpcHandle("link:refresh-widget-data", (_event, input) => refreshWidgetData(input));
   secureIpcHandle("link:list-dialer-configs", () => listDialerConfigs());
   secureIpcHandle("link:save-dialer-config", (_event, input) => saveDialerConfig(input));
   secureIpcHandle("link:activate-dialer-config", (_event, id) => activateDialerConfig(id));
@@ -2203,54 +2095,6 @@ function titleize(value) {
     .filter(Boolean)
     .map((part) => part[0].toUpperCase() + part.slice(1))
     .join(" ");
-}
-
-function createActiveWork({ title, subtitle, prompt, requestedAction, threadContext }) {
-  const draft = runtime.runSharedChannel({
-    actorId: "desktop_user",
-    channelType: "shared_customer",
-    customerIdentifier: "Acme Messaging Co.",
-    userPrompt: prompt,
-    requestedAction,
-    threadContext,
-  });
-
-  return {
-    id: `work-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    title,
-    subtitle,
-    status: "pending",
-    createdAt: new Date().toISOString(),
-    summary: "Customer-visible action requires human approval before posting.",
-    details: {
-      ...draft,
-      formatted: formatSharedChannelResponse(draft),
-    },
-  };
-}
-
-function decideWork(id, decision) {
-  activeWork = activeWork.map((item) =>
-    item.id === id
-      ? {
-          ...item,
-          status: decision === "approve" ? "approved" : "dismissed",
-          subtitle: decision === "approve" ? "Approved by human reviewer" : "Dismissed by human reviewer",
-        }
-      : item,
-  );
-
-  auditLogger.record({
-    actorId: "desktop_user",
-    surface: "desktop",
-    eventType: decision === "approve" ? "approval.approved" : "approval.dismissed",
-    action: "active_work_decision",
-    target: id,
-    metadata: { decision },
-  });
-
-  void saveDesktopState();
-  return activeWork.find((item) => item.id === id);
 }
 
 async function sendChatMessage({ sessionId, workspaceId = "workspace-link", content, systemInstruction, agentId, agentName, agentSource, approvalMode = "auto", modelMode = defaultAiModelRoute, contextScope = "workspace" }) {
@@ -3542,23 +3386,12 @@ async function searchExplorer({ query = "", workspaceId } = {}) {
     searchTelnyxDocs(term, workspaceId),
   ]);
   const customSourceResults = customWikiSourceResults(term, workspaceId);
-  const linkFileResults = activeWork.slice(0, 4).map((item) => ({
-    id: `explorer-work-${item.id}`,
-    title: `${item.title}.md`,
-    source: "link_file",
-    type: "file",
-    permission: "allowed",
-    freshness: relativeTime(item.createdAt),
-    excerpt: item.summary,
-    workspaceId: workspaceId || "workspace-acme",
-  }));
 
   return [
     ...docsResults,
     ...guruResults,
     ...pylonResults,
     ...customSourceResults,
-    ...linkFileResults,
     ...skills.slice(0, 3).map((skill) => ({
       id: `explorer-skill-${skill.name}`,
       title: skill.name,
@@ -6764,53 +6597,6 @@ async function listTools() {
   return [...registryTools, ...mcpTools];
 }
 
-async function listWidgetCatalog() {
-  const standardWidgets = standardTableauWidgetCatalog();
-  const baseUrl = tableauWidgetsServiceUrl();
-  if (!baseUrl) return standardWidgets;
-  try {
-    const payload = await tableauWidgetsRequest("/api/widgets/catalog");
-    const rawWidgets = Array.isArray(payload?.widgets) ? payload.widgets : Array.isArray(payload) ? payload : [];
-    return mergeWidgetCatalog(standardWidgets, rawWidgets.map(normalizeWidgetCatalogItem).filter(Boolean));
-  } catch {
-    return standardWidgets;
-  }
-}
-
-function listWidgetLayout() {
-  return normalizeWidgetLayout(widgetLayout);
-}
-
-async function saveWidgetLayout(input = {}) {
-  const requestedIds = Array.isArray(input.widgetIds) ? input.widgetIds.map(String) : [];
-  const authorizedIds = new Set((await listWidgetCatalog().catch(() => [])).map((widget) => widget.id));
-  widgetLayout = normalizeWidgetLayout({
-    widgetIds: requestedIds.filter((id) => authorizedIds.has(id)),
-    updatedAt: new Date().toISOString(),
-  });
-  await saveDesktopState();
-  return widgetLayout;
-}
-
-async function refreshWidgetData(input = {}) {
-  const widgetId = String(input.widgetId || "").trim();
-  if (!widgetId) throw new Error("Widget id is required.");
-  const baseUrl = tableauWidgetsServiceUrl();
-  const standardWidget = standardTableauWidgetCatalog().find((widget) => widget.id === widgetId);
-  let serviceError = null;
-  if (baseUrl) {
-    try {
-      const payload = await tableauWidgetsRequest(`/api/widgets/${encodeURIComponent(widgetId)}/data`, { method: "POST" });
-      return normalizeWidgetDataResult(payload?.data ?? payload);
-    } catch (error) {
-      serviceError = error;
-    }
-  }
-  if (standardWidget) return standardTableauWidgetData(widgetId);
-  if (serviceError) throw serviceError;
-  throw new Error("Tableau widget data is not configured.");
-}
-
 async function getScribesStatus() {
   const settings = getSpeakSettings();
   const models = await listScribesModels();
@@ -8708,245 +8494,6 @@ function emptyDialerState() {
 
 function emptySpeakSettings() {
   return normalizeSpeakSettings({ updatedAt: new Date().toISOString() });
-}
-
-function standardTableauWidgetCatalog() {
-  return standardTableauWidgetDefinitions
-    .map((definition) => normalizeWidgetCatalogItem({
-      ...definition,
-      source: "Tableau",
-      renderMode: "tableau",
-      tableau: {
-        url: standardTableauReportUrl(definition.envName),
-        toolbar: "hidden",
-        hideTabs: true,
-        device: "desktop",
-      },
-    }))
-    .filter(Boolean);
-}
-
-function standardTableauReportUrl(envName) {
-  const viteName = envName.startsWith("VITE_") ? envName : `VITE_${envName}`;
-  return stringValue(credentialValue(envName)) || stringValue(process.env[envName]) || stringValue(credentialValue(viteName)) || stringValue(process.env[viteName]);
-}
-
-function mergeWidgetCatalog(standardWidgets, serviceWidgets) {
-  const widgetsById = new Map(standardWidgets.map((widget) => [widget.id, widget]));
-  for (const widget of serviceWidgets) {
-    if (widget?.id) widgetsById.set(widget.id, widget);
-  }
-  return [...widgetsById.values()];
-}
-
-function standardTableauWidgetData(widgetId) {
-  const updatedAt = new Date().toISOString();
-  if (widgetId === "standard-sales-pipeline") {
-    return normalizeWidgetDataResult({
-      widgetId,
-      updatedAt,
-      columns: ["week", "coverage"],
-      rows: [
-        { week: "W1", coverage: 2.8 },
-        { week: "W2", coverage: 3.1 },
-        { week: "W3", coverage: 3.4 },
-        { week: "W4", coverage: 3.7 },
-      ],
-      metric: "3.7x",
-      trend: "+0.9x vs first point",
-    });
-  }
-  if (widgetId === "standard-support-health") {
-    return normalizeWidgetDataResult({
-      widgetId,
-      updatedAt,
-      columns: ["day", "tickets"],
-      rows: [
-        { day: "Mon", tickets: 420 },
-        { day: "Tue", tickets: 388 },
-        { day: "Wed", tickets: 405 },
-        { day: "Thu", tickets: 371 },
-        { day: "Fri", tickets: 348 },
-      ],
-      metric: "348",
-      trend: "-72 vs first point",
-    });
-  }
-  if (widgetId === "standard-messaging-quality") {
-    return normalizeWidgetDataResult({
-      widgetId,
-      updatedAt,
-      columns: ["day", "delivery_rate"],
-      rows: [
-        { day: "Mon", delivery_rate: 0.974 },
-        { day: "Tue", delivery_rate: 0.978 },
-        { day: "Wed", delivery_rate: 0.982 },
-        { day: "Thu", delivery_rate: 0.976 },
-        { day: "Fri", delivery_rate: 0.981 },
-      ],
-      metric: "98.1%",
-      trend: "+0.7 pts vs first point",
-    });
-  }
-  if (widgetId === "standard-product-adoption") {
-    return normalizeWidgetDataResult({
-      widgetId,
-      updatedAt,
-      columns: ["week", "active_accounts"],
-      rows: [
-        { week: "W1", active_accounts: 1240 },
-        { week: "W2", active_accounts: 1310 },
-        { week: "W3", active_accounts: 1388 },
-        { week: "W4", active_accounts: 1462 },
-      ],
-      metric: "1,462",
-      trend: "+222 vs first point",
-    });
-  }
-  if (widgetId === "standard-customer-usage") {
-    return normalizeWidgetDataResult({
-      widgetId,
-      updatedAt,
-      columns: ["product", "usage"],
-      rows: [
-        { product: "Messaging", usage: 820000 },
-        { product: "Voice", usage: 610000 },
-        { product: "Identity", usage: 280000 },
-        { product: "Network", usage: 190000 },
-      ],
-      metric: "1.9M",
-      trend: "+18% vs prior period",
-    });
-  }
-  return normalizeWidgetDataResult({
-    widgetId,
-    updatedAt,
-    columns: ["stage", "amount"],
-    rows: [
-      { stage: "Prospect", amount: 2100000 },
-      { stage: "Qualified", amount: 4200000 },
-      { stage: "Commit", amount: 6100000 },
-      { stage: "Closed", amount: 8100000 },
-    ],
-    metric: "$8.1M",
-    trend: "+$6.0M vs first point",
-  });
-}
-
-async function tableauWidgetsRequest(pathname, init = {}) {
-  const baseUrl = tableauWidgetsServiceUrl();
-  if (!baseUrl) throw new Error("Tableau widget service is not configured.");
-  const response = await fetch(`${baseUrl}${pathname}`, {
-    ...init,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...tableauWidgetHeaders(),
-      ...(init.headers || {}),
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`Tableau widget service returned ${response.status}.`);
-  }
-  return response.json();
-}
-
-function tableauWidgetHeaders() {
-  const headers = {};
-  const rev2 = credentialValue("TELNYX_AUTH_REV2");
-  const token = rev2 || credentialValue("TELNYX_API_KEY");
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (rev2) headers["telnyx-auth-rev2"] = rev2;
-  if (process.env.TELNYX_ACTOR) headers["X-Actor"] = process.env.TELNYX_ACTOR;
-  if (process.env.TELNYX_ON_BEHALF_OF) headers["X-On-Behalf-Of"] = process.env.TELNYX_ON_BEHALF_OF;
-  return headers;
-}
-
-function tableauWidgetsServiceUrl() {
-  const value = credentialValue("TABLEAU_WIDGETS_SERVICE_URL") || process.env.TABLEAU_WIDGETS_SERVICE_URL || "";
-  return value.replace(/\/$/, "");
-}
-
-function normalizeWidgetCatalogItem(item) {
-  if (!item || typeof item !== "object") return null;
-  const id = stringValue(item.id);
-  const title = stringValue(item.title);
-  const chart = item.chart && typeof item.chart === "object" ? item.chart : {};
-  const yField = stringValue(chart.yField);
-  if (!id || !title || !yField) return null;
-  const category = ["Revenue", "Operations", "Product"].includes(item.category) ? item.category : "Operations";
-  const type = ["kpi", "line", "bar", "area"].includes(chart.type) ? chart.type : "bar";
-  const rawTableau = item.tableau || item.tableauEmbed || item.embed;
-  const tableau = rawTableau && typeof rawTableau === "object" ? normalizeWidgetTableauSpec(rawTableau) : null;
-  const renderMode = stringValue(item.renderMode) === "tableau" || tableau ? "tableau" : "chart";
-  return {
-    id,
-    title,
-    source: "Tableau",
-    category,
-    description: stringValue(item.description),
-    cadence: stringValue(item.cadence) || "Refreshes from Tableau",
-    refreshTtlSeconds: positiveNumber(item.refreshTtlSeconds, 300),
-    renderMode,
-    ...(tableau ? { tableau } : {}),
-    chart: {
-      type,
-      xField: stringValue(chart.xField) || undefined,
-      yField,
-      seriesField: stringValue(chart.seriesField) || undefined,
-      metricField: stringValue(chart.metricField) || undefined,
-      metricFormat: ["currency", "number", "percent"].includes(chart.metricFormat) ? chart.metricFormat : "number",
-    },
-  };
-}
-
-function normalizeWidgetTableauSpec(input) {
-  const toolbar = stringValue(input.toolbar).toLowerCase();
-  const device = stringValue(input.device).toLowerCase();
-  const url = stringValue(input.url || input.src || input.viewUrl);
-  const viewId = stringValue(input.viewId || input.view || input.sheetId);
-  const sheetName = stringValue(input.sheetName || input.sheet);
-  return {
-    ...(url ? { url } : {}),
-    ...(viewId ? { viewId } : {}),
-    ...(sheetName ? { sheetName } : {}),
-    toolbar: ["top", "bottom", "hidden"].includes(toolbar) ? toolbar : "hidden",
-    hideTabs: typeof input.hideTabs === "boolean" ? input.hideTabs : true,
-    device: ["default", "desktop", "tablet", "phone"].includes(device) ? device : "desktop",
-  };
-}
-
-function normalizeWidgetDataResult(input) {
-  const widgetId = stringValue(input?.widgetId);
-  if (!widgetId) throw new Error("Tableau widget service returned data without a widget id.");
-  const rows = Array.isArray(input.rows) ? input.rows.filter((row) => row && typeof row === "object") : [];
-  return {
-    widgetId,
-    source: "Tableau",
-    status: "ready",
-    updatedAt: stringValue(input.updatedAt) || new Date().toISOString(),
-    columns: Array.isArray(input.columns) ? input.columns.map(String) : [],
-    rows,
-    metric: stringValue(input.metric) || "No data",
-    trend: stringValue(input.trend) || "Trend unavailable",
-  };
-}
-
-function normalizeWidgetLayout(input = {}) {
-  const ids = Array.isArray(input.widgetIds) ? input.widgetIds.map(String).filter(Boolean) : [];
-  return {
-    widgetIds: [...new Set(ids)],
-    updatedAt: input.updatedAt || new Date().toISOString(),
-  };
-}
-
-function stringValue(value) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function positiveNumber(value, fallback) {
-  const number = Number(value);
-  return Number.isFinite(number) && number > 0 ? number : fallback;
 }
 
 async function listPublishedApps() {
@@ -14248,8 +13795,6 @@ async function loadDesktopState() {
   try {
     const saved = JSON.parse(await fs.readFile(statePath(), "utf8"));
     const useSavedState = saved.version === stateVersion || saved.version === 10 || saved.version === 9 || saved.version === 8 || saved.version === 7 || saved.version === 6 || saved.version === 5 || saved.version === 4;
-    activeWork = useSavedState && Array.isArray(saved.activeWork) ? saved.activeWork : [];
-    automations = useSavedState && Array.isArray(saved.automations) ? saved.automations : [];
     connectorOverrides = saved.connectorOverrides && typeof saved.connectorOverrides === "object" ? saved.connectorOverrides : {};
     meetingBotIdentities = useSavedState && saved.meetingBotIdentities && typeof saved.meetingBotIdentities === "object" ? saved.meetingBotIdentities : {};
     meetingBotInvites = useSavedState && Array.isArray(saved.meetingBotInvites) ? saved.meetingBotInvites.map(normalizeMeetingInvite).filter(Boolean) : [];
@@ -14267,7 +13812,6 @@ async function loadDesktopState() {
     artifactDeployments = useSavedState && Array.isArray(saved.artifactDeployments) ? saved.artifactDeployments.map(normalizeArtifactDeploymentRecord).filter(Boolean) : [];
     workspaces = useSavedState && Array.isArray(saved.workspaces) ? saved.workspaces : [];
     onboardingState = useSavedState && saved.onboardingState && typeof saved.onboardingState === "object" ? normalizeOnboardingState(saved.onboardingState) : emptyOnboardingState();
-    widgetLayout = useSavedState && saved.widgetLayout && typeof saved.widgetLayout === "object" ? normalizeWidgetLayout(saved.widgetLayout) : emptyWidgetLayout();
     dialerState = useSavedState && saved.dialerState && typeof saved.dialerState === "object" ? normalizeDialerState(saved.dialerState) : emptyDialerState();
     speakSettings = useSavedState && saved.speakSettings && typeof saved.speakSettings === "object" ? normalizeSpeakSettings(saved.speakSettings) : emptySpeakSettings();
     scribesState = useSavedState && saved.scribesState && typeof saved.scribesState === "object" ? normalizeScribesState(saved.scribesState) : emptyScribesState();
@@ -14283,8 +13827,6 @@ async function loadDesktopState() {
         };
     if (saved.version !== stateVersion) await saveDesktopState();
   } catch {
-    activeWork = [];
-    automations = [];
     connectorOverrides = {};
     meetingBotIdentities = {};
     meetingBotInvites = [];
@@ -14302,7 +13844,6 @@ async function loadDesktopState() {
     artifactDeployments = [];
     workspaces = [];
     onboardingState = emptyOnboardingState();
-    widgetLayout = emptyWidgetLayout();
     dialerState = emptyDialerState();
     speakSettings = emptySpeakSettings();
     scribesState = emptyScribesState();
@@ -14322,8 +13863,6 @@ async function saveDesktopState() {
   const payload = {
     version: stateVersion,
     updatedAt: new Date().toISOString(),
-    activeWork,
-    automations,
     connectorOverrides,
     meetingBotIdentities,
     meetingBotInvites,
@@ -14341,7 +13880,6 @@ async function saveDesktopState() {
     pendingToolCatalogPublishes,
     artifactDeployments,
     onboardingState,
-    widgetLayout,
     dialerState,
     speakSettings,
     scribesState,
@@ -14378,13 +13916,6 @@ function emptyOnboardingState() {
     dismissed: false,
     completed: false,
     completedStepIds: [],
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-function emptyWidgetLayout() {
-  return {
-    widgetIds: [],
     updatedAt: new Date().toISOString(),
   };
 }

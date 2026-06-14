@@ -333,9 +333,6 @@ button {
 .desktop[data-theme="dark"] .meetingInviteAdapterSummary,
 .desktop[data-theme="dark"] .chatSessionPreview,
 .desktop[data-theme="dark"] .chatReviewItem,
-.desktop[data-theme="dark"] .widgetCanvas,
-.desktop[data-theme="dark"] .widgetLibrary,
-.desktop[data-theme="dark"] .dashboardWidget,
 .desktop[data-theme="dark"] .pageSectionShell,
 .desktop[data-theme="dark"] .connectorCard,
 .desktop[data-theme="dark"] .startReadinessPanel,
@@ -412,13 +409,10 @@ button {
 .desktop[data-theme="dark"] textarea,
 .desktop[data-theme="dark"] .composer,
 .desktop[data-theme="dark"] .assistantComposer,
-.desktop[data-theme="dark"] .widgetSearch,
 .desktop[data-theme="dark"] .explorerSearch,
 .desktop[data-theme="dark"] .wikiSearchField,
 .desktop[data-theme="dark"] .wikiSelectField select,
-.desktop[data-theme="dark"] .wikiSquadSelect,
-.desktop[data-theme="dark"] .widgetChartPreview,
-.desktop[data-theme="dark"] .tableauWidgetEmbed {
+.desktop[data-theme="dark"] .wikiSquadSelect {
   color: var(--text);
   background: #181817;
   border-color: var(--border);
@@ -430,8 +424,7 @@ button {
 
 .desktop[data-theme="dark"] .button.secondary,
 .desktop[data-theme="dark"] .button.ghost,
-.desktop[data-theme="dark"] .iconButton,
-.desktop[data-theme="dark"] .widgetCategoryTabs button {
+.desktop[data-theme="dark"] .iconButton {
   color: var(--text);
   background: #2d2b28;
 }
@@ -473,7 +466,6 @@ button {
 .desktop[data-theme="dark"] .appSurface,
 .desktop[data-theme="dark"] .pageSurface,
 .desktop[data-theme="dark"] .content,
-.desktop[data-theme="dark"] .widgetsView,
 .desktop[data-theme="dark"] .chatView,
 .desktop[data-theme="dark"] .settingsView,
 .desktop[data-theme="dark"] .agentsView,
@@ -483,12 +475,7 @@ button {
   background: var(--bg);
 }
 
-.desktop[data-theme="dark"] .widgetCanvas,
-.desktop[data-theme="dark"] .widgetLibrary,
-.desktop[data-theme="dark"] .dashboardWidget,
-.desktop[data-theme="dark"] .widgetLibraryItem,
 .desktop[data-theme="dark"] .panel,
-.desktop[data-theme="dark"] .artifactCard,
 .desktop[data-theme="dark"] .message,
 .desktop[data-theme="dark"] .assistantMessage,
 .desktop[data-theme="dark"] .agentCard,
@@ -528,14 +515,12 @@ button {
   border-color: var(--border);
 }
 
-.desktop[data-theme="dark"] .widgetChartPreview,
 .desktop[data-theme="dark"] .chartBox,
 .desktop[data-theme="dark"] .resultPreview,
 .desktop[data-theme="dark"] .agentRecoveryBanner,
 .desktop[data-theme="dark"] .mySkillRow,
 .desktop[data-theme="dark"] .skillBuilderPreview pre,
 .desktop[data-theme="dark"] .provisionSummary,
-.desktop[data-theme="dark"] .widgetSearch,
 .desktop[data-theme="dark"] .explorerSearch,
 .desktop[data-theme="dark"] .workboardCreateField input,
 .desktop[data-theme="dark"] .workboardCreateField select,
@@ -559,10 +544,8 @@ button {
 .desktop[data-theme="dark"] .designTabs,
 .desktop[data-theme="dark"] .chatReviewTabs,
 .desktop[data-theme="dark"] .workboardLayoutToggle,
-.desktop[data-theme="dark"] .widgetCategoryTabs button,
 .desktop[data-theme="dark"] .contactSourceBadge,
-.desktop[data-theme="dark"] .tagList span,
-.desktop[data-theme="dark"] .workspaceStats span {
+.desktop[data-theme="dark"] .tagList span {
   background: #2a2927;
 }
 
@@ -1584,382 +1567,6 @@ button {
   opacity: 0.55;
 }
 
-.widgetsView {
-  background: linear-gradient(180deg, #fbfaf9 0%, #f7f6f4 100%);
-}
-
-.widgetHomeGrid {
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
-  width: 100%;
-}
-
-.widgetCanvas,
-.widgetLibrary {
-  min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.widgetCanvas {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-  padding: 16px;
-}
-
-.widgetLibrary {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.widgetLibraryTakeover {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.widgetCanvasHeader,
-.widgetLibraryHeader,
-.widgetCardTop,
-.widgetLibraryItemTop {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.widgetCanvasHeader,
-.widgetLibraryHeader {
-  justify-content: space-between;
-}
-
-.widgetCanvasHeader {
-  margin-bottom: 14px;
-}
-
-.widgetCanvasHeader:has(> .button:only-child) {
-  justify-content: flex-end;
-}
-
-.widgetCanvasHeader strong,
-.widgetLibraryHeader strong,
-.widgetCardTop strong,
-.widgetLibraryItemTop strong {
-  display: block;
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.25;
-}
-
-.widgetCanvasHeader small,
-.widgetLibraryHeader small,
-.widgetCardTop small,
-.widgetLibraryItemTop small {
-  display: block;
-  margin-top: 2px;
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.25;
-}
-
-.dashboardWidgetGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(220px, 1fr));
-  gap: 12px;
-  flex: 1;
-  min-height: 0;
-}
-
-.dashboardWidgetGrid > .emptyState:only-child {
-  grid-column: 1 / -1;
-  align-self: center;
-  justify-self: center;
-  max-width: 560px;
-}
-
-.dashboardWidget {
-  display: grid;
-  grid-template-rows: auto auto 128px;
-  min-width: 0;
-  min-height: 260px;
-  overflow: hidden;
-  padding: 14px;
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  background: #fbfaf9;
-}
-
-.dashboardWidget.tableauEmbedWidget {
-  grid-column: span 2;
-  grid-template-rows: auto auto minmax(280px, 1fr);
-  min-height: 430px;
-}
-
-.dashboardWidgetGrid.layoutEditing .dashboardWidget {
-  cursor: grab;
-  transform-origin: 50% 65%;
-  animation: widgetJiggle 170ms ease-in-out infinite alternate;
-  box-shadow:
-    inset 0 0 0 1px var(--border-soft),
-    0 10px 24px rgba(31, 30, 28, 0.08);
-}
-
-.dashboardWidgetGrid.layoutEditing .dashboardWidget.dragging {
-  opacity: 0.48;
-}
-
-.dashboardWidgetGrid.layoutEditing .dashboardWidget.dropTarget {
-  border-color: var(--accent);
-  box-shadow:
-    inset 0 0 0 2px var(--accent),
-    0 12px 30px rgba(0, 209, 178, 0.18);
-}
-
-.dashboardWidgetGrid.layoutEditing .dashboardWidget:nth-child(2n) {
-  animation-delay: -70ms;
-  animation-duration: 190ms;
-}
-
-.dashboardWidgetGrid.layoutEditing .dashboardWidget:nth-child(3n) {
-  animation-delay: -110ms;
-  animation-duration: 160ms;
-}
-
-@keyframes widgetJiggle {
-  from {
-    transform: rotate(-0.65deg) translateY(-1px);
-  }
-
-  to {
-    transform: rotate(0.65deg) translateY(1px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dashboardWidgetGrid.layoutEditing .dashboardWidget {
-    animation: none;
-    box-shadow: inset 0 0 0 2px var(--accent);
-  }
-}
-
-.widgetCardTop {
-  min-width: 0;
-}
-
-.widgetCardTop > div:nth-child(2),
-.widgetLibraryItemTop > div:nth-child(2) {
-  min-width: 0;
-  flex: 1;
-}
-
-.widgetCardTop .iconButton {
-  flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: 8px;
-  color: var(--text-muted);
-  background: transparent;
-}
-
-.widgetCardTop .iconButton:hover {
-  color: var(--danger);
-  background: #fff3ef;
-}
-
-.widgetMetric {
-  margin-top: 18px;
-}
-
-.widgetMetric span {
-  display: block;
-  color: var(--text);
-  font-size: 28px;
-  font-weight: 760;
-  line-height: 1;
-}
-
-.widgetMetric small {
-  display: block;
-  margin-top: 6px;
-  color: var(--success);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.widgetChartPreview {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  height: 112px;
-  margin-top: 16px;
-  padding: 8px 10px 6px;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: inset 0 0 0 1px var(--border-soft);
-}
-
-.widgetChartPreview svg {
-  overflow: visible;
-}
-
-.tableauWidgetEmbed {
-  position: relative;
-  display: block;
-  width: 100%;
-  min-width: 0;
-  min-height: 280px;
-  margin-top: 16px;
-  overflow: hidden;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: inset 0 0 0 1px var(--border-soft);
-}
-
-.tableauWidgetViz,
-.tableauWidgetViz tableau-viz {
-  display: block;
-  width: 100%;
-  height: 100%;
-  min-height: 280px;
-}
-
-.tableauWidgetStatus {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  max-width: calc(100% - 16px);
-  overflow: hidden;
-  padding: 5px 8px;
-  border-radius: 999px;
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: inset 0 0 0 1px var(--border-soft);
-  font-size: 10px;
-  font-weight: 750;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.desktop[data-theme="dark"] .tableauWidgetStatus {
-  background: rgba(24, 24, 23, 0.9);
-}
-
-.widgetDataState {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 650;
-  text-align: center;
-}
-
-.dashboardWidget p,
-.widgetLibraryItem p {
-  margin: 12px 0 0;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.widgetLibraryHeader {
-  padding: 14px;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.widgetLibraryControls {
-  display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(320px, 420px);
-  gap: 12px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.widgetSearch {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  height: 40px;
-  margin: 0;
-  padding: 0 11px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-faint);
-  background: #ffffff;
-}
-
-.widgetSearch input {
-  width: 100%;
-  min-width: 0;
-  border: 0;
-  outline: none;
-  color: var(--text);
-  background: transparent;
-  font-size: 13px;
-}
-
-.widgetCategoryTabs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  padding: 0;
-}
-
-.widgetCategoryTabs button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-width: 0;
-  height: 30px;
-  border-radius: 8px;
-  color: var(--text-muted);
-  background: #f2f0ed;
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.widgetCategoryTabs button.selected {
-  color: var(--accent-ink);
-  background: var(--accent);
-}
-
-.widgetLibraryList {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(220px, 1fr));
-  gap: 10px;
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 14px;
-}
-
-.widgetLibraryList > .emptyState:only-child {
-  grid-column: 1 / -1;
-  align-self: center;
-  justify-self: center;
-  max-width: 520px;
-}
-
-.widgetLibraryItem {
-  padding: 12px;
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  background: #fbfaf9;
-}
-
-.widgetLibraryItem .button {
-  width: 100%;
-  margin-top: 12px;
-  border-radius: 8px;
-}
-
 .button:disabled {
   opacity: 0.6;
 }
@@ -1981,55 +1588,6 @@ button {
   font-weight: 760;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-
-.artifactCard {
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.artifactChrome {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.artifactChrome strong,
-.artifactChrome span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.artifactChrome strong {
-  font-size: 13px;
-}
-
-.artifactChrome span {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.artifactBody {
-  padding: 22px 18px 26px;
-}
-
-.artifactBody h2 {
-  margin: 0 0 12px;
-  font-size: 24px;
-  line-height: 1.15;
-}
-
-.draftText {
-  margin: 0;
-  white-space: pre-line;
-  font-size: 15px;
-  line-height: 1.55;
 }
 
 .reviewGrid,
@@ -3068,14 +2626,6 @@ button {
   background: color-mix(in srgb, var(--danger), transparent 90%);
 }
 
-.workspaceGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.workspaceCard,
 .skillCard {
   display: grid;
   gap: 10px;
@@ -3088,28 +2638,18 @@ button {
   text-align: left;
 }
 
-.workspaceCard:hover,
-.workspaceCard.selected,
 .skillCard:hover,
 .skillCard.selected {
   background: #fbfaf9;
   box-shadow: inset 0 0 0 1px rgba(32, 32, 31, 0.08);
 }
 
-.workspaceCardTop,
-.workspaceStats,
-.artifactFooter,
 .rowActions {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.workspaceCardTop {
-  justify-content: space-between;
-}
-
-.workspaceCard p,
 .skillCard p,
 .explorerResult p,
 .agentCard p {
@@ -3126,12 +2666,6 @@ button {
   -webkit-line-clamp: 3;
 }
 
-.workspaceStats {
-  flex-wrap: wrap;
-  margin-top: auto;
-}
-
-.workspaceStats span,
 .tagList span {
   display: inline-flex;
   align-items: center;
@@ -3145,27 +2679,12 @@ button {
 }
 
 .tabGrid,
-.automationStrip,
 .recallList {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
-.workspaceTabCard {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  min-height: 64px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.workspaceTabCard strong,
-.workspaceTabCard small,
 .sessionRow strong,
 .sessionRow small {
   display: block;
@@ -3174,7 +2693,6 @@ button {
   white-space: nowrap;
 }
 
-.workspaceTabCard small,
 .sessionRow small,
 .skillCard small,
 .agentCard small,
@@ -3184,20 +2702,6 @@ button {
   font-size: 12px;
 }
 
-.workspaceDetailGrid {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.42fr) minmax(0, 1fr);
-  gap: 14px;
-}
-
-.reviewQueue {
-  display: grid;
-  gap: 8px;
-  align-content: start;
-}
-
-.reviewQueueRow,
-.changeRequestRow,
 .sessionRow {
   width: 100%;
   min-height: 66px;
@@ -3209,56 +2713,8 @@ button {
   text-align: left;
 }
 
-.reviewQueueRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 14px;
-  align-items: center;
-}
-
-.reviewQueueRow.selected,
 .sessionRow.selected {
   background: #f3efea;
-}
-
-.reviewQueueRow strong,
-.reviewQueueRow small,
-.changeRequestRow strong,
-.changeRequestRow small {
-  display: block;
-}
-
-.reviewQueueRow small,
-.changeRequestRow small {
-  margin-top: 4px;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.changeRequestRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-}
-
-.artifactFooter {
-  justify-content: space-between;
-  gap: 14px;
-  margin-top: 22px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-soft);
-}
-
-.artifactFooter strong,
-.artifactFooter small {
-  display: block;
-}
-
-.artifactFooter small {
-  margin-top: 4px;
-  color: var(--text-muted);
-  font-size: 12px;
-  overflow-wrap: anywhere;
 }
 
 .explorerSearch {
@@ -16515,10 +15971,7 @@ body.assistantPanelResizing {
   }
 
   .reviewGrid,
-  .workspaceGrid,
   .tabGrid,
-  .workspaceDetailGrid,
-  .automationStrip,
   .skillCatalog,
   .agentGrid,
   .chatDirectoryLayout,
@@ -16688,9 +16141,6 @@ body.assistantPanelResizing {
   .phoneAssistantGrid,
   .numberResults,
   .phoneSearchGrid,
-  .dashboardWidgetGrid,
-  .widgetLibraryControls,
-  .widgetLibraryList,
   .startReadinessGrid,
   .startActionGrid,
   .startTestingGrid,
@@ -16700,10 +16150,6 @@ body.assistantPanelResizing {
   .marketplaceGrid,
   .credentialRow {
     grid-template-columns: 1fr;
-  }
-
-  .dashboardWidget.tableauEmbedWidget {
-    grid-column: auto;
   }
 
   .phoneInboxToolbar,

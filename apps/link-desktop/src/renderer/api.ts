@@ -1,10 +1,7 @@
 import { createDefaultDialerConfig, normalizeDialerConfig, type DialerConfig, type DialerState } from "./phone/dialer-config.js";
 
 export type ViewId =
-  | "workspaces"
   | "onboarding"
-  | "widgets"
-  | "explorer"
   | "chats"
   | "gateway"
   | "inbox"
@@ -20,7 +17,6 @@ export type ViewId =
   | "wiki"
   | "settings";
 
-export type Decision = "approve" | "dismiss";
 export type ConnectionStatus = "connected" | "needs_access" | "requested" | "signed_in";
 export type ConnectionMode = "env" | "saved" | "okta" | "live";
 export type ToolArtifactType = "skill" | "mcp_tool" | "link_app";
@@ -259,42 +255,10 @@ export interface ToolMetadata {
   outputCanBeShownExternally: boolean;
 }
 
-export interface ActiveWorkItem {
-  id: string;
-  title: string;
-  subtitle: string;
-  status: "pending" | "ready" | "approved" | "dismissed";
-  createdAt: string;
-  summary: string;
-  details: {
-    customerSafeDraft: string;
-    internalRationale: string;
-    sourcesUsed: string[];
-    formatted?: string;
-    approval: {
-      approvalRequired: boolean;
-      approvalStatus: string;
-      reason?: string;
-    };
-  };
-}
-
-export interface AutomationItem {
-  id: string;
-  name: string;
-  status: "active" | "paused";
-  schedule: string;
-  channel: string;
-  tools: string[];
-  skills: string[];
-  instructions: string;
-  runHistory: { time: string; duration: string; status: string; tone: "success" | "error" | "warning" }[];
-}
-
 export interface WorkspaceTab {
   id: string;
   title: string;
-  kind: "chat" | "artifact" | "automation" | "approval" | "explorer";
+  kind: "chat" | "artifact" | "automation" | "approval";
   status: "open" | "pinned" | "pending" | "complete";
   updatedAt: string;
 }
@@ -959,58 +923,6 @@ export interface OnboardingState {
   completed: boolean;
   completedStepIds: string[];
   updatedAt: string;
-}
-
-export type WidgetChartType = "kpi" | "line" | "bar" | "area";
-export type WidgetCategory = "Revenue" | "Operations" | "Product";
-export type WidgetValueFormat = "currency" | "number" | "percent";
-export type WidgetRenderMode = "chart" | "tableau";
-
-export interface WidgetChartSpec {
-  type: WidgetChartType;
-  xField?: string;
-  yField: string;
-  seriesField?: string;
-  metricField?: string;
-  metricFormat?: WidgetValueFormat;
-}
-
-export interface WidgetTableauEmbedSpec {
-  url?: string;
-  viewId?: string;
-  sheetName?: string;
-  toolbar?: "top" | "bottom" | "hidden";
-  hideTabs?: boolean;
-  device?: "default" | "desktop" | "tablet" | "phone";
-}
-
-export interface WidgetCatalogItem {
-  id: string;
-  title: string;
-  source: "Tableau";
-  category: WidgetCategory;
-  description: string;
-  cadence: string;
-  refreshTtlSeconds: number;
-  renderMode?: WidgetRenderMode;
-  tableau?: WidgetTableauEmbedSpec;
-  chart: WidgetChartSpec;
-}
-
-export interface WidgetLayoutState {
-  widgetIds: string[];
-  updatedAt: string;
-}
-
-export interface WidgetDataResult {
-  widgetId: string;
-  source: "Tableau";
-  status: "ready";
-  updatedAt: string;
-  columns: string[];
-  rows: Array<Record<string, string | number | null>>;
-  metric: string;
-  trend: string;
 }
 
 export interface WebRtcStatus {
@@ -1740,15 +1652,6 @@ export interface LinkDesktopApi {
   listArtifactDeployments(): Promise<ArtifactDeploymentRecord[]>;
   deployArtifact(input: ArtifactDeploymentRequest): Promise<ArtifactDeploymentRecord>;
   listTools(): Promise<ToolMetadata[]>;
-  createSharedChannelDraft(input: {
-    title?: string;
-    userPrompt: string;
-    requestedAction: string;
-    threadContext: string;
-  }): Promise<ActiveWorkItem>;
-  listActiveWork(): Promise<ActiveWorkItem[]>;
-  decideWork(id: string, decision: Decision): Promise<ActiveWorkItem>;
-  listAutomations(): Promise<AutomationItem[]>;
   listConnectors(): Promise<ConnectorStatus[]>;
   listCredentials(): Promise<CredentialGroupStatus[]>;
   saveCredential(input: { name: string; value: string }): Promise<CredentialGroupStatus[]>;
@@ -1780,10 +1683,6 @@ export interface LinkDesktopApi {
   updateGoogleInboxDraft(input: GoogleInboxDraftInput & { draftId: string }): Promise<GoogleInboxDraft>;
   connectGoogleTasksWithGog(): Promise<GoogleInboxConnectionResult>;
   updateConnectorStatus(id: string, status: ConnectorStatus["status"]): Promise<ConnectorStatus[]>;
-  listWidgetCatalog(): Promise<WidgetCatalogItem[]>;
-  listWidgetLayout(): Promise<WidgetLayoutState>;
-  saveWidgetLayout(input: { widgetIds: string[] }): Promise<WidgetLayoutState>;
-  refreshWidgetData(input: { widgetId: string }): Promise<WidgetDataResult>;
   listDialerConfigs(): Promise<DialerState>;
   saveDialerConfig(input: Partial<DialerConfig>): Promise<DialerState>;
   activateDialerConfig(id: string): Promise<DialerState>;
@@ -1940,7 +1839,6 @@ const now = new Date().toISOString();
 const previewSkills: SkillMetadata[] = [];
 const previewTools: ToolMetadata[] = [];
 let previewArtifactDeployments: ArtifactDeploymentRecord[] = [];
-let previewWork: ActiveWorkItem[] = [];
 let previewWorkboardCards: WorkboardCard[] = [];
 let previewWorkboardTaskSessions: WorkboardTaskSession[] = [];
 const workboardColumns: WorkboardStatus[] = ["needs_review", "todo", "in_progress", "done"];
@@ -1955,7 +1853,6 @@ function sortChatSessions(sessions: ChatSession[]) {
   });
 }
 
-const previewAutomations: AutomationItem[] = [];
 let previewChangeRequests: LinkChangeRequest[] = [];
 let previewConnectors: ConnectorStatus[] = [];
 let previewGatewayMessages: MessageGatewayMessage[] = [];
@@ -2395,7 +2292,6 @@ let previewCredentials: CredentialGroupStatus[] = [
   credentials("mcp-proxy", "Telnyx MCP Proxy", "Connect Link to team-telnyx/mcp-proxy so agents discover approved MCP servers and tools through one Telnyx registry.", ["MCP_PROXY_URL"]),
   credentials("link-app-publisher", "Link App Publisher", "Optional VPN-only publisher service override. Link defaults to the internal managed publisher endpoint and authenticates with Okta Rev2 or TELNYX_API_KEY.", ["LINK_APP_PUBLISHER_URL"]),
   credentials("link-message-gateway", "Link Message Gateway", "Optional VPN-only message gateway override. Link defaults to the internal managed gateway and authenticates with Okta Rev2 or TELNYX_API_KEY.", ["LINK_MESSAGE_GATEWAY_URL"]),
-  credentials("tableau-widgets", "Tableau Widgets", "URLs for standard embedded Tableau reports plus the optional strict-access Tableau widget service.", ["TABLEAU_WIDGETS_SERVICE_URL", "TABLEAU_REVENUE_OVERVIEW_URL", "TABLEAU_SALES_PIPELINE_URL", "TABLEAU_SUPPORT_HEALTH_URL", "TABLEAU_MESSAGING_QUALITY_URL", "TABLEAU_PRODUCT_ADOPTION_URL", "TABLEAU_CUSTOMER_USAGE_URL"]),
   credentials("litellm", "Model Gateway", "Optional managed gateway and frontier BYO settings. Local Ollama mode does not require a cloud key; Telnyx BYO uses the Telnyx API key group.", ["LITELLM_BASE_URL", "LITELLM_API_KEY", "TELNYX_INFERENCE_BASE_URL", "ANTHROPIC_API_KEY"]),
   credentials("hindsight", "Hindsight", "Per-user Hindsight API key plus the memory bank id used when saving archive entries.", ["HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"]),
   credentials("linear", "Linear", "Linear API key for issue and project lookup.", ["LINEAR_API_KEY"]),
@@ -2411,84 +2307,6 @@ let previewCredentials: CredentialGroupStatus[] = [
   credentials("google-tasks", "Google Tasks", "Connect Google Tasks through gog so Taskbox can sync, create, update, and complete Google tasks without delete or clear commands.", ["GOOGLE_TASKS_AGENT_CONNECTION_ID", "GOOGLE_TASKS_VERIFIED_AT", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
 ];
 
-const previewWidgetCatalog: WidgetCatalogItem[] = [
-  {
-    id: "standard-revenue-overview",
-    title: "Revenue overview",
-    source: "Tableau",
-    category: "Revenue",
-    description: "Standard executive revenue, pipeline, and bookings report.",
-    cadence: "Refreshes hourly",
-    refreshTtlSeconds: 300,
-    renderMode: "tableau",
-    tableau: { url: standardTableauReportUrl("TABLEAU_REVENUE_OVERVIEW_URL"), toolbar: "hidden", hideTabs: true, device: "desktop" },
-    chart: { type: "bar", xField: "stage", yField: "amount", metricField: "amount", metricFormat: "currency" },
-  },
-  {
-    id: "standard-sales-pipeline",
-    title: "Sales pipeline coverage",
-    source: "Tableau",
-    category: "Revenue",
-    description: "Standard pipeline coverage, stage health, and commit visibility.",
-    cadence: "Refreshes hourly",
-    refreshTtlSeconds: 300,
-    renderMode: "tableau",
-    tableau: { url: standardTableauReportUrl("TABLEAU_SALES_PIPELINE_URL"), toolbar: "hidden", hideTabs: true, device: "desktop" },
-    chart: { type: "area", xField: "week", yField: "coverage", metricField: "coverage", metricFormat: "number" },
-  },
-  {
-    id: "standard-support-health",
-    title: "Support operations health",
-    source: "Tableau",
-    category: "Operations",
-    description: "Standard ticket volume, backlog, and response health report.",
-    cadence: "Refreshes daily",
-    refreshTtlSeconds: 900,
-    renderMode: "tableau",
-    tableau: { url: standardTableauReportUrl("TABLEAU_SUPPORT_HEALTH_URL"), toolbar: "hidden", hideTabs: true, device: "desktop" },
-    chart: { type: "line", xField: "day", yField: "tickets", metricField: "tickets", metricFormat: "number" },
-  },
-  {
-    id: "standard-messaging-quality",
-    title: "Messaging delivery quality",
-    source: "Tableau",
-    category: "Operations",
-    description: "Standard delivery quality, route health, and failure trends report.",
-    cadence: "Refreshes hourly",
-    refreshTtlSeconds: 600,
-    renderMode: "tableau",
-    tableau: { url: standardTableauReportUrl("TABLEAU_MESSAGING_QUALITY_URL"), toolbar: "hidden", hideTabs: true, device: "desktop" },
-    chart: { type: "line", xField: "day", yField: "delivery_rate", metricField: "delivery_rate", metricFormat: "percent" },
-  },
-  {
-    id: "standard-product-adoption",
-    title: "Product adoption",
-    source: "Tableau",
-    category: "Product",
-    description: "Standard product adoption, activation, and active account report.",
-    cadence: "Refreshes daily",
-    refreshTtlSeconds: 900,
-    renderMode: "tableau",
-    tableau: { url: standardTableauReportUrl("TABLEAU_PRODUCT_ADOPTION_URL"), toolbar: "hidden", hideTabs: true, device: "desktop" },
-    chart: { type: "area", xField: "week", yField: "active_accounts", metricField: "active_accounts", metricFormat: "number" },
-  },
-  {
-    id: "standard-customer-usage",
-    title: "Customer usage trends",
-    source: "Tableau",
-    category: "Product",
-    description: "Standard usage, growth, and customer activity report.",
-    cadence: "Refreshes daily",
-    refreshTtlSeconds: 900,
-    renderMode: "tableau",
-    tableau: { url: standardTableauReportUrl("TABLEAU_CUSTOMER_USAGE_URL"), toolbar: "hidden", hideTabs: true, device: "desktop" },
-    chart: { type: "bar", xField: "product", yField: "usage", metricField: "usage", metricFormat: "number" },
-  },
-];
-let previewWidgetLayout: WidgetLayoutState = {
-  widgetIds: previewWidgetCatalog.slice(0, 2).map((widget) => widget.id),
-  updatedAt: now,
-};
 let previewDialerConfigs: DialerConfig[] = [createDefaultDialerConfig()];
 let previewActiveDialerConfig = createDefaultDialerConfig();
 
@@ -2642,29 +2460,6 @@ const previewLinkApi: LinkDesktopApi = {
   },
   async listTools() {
     return previewTools;
-  },
-  async createSharedChannelDraft(input) {
-    const work = createLocalWork(`work-${Date.now()}`, input.title || "Shared-channel response draft", "Shared-channel draft - Pending review", "pending");
-    previewWork = [work, ...previewWork];
-    return work;
-  },
-  async listActiveWork() {
-    return previewWork;
-  },
-  async decideWork(id, decision) {
-    previewWork = previewWork.map((item) =>
-      item.id === id
-        ? {
-            ...item,
-            status: decision === "approve" ? "approved" : "dismissed",
-            subtitle: decision === "approve" ? "Approved by human reviewer" : "Dismissed by human reviewer",
-          }
-        : item,
-    );
-    return previewWork.find((item) => item.id === id)!;
-  },
-  async listAutomations() {
-    return previewAutomations;
   },
   async listConnectors() {
     if (previewGoogleWorkspaceEnabled()) {
@@ -3042,23 +2837,6 @@ const previewLinkApi: LinkDesktopApi = {
     return previewConnectors.map((connectorItem) =>
       connectorItem.id === id ? { ...connectorItem, status, mode: status === "connected" ? connectorItem.mode : "live" } : connectorItem,
     );
-  },
-  async listWidgetCatalog() {
-    return previewWidgetCatalog;
-  },
-  async listWidgetLayout() {
-    return previewWidgetLayout;
-  },
-  async saveWidgetLayout({ widgetIds }) {
-    const allowedIds = new Set(previewWidgetCatalog.map((widget) => widget.id));
-    previewWidgetLayout = {
-      widgetIds: [...new Set(widgetIds.filter((id) => allowedIds.has(id)))],
-      updatedAt: new Date().toISOString(),
-    };
-    return previewWidgetLayout;
-  },
-  async refreshWidgetData({ widgetId }) {
-    return previewWidgetData(widgetId);
   },
   async listDialerConfigs() {
     return {
@@ -4174,118 +3952,6 @@ export const linkApi: LinkDesktopApi = {
   ...(window.linkDesktop ?? {}),
 };
 
-function previewWidgetData(widgetId: string): WidgetDataResult {
-  const updatedAt = new Date().toISOString();
-  if (widgetId === "standard-support-health") {
-    return {
-      widgetId,
-      source: "Tableau",
-      status: "ready",
-      updatedAt,
-      columns: ["day", "tickets"],
-      rows: [
-        { day: "Mon", tickets: 420 },
-        { day: "Tue", tickets: 388 },
-        { day: "Wed", tickets: 405 },
-        { day: "Thu", tickets: 371 },
-        { day: "Fri", tickets: 348 },
-      ],
-      metric: "348",
-      trend: "-72 vs first point",
-    };
-  }
-  if (widgetId === "standard-product-adoption") {
-    return {
-      widgetId,
-      source: "Tableau",
-      status: "ready",
-      updatedAt,
-      columns: ["week", "active_accounts"],
-      rows: [
-        { week: "W1", active_accounts: 1240 },
-        { week: "W2", active_accounts: 1310 },
-        { week: "W3", active_accounts: 1388 },
-        { week: "W4", active_accounts: 1462 },
-      ],
-      metric: "1,462",
-      trend: "+222 vs first point",
-    };
-  }
-  if (widgetId === "standard-sales-pipeline") {
-    return {
-      widgetId,
-      source: "Tableau",
-      status: "ready",
-      updatedAt,
-      columns: ["week", "coverage"],
-      rows: [
-        { week: "W1", coverage: 2.8 },
-        { week: "W2", coverage: 3.1 },
-        { week: "W3", coverage: 3.4 },
-        { week: "W4", coverage: 3.7 },
-      ],
-      metric: "3.7x",
-      trend: "+0.9x vs first point",
-    };
-  }
-  if (widgetId === "standard-messaging-quality") {
-    return {
-      widgetId,
-      source: "Tableau",
-      status: "ready",
-      updatedAt,
-      columns: ["day", "delivery_rate"],
-      rows: [
-        { day: "Mon", delivery_rate: 0.974 },
-        { day: "Tue", delivery_rate: 0.978 },
-        { day: "Wed", delivery_rate: 0.982 },
-        { day: "Thu", delivery_rate: 0.976 },
-        { day: "Fri", delivery_rate: 0.981 },
-      ],
-      metric: "98.1%",
-      trend: "+0.7 pts vs first point",
-    };
-  }
-  if (widgetId === "standard-customer-usage") {
-    return {
-      widgetId,
-      source: "Tableau",
-      status: "ready",
-      updatedAt,
-      columns: ["product", "usage"],
-      rows: [
-        { product: "Messaging", usage: 820000 },
-        { product: "Voice", usage: 610000 },
-        { product: "Identity", usage: 280000 },
-        { product: "Network", usage: 190000 },
-      ],
-      metric: "1.9M",
-      trend: "+18% vs prior period",
-    };
-  }
-  return {
-    widgetId,
-    source: "Tableau",
-    status: "ready",
-    updatedAt,
-    columns: ["stage", "amount"],
-    rows: [
-      { stage: "Prospect", amount: 2100000 },
-      { stage: "Qualified", amount: 4200000 },
-      { stage: "Commit", amount: 6100000 },
-      { stage: "Closed", amount: 8100000 },
-    ],
-    metric: "$8.1M",
-    trend: "+$6.0M vs first point",
-  };
-}
-
-function standardTableauReportUrl(fieldName: string): string {
-  const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
-  const viteFieldName = fieldName.startsWith("VITE_") ? fieldName : `VITE_${fieldName}`;
-  return env?.[fieldName]?.trim() || env?.[viteFieldName]?.trim() || "";
-}
-
 function tool(
   name: string,
   description: string,
@@ -4304,31 +3970,6 @@ function tool(
     riskLevel,
     approvalRequired,
     outputCanBeShownExternally: visibility === "customer_safe",
-  };
-}
-
-function createLocalWork(
-  id: string,
-  title: string,
-  subtitle: string,
-  status: ActiveWorkItem["status"],
-): ActiveWorkItem {
-  return {
-    id,
-    title,
-    subtitle,
-    status,
-    createdAt: new Date().toISOString(),
-    summary: "Customer-visible action requires human approval before posting.",
-    details: {
-      customerSafeDraft: "",
-      internalRationale: "Live shared-channel drafting is unavailable in this preview.",
-      sourcesUsed: [],
-      approval: {
-        approvalRequired: status === "pending",
-        approvalStatus: status === "pending" ? "approval_required" : "not_required",
-      },
-    },
   };
 }
 

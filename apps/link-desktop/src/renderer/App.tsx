@@ -3,7 +3,6 @@ import {
   ArrowRight,
   ArrowUp,
   Archive as ArchiveIcon,
-  Bell,
   BookOpen,
   Bot,
   CalendarDays,
@@ -67,26 +66,11 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { TableauEventType } from "@tableau/embedding-api";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import type { ComponentType, CSSProperties, DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type {
-  ActiveWorkItem,
   AgentControlPlaneAuthStatus,
   AgentSummary,
-  AutomationItem,
   ChatAttachment,
   ChatArtifact,
   ChatMessage,
@@ -115,7 +99,6 @@ import type {
   LinkAppPublishInput,
   LinkAppPublishResult,
   LinkAppPublisherReadiness,
-  LinkChangeRequest,
   MessageGatewayEventsResult,
   MessageGatewayListResult,
   MessageGatewayMessage,
@@ -153,8 +136,6 @@ import type {
   ViewId,
   WebRtcStatus,
   WhisperStatus,
-  WidgetCatalogItem,
-  WidgetDataResult,
   WikiDocumentationSource,
   WikiDocumentationSourceInput,
   WikiDocumentationSourceType,
@@ -911,10 +892,7 @@ const linkGettingStartedAgentId = "c4de5f6a-e2e9-4568-9611-80cd35b483f7";
 const linkGettingStartedAgentName = "Link";
 
 const viewMeta: Record<ViewId, { label: string; icon: AppIcon }> = {
-  workspaces: { label: "Workspaces", icon: Grid2X2 },
   onboarding: { label: "Get Started", icon: Flag },
-  widgets: { label: "Widgets", icon: LayoutDashboard },
-  explorer: { label: "Library", icon: BookOpen },
   chats: { label: "Chat", icon: MessageSquare },
   gateway: { label: "Gateway", icon: Send },
   apps: { label: "Apps", icon: Grid2X2Plus },
@@ -1012,14 +990,11 @@ export function App() {
   const [view, setView] = useState<ViewId>("chats");
   const [skills, setSkills] = useState<SkillMetadata[]>([]);
   const [tools, setTools] = useState<ToolMetadata[]>([]);
-  const [work, setWork] = useState<ActiveWorkItem[]>([]);
-  const [automations, setAutomations] = useState<AutomationItem[]>([]);
   const [connectors, setConnectors] = useState<ConnectorStatus[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [selectedArtifact, setSelectedArtifact] = useState<ChatArtifact | null>(null);
   const [edgePreviewSurface, setEdgePreviewSurface] = useState<EdgePreviewSurface | null>(null);
-  const [changeRequests, setChangeRequests] = useState<LinkChangeRequest[]>([]);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [memoryBanks, setMemoryBanks] = useState<MemoryBank[]>([]);
   const [wikiState, setWikiState] = useState<WikiState | null>(null);
@@ -1039,7 +1014,6 @@ export function App() {
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [newSessionDraftOpen, setNewSessionDraftOpen] = useState(false);
   const [newAppSessionRequestId, setNewAppSessionRequestId] = useState(0);
-  const [selectedWorkId, setSelectedWorkId] = useState("");
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [archiveRefreshKey, setArchiveRefreshKey] = useState(0);
   const [railExpanded, setRailExpanded] = useState(false);
@@ -1050,7 +1024,6 @@ export function App() {
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [, setPhoneTab] = useState<PhoneViewTab>("calls");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("auth");
-  const [widgetLibraryOpen, setWidgetLibraryOpen] = useState(false);
   const [linkedPhoneNumber, setLinkedPhoneNumber] = useState("");
   const [phoneDialTarget, setPhoneDialTarget] = useState("");
   const [phoneDialTargetRequestId, setPhoneDialTargetRequestId] = useState(0);
@@ -1211,12 +1184,9 @@ export function App() {
     const [
       skillList,
       toolList,
-      workList,
-      automationList,
       connectorList,
       workspaceList,
       chatList,
-      changeList,
       agentList,
       bankList,
       wiki,
@@ -1232,12 +1202,9 @@ export function App() {
     ] = await Promise.all([
       linkApi.listSkills(),
       linkApi.listTools(),
-      linkApi.listActiveWork(),
-      linkApi.listAutomations(),
       linkApi.listConnectors(),
       linkApi.listWorkspaces(),
       linkApi.listChatSessions(),
-      linkApi.listChangeRequests(),
       linkApi.listAgents(),
       linkApi.listMemoryBanks(),
       linkApi.listWikiState(),
@@ -1253,12 +1220,9 @@ export function App() {
     ]);
     setSkills(skillList);
     setTools(toolList);
-    setWork(workList);
-    setAutomations(automationList);
     setConnectors(connectorList);
     setWorkspaces(workspaceList);
     setChatSessions(chatList);
-    setChangeRequests(changeList);
     setAgents(agentList);
     setMemoryBanks(bankList);
     setWikiState(wiki);
@@ -1277,7 +1241,6 @@ export function App() {
     setSignedOutLocally(false);
     setSelectedWorkspaceId((current) => current || workspaceList[0]?.id || "");
     setSelectedSessionId((current) => current || chatList[0]?.id || "");
-    setSelectedWorkId((current) => current || workList[0]?.id || "");
   }
 
   async function refreshSessionTablesThenAll() {
@@ -1293,7 +1256,6 @@ export function App() {
 
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? workspaces[0];
   const selectedSession = selectedSessionId ? chatSessions.find((session) => session.id === selectedSessionId) : undefined;
-  const selectedWork = work.find((item) => item.id === selectedWorkId) ?? work[0];
   const selectedWorkboardChatAgent = useMemo(() => {
     const directoryAgent = agents.find((agent) => agent.id === selectedChatAgentId);
     if (directoryAgent) {
@@ -1457,19 +1419,6 @@ export function App() {
     );
   }
 
-  async function startOnboardingSharedDraft() {
-    const draft = await linkApi.createSharedChannelDraft({
-      title: "Internal testing customer-safe update",
-      userPrompt: "Draft a customer-safe update for internal testing of Link's approval workflow.",
-      requestedAction: "review a customer-safe shared-channel update before posting",
-      threadContext:
-        "Internal testing context: verify Link separates customer-safe copy from internal rationale and requires human approval before any external action.",
-    });
-    setSelectedWorkId(draft.id);
-    setView("workspaces");
-    await refresh();
-  }
-
   async function shareExplorerResultToAgent(result: ExplorerResult) {
     const agent = resolveNewSessionAgent();
     setAssistantMode("chat");
@@ -1629,20 +1578,14 @@ export function App() {
         {showContextSidebar && (
           <Sidebar
             view={view}
-            work={work}
             skills={skills}
             connectors={connectors}
-            workspaces={workspaces}
             chatSessions={chatSessions}
-            changeRequests={changeRequests}
             agents={agents}
             memoryBanks={memoryBanks}
             wikiState={wikiState}
-            selectedWorkspaceId={selectedWorkspace?.id ?? ""}
             selectedSessionId={selectedSession?.id ?? ""}
-            setSelectedWorkspaceId={setSelectedWorkspaceId}
             setSelectedSessionId={setSelectedSessionId}
-            setSelectedWorkId={setSelectedWorkId}
             setView={setView}
           />
         )}
@@ -1673,11 +1616,9 @@ export function App() {
                   }}
                   refresh={refresh}
                   startPromptChat={startOnboardingPromptChat}
-                  startSharedDraft={startOnboardingSharedDraft}
                 />
               )}
               {selectedArtifact && <ArtifactViewer artifact={selectedArtifact} onClose={() => setSelectedArtifact(null)} />}
-              {!selectedArtifact && view === "widgets" && <WidgetsView libraryOpen={widgetLibraryOpen} setLibraryOpen={setWidgetLibraryOpen} />}
               {!selectedArtifact && view === "chats" && (
                 <ChatsView
                   sessions={chatSessions}
@@ -2509,8 +2450,6 @@ const internalTestingChecklistItems = [
   { id: "chat", label: "Send one chat request", view: "chats" },
   { id: "plugin", label: "Connect or review one plugin", view: "settings" },
   { id: "skill", label: "Run or inspect one skill", view: "wiki" },
-  { id: "widget", label: "Add or refresh one widget", view: "widgets" },
-  { id: "approval", label: "Review one approval flow", view: "workspaces" },
   { id: "feedback", label: "File one feedback note", view: "chats" },
 ] satisfies { id: string; label: string; view: ViewId }[];
 
@@ -2540,7 +2479,6 @@ function OnboardingView({
   openSettingsTab,
   refresh,
   startPromptChat,
-  startSharedDraft,
 }: {
   onboarding: OnboardingState;
   setOnboarding: (state: OnboardingState) => void;
@@ -2557,7 +2495,6 @@ function OnboardingView({
   openSettingsTab: (tab: SettingsTab) => void;
   refresh: () => Promise<void>;
   startPromptChat: (prompt: string, title: string) => Promise<void>;
-	  startSharedDraft: () => Promise<void>;
 }) {
   const [acpAuth, setAcpAuth] = useState<AgentControlPlaneAuthStatus | null>(null);
   const [whisperStatus, setWhisperStatus] = useState<WhisperStatus | null>(null);
@@ -2748,13 +2685,6 @@ function OnboardingView({
         setView("wiki");
         return Promise.resolve();
       },
-    },
-    {
-      id: "shared-draft",
-      title: "Draft customer-safe update",
-      body: "Create a reviewable approval item for testing the human gate.",
-      icon: ShieldCheck,
-      action: startSharedDraft,
     },
     {
       id: "phone-dictation",
@@ -3047,82 +2977,33 @@ function Rail({
 
 function Sidebar({
   view,
-  work,
   skills,
   connectors,
-  workspaces,
   chatSessions,
-  changeRequests,
   agents,
   memoryBanks,
   wikiState,
-  selectedWorkspaceId,
   selectedSessionId,
-  setSelectedWorkspaceId,
   setSelectedSessionId,
-  setSelectedWorkId,
   setView,
 }: {
   view: ViewId;
-  work: ActiveWorkItem[];
   skills: SkillMetadata[];
   connectors: ConnectorStatus[];
-  workspaces: WorkspaceSummary[];
   chatSessions: ChatSession[];
-  changeRequests: LinkChangeRequest[];
   agents: AgentSummary[];
   memoryBanks: MemoryBank[];
   wikiState: WikiState | null;
-  selectedWorkspaceId: string;
   selectedSessionId: string;
-  setSelectedWorkspaceId: (id: string) => void;
   setSelectedSessionId: (id: string) => void;
-  setSelectedWorkId: (id: string) => void;
   setView: (view: ViewId) => void;
 }) {
-  const pendingCount = work.filter((item) => item.status === "pending").length + changeRequests.filter((item) => item.status === "pending_review").length;
   return (
     <aside className="sidebar">
       <div className="searchBox">
         <Search size={15} />
         <input placeholder="Search..." />
       </div>
-      <SidebarSection title="Workspaces" count={workspaces.length} icon={<Grid2X2 size={13} />} active={view === "workspaces"}>
-        {workspaces.map((workspace) => (
-          <button
-            key={workspace.id}
-            className={`sideRow ${selectedWorkspaceId === workspace.id ? "selected" : ""}`}
-            onClick={() => {
-              setSelectedWorkspaceId(workspace.id);
-              setView("workspaces");
-            }}
-          >
-            <span>
-              <strong>{workspace.name}</strong>
-              <small>{workspace.tabs.length} tabs - {workspace.fileCount} files</small>
-            </span>
-            <StatusDot tone={workspace.status === "review" ? "warning" : workspace.status === "active" ? "success" : "muted"} />
-          </button>
-        ))}
-      </SidebarSection>
-      <SidebarSection title="Pending" count={pendingCount} icon={<Bell size={13} />}>
-        {work.slice(0, 3).map((item) => (
-          <button
-            key={item.id}
-            className="sideRow slim"
-            onClick={() => {
-              setSelectedWorkId(item.id);
-              setView("workspaces");
-            }}
-          >
-            <span>
-              <strong>{item.title}</strong>
-              <small>{item.subtitle}</small>
-            </span>
-            <StatusDot tone={item.status === "pending" ? "warning" : "muted"} />
-          </button>
-        ))}
-      </SidebarSection>
       <SidebarSection title="Chat" count={chatSessions.length} icon={<MessageSquare size={13} />} compact active={view === "chats"}>
         {chatSessions.slice(0, 4).map((session) => (
           <button
@@ -3180,591 +3061,6 @@ function SidebarSection({
   );
 }
 
-function WorkspacesView({
-  workspaces,
-  work,
-  automations,
-  changeRequests,
-  selectedWorkspace,
-  selectedWork,
-  selectWorkspace,
-  selectWork,
-  decideWork,
-  approveChange,
-  dismissChange,
-  refresh,
-}: {
-  workspaces: WorkspaceSummary[];
-  work: ActiveWorkItem[];
-  automations: AutomationItem[];
-  changeRequests: LinkChangeRequest[];
-  selectedWorkspace?: WorkspaceSummary;
-  selectedWork?: ActiveWorkItem;
-  selectWorkspace: (id: string) => void;
-  selectWork: (id: string) => void;
-  decideWork: (id: string, decision: "approve" | "dismiss") => Promise<void>;
-  approveChange: (id: string) => Promise<void>;
-  dismissChange: (id: string) => Promise<void>;
-  refresh: () => Promise<void>;
-}) {
-  async function createDraft() {
-    await linkApi.createSharedChannelDraft({
-      title: "Generated customer-safe update",
-      userPrompt: "Draft a customer-safe update for Acme about the SMS delivery investigation.",
-      requestedAction: "post update to shared customer Slack channel",
-      threadContext:
-        "Internal note: see #support-escalations. Raw log trace id msg-891. Customer impact appears limited to delayed SMS delivery in US traffic.",
-    });
-    await refresh();
-  }
-
-  return (
-    <section className="content workspacesView">
-      <header className="pageHeader">
-        <div>
-          <h1>Workspaces</h1>
-        </div>
-        <div className="headerActions">
-          <button className="button secondary" onClick={createDraft}>
-            <Plus size={15} />
-            Draft update
-          </button>
-        </div>
-      </header>
-
-      <div className="workspaceGrid">
-        {workspaces.map((workspace) => (
-          <button key={workspace.id} className={`workspaceCard ${selectedWorkspace?.id === workspace.id ? "selected" : ""}`} onClick={() => selectWorkspace(workspace.id)}>
-            <div className="workspaceCardTop">
-              <strong>{workspace.name}</strong>
-              <Badge tone={workspace.status === "review" ? "warning" : workspace.status === "active" ? "success" : "default"}>{workspace.status}</Badge>
-            </div>
-            <p>{workspace.description}</p>
-            <div className="workspaceStats">
-              <span>{workspace.tabs.length} tabs</span>
-              <span>{workspace.fileCount} files</span>
-              <span>{workspace.activeWorkIds.length} active</span>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {selectedWorkspace && (
-        <>
-          <div className="sectionLabel">
-            <ChevronDown size={14} />
-            Open tabs
-          </div>
-          <div className="tabGrid">
-            {selectedWorkspace.tabs.map((tab) => (
-              <article className="workspaceTabCard" key={tab.id}>
-                <FileText size={17} />
-                <div>
-                  <strong>{tab.title}</strong>
-                  <small>{tab.kind} - {tab.status}</small>
-                </div>
-              </article>
-            ))}
-          </div>
-        </>
-      )}
-
-      <div className="sectionLabel">
-        <ChevronDown size={14} />
-        Active work and admin review
-      </div>
-      <div className="workspaceDetailGrid">
-        <div className="reviewQueue">
-          {work.map((item) => (
-            <button key={item.id} className={`reviewQueueRow ${selectedWork?.id === item.id ? "selected" : ""}`} onClick={() => selectWork(item.id)}>
-              <span>
-                <strong>{item.title}</strong>
-                <small>{item.subtitle}</small>
-              </span>
-              <StatusDot tone={item.status === "pending" ? "warning" : item.status === "approved" ? "success" : "muted"} />
-            </button>
-          ))}
-          {changeRequests.map((request) => (
-            <article className="changeRequestRow" key={request.id}>
-              <div>
-                <strong>{request.title}</strong>
-                <small>{request.status.replaceAll("_", " ")}</small>
-              </div>
-              <div className="rowActions">
-                {request.status === "pending_review" && (
-                  <>
-                    <button className="button primary" onClick={() => approveChange(request.id)}>Approve</button>
-                    <button className="button ghost" onClick={() => dismissChange(request.id)}>Dismiss</button>
-                  </>
-                )}
-                {request.github?.prUrl && <Badge tone="success">PR queued</Badge>}
-              </div>
-            </article>
-          ))}
-        </div>
-        <ActiveWorkArtifact selectedWork={selectedWork} decideWork={decideWork} />
-      </div>
-
-      <div className="sectionLabel">
-        <ChevronDown size={14} />
-        Automations
-      </div>
-      <div className="automationStrip">
-        {automations.map((automation) => (
-          <Panel title={automation.name} key={automation.id}>
-            <Badge tone={automation.status === "active" ? "success" : "default"}>{automation.status}</Badge>
-            <p>{automation.schedule} in {automation.channel}</p>
-          </Panel>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ActiveWorkArtifact({
-  selectedWork,
-  decideWork,
-}: {
-  selectedWork?: ActiveWorkItem;
-  decideWork: (id: string, decision: "approve" | "dismiss") => Promise<void>;
-}) {
-  if (!selectedWork) return <Panel title="No work selected"><p>Select a review item to inspect content and approval state.</p></Panel>;
-
-  return (
-    <article className="artifactCard">
-      <div className="artifactChrome">
-        <strong>customer-safe-draft.md</strong>
-        <span>{selectedWork.summary}</span>
-        <FileText size={16} />
-      </div>
-      <div className="artifactBody">
-        <h2>{selectedWork.title}</h2>
-        <p className="draftText">{selectedWork.details.customerSafeDraft}</p>
-        <div className="artifactFooter">
-          <div>
-            <strong>Sources</strong>
-            <small>{selectedWork.details.sourcesUsed.join(", ")}</small>
-          </div>
-          {selectedWork.status === "pending" && (
-            <div className="headerActions">
-              <button className="button primary" onClick={() => decideWork(selectedWork.id, "approve")}>Approve</button>
-              <button className="button ghost" onClick={() => decideWork(selectedWork.id, "dismiss")}>Dismiss</button>
-            </div>
-          )}
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function WidgetsView({
-  libraryOpen,
-  setLibraryOpen,
-}: {
-  libraryOpen: boolean;
-  setLibraryOpen: (open: boolean) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<"All" | WidgetCatalogItem["category"]>("All");
-  const [layoutEditing, setLayoutEditing] = useState(false);
-  const [draggedWidgetId, setDraggedWidgetId] = useState("");
-  const [widgetDropTargetId, setWidgetDropTargetId] = useState("");
-  const [widgetsLoading, setWidgetsLoading] = useState(true);
-  const [widgetError, setWidgetError] = useState("");
-  const [widgetCatalog, setWidgetCatalog] = useState<WidgetCatalogItem[]>([]);
-  const [dashboardWidgetIds, setDashboardWidgetIds] = useState<string[]>([]);
-  const [widgetData, setWidgetData] = useState<Record<string, WidgetDataResult>>({});
-  const [widgetDataErrors, setWidgetDataErrors] = useState<Record<string, string>>({});
-  const [refreshingWidgetId, setRefreshingWidgetId] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadWidgets() {
-      setWidgetsLoading(true);
-      setWidgetError("");
-      try {
-        const [catalog, layout] = await Promise.all([linkApi.listWidgetCatalog(), linkApi.listWidgetLayout()]);
-        if (cancelled) return;
-        const authorizedIds = new Set(catalog.map((widget) => widget.id));
-        const savedIds = layout.widgetIds.filter((id) => authorizedIds.has(id));
-        const startingIds = savedIds.length > 0 ? savedIds : catalog.slice(0, 3).map((widget) => widget.id);
-        setWidgetCatalog(catalog);
-        setDashboardWidgetIds(startingIds);
-        void Promise.all(startingIds.map((widgetId) => loadWidgetData(widgetId)));
-      } catch {
-        if (!cancelled) {
-          setWidgetCatalog([]);
-          setDashboardWidgetIds([]);
-          setWidgetError("Tableau widgets are unavailable. Connect the strict-access widget service from Settings.");
-        }
-      } finally {
-        if (!cancelled) setWidgetsLoading(false);
-      }
-    }
-
-    void loadWidgets();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const dashboardWidgets = useMemo(() => {
-    const byId = new Map(widgetCatalog.map((widget) => [widget.id, widget]));
-    return dashboardWidgetIds.map((id) => byId.get(id)).filter((widget): widget is WidgetCatalogItem => Boolean(widget));
-  }, [dashboardWidgetIds, widgetCatalog]);
-
-  const filteredLibrary = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    return widgetCatalog.filter((widget) => {
-      const matchesCategory = category === "All" || widget.category === category;
-      const matchesQuery =
-        !normalizedQuery ||
-        [widget.title, widget.source, widget.category, widget.description, widget.tableau?.viewId ?? "", widget.tableau?.sheetName ?? ""].some((field) => field.toLowerCase().includes(normalizedQuery));
-      return matchesCategory && matchesQuery;
-    });
-  }, [category, query, widgetCatalog]);
-
-  async function loadWidgetData(widgetId: string) {
-    setWidgetDataErrors((current) => ({ ...current, [widgetId]: "" }));
-    try {
-      const data = await linkApi.refreshWidgetData({ widgetId });
-      setWidgetData((current) => ({ ...current, [widgetId]: data }));
-    } catch {
-      setWidgetDataErrors((current) => ({ ...current, [widgetId]: "Access unavailable" }));
-    }
-  }
-
-  function saveDashboardLayout(nextIds: string[]) {
-    const deduped = [...new Set(nextIds)];
-    setDashboardWidgetIds(deduped);
-    void linkApi.saveWidgetLayout({ widgetIds: deduped }).then((layout) => {
-      setDashboardWidgetIds(layout.widgetIds);
-    }).catch(() => {
-      setWidgetError("The widget layout could not be saved.");
-    });
-  }
-
-  function addWidget(widget: WidgetCatalogItem) {
-    if (dashboardWidgetIds.includes(widget.id)) return;
-    saveDashboardLayout([...dashboardWidgetIds, widget.id]);
-    void loadWidgetData(widget.id);
-  }
-
-  function removeWidget(widgetId: string) {
-    saveDashboardLayout(dashboardWidgetIds.filter((id) => id !== widgetId));
-  }
-
-  function startWidgetDrag(event: DragEvent<HTMLElement>, widgetId: string) {
-    if (!layoutEditing) return;
-    setDraggedWidgetId(widgetId);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("application/x-link-widget", widgetId);
-    event.dataTransfer.setData("text/plain", widgetId);
-  }
-
-  function allowWidgetDrop(event: DragEvent<HTMLElement>, widgetId: string) {
-    if (!layoutEditing || draggedWidgetId === widgetId) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    setWidgetDropTargetId(widgetId);
-  }
-
-  function dropWidget(event: DragEvent<HTMLElement>, targetWidgetId: string) {
-    event.preventDefault();
-    const sourceWidgetId = event.dataTransfer.getData("application/x-link-widget") || event.dataTransfer.getData("text/plain");
-    setDraggedWidgetId("");
-    setWidgetDropTargetId("");
-    if (!sourceWidgetId || sourceWidgetId === targetWidgetId) return;
-
-    const sourceIndex = dashboardWidgetIds.indexOf(sourceWidgetId);
-    const targetIndex = dashboardWidgetIds.indexOf(targetWidgetId);
-    if (sourceIndex < 0 || targetIndex < 0) return;
-    const next = [...dashboardWidgetIds];
-    const [moved] = next.splice(sourceIndex, 1);
-    next.splice(targetIndex, 0, moved);
-    saveDashboardLayout(next);
-  }
-
-  function endWidgetDrag() {
-    setDraggedWidgetId("");
-    setWidgetDropTargetId("");
-  }
-
-  async function refreshDashboardWidget(widgetId: string) {
-    setRefreshingWidgetId(widgetId);
-    await loadWidgetData(widgetId);
-    setRefreshingWidgetId("");
-  }
-
-  return (
-    <section className="content widgetsView">
-      <header className="pageHeader">
-        <div>
-          <h1>Widgets</h1>
-	        </div>
-	        <div className="headerActions">
-          <button className="button primary" onClick={() => setLibraryOpen(true)}>
-	            <Plus size={15} />
-	            Add Widget
-	          </button>
-	        </div>
-	      </header>
-
-      <div className="widgetHomeGrid">
-        {libraryOpen ? (
-          <section className="widgetLibrary widgetLibraryTakeover" aria-label="Widget library">
-            <div className="widgetLibraryHeader">
-              <div>
-                <strong>Widget library</strong>
-                <small>Browse Tableau widgets authorized for your user and squad</small>
-              </div>
-              <button className="button ghost" onClick={() => setLibraryOpen(false)}>
-                <X size={14} />
-                Close
-              </button>
-            </div>
-            <div className="widgetLibraryControls">
-              <div className="widgetSearch">
-                <Search size={15} />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports" autoFocus />
-              </div>
-              <div className="widgetCategoryTabs" role="tablist" aria-label="Widget categories">
-                {([
-                  ["All", "All", Grid2X2],
-                  ["Revenue", "Revenue", Target],
-                  ["Operations", "Operations", Settings],
-                  ["Product", "Product", Store],
-                ] as const).map(([item, label, Icon]) => (
-                  <button key={item} className={category === item ? "selected" : ""} onClick={() => setCategory(item)}>
-                    <Icon size={14} />
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="widgetLibraryList">
-              {filteredLibrary.map((widget) => {
-                const added = dashboardWidgetIds.includes(widget.id);
-                return (
-                  <article className="widgetLibraryItem" key={widget.id}>
-                    <div className="widgetLibraryItemTop">
-                      <div className="connectorIcon">{sourceInitials(widget.source)}</div>
-                      <div>
-                        <strong>{widget.title}</strong>
-                        <small>{widget.source} - {widget.category}</small>
-                      </div>
-                    </div>
-                    <p>{widget.description}</p>
-                    <button className="button secondary" onClick={() => addWidget(widget)} disabled={added}>
-                      <Plus size={14} />
-                      {added ? "Added" : "Add widget"}
-                    </button>
-                  </article>
-                );
-              })}
-              {filteredLibrary.length === 0 && (
-                <EmptyState
-                  title={widgetsLoading ? "Loading widgets" : "No authorized widgets"}
-                  body={widgetError || "Try another report name or request access from the widget owner squad."}
-                  icon={BarChart}
-                />
-              )}
-            </div>
-          </section>
-	        ) : (
-	          <section className="widgetCanvas" aria-label="Home widgets">
-	            {dashboardWidgets.length >= 2 && (
-	              <div className="widgetCanvasHeader">
-	                <button className={`button ${layoutEditing ? "primary" : "secondary"} ${layoutEditing ? "active" : ""}`} onClick={() => setLayoutEditing((editing) => !editing)} aria-pressed={layoutEditing}>
-	                  <LayoutDashboard size={15} />
-	                  {layoutEditing ? "Done" : "Manage layout"}
-	                </button>
-	              </div>
-	            )}
-            <div className={`dashboardWidgetGrid ${layoutEditing ? "layoutEditing" : ""}`}>
-              {dashboardWidgets.map((widget) => {
-                const embedded = Boolean(widget.tableau?.url);
-                return (
-                  <article
-                    className={`dashboardWidget ${embedded ? "tableauEmbedWidget" : ""} ${draggedWidgetId === widget.id ? "dragging" : ""} ${widgetDropTargetId === widget.id ? "dropTarget" : ""}`}
-                    key={widget.id}
-                    draggable={layoutEditing}
-                    onDragStart={(event) => startWidgetDrag(event, widget.id)}
-                    onDragOver={(event) => allowWidgetDrop(event, widget.id)}
-                    onDragLeave={() => setWidgetDropTargetId((current) => current === widget.id ? "" : current)}
-                    onDrop={(event) => dropWidget(event, widget.id)}
-                    onDragEnd={endWidgetDrag}
-                  >
-                    <div className="widgetCardTop">
-                      <div className="connectorIcon">{sourceInitials(widget.source)}</div>
-                      <div>
-                        <strong>{widget.title}</strong>
-                        <small>{widget.source} - {widget.cadence}</small>
-                      </div>
-                      <button className="iconButton" aria-label={`Refresh ${widget.title}`} onClick={() => void refreshDashboardWidget(widget.id)}>
-                        <RefreshCw size={14} className={refreshingWidgetId === widget.id ? "spinning" : ""} />
-                      </button>
-                      <button className="iconButton" aria-label={`Remove ${widget.title}`} onClick={() => removeWidget(widget.id)}>
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                    <div className="widgetMetric">
-                      <span>{widgetMetricValue(widget, widgetData[widget.id])}</span>
-                      <small>{widgetMetricTrend(widget, widgetData[widget.id])}</small>
-                    </div>
-                    <WidgetChart widget={widget} data={widgetData[widget.id]} error={widgetDataErrors[widget.id]} />
-                  </article>
-                );
-              })}
-              {dashboardWidgets.length === 0 && !widgetsLoading && (
-                <EmptyState
-                  title={widgetCatalog.length === 0 ? "No authorized widgets" : "No widgets added"}
-                  body={widgetError || "Add authorized reports from the widget library to build your home page."}
-                  icon={BarChart}
-                />
-              )}
-              {dashboardWidgets.length === 0 && widgetsLoading && <EmptyState title="Loading widgets" body="Checking your widget access." icon={BarChart} />}
-            </div>
-          </section>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function widgetMetricValue(widget: WidgetCatalogItem, data?: WidgetDataResult) {
-  if (data?.metric) return data.metric;
-  if (widget.tableau?.url) return "Live view";
-  return "Loading";
-}
-
-function widgetMetricTrend(widget: WidgetCatalogItem, data?: WidgetDataResult) {
-  if (data?.trend) return data.trend;
-  if (widget.tableau?.url) return "Embedded Tableau report";
-  return "Waiting for report data";
-}
-
-function TableauEmbeddedWidget({ widget }: { widget: WidgetCatalogItem }) {
-  const embedRef = useRef<HTMLDivElement>(null);
-  const [status, setStatus] = useState("Loading embedded report");
-  const url = widget.tableau?.url?.trim();
-
-  useEffect(() => {
-    const container = embedRef.current;
-    if (!container || !url) return undefined;
-
-    container.replaceChildren();
-    const viz = document.createElement("tableau-viz");
-    viz.setAttribute("src", url);
-    viz.setAttribute("toolbar", widget.tableau?.toolbar ?? "hidden");
-    viz.setAttribute("device", widget.tableau?.device ?? "desktop");
-    if (widget.tableau?.hideTabs !== false) viz.setAttribute("hide-tabs", "");
-    viz.style.width = "100%";
-    viz.style.height = "100%";
-
-    const firstInteractive = () => setStatus("Interactive");
-    const summaryDataChanged = () => setStatus("Data refreshed");
-    const filterChanged = () => setStatus("Filter updated");
-    const markSelectionChanged = () => setStatus("Selection updated");
-    const loadError = () => setStatus("Unable to load report");
-
-    viz.addEventListener(TableauEventType.FirstInteractive, firstInteractive);
-    viz.addEventListener(TableauEventType.SummaryDataChanged, summaryDataChanged);
-    viz.addEventListener(TableauEventType.FilterChanged, filterChanged);
-    viz.addEventListener(TableauEventType.MarkSelectionChanged, markSelectionChanged);
-    viz.addEventListener(TableauEventType.VizLoadError, loadError);
-    container.appendChild(viz);
-
-    return () => {
-      viz.removeEventListener(TableauEventType.FirstInteractive, firstInteractive);
-      viz.removeEventListener(TableauEventType.SummaryDataChanged, summaryDataChanged);
-      viz.removeEventListener(TableauEventType.FilterChanged, filterChanged);
-      viz.removeEventListener(TableauEventType.MarkSelectionChanged, markSelectionChanged);
-      viz.removeEventListener(TableauEventType.VizLoadError, loadError);
-      container.replaceChildren();
-    };
-  }, [url, widget.tableau?.toolbar, widget.tableau?.hideTabs, widget.tableau?.device]);
-
-  if (!url) {
-    return (
-      <div className="widgetChartPreview widgetDataState">
-        Add this report URL in Settings to embed the live view.
-      </div>
-    );
-  }
-
-  return (
-    <div className="tableauWidgetEmbed">
-      <div ref={embedRef} className="tableauWidgetViz" />
-      <span className="tableauWidgetStatus" aria-live="polite">{status}</span>
-    </div>
-  );
-}
-
-function WidgetChart({ widget, data, error }: { widget: WidgetCatalogItem; data?: WidgetDataResult; error?: string }) {
-  if (widget.renderMode === "tableau" || widget.tableau) return <TableauEmbeddedWidget widget={widget} />;
-
-  return <RechartsWidgetChart widget={widget} data={data} error={error} />;
-}
-
-function RechartsWidgetChart({ widget, data, error }: { widget: WidgetCatalogItem; data?: WidgetDataResult; error?: string }) {
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-  const [chartSize, setChartSize] = useState({ width: 320, height: 112 });
-
-  useEffect(() => {
-    const element = chartContainerRef.current;
-    if (!element) return;
-    const updateSize = () => {
-      setChartSize({
-        width: Math.max(1, element.clientWidth),
-        height: Math.max(1, element.clientHeight),
-      });
-    };
-    updateSize();
-    const observer = new ResizeObserver(updateSize);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  if (error) return <div className="widgetChartPreview widgetDataState">Access unavailable</div>;
-  if (!data) return <div className="widgetChartPreview widgetDataState">Loading report data</div>;
-  if (data.rows.length === 0) return <div className="widgetChartPreview widgetDataState">No report rows returned</div>;
-
-  const xKey = widget.chart.xField ?? data.columns[0] ?? "label";
-  const yKey = widget.chart.yField;
-  const chartProps = { data: data.rows, width: chartSize.width, height: chartSize.height, margin: { top: 8, right: 10, bottom: 0, left: -18 } };
-
-  return (
-    <div ref={chartContainerRef} className="widgetChartPreview" role="img" aria-label={`${widget.title} chart`}>
-      {widget.chart.type === "line" ? (
-        <LineChart {...chartProps}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey={xKey} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-          <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-          <Tooltip />
-          <Line type="monotone" dataKey={yKey} stroke="var(--accent)" strokeWidth={2} dot={false} />
-        </LineChart>
-      ) : widget.chart.type === "area" ? (
-        <AreaChart {...chartProps}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey={xKey} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-          <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-          <Tooltip />
-          <Area type="monotone" dataKey={yKey} stroke="var(--accent)" fill="var(--accent-soft)" strokeWidth={2} />
-        </AreaChart>
-      ) : (
-        <BarChart {...chartProps}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey={xKey} tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-          <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-          <Tooltip />
-          <Bar dataKey={yKey} fill="var(--accent)" radius={[5, 5, 2, 2]} />
-        </BarChart>
-      )}
-    </div>
-  );
-}
 
 type ExplorerSourceTab = "support" | "developers" | "wiki" | "pylon" | "custom" | "local";
 type WikiSourceTab = string;
@@ -15064,9 +14360,6 @@ function SettingsProviderLogoMark({ id, label }: { id: string; label: string }) 
   }
   if (id === "hindsight") {
     return <ArchiveIcon size={29} strokeWidth={2.1} />;
-  }
-  if (id === "tableau-widgets") {
-    return <Grid2X2 size={29} strokeWidth={2.1} />;
   }
   if (id === "mcp-proxy" || id.startsWith("mcp-")) {
     return <Plug size={29} strokeWidth={2.1} />;
