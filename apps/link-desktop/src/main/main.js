@@ -366,7 +366,6 @@ let meetingBotIdentities = {};
 let meetingBotInvites = [];
 let workspaces = [];
 let chatSessions = [];
-let changeRequests = [];
 let storedCredentials = {};
 let memoryBanks = [];
 let wikiState = emptyWikiState();
@@ -1076,10 +1075,6 @@ function registerIpc() {
   secureIpcHandle("link:rename-chat-session", (_event, input) => renameChatSession(input));
   secureIpcHandle("link:update-chat-session", (_event, input) => updateChatSession(input));
   secureIpcHandle("link:voice-transcribe", (_event, input) => transcribeAudio(input));
-  secureIpcHandle("link:create-change-request", (_event, input) => createChangeRequest(input));
-  secureIpcHandle("link:approve-change-request", (_event, id) => approveChangeRequest(id));
-  secureIpcHandle("link:dismiss-change-request", (_event, id) => dismissChangeRequest(id));
-  secureIpcHandle("link:list-change-requests", () => changeRequests);
   secureIpcHandle("link:list-agents", () => listAgents());
   secureIpcHandle("link:send-agent-message", (_event, input) => sendAgentMessage(input));
   secureIpcHandle("link:workboard-list", (_event, input) => listWorkboard(input));
@@ -3303,91 +3298,8 @@ function audioFileName(mimeType) {
   return "voice-input.webm";
 }
 
-function createChangeRequest(input) {
-  const request = {
-    id: `change-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    title: input.title,
-    summary: input.summary,
-    requestedChange: input.requestedChange,
-    status: "pending_review",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    sourceSessionId: input.sourceSessionId,
-    workspaceId: input.workspaceId || "workspace-link",
-    githubRepo: input.githubRepo,
-  };
-  changeRequests = [request, ...changeRequests];
-  addWorkspaceTab(request.workspaceId, {
-    id: `tab-${request.id}`,
-    title: request.title,
-    kind: "approval",
-    status: "pending",
-    updatedAt: request.updatedAt,
-  });
-  void saveDesktopState();
-  return request;
-}
-
-async function approveChangeRequest(id) {
-  const request = changeRequests.find((item) => item.id === id);
-  if (!request) throw new Error(`Unknown change request: ${id}`);
-  const github = await createGitHubDraftPr(request);
-  changeRequests = changeRequests.map((item) =>
-    item.id === id
-      ? {
-          ...item,
-          status: "draft_pr_created",
-          updatedAt: new Date().toISOString(),
-          github,
-        }
-      : item,
-  );
-
-  auditLogger.record({
-    actorId: "desktop_user",
-    surface: "desktop",
-    eventType: "change_request.approved",
-    action: "approve_change_request",
-    target: id,
-    metadata: { github },
-  });
-
-  await saveDesktopState();
-  return changeRequests.find((item) => item.id === id);
-}
-
-function dismissChangeRequest(id) {
-  changeRequests = changeRequests.map((item) =>
-    item.id === id ? { ...item, status: "dismissed", updatedAt: new Date().toISOString() } : item,
-  );
-  auditLogger.record({
-    actorId: "desktop_user",
-    surface: "desktop",
-    eventType: "change_request.dismissed",
-    action: "dismiss_change_request",
-    target: id,
-  });
-  void saveDesktopState();
-  return changeRequests.find((item) => item.id === id);
-}
-
-async function createGitHubDraftPr(request) {
-  const token = credentialValue("GH_TOKEN") || credentialValue("GITHUB_TOKEN");
-  const repo = request.githubRepo || process.env.LINK_GITHUB_REPO || process.env.GITHUB_REPOSITORY || "team-telnyx/link";
-  const branch = `link/change-${request.id}`;
-
-  if (!token || !repo || process.env.LINK_PR_MODE !== "live") {
-    throw new Error("Live GitHub PR creation requires LINK_PR_MODE=live and GH_TOKEN or GITHUB_TOKEN.");
-  }
-
-  throw new Error(`Live draft PR creation for ${repo} is not implemented until Link can generate concrete file patches for ${branch}.`);
-}
-
 function listWorkspaces() {
-  return workspaces.map((workspace) => ({
-    ...workspace,
-    activeWorkIds: Array.from(new Set([...(workspace.activeWorkIds ?? []), ...changeRequests.filter((request) => request.workspaceId === workspace.id).map((request) => request.id)])),
-  }));
+  return workspaces;
 }
 
 async function searchExplorer({ query = "", workspaceId } = {}) {
@@ -13815,7 +13727,6 @@ async function loadDesktopState() {
     connectorOverrides = saved.connectorOverrides && typeof saved.connectorOverrides === "object" ? saved.connectorOverrides : {};
     meetingBotIdentities = useSavedState && saved.meetingBotIdentities && typeof saved.meetingBotIdentities === "object" ? saved.meetingBotIdentities : {};
     meetingBotInvites = useSavedState && Array.isArray(saved.meetingBotInvites) ? saved.meetingBotInvites.map(normalizeMeetingInvite).filter(Boolean) : [];
-    changeRequests = useSavedState && Array.isArray(saved.changeRequests) ? saved.changeRequests : [];
     chatSessions = useSavedState && Array.isArray(saved.chatSessions) ? saved.chatSessions : [];
     memoryBanks = useSavedState && Array.isArray(saved.memoryBanks) ? saved.memoryBanks : [];
     wikiState = useSavedState && saved.wikiState && typeof saved.wikiState === "object" ? saved.wikiState : emptyWikiState();
@@ -13847,7 +13758,6 @@ async function loadDesktopState() {
     connectorOverrides = {};
     meetingBotIdentities = {};
     meetingBotInvites = [];
-    changeRequests = [];
     chatSessions = [];
     memoryBanks = [];
     wikiState = emptyWikiState();
@@ -13885,7 +13795,6 @@ async function saveDesktopState() {
     meetingBotInvites,
     workspaces,
     chatSessions,
-    changeRequests,
     memoryBanks,
     wikiState,
     workboardCards,

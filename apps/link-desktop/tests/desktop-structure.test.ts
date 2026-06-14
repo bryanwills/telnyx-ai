@@ -150,6 +150,7 @@ test("main-process privileged entrypoints fail closed", async () => {
   assert.match(main, /Refusing to open a non-approved Link app URL/);
   assert.match(main, /\/publish-intents/);
   assert.match(main, /secureIpcHandle\("link:edge-compute-status", \(\) => getEdgeComputeStatus\(\{ seedAuth: true \}\)\)/);
+  assert.doesNotMatch(main, /createGitHubDraftPr|link:create-change-request|link:approve-change-request|link:dismiss-change-request|link:list-change-requests/);
 });
 
 test("preload exposes the Link desktop IPC contract", async () => {
@@ -215,10 +216,6 @@ test("preload exposes the Link desktop IPC contract", async () => {
     "sendChatMessage",
     "renameChatSession",
     "transcribeAudio",
-    "createChangeRequest",
-    "approveChangeRequest",
-    "dismissChangeRequest",
-    "listChangeRequests",
     "listAgents",
     "sendAgentMessage",
     "listWorkboard",
@@ -248,6 +245,7 @@ test("preload exposes the Link desktop IPC contract", async () => {
   ]) {
     assert.match(preload, new RegExp(`${method}:`));
   }
+  assert.doesNotMatch(preload, /createChangeRequest|approveChangeRequest|dismissChangeRequest|listChangeRequests/);
 });
 
 test("Google Inbox IPC is read and draft only", async () => {
@@ -2189,7 +2187,10 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.match(app, /function openLiteLlmSettings/);
   assert.match(app, /Open model settings/);
   assert.match(app, /runtimeSettingsButton/);
-  assert.match(app, /githubRepo:\s*"team-telnyx\/link"/);
+  assert.match(app, /linkApi\.createWorkboardCard/);
+  assert.match(app, /provider:\s*"local"/);
+  assert.match(app, /labels:\s*\["docs", "review"\]/);
+  assert.match(app, /Docs update task added to Taskbox/);
   assert.match(app, /https:\/\/support\.telnyx\.com\/en\//);
   assert.match(app, /https:\/\/developers\.telnyx\.com\/docs\/overview/);
   assert.match(styles, /\.docsSuggestionButton,\s*\n\.runtimeSettingsButton\s*{/);
@@ -2578,7 +2579,7 @@ test("chat sessions are selectable without the global top tab bar", async () => 
   assert.match(styles, /\.mainPane\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1fr\)/);
 });
 
-test("main process has v2 state, live-ready adapters, and approval-gated PR flow", async () => {
+test("main process has v2 state, live-ready adapters, and Taskbox review flow", async () => {
   const main = await readFile("src/main/main.js", "utf8");
   const app = await readFile("src/renderer/App.tsx", "utf8");
   const preload = await readFile("src/main/preload.cjs", "utf8");
@@ -2678,9 +2679,7 @@ test("main process has v2 state, live-ready adapters, and approval-gated PR flow
   assert.match(main, /Link local board/);
   assert.match(main, /safeStorage/);
   assert.match(main, /link-desktop-credentials\.v1\.json/);
-  assert.match(main, /LINK_PR_MODE !== "live"/);
-  assert.doesNotMatch(main, /Draft PR creation is mocked/);
-  assert.match(main, /Live GitHub PR creation requires/);
+  assert.doesNotMatch(main, /LINK_PR_MODE|Live GitHub PR creation requires|Live draft PR creation|Draft PR creation is mocked/);
 });
 
 test("workboard page has provider-aware adapters and local fallback UI", async () => {

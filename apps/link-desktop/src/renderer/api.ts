@@ -428,26 +428,6 @@ export interface ChatSession {
   };
 }
 
-export interface LinkChangeRequest {
-  id: string;
-  title: string;
-  summary: string;
-  requestedChange: string;
-  status: "pending_review" | "approved" | "dismissed" | "draft_pr_created";
-  createdAt: string;
-  updatedAt: string;
-  sourceSessionId?: string;
-  workspaceId?: string;
-  githubRepo?: string;
-  github?: {
-    mode: "live";
-    branch?: string;
-    prUrl?: string;
-    issueUrl?: string;
-    note: string;
-  };
-}
-
 export interface ConnectorStatus {
   id: string;
   name: string;
@@ -1761,17 +1741,6 @@ export interface LinkDesktopApi {
   }): Promise<ChatSession>;
   selectChatAttachments(): Promise<ChatAttachmentSelection>;
   transcribeAudio(input: VoiceTranscriptionInput): Promise<VoiceTranscriptionResult>;
-  createChangeRequest(input: {
-    title: string;
-    summary: string;
-    requestedChange: string;
-    workspaceId?: string;
-    sourceSessionId?: string;
-    githubRepo?: string;
-  }): Promise<LinkChangeRequest>;
-  approveChangeRequest(id: string): Promise<LinkChangeRequest>;
-  dismissChangeRequest(id: string): Promise<LinkChangeRequest>;
-  listChangeRequests(): Promise<LinkChangeRequest[]>;
   listAgents(): Promise<AgentSummary[]>;
   sendAgentMessage(input: { agentId: string; content: string }): Promise<AgentInteractionResult>;
   listWorkboard(input?: { provider?: WorkboardProvider; boardId?: string; preferredAgentType?: "hermes" | "openclaw" }): Promise<WorkboardSnapshot>;
@@ -1853,7 +1822,6 @@ function sortChatSessions(sessions: ChatSession[]) {
   });
 }
 
-let previewChangeRequests: LinkChangeRequest[] = [];
 let previewConnectors: ConnectorStatus[] = [];
 let previewGatewayMessages: MessageGatewayMessage[] = [];
 let previewGoogleConnected = false;
@@ -3320,34 +3288,6 @@ const previewLinkApi: LinkDesktopApi = {
   },
   async transcribeAudio() {
     throw new Error("Add a managed model gateway API key in Settings to use voice input.");
-  },
-  async createChangeRequest(input) {
-    const request: LinkChangeRequest = {
-      id: `change-${Date.now()}`,
-      title: input.title,
-      summary: input.summary,
-      requestedChange: input.requestedChange,
-      status: "pending_review",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      workspaceId: input.workspaceId,
-      sourceSessionId: input.sourceSessionId,
-    };
-    previewChangeRequests = [request, ...previewChangeRequests];
-    return request;
-  },
-  async approveChangeRequest(id) {
-    void id;
-    throw new Error("Live GitHub draft PR creation is unavailable in this preview.");
-  },
-  async dismissChangeRequest(id) {
-    previewChangeRequests = previewChangeRequests.map((request) =>
-      request.id === id ? { ...request, status: "dismissed", updatedAt: new Date().toISOString() } : request,
-    );
-    return previewChangeRequests.find((request) => request.id === id)!;
-  },
-  async listChangeRequests() {
-    return previewChangeRequests;
   },
   async listAgents() {
     return previewAuthEnabled()

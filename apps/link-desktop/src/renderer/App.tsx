@@ -5640,12 +5640,14 @@ function AssistantPanel({
 
   async function suggestDocsUpdate(message: ChatMessage) {
     const previousUserMessage = [...(selectedSession?.messages ?? [])].reverse().find((item) => item.role === "user");
-    setDocsSuggestionStatus("Drafting documentation update");
+    setDocsSuggestionStatus("Adding documentation review task");
     try {
-      await linkApi.createChangeRequest({
+      await linkApi.createWorkboardCard({
+        provider: "local",
         title: "Suggest Telnyx documentation update",
-        summary: "A bot answer may be wrong or incomplete against Telnyx Support Center or Developer Docs.",
-        requestedChange: [
+        body: [
+          "A bot answer may be wrong or incomplete against Telnyx Support Center or Developer Docs.",
+          "",
           "Documentation sources to verify:",
           "- https://support.telnyx.com/en/",
           "- https://developers.telnyx.com/docs/overview",
@@ -5659,14 +5661,15 @@ function AssistantPanel({
           "Requested outcome:",
           "Update the relevant documentation in team-telnyx/link so future OpenClaw/Hermes/AIDA answers can cite the corrected source.",
         ].join("\n"),
-        workspaceId: selectedWorkspace?.id,
-        sourceSessionId: selectedSession?.id,
-        githubRepo: "team-telnyx/link",
+        labels: ["docs", "review"],
+        status: "todo",
+        workspace: selectedWorkspace?.id,
+        autoDispatch: false,
       });
       await refresh();
-      setDocsSuggestionStatus("Docs update suggestion queued for review.");
+      setDocsSuggestionStatus("Docs update task added to Taskbox.");
     } catch (err) {
-      setDocsSuggestionStatus(err instanceof Error ? err.message : "Unable to draft docs update.");
+      setDocsSuggestionStatus(err instanceof Error ? err.message : "Unable to add docs update task.");
     }
   }
 
