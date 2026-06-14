@@ -912,7 +912,12 @@ test("app marketplace uses the managed Link App Publisher catalog", async () => 
   assert.match(main, /return mergePublishedApps\(livePublishedApps, publishedApps\)\.find/);
   assert.match(main, /return \[localEdgeAppsRoot\(\), localAppsRoot\(\)\]/);
   assert.match(main, /destinationRoot:\s*localEdgeAppsRoot\(\)/);
-  assert.doesNotMatch(main, /Only draft apps inside this repo's edge-apps or apps folders can be removed/);
+  assert.match(main, /function assertLocalEdgeDraftDirectory/);
+  assert.match(main, /fs\.realpath\(directory\)/);
+  assert.match(main, /await assertLocalEdgeDraftDirectory\(requestedDirectory, "Draft app directory"\)/);
+  assert.match(main, /await assertLocalEdgeDraftDirectory\(requestedDirectory, "Preview app directory"\)/);
+  assert.match(main, /await assertLocalEdgeDraftDirectory\(requestedDirectory, "Deploy app directory"\)/);
+  assert.match(main, /Import the app before previewing or deploying it/);
   assert.doesNotMatch(main, /liveApps\.length > 0 \? liveApps : defaultPublishedApps\(\)/);
   assert.match(main, /function isPlaceholderPublishedApp/);
   assert.match(main, /function isEdgeHostedPublishedApp/);

@@ -8919,6 +8919,20 @@ async function localEdgeDraftSearchRoots() {
   return [localEdgeAppsRoot(), localAppsRoot()];
 }
 
+async function assertLocalEdgeDraftDirectory(directoryPath, label = "directory") {
+  const directory = path.resolve(normalizeOptionalString(directoryPath));
+  const stat = await fs.stat(directory).catch(() => null);
+  if (!stat?.isDirectory()) throw new Error(`${label} must be an existing draft app directory.`);
+  const realDirectory = await fs.realpath(directory).catch(() => directory);
+  const roots = await Promise.all((await localEdgeDraftSearchRoots()).map(async (root) => fs.realpath(path.resolve(root)).catch(() => path.resolve(root))));
+  const insideDraftRoot = roots.some((root) => {
+    const relative = path.relative(root, realDirectory);
+    return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
+  });
+  if (!insideDraftRoot) throw new Error(`${label} must be an imported Link draft app. Import the app before previewing or deploying it.`);
+  return directory;
+}
+
 async function localEdgeDraftCandidateDirectories(searchRoot, maxDepth = 2) {
   const directories = [];
   async function walk(directory, depth) {
@@ -8977,10 +8991,7 @@ async function listLocalEdgeDraftApps() {
 async function deleteLocalEdgeDraftApp(input = {}) {
   const requestedDirectory = normalizeOptionalString(input.directory);
   if (!requestedDirectory) throw new Error("Choose a draft app to remove.");
-  const directory = path.resolve(requestedDirectory);
-  const searchRoots = (await localEdgeDraftSearchRoots()).map((root) => path.resolve(root));
-  const insideAllowedRoot = searchRoots.some((root) => directory.startsWith(`${root}${path.sep}`));
-  if (!insideAllowedRoot) throw new Error("Only draft apps inside this repo's edge-apps folder can be removed.");
+  const directory = await assertLocalEdgeDraftDirectory(requestedDirectory, "Draft app directory");
   if (!await directoryHasLocalLinkManifest(directory)) throw new Error("Refusing to remove a folder without link-app.yml.");
   await fs.rm(directory, { recursive: true, force: true });
   auditPublisherAction("edge.local_app.deleted", "delete_local_edge_draft_app", `draft-${path.basename(directory)}`, { directory });
@@ -9066,7 +9077,7 @@ async function startLocalEdgePreviewServer(key, rootDirectory) {
 async function prepareLocalEdgeAppForPreview(input = {}) {
   const requestedDirectory = normalizeOptionalString(input.directory);
   const requestedSlug = slugify(normalizeOptionalString(input.slug ?? input.urlSlug ?? input.url_slug));
-  let directory = requestedDirectory;
+  let directory = requestedDirectory ? await assertLocalEdgeDraftDirectory(requestedDirectory, "Preview app directory") : "";
   if (!directory && requestedSlug) directory = await findGeneratedEdgeAppDirectory(requestedSlug);
   if (!directory) {
     throw new Error(requestedSlug ? `No generated app folder found for edge-apps/${requestedSlug}. Ask the agent to build it first.` : "Choose a URL slug before previewing.");
@@ -9133,7 +9144,7 @@ async function previewLocalEdgeApp(input = {}) {
 async function deployLocalEdgeApp(input = {}) {
   const requestedDirectory = normalizeOptionalString(input.directory);
   const requestedSlug = slugify(normalizeOptionalString(input.slug ?? input.urlSlug ?? input.url_slug));
-  let directory = requestedDirectory;
+  let directory = requestedDirectory ? await assertLocalEdgeDraftDirectory(requestedDirectory, "Deploy app directory") : "";
   if (!directory) {
     const generatedDirectory = requestedSlug ? await findGeneratedEdgeAppDirectory(requestedSlug) : "";
     if (generatedDirectory) {
