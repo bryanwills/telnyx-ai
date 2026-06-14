@@ -89,9 +89,9 @@ That command builds `tools/link` plus the desktop renderer, starts a local manag
 
 ## Current Surfaces
 
-- Workspaces with persisted tabs, Link-created files, automations, approvals, and change requests
-- Explorer search across Telnyx Help Center, Developer Docs, mocked Guru, Google Drive, Link files, skills, agents, and memory
-- Chats with Telnyx LiteLLM-ready runtime fallback and admin-reviewed Link improvement requests
+- Chats with Telnyx LiteLLM-ready runtime fallback and Taskbox-backed review tasks
+- Wiki search across Telnyx Help Center, Developer Docs, Guru, Pylon, custom sources, skills, and agents
+- Taskbox with provider-aware Hermes, OpenClaw, Google Tasks, and local fallback adapters
 - Skills from `tools/link/skills` and the root Telnyx Git-backed `skills/` directory
 - Agents directory with Agent Control Plane Okta readiness and mocked fallback agents
 - Connections with connector status and Auto/Allow/Ask tool permission groups
@@ -100,13 +100,13 @@ That command builds `tools/link` plus the desktop renderer, starts a local manag
 - Apps publishing through the managed Link App Publisher contract, with live VPN-only API handoff and local fallback catalog state
 - Internal Design System and Settings surfaces
 
-Generated drafts, approval decisions, automations, and connector request state are persisted in Electron user data.
+Chat sessions, Taskbox cards, generated artifacts, saved connector state, and local app publisher state are persisted in Electron user data.
 
 The app uses hybrid live-ready adapters. It contacts production services only when the related saved credentials, environment variables, or Okta session are configured; otherwise it returns deterministic mocked data.
 
-## Task Board Status Architecture
+## Taskbox Status Architecture
 
-All Link task boards use the same four stages: `Needs Review`, `To Do`, `In Progress`, and `Done`. New unstarted tasks land in `To Do`; sending a task to an ACP agent moves it to `In Progress`; when an agent finishes and has a final response ready, it moves the task to `Needs Review`; a human reviewer moves accepted or closed work to `Done`.
+All Link task workflows use the same four stages: `Needs Review`, `To Do`, `In Progress`, and `Done`. New unstarted tasks land in `To Do`; sending a task to an ACP agent moves it to `In Progress`; when an agent finishes and has a final response ready, it moves the task to `Needs Review`; a human reviewer moves accepted or closed work to `Done`.
 
 Link injects this operating guide into task monitoring chat sessions and live ACP routing prompts so agents know to use `Needs Review`, not `Done`, when handing completed agent work back to a human.
 

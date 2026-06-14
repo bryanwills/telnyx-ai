@@ -6,13 +6,18 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CLI = join(__dirname, "..", "bin", "telnyx-agent.ts");
-const run = (args: string) => execSync(`npx tsx ${CLI} ${args}`, { encoding: "utf-8", timeout: 30000 });
+const splitArgs = (args: string): string[] => args.trim().split(/\s+/).filter(Boolean);
+const run = (args: string) =>
+  execFileSync("npx", ["tsx", CLI, ...splitArgs(args)], {
+    encoding: "utf-8",
+    timeout: 30000,
+  });
 
 describe("telnyx-agent CLI", () => {
   describe("help", () => {

@@ -2,15 +2,15 @@
 
 Telnyx Link is a desktop AI workspace for Telnyx employees. It brings together agents, company knowledge, skills, memory, phone workflows, tasks, and approved actions in one place.
 
-Link is designed for everyday internal work: asking questions, finding the right context, drafting customer-safe responses, working with internal agents, creating documents, reviewing tasks, and improving Link itself through admin-reviewed change requests.
+Link is designed for everyday internal work: asking questions, finding the right context, drafting customer-safe responses, working with internal agents, creating documents, reviewing tasks, and tracking follow-up work in Taskbox.
 
 ## What You Can Do
 
 - Chat with personal and directory agents.
-- Search company knowledge in Company Library.
+- Search company knowledge in Wiki.
 - Use Telnyx Skills and squad kits in Wiki.
-- Work from a Widgets dashboard with reports and saved views.
-- Track tasks in Task Board.
+- Track tasks and agent handoffs in Taskbox.
+- Publish and review internal apps through the managed Apps flow.
 - Use Memory Bank for long-term agent memory and recall.
 - Configure Phone, contacts, SIP/WebRTC, and Telnyx AI Assistants.
 - Review and approve Link-generated drafts before external/customer-visible action.
@@ -33,13 +33,9 @@ When Link opens:
 
 ## Main Pages
 
-### Widgets
-
-Your home dashboard for reports, snapshots, and operational widgets.
-
 ### Agent Chat
 
-A persistent chat workspace for personal agents, hosted agents, and Slack-connected bots. Agent Chat can also create reviewable Link improvement requests.
+A persistent chat workspace for personal agents, hosted agents, and Slack-connected bots. Agent Chat can create local Taskbox review tasks when an answer needs follow-up.
 
 ### Phone
 
@@ -49,11 +45,7 @@ Configure phone settings, contacts, SIP/WebRTC details, and Telnyx AI Assistants
 
 Find and work with agents available through Telnyx systems.
 
-### Company Library
-
-Search internal documentation, Link-created files, Telnyx Skills, agents, and connected knowledge sources.
-
-### Task Board
+### Taskbox
 
 Track active work in a kanban-style board.
 
@@ -63,7 +55,11 @@ Browse and prompt Hindsight-backed memory banks, including documents, memories, 
 
 ### Wiki
 
-Train and equip your agents with Telnyx Skills, squad kits, and internal app capabilities.
+Search internal documentation, inspect Telnyx Skills, and equip your agents with squad kits and internal app capabilities.
+
+### Apps
+
+Publish, review, duplicate, roll back, and deprecate internal Link apps through the managed Link App Publisher contract.
 
 ### Settings
 

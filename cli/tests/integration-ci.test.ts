@@ -4,7 +4,7 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,8 +19,9 @@ if (!process.env.TELNYX_API_KEY) {
 const CLI_TIMEOUT_MS = Number(process.env.CLI_INTEGRATION_TIMEOUT_MS ?? 60000);
 let cachedStatusJson: any | undefined;
 
+const splitArgs = (args: string): string[] => args.trim().split(/\s+/).filter(Boolean);
 const run = (args: string): string => {
-  return execSync(`npx tsx ${CLI} ${args}`, {
+  return execFileSync("npx", ["tsx", CLI, ...splitArgs(args)], {
     encoding: "utf-8",
     timeout: CLI_TIMEOUT_MS,
     env: { ...process.env },
@@ -242,7 +243,7 @@ describe("CLI — setup-wireguard (network creation)", () => {
 });
 
 describe("CLI — setup-verify (verify profile creation)", () => {
-  it("returns valid JSON output shape or graceful error", () => {
+  it("returns valid JSON output shape or graceful error", async () => {
     const result = tryRunJson("setup-verify --json");
     if (result.ok) {
       const data = result.data;
@@ -258,13 +259,14 @@ describe("CLI — setup-verify (verify profile creation)", () => {
             Authorization: `Bearer ${process.env.TELNYX_API_KEY}`,
             "Content-Type": "application/json",
           };
-          // Best-effort cleanup via curl
-          execSync(`curl -s -X DELETE "https://api.telnyx.com/v2/verify/profiles/${data.profile_id}" -H "Authorization: Bearer ${process.env.TELNYX_API_KEY}"`, {
-            timeout: 10000,
+          await fetch(`https://api.telnyx.com/v2/verify/profiles/${data.profile_id}`, {
+            method: "DELETE",
+            headers,
           });
           if (data.phone_number_id) {
-            execSync(`curl -s -X DELETE "https://api.telnyx.com/v2/phone_numbers/${data.phone_number_id}" -H "Authorization: Bearer ${process.env.TELNYX_API_KEY}"`, {
-              timeout: 10000,
+            await fetch(`https://api.telnyx.com/v2/phone_numbers/${data.phone_number_id}`, {
+              method: "DELETE",
+              headers,
             });
           }
         } catch { /* best effort cleanup */ }
