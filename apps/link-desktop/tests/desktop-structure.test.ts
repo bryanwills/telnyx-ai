@@ -117,7 +117,6 @@ test("Electron windows follow the internal app security baseline", async () => {
   assert.match(index, /Content-Security-Policy/);
   assert.match(index, /object-src 'none'/);
   assert.match(index, /frame-src 'self' http:\/\/127\.0\.0\.1:\* http:\/\/localhost:\*/);
-  assert.doesNotMatch(index, /tableau/i);
   assert.doesNotMatch(index, /frame-src 'none'/);
   assert.match(index, /form-action 'none'/);
 });
@@ -879,14 +878,12 @@ test("removed desktop pages stay unwired", async () => {
   assert.doesNotMatch(app, /view === "widgets"/);
   assert.doesNotMatch(app, /view === "workspaces"/);
   assert.doesNotMatch(app, /setView\("workspaces"\)/);
-  assert.doesNotMatch(app, /TableauEmbeddedWidget|TableauEventType|document\.createElement\("tableau-viz"\)|WidgetChart/);
+  assert.doesNotMatch(app, /WidgetChart/);
   assert.doesNotMatch(api, /\| "widgets"|\| "workspaces"|\| "explorer"/);
-  assert.doesNotMatch(api, /WorkspaceSummary|WidgetCatalogItem|WidgetTableauEmbedSpec|listWorkspaces|listWidgetCatalog|createSharedChannelDraft|listActiveWork|listAutomations/);
-  assert.doesNotMatch(main, /TABLEAU_|tableau|link:list-widget|link:list-workspaces|widgetLayout|link:shared-channel-draft|link:list-active-work|link:list-automations|createActiveWork|formatSharedChannelResponse/i);
+  assert.doesNotMatch(api, /WorkspaceSummary|WidgetCatalogItem|listWorkspaces|listWidgetCatalog|createSharedChannelDraft|listActiveWork|listAutomations/);
+  assert.doesNotMatch(main, /link:list-widget|link:list-workspaces|widgetLayout|link:shared-channel-draft|link:list-active-work|link:list-automations|createActiveWork|formatSharedChannelResponse/i);
   assert.doesNotMatch(preload, /listWorkspaces|listWidgetCatalog|createSharedChannelDraft|listActiveWork|listAutomations/);
-  assert.doesNotMatch(styles, /widgetsView|dashboardWidget|workspaceGrid|artifactCard|tableauWidget/);
-  assert.doesNotMatch(index, /tableau/i);
-  assert.ok(!pkg.dependencies?.["@tableau/embedding-api"]);
+  assert.doesNotMatch(styles, /widgetsView|dashboardWidget|workspaceGrid|artifactCard/);
   assert.ok(!pkg.dependencies?.recharts);
   assert.match(app, /function ExplorerView\(\{/);
 });
@@ -2661,8 +2658,6 @@ test("main process has v2 state, live-ready adapters, and Taskbox review flow", 
   assert.doesNotMatch(main, /name: "Standard"/);
   assert.doesNotMatch(main, /name: "Sales"/);
   assert.doesNotMatch(main, /name: "Support"/);
-  assert.doesNotMatch(main, /tableauWidgetHeaders/);
-  assert.doesNotMatch(main, /ACP identity and Tableau view entitlement/);
   assert.match(main, /LITELLM_BASE_URL/);
   assert.match(main, /HINDSIGHT_API_KEY/);
   assert.match(main, /HINDSIGHT_API_URL/);
