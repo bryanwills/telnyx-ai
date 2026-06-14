@@ -138,17 +138,17 @@ The repo includes a live regression harness that:
 Create a `.env` file in `plugins/opencode/` or export `TELNYX_API_KEY`, then run:
 
 ```bash
-npm test
+npm run test:live
 ```
 
 Useful optional filters:
 
 ```bash
-TELNYX_TEST_MODEL_MATCH=Llama-3.3-70B-Instruct npm test
-TELNYX_TEST_LIMIT=1 npm test
-TELNYX_TEST_AGENT=sisyphus npm test
-TELNYX_TEST_VARIANT=max npm test
-TELNYX_TEST_INCLUDE_EXTERNAL=1 npm test
+TELNYX_TEST_MODEL_MATCH=Llama-3.3-70B-Instruct npm run test:live
+TELNYX_TEST_LIMIT=1 npm run test:live
+TELNYX_TEST_AGENT=sisyphus npm run test:live
+TELNYX_TEST_VARIANT=max npm run test:live
+TELNYX_TEST_INCLUDE_EXTERNAL=1 npm run test:live
 ```
 
 Artifacts are written to `test/.artifacts/`, including raw per-model outputs and a `results.json` summary. External-provider models are reported separately and, if included explicitly, marked as skipped because the plugin intentionally does not register them without provider-specific key support.
