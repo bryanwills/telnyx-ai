@@ -7,6 +7,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(__dirname, "..", "..");
 const CLI = join(__dirname, "..", "bin", "telnyx-agent.ts");
 const TELNYX_MCP_URL = "https://api.telnyx.com/v2/mcp";
 
@@ -48,6 +49,16 @@ describe("CLI — setup-cursor-mcp", () => {
     const category = Object.keys(data.api_capabilities || {}).find((k) => k.includes("IDE Integrations"));
     assert.ok(category);
     assert.ok(data.api_capabilities[category].some((c: any) => c.actions.includes("setup_cursor_mcp")));
+  });
+
+  it("canonical agent manifest includes setup_cursor_mcp capability", () => {
+    const agentJson = JSON.parse(readFileSync(join(REPO_ROOT, "agent.json"), "utf8"));
+    const capability = agentJson.capabilities.find((cap: any) => cap.id === "ide_integrations");
+
+    assert.ok(capability, "agent.json should expose IDE Integrations capability");
+    assert.equal(capability.name, "IDE Integrations");
+    assert.ok(capability.cli.includes("setup-cursor-mcp"));
+    assert.ok(capability.actions.includes("setup_cursor_mcp"));
   });
 
   it("creates a new Cursor config if missing", () => {
