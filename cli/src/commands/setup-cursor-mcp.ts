@@ -51,10 +51,10 @@ export async function setupCursorMcpCommand(flags: Record<string, string | boole
           result.action = "error";
           result.detail = "mcp.json exists but is malformed JSON. Use --force to overwrite.";
           if (jsonOutput) {
-            outputJson(result);
-            return;
+            return failWithJson(result);
           }
           printError("Failed to parse existing .cursor/mcp.json", result.detail);
+          process.exitCode = 1;
           return;
         }
         // If force, we just overwrite
@@ -70,10 +70,10 @@ export async function setupCursorMcpCommand(flags: Record<string, string | boole
         result.action = "error";
         result.detail = "mcp.json must contain a JSON object. Use --force to overwrite.";
         if (jsonOutput) {
-          outputJson(result);
-          return;
+          return failWithJson(result);
         }
         printError("Invalid .cursor/mcp.json", result.detail);
+        process.exitCode = 1;
         return;
       }
       currentConfig = { mcpServers: {} };
@@ -87,10 +87,10 @@ export async function setupCursorMcpCommand(flags: Record<string, string | boole
         result.action = "error";
         result.detail = "mcp.json mcpServers must be an object. Use --force to overwrite.";
         if (jsonOutput) {
-          outputJson(result);
-          return;
+          return failWithJson(result);
         }
         printError("Invalid .cursor/mcp.json", result.detail);
+        process.exitCode = 1;
         return;
       }
       currentConfig.mcpServers = {};
@@ -105,10 +105,10 @@ export async function setupCursorMcpCommand(flags: Record<string, string | boole
           result.action = "skipped";
           result.detail = "A 'telnyx' MCP server already exists with different settings. Use --force to overwrite.";
           if (jsonOutput) {
-            outputJson(result);
-            return;
+            return failWithJson(result);
           }
           printWarning(result.detail);
+          process.exitCode = 1;
           return;
         } else {
           result.action = "merged";
@@ -157,7 +157,13 @@ export async function setupCursorMcpCommand(flags: Record<string, string | boole
     } else {
       printError("Failed to setup Cursor MCP", result.detail);
     }
+    process.exitCode = 1;
   }
+}
+
+function failWithJson(result: CursorMcpResult): void {
+  outputJson(result);
+  process.exitCode = 1;
 }
 
 function isCursorMcpServer(value: unknown): value is CursorMcpServer {

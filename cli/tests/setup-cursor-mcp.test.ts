@@ -122,6 +122,7 @@ describe("CLI — setup-cursor-mcp", () => {
     );
 
     const result = runWithStderr(["setup-cursor-mcp", "--dir", tempDir]);
+    assert.equal(result.status, 1);
     assert.ok(result.stderr.includes("exists with different settings"));
     
     // Ensure it wasn't overwritten
@@ -158,6 +159,7 @@ describe("CLI — setup-cursor-mcp", () => {
     writeFileSync(configPath, "{ malformed: json, ]}");
 
     const result = runWithStderr(["setup-cursor-mcp", "--dir", tempDir]);
+    assert.equal(result.status, 1);
     assert.ok(result.stderr.includes("malformed JSON"));
 
     // Ensure it wasn't overwritten
@@ -187,6 +189,7 @@ describe("CLI — setup-cursor-mcp", () => {
     writeFileSync(configPath, initialContent, "utf8");
 
     const result = runWithStderr(["setup-cursor-mcp", "--dir", tempDir]);
+    assert.equal(result.status, 1);
     assert.ok(result.stderr.includes("mcpServers must be an object"));
     assert.equal(readFileSync(configPath, "utf8"), initialContent);
   });
@@ -211,8 +214,9 @@ describe("CLI — setup-cursor-mcp", () => {
 
   it("outputs valid JSON with --json", () => {
     const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
-    const output = run(["setup-cursor-mcp", "--dir", tempDir, "--json"]);
-    const data = JSON.parse(output);
+    const result = runWithStderr(["setup-cursor-mcp", "--dir", tempDir, "--json"]);
+    assert.equal(result.status, 0);
+    const data = JSON.parse(result.stdout);
     assert.equal(data.ready, true);
     assert.ok(data.path);
   });
@@ -235,14 +239,15 @@ describe("CLI — setup-cursor-mcp", () => {
       })
     );
 
-    const output = run(["setup-cursor-mcp", "--dir", tempDir, "--json"]);
-    const data = JSON.parse(output);
+    const result = runWithStderr(["setup-cursor-mcp", "--dir", tempDir, "--json"]);
+    assert.equal(result.status, 0);
+    const data = JSON.parse(result.stdout);
     assert.equal(data.action, "merged");
     assert.equal(data.ready, true);
     assert.equal(data.config.mcpServers.telnyx.url, TELNYX_MCP_URL);
     assert.equal(data.config.mcpServers.existing, undefined);
-    assert.ok(!output.includes("should-not-leak"));
-    assert.ok(!output.includes("Authorization"));
+    assert.ok(!result.stdout.includes("should-not-leak"));
+    assert.ok(!result.stdout.includes("Authorization"));
   });
 
   it("outputs JSON error for malformed JSON without --force", () => {
@@ -252,8 +257,9 @@ describe("CLI — setup-cursor-mcp", () => {
     const configPath = join(cursorDir, "mcp.json");
     writeFileSync(configPath, "{ malformed: json, ]}");
 
-    const output = run(["setup-cursor-mcp", "--dir", tempDir, "--json"]);
-    const data = JSON.parse(output);
+    const result = runWithStderr(["setup-cursor-mcp", "--dir", tempDir, "--json"]);
+    assert.equal(result.status, 1);
+    const data = JSON.parse(result.stdout);
     assert.equal(data.action, "error");
     assert.equal(data.ready, false);
     assert.ok(data.detail.includes("malformed JSON"));
@@ -287,8 +293,9 @@ describe("CLI — setup-cursor-mcp", () => {
       })
     );
 
-    const output = run(["setup-cursor-mcp", "--dir", tempDir, "--json"]);
-    const data = JSON.parse(output);
+    const result = runWithStderr(["setup-cursor-mcp", "--dir", tempDir, "--json"]);
+    assert.equal(result.status, 1);
+    const data = JSON.parse(result.stdout);
     assert.equal(data.action, "skipped");
     assert.equal(data.ready, false);
     assert.ok(data.detail.includes("different settings"));
