@@ -2,6 +2,20 @@ import AppKit
 import Carbon
 
 final class GlobalHotKeyController {
+    enum ShortcutMode {
+        case holdFunction
+        case commandShiftL
+
+        init(environmentValue: String?) {
+            switch environmentValue {
+            case "cmd-shift-l":
+                self = .commandShiftL
+            default:
+                self = .holdFunction
+            }
+        }
+    }
+
     private static let lKeyCode: UInt16 = 37  // "L" key on US keyboard
     private static let escapeKeyCode: UInt16 = 53
 
@@ -34,8 +48,10 @@ final class GlobalHotKeyController {
     private let onStart: () -> Void
     private let onFinish: () -> Void
     private let onCancel: () -> Void
+    private let shortcutMode: ShortcutMode
 
-    init(onStart: @escaping () -> Void, onFinish: @escaping () -> Void, onCancel: @escaping () -> Void) {
+    init(shortcutMode: ShortcutMode, onStart: @escaping () -> Void, onFinish: @escaping () -> Void, onCancel: @escaping () -> Void) {
+        self.shortcutMode = shortcutMode
         self.onStart = onStart
         self.onFinish = onFinish
         self.onCancel = onCancel
@@ -51,7 +67,9 @@ final class GlobalHotKeyController {
         }
 
         ensureEventHandlerInstalled()
-        registerStartHotKey()
+        if shortcutMode == .commandShiftL {
+            registerStartHotKey()
+        }
         escapeGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             _ = self?.handleEscape(event: event)
         }
@@ -208,6 +226,10 @@ final class GlobalHotKeyController {
     }
 
     private func handleModifierFlagsChanged(event: NSEvent) {
+        guard shortcutMode == .holdFunction else {
+            return
+        }
+
         let functionPressed = event.modifierFlags.contains(.function)
 
         if functionPressed && !functionKeyIsDown {

@@ -176,6 +176,46 @@ export function DialerBuilder({
     });
   }
 
+  function renderFeatureDetailPanel(feature: DialerConfig["enabledFeatures"][number]) {
+    if (feature === "local-calling") {
+      return (
+        <div className="dialerFeatureDetailCard">
+          <div className="dialerFeatureDetailRow">
+            <span>Default</span>
+            <strong>{draft.showCountryPrefix ? "Add local country code" : "Require full number"}</strong>
+            <button
+              className={`dialerSwitch ${draft.showCountryPrefix ? "on" : ""}`}
+              type="button"
+              role="switch"
+              aria-checked={draft.showCountryPrefix}
+              aria-label="Allow local calling without country code by default"
+              onClick={() => setDraft((current) => ({ ...current, showCountryPrefix: !current.showCountryPrefix, updatedAt: new Date().toISOString() }))}
+            >
+              <span />
+            </button>
+          </div>
+          <p>For North America numbers, 10-digit calls will use the outbound line&apos;s +1 automatically.</p>
+        </div>
+      );
+    }
+
+    if (feature === "crm") {
+      const provider = String(draft.featureSettings.crm?.["crm-provider"] ?? "Salesforce MCP");
+      return (
+        <div className="dialerFeatureDetailCard">
+          <div className="dialerFeatureDetailRow">
+            <span>Contact source</span>
+            <strong>{provider}</strong>
+            <em>Pre-call preview</em>
+          </div>
+          <p>Connect Salesforce MCP to preview contact, account, history, and opportunity data before placing the call.</p>
+        </div>
+      );
+    }
+
+    return null;
+  }
+
   const visibleFeatures = useMemo(() => dialerFeatures.filter((feature) => feature.phase === phase), [phase]);
   const selectedActions = useMemo(() => draft.actions.map((id) => dialerActions.find((action) => action.id === id)).filter(Boolean), [draft.actions]);
   const actions = useMemo(() => (
@@ -246,6 +286,7 @@ export function DialerBuilder({
                       })}
                     </div>
                   )}
+                  {enabled && expanded && renderFeatureDetailPanel(feature.id)}
                 </article>
               );
             })}
@@ -276,10 +317,13 @@ export function DialerBuilder({
                 {dialerActions.filter((action) => !draft.actions.includes(action.id)).map((action) => {
                   const Icon = iconFor(action.icon);
                   return (
-                    <button key={action.id} type="button" onClick={() => toggleAction(action.id)} disabled={draft.actions.length >= 6}>
-                      <Icon size={14} />
-                      {action.label}
-                    </button>
+                    <div className={`dialerActionRow dialerAvailableActionRow ${action.style === "end" ? "end" : ""}`} key={action.id}>
+                      <Icon size={16} />
+                      <span>{action.label}</span>
+                      <button type="button" aria-label={`Move ${action.label} up`} disabled><ArrowUp size={13} /></button>
+                      <button type="button" aria-label={`Move ${action.label} down`} disabled><ArrowDown size={13} /></button>
+                      <button type="button" onClick={() => toggleAction(action.id)} disabled={draft.actions.length >= 6}>Add</button>
+                    </div>
                   );
                 })}
               </div>

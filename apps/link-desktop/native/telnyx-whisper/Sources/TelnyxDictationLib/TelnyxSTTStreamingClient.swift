@@ -121,6 +121,7 @@ public final class TelnyxSTTStreamingClient: STTStreaming, @unchecked Sendable {
     private var receiveTask: Task<Void, Never>?
 
     private let apiKeyProvider: () -> String?
+    private let languageProvider: () -> String
     private let transportFactory: (URLRequest) -> WebSocketTransport
 
     // MARK: - Endpoint
@@ -133,6 +134,7 @@ public final class TelnyxSTTStreamingClient: STTStreaming, @unchecked Sendable {
     public convenience init() {
         self.init(
             apiKeyProvider: { TelnyxAPIKeyResolver.resolve() },
+            languageProvider: { ProcessInfo.processInfo.environment["TELNYX_WHISPER_LANGUAGE"] ?? "en-US" },
             transportFactory: { request in
                 URLSessionWebSocketTransport(request: request) { line in
                     TelnyxSTTStreamingClient.appendDebugLine(line)
@@ -144,9 +146,11 @@ public final class TelnyxSTTStreamingClient: STTStreaming, @unchecked Sendable {
     /// Internal initializer for testing with injectable dependencies.
     init(
         apiKeyProvider: @escaping () -> String?,
+        languageProvider: @escaping () -> String = { "en-US" },
         transportFactory: @escaping (URLRequest) -> WebSocketTransport
     ) {
         self.apiKeyProvider = apiKeyProvider
+        self.languageProvider = languageProvider
         self.transportFactory = transportFactory
         var cont: AsyncStream<STTTranscriptEvent>.Continuation!
         self.transcriptEvents = AsyncStream { continuation in
@@ -178,7 +182,7 @@ public final class TelnyxSTTStreamingClient: STTStreaming, @unchecked Sendable {
             URLQueryItem(name: "model", value: "deepgram/nova-3"),
             URLQueryItem(name: "input_format", value: "wav"),
             URLQueryItem(name: "interim_results", value: "true"),
-            URLQueryItem(name: "language", value: "en-US"),
+            URLQueryItem(name: "language", value: languageProvider()),
         ]
 
         guard let url = components.url else {
@@ -293,7 +297,7 @@ public final class TelnyxSTTStreamingClient: STTStreaming, @unchecked Sendable {
         return nil
     }
 
-    private static func appendDebugLine(_ line: String) {
+    static func appendDebugLine(_ line: String) {
         let fileURL = DictationLogPaths.baseDirectory().appendingPathComponent("stt-debug.log")
         let payload = Data(("[\(ISO8601DateFormatter().string(from: Date()))] \(line)\n").utf8)
 

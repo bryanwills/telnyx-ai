@@ -27,10 +27,28 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var thresholdProbeEngine: AudioCaptureEngine?
     private var thresholdProbeLevelTask: Task<Void, Never>?
     private var llmCleanupMenuItem: NSMenuItem?
+    private var startDictationMenuItem: NSMenuItem?
+    private weak var shortcutMenu: NSMenu?
+    private weak var languageMenu: NSMenu?
+    private var showFlowBarMenuItem: NSMenuItem?
 
     private static let selectedMicUIDDefaultsKey = "selectedMicrophoneUID"
+    private static let selectedShortcutModeDefaultsKey = "selectedShortcutMode"
+    private static let selectedLanguageDefaultsKey = "selectedLanguage"
     private static let speechThresholdDefaultsKey = "speechThreshold"
     private static let llmCleanupEnabledDefaultsKey = "llmCleanupEnabled"
+    private static let showFlowBarAlwaysDefaultsKey = "showFlowBarAlways"
+
+    private static let languageOptions: [(label: String, value: String)] = [
+        ("English", "en-US"),
+        ("Auto detect", "auto"),
+        ("Spanish", "es-ES"),
+        ("French", "fr-FR"),
+        ("German", "de-DE"),
+        ("Italian", "it-IT"),
+        ("Portuguese", "pt-BR"),
+        ("Dutch", "nl-NL"),
+    ]
 
     private enum MenuBarIconMode {
         case normal
@@ -68,36 +86,72 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
-            if let img = NSImage(systemSymbolName: "mic.fill",
-                                 accessibilityDescription: "Telnyx Dictation") {
+            if let img = NSImage(systemSymbolName: "waveform",
+                                 accessibilityDescription: "Telnyx Link") {
                 img.isTemplate = true
                 button.image = img
             } else {
                 // Fallback for older systems without SF Symbols
-                button.title = "🎤"
+                button.title = "S"
             }
         }
 
         let menu = NSMenu()
-        let statusMenuItem = NSMenuItem(title: "Telnyx Dictation", action: nil, keyEquivalent: "")
+        let statusMenuItem = NSMenuItem(title: "Scribe", action: nil, keyEquivalent: "")
         statusMenuItem.isEnabled = false
         statusTitleMenuItem = statusMenuItem
         menu.addItem(statusMenuItem)
         menu.addItem(NSMenuItem.separator())
 
         let startItem = NSMenuItem(
-            title: "Hold fn to Dictate",
+            title: "\(dictationShortcutLabel()) to Dictate",
             action: #selector(startDictationFromMenu),
             keyEquivalent: ""
         )
         startItem.target = self
+        startDictationMenuItem = startItem
         menu.addItem(startItem)
+
+        let pasteLastItem = NSMenuItem(
+            title: "Paste Last Transcript",
+            action: #selector(pasteLastTranscriptFromMenu),
+            keyEquivalent: "v"
+        )
+        pasteLastItem.keyEquivalentModifierMask = [.command, .option]
+        pasteLastItem.target = self
+        menu.addItem(pasteLastItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let shortcutItem = NSMenuItem(title: "Shortcuts", action: nil, keyEquivalent: "")
+        let shortcutSubmenu = NSMenu(title: "Shortcuts")
+        shortcutItem.submenu = shortcutSubmenu
+        menu.addItem(shortcutItem)
+        self.shortcutMenu = shortcutSubmenu
 
         let microphoneItem = NSMenuItem(title: "Input Microphone", action: nil, keyEquivalent: "")
         let microphoneSubmenu = NSMenu(title: "Input Microphone")
         microphoneItem.submenu = microphoneSubmenu
         menu.addItem(microphoneItem)
         self.microphoneMenu = microphoneSubmenu
+
+        let languageItem = NSMenuItem(title: "Languages", action: nil, keyEquivalent: "")
+        let languageSubmenu = NSMenu(title: "Languages")
+        languageItem.submenu = languageSubmenu
+        menu.addItem(languageItem)
+        self.languageMenu = languageSubmenu
+
+        let flowBarItem = NSMenuItem(
+            title: "Show Scribe Bar at All Times",
+            action: #selector(toggleFlowBarFromMenu),
+            keyEquivalent: ""
+        )
+        flowBarItem.target = self
+        flowBarItem.state = UserDefaults.standard.bool(forKey: Self.showFlowBarAlwaysDefaultsKey) ? .on : .off
+        showFlowBarMenuItem = flowBarItem
+        menu.addItem(flowBarItem)
+
+        menu.addItem(NSMenuItem.separator())
 
         // Silence threshold slider
         let savedThreshold = UserDefaults.standard.float(forKey: Self.speechThresholdDefaultsKey)
@@ -168,13 +222,21 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(showLastTen)
 
         menu.addItem(NSMenuItem.separator())
+        menu.addItem(NSMenuItem(title: "Open Scribe Configure",
+                                action: #selector(openConfigureFromMenu),
+                                keyEquivalent: ""))
 
-        menu.addItem(NSMenuItem(title: "Quit Telnyx Dictation",
+        menu.addItem(NSMenuItem.separator())
+
+        menu.addItem(NSMenuItem(title: "Quit Scribe",
                                 action: #selector(NSApplication.terminate(_:)),
                                 keyEquivalent: "q"))
         menu.delegate = self
         statusItem.menu = menu
+        reloadShortcutMenu()
         reloadMicrophoneMenu()
+        reloadLanguageMenu()
+        updateFlowBarPreference()
     }
 
     @MainActor
@@ -207,12 +269,67 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @MainActor
+    @objc private func pasteLastTranscriptFromMenu() {
+        guard let transcript = lastTranscript(), !transcript.isEmpty else {
+            showTransientHUDMessage("No recent transcript found yet.")
+            return
+        }
+
+        do {
+            try PasteboardTextInserter().insert(transcript)
+            showTransientHUDMessage("Last transcript pasted.")
+        } catch {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(transcript, forType: .string)
+            showTransientHUDMessage("Last transcript copied. Enable Accessibility for auto-paste.")
+        }
+    }
+
+    @MainActor
+    @objc private func selectShortcutFromMenu(_ sender: NSMenuItem) {
+        guard let shortcutMode = sender.representedObject as? String else {
+            return
+        }
+
+        UserDefaults.standard.set(shortcutMode, forKey: Self.selectedShortcutModeDefaultsKey)
+        reloadShortcutMenu()
+        setupHotKeys()
+        startDictationMenuItem?.title = "\(dictationShortcutLabel()) to Dictate"
+        showTransientHUDMessage("Shortcut changed to \(dictationShortcutLabel()).")
+    }
+
+    @MainActor
     @objc private func selectMicrophoneFromMenu(_ sender: NSMenuItem) {
         let chosenUID = sender.representedObject as? String
         selectedMicrophoneUID = chosenUID
         UserDefaults.standard.set(chosenUID, forKey: Self.selectedMicUIDDefaultsKey)
         applySelectedMicrophone(runProbe: true)
         reloadMicrophoneMenu()
+    }
+
+    @MainActor
+    @objc private func selectLanguageFromMenu(_ sender: NSMenuItem) {
+        guard let language = sender.representedObject as? String else {
+            return
+        }
+
+        UserDefaults.standard.set(language, forKey: Self.selectedLanguageDefaultsKey)
+        reloadLanguageMenu()
+        setupDictationCoordinator()
+        showTransientHUDMessage("Dictation language changed to \(languageLabel(language)).")
+    }
+
+    @MainActor
+    @objc private func toggleFlowBarFromMenu() {
+        let nextValue = !UserDefaults.standard.bool(forKey: Self.showFlowBarAlwaysDefaultsKey)
+        UserDefaults.standard.set(nextValue, forKey: Self.showFlowBarAlwaysDefaultsKey)
+        showFlowBarMenuItem?.state = nextValue ? .on : .off
+        updateFlowBarPreference()
+    }
+
+    @MainActor
+    @objc private func openConfigureFromMenu() {
+        showTransientHUDMessage("Open Telnyx Link -> Scribe -> Configure to manage Scribe settings.")
     }
 
     @MainActor
@@ -277,10 +394,17 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @MainActor
     private func setupDictationCoordinator() {
-        let menuBarHUDPresenter = MenuBarHUDPresenter { [weak self] in
-            self?.statusItem.button
+        audioCaptureEngine?.stop()
+        let menuBarHUDPresenter: MenuBarHUDPresenter
+        if let existingPresenter = hudPresenter as? MenuBarHUDPresenter {
+            menuBarHUDPresenter = existingPresenter
+        } else {
+            menuBarHUDPresenter = MenuBarHUDPresenter { [weak self] in
+                self?.statusItem.button
+            }
+            self.hudPresenter = menuBarHUDPresenter
         }
-        self.hudPresenter = menuBarHUDPresenter
+        menuBarHUDPresenter.setFlowBarVisibleAtAllTimes(UserDefaults.standard.bool(forKey: Self.showFlowBarAlwaysDefaultsKey))
 
         let audioCapture = AudioCaptureEngine()
         audioCaptureEngine = audioCapture
@@ -293,7 +417,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         dictationCoordinator = DictationCoordinator(
             audioCapture: audioCapture,
             audioLevels: { audioCapture.audioLevels },
-            sttStreaming: ScribesSTTStreamingFactory.makeStreamingClient(),
+            sttStreaming: ScribesSTTStreamingFactory.makeStreamingClient(language: selectedLanguage()),
             hudPresenter: menuBarHUDPresenter,
             textInserter: PasteboardTextInserter(),
             accessibilityTrustChecker: { [weak self] in
@@ -306,7 +430,12 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func setupHotKeys() {
+        hotKeyController?.stopMonitoring()
+        let shortcutMode = GlobalHotKeyController.ShortcutMode(
+            environmentValue: selectedShortcutMode()
+        )
         let controller = GlobalHotKeyController(
+            shortcutMode: shortcutMode,
             onStart: { [weak self] in
                 self?.handleStartHotKey()
             },
@@ -319,6 +448,15 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         )
         controller.startMonitoring()
         hotKeyController = controller
+    }
+
+    private func dictationShortcutLabel() -> String {
+        switch selectedShortcutMode() {
+        case "cmd-shift-l":
+            return "Cmd+Shift+L"
+        default:
+            return "Hold fn"
+        }
     }
 
     private func handleStartHotKey() {
@@ -364,7 +502,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.showPermissionAlert(
                         title: "Microphone Access Required",
                         message: """
-                            Telnyx Dictation cannot start while microphone access is denied.
+                            Telnyx Link cannot start while microphone access is denied.
 
                             Enable access in System Settings -> Privacy & Security -> Microphone.
                             """,
@@ -480,7 +618,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             showPermissionAlert(
                 title: "Accessibility Access Recommended",
                 message: """
-                    Telnyx Dictation uses Accessibility to paste transcribed text into the active app.
+                    Telnyx Link uses Accessibility to paste transcribed text into the active app.
 
                     Without it, text will be copied to the clipboard only (no auto-paste).
 
@@ -523,6 +661,69 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.state = device.uid == selectedMicrophoneUID ? .on : .off
             microphoneMenu.addItem(item)
         }
+    }
+
+    @MainActor
+    private func reloadShortcutMenu() {
+        guard let shortcutMenu else {
+            return
+        }
+
+        shortcutMenu.removeAllItems()
+        let selected = selectedShortcutMode()
+        let options = [
+            ("Hold fn", "hold-fn"),
+            ("Cmd+Shift+L", "cmd-shift-l"),
+        ]
+
+        for option in options {
+            let item = NSMenuItem(title: option.0, action: #selector(selectShortcutFromMenu(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = option.1
+            item.state = option.1 == selected ? .on : .off
+            shortcutMenu.addItem(item)
+        }
+    }
+
+    @MainActor
+    private func reloadLanguageMenu() {
+        guard let languageMenu else {
+            return
+        }
+
+        languageMenu.removeAllItems()
+        let selected = selectedLanguage()
+        for option in Self.languageOptions {
+            let item = NSMenuItem(title: option.label, action: #selector(selectLanguageFromMenu(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = option.value
+            item.state = option.value == selected ? .on : .off
+            languageMenu.addItem(item)
+        }
+    }
+
+    private func selectedShortcutMode() -> String {
+        if let stored = UserDefaults.standard.string(forKey: Self.selectedShortcutModeDefaultsKey), !stored.isEmpty {
+            return stored
+        }
+        return ProcessInfo.processInfo.environment["TELNYX_WHISPER_SHORTCUT_MODE"] ?? "hold-fn"
+    }
+
+    private func selectedLanguage() -> String {
+        if let stored = UserDefaults.standard.string(forKey: Self.selectedLanguageDefaultsKey), !stored.isEmpty {
+            return stored
+        }
+        return ProcessInfo.processInfo.environment["TELNYX_WHISPER_LANGUAGE"] ?? "en-US"
+    }
+
+    private func languageLabel(_ value: String) -> String {
+        Self.languageOptions.first { $0.value == value }?.label ?? value
+    }
+
+    @MainActor
+    private func updateFlowBarPreference() {
+        showFlowBarMenuItem?.state = UserDefaults.standard.bool(forKey: Self.showFlowBarAlwaysDefaultsKey) ? .on : .off
+        (hudPresenter as? MenuBarHUDPresenter)?.setFlowBarVisibleAtAllTimes(UserDefaults.standard.bool(forKey: Self.showFlowBarAlwaysDefaultsKey))
     }
 
     @MainActor
@@ -674,6 +875,26 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         alert.runModal()
     }
 
+    private func lastTranscript() -> String? {
+        let url = DictationLogPaths.aggregateLogURL()
+        guard let raw = try? String(contentsOf: url, encoding: .utf8) else {
+            return nil
+        }
+
+        let decoder = JSONDecoder()
+        return raw.split(separator: "\n").reversed().compactMap { line -> String? in
+            guard let data = String(line).data(using: .utf8),
+                  let entry = try? decoder.decode(DictationSessionLogEntry.self, from: data),
+                  entry.stage == "session_result",
+                  let transcript = entry.transcript?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !transcript.isEmpty
+            else {
+                return nil
+            }
+            return transcript
+        }.first
+    }
+
     private func recentSessionEntries(limit: Int) -> [String] {
         let url = DictationLogPaths.aggregateLogURL()
         guard let raw = try? String(contentsOf: url, encoding: .utf8) else {
@@ -714,7 +935,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func updateMenuBarStatus(_ detail: String?) {
-        let baseTitle = "Telnyx Dictation"
+        let baseTitle = "Scribe"
         statusTitleMenuItem?.title = detail.map { "\(baseTitle) — \($0)" } ?? baseTitle
     }
 
@@ -748,14 +969,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if TelnyxAPIKeyResolver.resolve() == nil {
             updateMenuBarStatus("API key required")
             message = """
-            Telnyx Dictation is running in the menu bar.
+            Telnyx Link is running in the menu bar.
 
             TELNYX_API_KEY is not configured yet. Add it to ~/.config/telnyx-dictation/.env, then press Cmd+Shift+L to dictate.
             """
         } else {
             restoreIdleMenuBarStatus()
             message = """
-            Telnyx Dictation is running in the menu bar.
+            Telnyx Link is running in the menu bar.
 
             Press Cmd+Shift+L to start dictation, or use the microphone icon in the menu bar.
             """
@@ -800,13 +1021,13 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
-        if let image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Telnyx Dictation") {
+        if let image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Scribe") {
             image.isTemplate = true
             button.title = ""
             button.image = image
         } else {
             button.image = nil
-            button.title = "🎤"
+            button.title = "S"
         }
     }
 

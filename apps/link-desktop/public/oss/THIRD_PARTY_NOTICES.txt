@@ -1,0 +1,10 @@
+Telnyx Link can download Harper as an optional local grammar add-on.
+
+Component: Harper
+Project URL: https://github.com/Automattic/harper
+Homepage: https://writewithharper.com
+Copyright: Copyright 2024 Elijah Potter
+License: Apache License, Version 2.0
+
+Link installs and updates Harper through the published harper.js npm package.
+Harper is used for on-device grammar review and optional text polishing in Scribe and Gmail draft workflows.

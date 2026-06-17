@@ -2,6 +2,8 @@
 
 This is the Electron desktop shell for Telnyx Link. It uses live-ready service adapters with deterministic local fallbacks: hosted services are contacted only when the related credentials, environment variables, or Okta session are configured.
 
+For the short agent/operator bootstrap path, use [docs/bootstrap.md](docs/bootstrap.md).
+
 ## Run Locally
 
 ```bash

@@ -5,7 +5,8 @@ set -euo pipefail
 PRODUCT_NAME="TelnyxDictation"
 CONFIGURATION="${1:-release}"
 BUILD_DIR=".build/${CONFIGURATION}"
-APP_BUNDLE="${PRODUCT_NAME}.app"
+APP_BUNDLE="Telnyx Link.app"
+LEGACY_APP_BUNDLE="${PRODUCT_NAME}.app"
 CONTENTS_DIR="${APP_BUNDLE}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
 
@@ -13,7 +14,7 @@ echo "▸ Building ${PRODUCT_NAME} (${CONFIGURATION})…"
 swift build -c "$CONFIGURATION"
 
 echo "▸ Assembling ${APP_BUNDLE}…"
-rm -rf "$APP_BUNDLE"
+rm -rf "$APP_BUNDLE" "$LEGACY_APP_BUNDLE"
 mkdir -p "$MACOS_DIR"
 
 # Copy executable

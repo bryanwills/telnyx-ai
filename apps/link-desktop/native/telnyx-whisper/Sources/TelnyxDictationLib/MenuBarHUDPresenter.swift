@@ -12,6 +12,11 @@ final class MenuBarHUDPresenter: NSObject, HUDPresenting {
     private let historyStack = NSStackView()
     private let historyContainer = NSView()
     private let closeButton = NSButton()
+    private let flowBarWindow: NSPanel
+    private let flowBarStatusLabel = NSTextField(labelWithString: "Ready")
+    private let flowBarTranscriptLabel = NSTextField(labelWithString: "Hold fn and speak")
+    private let flowBarVisualizer = AudioBarVisualizerView(frame: .zero)
+    private var flowBarVisibleAtAllTimes = false
 
     /// Stored entries so click handlers can look up details.
     private var currentEntries: [RecentSessionEntry] = []
@@ -30,8 +35,15 @@ final class MenuBarHUDPresenter: NSObject, HUDPresenting {
 
     init(statusButtonProvider: @escaping () -> NSStatusBarButton?) {
         self.statusButtonProvider = statusButtonProvider
+        self.flowBarWindow = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 58),
+            styleMask: [.nonactivatingPanel, .borderless],
+            backing: .buffered,
+            defer: false
+        )
         super.init()
         setupPopoverContent()
+        setupFlowBarContent()
     }
 
     nonisolated func update(state: DictationSession.State, transcript: String?) {
@@ -88,6 +100,7 @@ final class MenuBarHUDPresenter: NSObject, HUDPresenting {
         if state != .recording {
             barVisualizer.resetToIdle()
         }
+        updateFlowBar(state: state, transcript: transcript)
 
         show(relativeTo: button)
     }
@@ -95,12 +108,28 @@ final class MenuBarHUDPresenter: NSObject, HUDPresenting {
     nonisolated func update(level: Float) {
         Task { @MainActor in
             barVisualizer.setLevel(level)
+            flowBarVisualizer.setLevel(level)
         }
     }
 
     nonisolated func hide() {
         Task { @MainActor in
             popover.performClose(nil)
+            if self.flowBarVisibleAtAllTimes {
+                self.updateFlowBar(state: .idle, transcript: nil)
+            } else {
+                self.flowBarWindow.orderOut(nil)
+            }
+        }
+    }
+
+    func setFlowBarVisibleAtAllTimes(_ visible: Bool) {
+        flowBarVisibleAtAllTimes = visible
+        if visible {
+            updateFlowBar(state: .idle, transcript: nil)
+            showFlowBar()
+        } else {
+            flowBarWindow.orderOut(nil)
         }
     }
 
@@ -313,6 +342,82 @@ final class MenuBarHUDPresenter: NSObject, HUDPresenting {
         refreshPopoverSize()
     }
 
+    private func setupFlowBarContent() {
+        flowBarWindow.isFloatingPanel = true
+        flowBarWindow.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)) + 2)
+        flowBarWindow.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        flowBarWindow.backgroundColor = .clear
+        flowBarWindow.isOpaque = false
+        flowBarWindow.hasShadow = true
+        flowBarWindow.hidesOnDeactivate = false
+        flowBarWindow.isReleasedWhenClosed = false
+
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 58))
+        flowBarWindow.contentView = contentView
+
+        let effectView = NSVisualEffectView()
+        effectView.material = .hudWindow
+        effectView.blendingMode = .behindWindow
+        effectView.state = .active
+        effectView.wantsLayer = true
+        effectView.layer?.cornerRadius = 20
+        effectView.layer?.masksToBounds = true
+        effectView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(effectView)
+
+        let icon = NSImageView()
+        icon.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "Scribe")
+        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+        icon.contentTintColor = .labelColor
+        icon.translatesAutoresizingMaskIntoConstraints = false
+
+        flowBarStatusLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        flowBarStatusLabel.textColor = .labelColor
+        flowBarStatusLabel.setContentHuggingPriority(.required, for: .horizontal)
+
+        flowBarTranscriptLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        flowBarTranscriptLabel.textColor = .secondaryLabelColor
+        flowBarTranscriptLabel.lineBreakMode = .byTruncatingTail
+        flowBarTranscriptLabel.maximumNumberOfLines = 1
+
+        flowBarVisualizer.barCount = 18
+        flowBarVisualizer.barSpacing = 2.0
+        flowBarVisualizer.barCornerRadius = 2.0
+        flowBarVisualizer.barColor = .controlAccentColor
+        flowBarVisualizer.translatesAutoresizingMaskIntoConstraints = false
+
+        let textStack = NSStackView(views: [flowBarStatusLabel, flowBarTranscriptLabel])
+        textStack.orientation = .vertical
+        textStack.spacing = 1
+        textStack.alignment = .leading
+        textStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let stack = NSStackView(views: [icon, textStack, flowBarVisualizer])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        effectView.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            effectView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            effectView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            effectView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            effectView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: effectView.leadingAnchor, constant: 14),
+            stack.trailingAnchor.constraint(equalTo: effectView.trailingAnchor, constant: -14),
+            stack.topAnchor.constraint(equalTo: effectView.topAnchor, constant: 10),
+            stack.bottomAnchor.constraint(equalTo: effectView.bottomAnchor, constant: -10),
+            icon.widthAnchor.constraint(equalToConstant: 24),
+            icon.heightAnchor.constraint(equalToConstant: 24),
+            flowBarVisualizer.widthAnchor.constraint(equalToConstant: 120),
+            flowBarVisualizer.heightAnchor.constraint(equalToConstant: 34),
+            textStack.widthAnchor.constraint(greaterThanOrEqualToConstant: 220),
+        ])
+
+        positionFlowBar()
+    }
+
     private func show(relativeTo button: NSStatusBarButton) {
         if popover.isShown {
             return
@@ -333,6 +438,56 @@ final class MenuBarHUDPresenter: NSObject, HUDPresenting {
         let targetHeight: CGFloat = 150 + historyHeight
         popover.contentSize = NSSize(width: 340, height: targetHeight)
         popover.contentViewController?.view.frame.size = popover.contentSize
+    }
+
+    private func updateFlowBar(state: DictationSession.State, transcript: String?) {
+        switch state {
+        case .idle:
+            flowBarStatusLabel.stringValue = "Ready"
+            flowBarTranscriptLabel.stringValue = transcript?.isEmpty == false ? transcript! : "Hold fn and speak"
+            flowBarVisualizer.resetToIdle()
+        case .recording:
+            flowBarStatusLabel.stringValue = "Listening"
+            flowBarTranscriptLabel.stringValue = transcript?.isEmpty == false ? transcript! : "Waiting for transcript..."
+        case .finalizing:
+            flowBarStatusLabel.stringValue = "Finalizing"
+            flowBarTranscriptLabel.stringValue = transcript?.isEmpty == false ? transcript! : "Preparing transcript..."
+            flowBarVisualizer.resetToIdle()
+        case .pasting:
+            flowBarStatusLabel.stringValue = "Pasting"
+            flowBarTranscriptLabel.stringValue = transcript?.isEmpty == false ? transcript! : "Sending text to the active app..."
+            flowBarVisualizer.resetToIdle()
+        }
+
+        if flowBarVisibleAtAllTimes || state != .idle || transcript?.isEmpty == false {
+            showFlowBar()
+        }
+    }
+
+    private func showFlowBar() {
+        positionFlowBar()
+        if !flowBarWindow.isVisible {
+            flowBarWindow.alphaValue = 0
+            flowBarWindow.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.16
+                flowBarWindow.animator().alphaValue = 1
+            }
+        }
+    }
+
+    private func positionFlowBar() {
+        guard let screen = NSScreen.main else {
+            return
+        }
+
+        let frame = screen.visibleFrame
+        let size = flowBarWindow.frame.size
+        let origin = NSPoint(
+            x: frame.midX - size.width / 2,
+            y: frame.minY + 18
+        )
+        flowBarWindow.setFrameOrigin(origin)
     }
 }
 

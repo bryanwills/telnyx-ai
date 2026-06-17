@@ -264,14 +264,15 @@ button {
 }
 
 .workspace.railExpanded {
-  grid-template-columns: 176px 270px minmax(0, 1fr);
+  grid-template-columns: var(--rail-width, 175px) 270px minmax(0, 1fr);
 }
 
 .workspaceNoSidebar.railExpanded {
-  grid-template-columns: 176px minmax(0, 1fr);
+  grid-template-columns: var(--rail-width, 175px) minmax(0, 1fr);
 }
 
 .rail {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -369,7 +370,7 @@ button {
 
 .desktop[data-theme="dark"] .pageSectionSidebarHeading {
   color: var(--text);
-  background: #252320;
+  background: #2d2b28;
 }
 
 .desktop[data-theme="dark"] .pageSectionSidebarGroupTitle {
@@ -401,6 +402,19 @@ button {
 }
 
 .desktop[data-theme="dark"] .wikiHubView .pageSectionSidebar button.selected {
+  background: #2d2b28;
+}
+
+.desktop[data-theme="dark"] .scribesView .pageSectionSidebar,
+.desktop[data-theme="dark"] .scribesView .pageSectionSidebarHeading {
+  background: #1b1a19;
+}
+
+.desktop[data-theme="dark"] .scribesView .pageSectionSidebarGroupTitle {
+  background: #242321;
+}
+
+.desktop[data-theme="dark"] .scribesView .pageSectionSidebar button.selected {
   background: #2d2b28;
 }
 
@@ -498,6 +512,10 @@ button {
 .desktop[data-theme="dark"] .startReadinessPanel,
 .desktop[data-theme="dark"] .startFirstUsePanel,
 .desktop[data-theme="dark"] .startTestingPanel,
+.desktop[data-theme="dark"] .onboardingIntroVisual,
+.desktop[data-theme="dark"] .onboardingIntroFact,
+.desktop[data-theme="dark"] .onboardingIntroArrow,
+.desktop[data-theme="dark"] .onboardingIntroProgressButton,
 .desktop[data-theme="dark"] .startReadinessItem,
 .desktop[data-theme="dark"] .startActionCard,
 .desktop[data-theme="dark"] .testerChecklistItem {
@@ -546,12 +564,13 @@ button {
 .desktop[data-theme="dark"] .workboardLayoutToggle,
 .desktop[data-theme="dark"] .contactSourceBadge,
 .desktop[data-theme="dark"] .tagList span {
-  background: #2a2927;
+  background: #201f1d;
 }
 
 .desktop[data-theme="dark"] .chatReviewTabs button.selected {
-  color: var(--text);
-  background: #242321;
+  color: #ffffff;
+  background: #3f3c38;
+  box-shadow: inset 0 0 0 1px #6a655f;
 }
 
 .desktop[data-theme="dark"] .chatSessionRows,
@@ -600,12 +619,19 @@ button {
   color: var(--text-muted);
 }
 
+.desktop[data-theme="dark"] .chatReviewTabs {
+  border-color: #514c46;
+}
+
+.desktop[data-theme="dark"] .chatReviewTabs button:not(.selected) {
+  background: #242321;
+}
+
 .desktop[data-theme="dark"] .assistantTabs button.selected,
 .desktop[data-theme="dark"] .segmented .selected,
 .desktop[data-theme="dark"] .memoryTabs button.selected,
 .desktop[data-theme="dark"] .explorerSourceTabs button.selected,
-.desktop[data-theme="dark"] .designTabs .selected,
-.desktop[data-theme="dark"] .chatReviewTabs button.selected {
+.desktop[data-theme="dark"] .designTabs .selected {
   color: var(--text);
   background: #3a3835;
 }
@@ -771,6 +797,36 @@ button {
   padding: 0 9px;
 }
 
+.railResizeHandle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  z-index: 6;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.railResizeHandle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 3px;
+  width: 1px;
+  height: 100%;
+  background: transparent;
+}
+
+.railResizeHandle:hover::after,
+.railResizeHandle:focus-visible::after {
+  background: var(--accent);
+}
+
+.railResizeHandle:focus-visible {
+  outline: none;
+}
+
 .railLabel {
   display: none;
   min-width: 0;
@@ -847,6 +903,10 @@ button {
 }
 
 .brandButton + .railButton {
+  margin-top: 6px;
+}
+
+.brandButton + .railOnboardingItem {
   margin-top: 6px;
 }
 
@@ -966,7 +1026,7 @@ button {
 
 .accountThemeButton:hover,
 .accountThemeButton:focus-visible {
-  color: var(--text);
+  color: var(--accent);
   background: var(--surface-raised);
   outline: 0;
 }
@@ -1193,7 +1253,7 @@ button {
 
 .pageSectionShell {
   display: grid;
-  grid-template-columns: var(--page-section-sidebar-width, 142px) minmax(0, 1fr);
+  grid-template-columns: var(--page-section-sidebar-width, 175px) minmax(0, 1fr);
   align-items: stretch;
   flex: 1;
   width: 100%;
@@ -1224,85 +1284,102 @@ button {
 .pageSectionSidebarTabs {
   display: grid;
   align-content: start;
-  gap: 6px;
+  gap: 0;
   min-width: 0;
   min-height: 100%;
-  padding: 0 12px var(--app-bottom-inset);
+  padding: 0 0 var(--app-bottom-inset);
 }
 
 .pageSectionSidebarHeading {
   display: grid;
-  align-items: center;
-  align-content: center;
-  justify-content: center;
-  justify-items: center;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
   min-width: 0;
-  margin: 0 -12px;
-  min-height: 112px;
-  padding: 14px 12px 16px;
+  width: auto;
+  height: var(--top-control-height);
+  margin: var(--app-top-inset) 12px 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f1efeb;
+}
+
+.pageSectionSidebarHeadingInner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  height: 30px;
   border: 0;
+  border-radius: 6px;
   color: var(--text);
-  background: #fbfaf9;
-  font-size: 24px;
-  font-weight: 760;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px var(--border-soft);
+  font-size: 13px;
+  font-weight: 700;
   line-height: 1.1;
   text-align: center;
+  white-space: nowrap;
 }
 
-.pageSectionSidebarHeading svg {
-  display: block;
-  width: 24px;
-  height: 24px;
-  color: currentColor;
+.pageSectionSidebarHeadingInner .pageSectionSidebarIcon {
+  flex-basis: 15px;
+  width: 15px;
+  height: 15px;
 }
 
-.pageSectionSidebarHeading span {
+.pageSectionSidebarHeadingInner .pageSectionSidebarIcon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.pageSectionSidebarHeadingInner span:last-child {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
 }
 
 .pageSectionSidebarGroup {
   display: grid;
-  gap: 4px;
+  gap: 0;
   min-width: 0;
 }
 
 .pageSectionSidebarHeading + .pageSectionSidebarGroup {
-  margin-top: 0;
+  margin-top: var(--top-row-gap);
 }
 
 .pageSectionSidebarGroupTitle {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   min-width: 0;
-  margin: 0 -12px 2px;
-  min-height: var(--top-control-height);
-  padding: 0 12px;
+  margin: 0 0 2px;
+  min-height: 32px;
+  padding: 0 16px;
   border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
   color: var(--text-muted);
-  background: transparent;
+  background: var(--surface-raised);
   font-size: 10px;
   font-weight: 820;
   letter-spacing: 0.08em;
   line-height: 1.1;
-  text-align: center;
+  text-align: left;
+  text-transform: uppercase;
 }
 
 .pageSectionSidebar button {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
+  display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 9px;
   min-width: 0;
   min-height: var(--top-control-height);
-  margin: 0 -12px;
-  padding: 0 21px;
-  border: 1px solid transparent;
-  border-right: 0;
-  border-left: 0;
+  margin: 0;
+  padding: 0 16px;
+  border: 0;
   border-radius: 0;
   color: var(--text-muted);
   background: transparent;
@@ -1312,11 +1389,18 @@ button {
   text-align: left;
 }
 
-.pageSectionSidebar button svg {
+.pageSectionSidebarIcon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+}
+
+.pageSectionSidebarIcon svg {
   display: block;
   width: 18px;
   height: 18px;
-  justify-self: center;
 }
 
 .pageSectionSidebar button span {
@@ -1326,9 +1410,9 @@ button {
 }
 
 .pageSectionSidebar button.selected {
-  border-color: var(--border);
   color: var(--text);
-  background: #ffffff;
+  background: #ece9e5;
+  border-bottom-color: transparent;
   box-shadow: none;
 }
 
@@ -1448,6 +1532,7 @@ button {
 }
 
 .pageSurface {
+  position: relative;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -1657,12 +1742,14 @@ button {
 
 .badge {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   height: 24px;
   padding: 0 10px;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 680;
+  white-space: nowrap;
 }
 
 .badge.success {
@@ -1700,7 +1787,7 @@ button {
 .chatListView {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .chatLog {
@@ -2885,8 +2972,7 @@ button {
 }
 
 .helpCenterAskPanel,
-.helpCenterAnswerPanel,
-.helpCenterSourcesPanel {
+.helpCenterAnswerPanel {
   display: grid;
   gap: 12px;
   padding: 14px;
@@ -3053,16 +3139,6 @@ button {
   background: var(--surface-raised);
   font-size: 12px;
   text-decoration: none;
-}
-
-.helpCenterSourcesPanel {
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.helpCenterSourcesPanel .explorerSourceHeader {
-  margin-top: 0;
 }
 
 .chatDirectoryLayout {
@@ -3328,8 +3404,9 @@ button {
 }
 
 .chatListView .chatResultRows {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: calc(100vh - 224px);
   overflow: auto;
 }
 
@@ -3389,15 +3466,22 @@ button {
   pointer-events: none;
 }
 
+.directoryTable .chatResultRowHead {
+  padding-right: calc(var(--table-row-inline-inset) + var(--table-scrollbar-gutter-width));
+}
+
 .chatResultRowHead > [role="columnheader"],
 .phoneContactRowHead > [role="columnheader"],
 .phoneInboxRowHead > [role="columnheader"],
 .phoneCallRowHead > [role="columnheader"],
 .phoneNumberRowHead > [role="columnheader"],
+.chatResultRow > [role="cell"],
+.chatResultRow > [role="columnheader"],
 .chatResultRow > span:not(.bulkSelectCell),
 .chatSessionNameCell {
   justify-self: stretch;
   width: 100%;
+  min-width: 0;
   text-align: left;
 }
 
@@ -3412,10 +3496,11 @@ button {
 }
 
 .chatListView .chatSessionRows {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
+  max-height: calc(100vh - 176px);
 }
 
-.chatListView .chatSessionRows > .emptyState {
+.chatListView .chatSessionRows > .tableEmptyState {
   flex: 1 1 auto;
 }
 
@@ -3483,6 +3568,10 @@ button {
   scrollbar-gutter: stable;
 }
 
+.directoryTable .chatResultRows .chatResultRow {
+  padding-right: calc(var(--table-row-inline-inset) + var(--table-scrollbar-gutter-width));
+}
+
 .directoryTable .chatResultRowHead {
   margin-right: 0;
 }
@@ -3498,18 +3587,120 @@ button {
 }
 
 .directoryResultRow > [role="columnheader"],
+.directoryResultRow > [role="cell"]:not(.directoryRowActions),
 .directoryResultRow > span:not(.bulkSelectCell):not(.directoryRowActions) {
   justify-self: stretch;
   width: 100%;
+  min-width: 0;
   text-align: left;
 }
 
-.directoryResultRow > span:not(.bulkSelectCell):not(.directoryRowActions) {
-  display: block;
+.directoryResultRow > [role="cell"]:not(.directoryRowActions):not(.settingsProviderNameCell),
+.directoryResultRow > span:not(.bulkSelectCell):not(.directoryRowActions):not(.settingsProviderNameCell) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.directoryResultRow > [role="cell"]:not(.directoryRowActions) > .badge,
+.directoryResultRow > span:not(.bulkSelectCell):not(.directoryRowActions) > .badge {
+  justify-self: start;
+  margin-right: auto;
+  margin-left: 0;
 }
 
 .directoryResultRow > .directoryRowActions {
   justify-self: end;
+}
+
+.phoneContactRow > [role="columnheader"],
+.phoneContactRow > [role="cell"],
+.phoneCallRow > [role="columnheader"],
+.phoneCallRow > [role="cell"],
+.phoneNumberRow > [role="columnheader"],
+.phoneNumberRow > [role="cell"],
+.phoneInboxRow > [role="columnheader"],
+.phoneInboxRow > [role="cell"],
+.phoneCallDataRow > [role="columnheader"],
+.phoneCallDataRow > [role="cell"],
+.calendarResultRow > [role="columnheader"],
+.calendarResultRow > [role="cell"],
+.scribesModelRow > [role="columnheader"],
+.scribesModelRow > [role="cell"],
+.ttsVoiceTableHeader > [role="columnheader"],
+.ttsVoiceRow > [role="cell"] {
+  justify-self: stretch;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+
+.phoneContactRow > [role="cell"]:not(:last-child),
+.phoneCallRow > [role="cell"]:not(:last-child),
+.phoneNumberRow > [role="cell"]:not(:last-child),
+.phoneInboxRow > [role="cell"]:not(:last-child),
+.phoneCallDataRow > [role="cell"],
+.calendarResultRow > [role="cell"]:not(:last-child),
+.scribesModelRow > [role="cell"]:not(.scribesModelActions),
+.ttsVoiceRow > [role="cell"]:not(.ttsVoiceActions) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.phoneContactRow > [role="cell"] > .badge,
+.phoneCallRow > [role="cell"] > .badge,
+.phoneNumberRow > [role="cell"] > .badge,
+.phoneInboxRow > [role="cell"] > .badge,
+.phoneCallDataRow > [role="cell"] > .badge,
+.calendarResultRow > [role="cell"] > .badge,
+.scribesModelRow > [role="cell"] > .badge,
+.ttsVoiceRow > [role="cell"] > .badge {
+  margin-right: auto;
+  margin-left: 0;
+}
+
+.sortableColumnHeader {
+  position: relative;
+  display: block;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 0;
+  padding: 0 20px 0 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  text-transform: inherit;
+}
+
+.sortableColumnHeader svg {
+  position: absolute;
+  top: 50%;
+  left: auto;
+  margin-left: 6px;
+  flex: 0 0 auto;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.sortableColumnHeader:hover svg,
+.sortableColumnHeader:focus-visible svg,
+.sortableColumnHeader.active svg {
+  opacity: 1;
+}
+
+.sortableColumnHeader svg.ascending {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.sortableColumnHeader:focus-visible {
+  color: var(--text);
+  outline: 0;
 }
 
 .agentDirectoryResultRow,
@@ -3521,7 +3712,7 @@ button {
 
 .agentDirectoryTable .chatResultRows,
 .skillDirectoryTable .chatResultRows {
-  scrollbar-gutter: auto;
+  scrollbar-gutter: stable;
 }
 
 .agentDirectoryTable .chatResultRowHead,
@@ -3545,6 +3736,11 @@ button {
   min-height: 0;
 }
 
+.appDirectoryStatusCell .badge {
+  padding-left: 0;
+  background: transparent;
+}
+
 .settingsDirectoryPanel {
   display: flex;
   flex-direction: column;
@@ -3553,7 +3749,11 @@ button {
 }
 
 .settingsDirectorySearchRow {
-  grid-template-columns: 44px minmax(0, 1fr) minmax(104px, 132px) 44px;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+}
+
+.modelsDirectorySearchRow {
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
 }
 
 .settingsDirectoryTable {
@@ -3575,6 +3775,12 @@ button {
 .settingsAuthDirectoryTable .settingsDirectoryResultRow,
 .chatSessionRows:not(.bulkEditing).settingsAuthDirectoryTable .settingsDirectoryResultRow {
   grid-template-columns: minmax(300px, 1fr) minmax(132px, 0.2fr) var(--table-action-column-width);
+}
+
+.settingsAuthDirectoryTable .settingsDirectoryResultRow:not(.chatResultRowHead) {
+  min-height: var(--table-row-min-height);
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .settingsDirectoryFilterBar,
@@ -3623,6 +3829,328 @@ button {
   margin: 0;
 }
 
+.settingsModelsPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.onboardingHero .modelsRouteCapabilityChips {
+  margin-top: 10px;
+}
+
+.modelsOverviewGrid,
+.modelsRuntimeGrid,
+.modelsDefaultsGrid,
+.modelsRouteMeta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.modelsRoutingTab {
+  display: grid;
+  gap: 12px;
+}
+
+.modelsRuntimeCard {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-raised);
+}
+
+.modelsRuntimeCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modelsRuntimeCardHeader > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.modelsRuntimeCardHeader strong,
+.modelsCapabilityRow strong,
+.modelsRouteMeta strong,
+.modelsRouteCardHeader strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 820;
+}
+
+.modelsRuntimeCardHeader small,
+.modelsRuntimeCheckedAt,
+.modelsCapabilityRow small,
+.modelsRouteMeta small,
+.modelsRouteCardHeader small,
+.modelsRouteCard p {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.modelsRuntimeCheckedAt {
+  display: block;
+}
+
+.modelsRouteSummaryBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-raised);
+}
+
+.modelsRouteSummaryBar strong,
+.modelsRouteSummaryBar span,
+.modelsCompactNote,
+.modelsCapabilityRow > div,
+.modelsProviderOverview > div {
+  min-width: 0;
+}
+
+.modelsRouteSummaryBar strong,
+.modelsRouteSummaryBar span {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelsCompactNote {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.modelsRouteScopeNote {
+  margin-top: 6px;
+}
+
+.modelsCapabilityList,
+.modelsRouteCatalog {
+  display: grid;
+  gap: 10px;
+}
+
+.modelsLocalTab {
+  display: grid;
+  gap: 12px;
+}
+
+.modelsLocalTab .accessCard {
+  padding: 14px;
+}
+
+.modelsLocalTab .accessCardHeader {
+  gap: 12px;
+}
+
+.modelsLocalTab .accessCardTitle {
+  gap: 10px;
+}
+
+.modelsLocalTab .accessIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+}
+
+.modelsLocalTab .accessCard h3 {
+  font-size: 14px;
+}
+
+.modelsLocalTab .accessCard p {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.modelsLocalSetupGrid {
+  margin-bottom: 10px;
+}
+
+.modelsLocalInstallActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modelsLocalInstallActions .button {
+  min-height: 32px;
+}
+
+.modelsCapabilityRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-raised);
+}
+
+.modelsCapabilityRow > div {
+  display: grid;
+  gap: 3px;
+}
+
+.modelsLocalTab .modelsCapabilityList {
+  gap: 8px;
+}
+
+.modelsLocalTab .modelsCapabilityRow {
+  border-radius: 8px;
+}
+
+.modelsLocalTab .modelsCapabilityRow .badge {
+  align-self: start;
+}
+
+.modelsCapabilityNotice {
+  margin-top: 12px;
+}
+
+.modelsProviderOverview {
+  margin-bottom: 12px;
+}
+
+.modelsProviderOverview > div {
+  display: grid;
+  gap: 4px;
+}
+
+.modelsProviderTable,
+.modelsModelTable {
+  min-height: 0;
+}
+
+.modelsProviderRow,
+.chatSessionRows:not(.bulkEditing) .modelsProviderRow {
+  grid-template-columns: minmax(260px, 1fr) 84px 120px var(--table-action-column-width);
+}
+
+.modelsModelRow,
+.chatSessionRows:not(.bulkEditing) .modelsModelRow {
+  grid-template-columns: minmax(220px, 0.85fr) minmax(150px, 0.65fr) 120px minmax(148px, 0.7fr);
+}
+
+.modelsProviderNameCell,
+.modelsModelNameCell {
+  min-width: 0;
+}
+
+.modelsProviderSummaryCell,
+.modelsProviderStatusCell {
+  min-width: 0;
+}
+
+.modelsProviderSummaryCell,
+.modelsProviderStatusCell,
+.modelsModelActions {
+  align-self: center;
+}
+
+.modelsProviderStatusCell,
+.modelsModelRow > .modelsProviderStatusCell {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.modelsModelActions {
+  display: flex;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modelsModelActions .button {
+  min-height: 28px;
+  padding: 0 10px;
+}
+
+.modelsProviderTable .directoryNameCell small,
+.modelsModelTable .directoryNameCell small,
+.modelsProviderSummaryCell {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.35;
+}
+
+.modelsRouteCard {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 92%, #ffffff), var(--surface));
+}
+
+.modelsRouteCardHeader,
+.modelsRouteBadges,
+.modelsRouteCapabilityChips {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.modelsRouteCardHeader {
+  justify-content: space-between;
+}
+
+.modelsRouteCardHeader > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.modelsRouteBadges {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.modelsRouteCapabilityChips {
+  flex-wrap: wrap;
+}
+
+.modelsRouteFallbacks {
+  display: grid;
+  gap: 8px;
+}
+
+.modelsRouteFallbackLabel {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 780;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.modelsRouteCapabilityChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface-soft);
+  font-size: 11px;
+  font-weight: 760;
+}
+
 .phoneAssistantSearchRow {
   grid-template-columns: 44px minmax(0, 1fr) 44px;
 }
@@ -3630,11 +4158,13 @@ button {
 .phoneAssistantDirectoryTable {
   flex: 0 0 auto;
   min-height: 0;
+  max-height: calc(100vh - 224px);
 }
 
 .phoneAssistantDirectoryTable .chatResultRows {
   align-content: start;
   min-height: 0;
+  max-height: calc(100vh - 224px);
 }
 
 .phoneAssistantDirectoryResultRow,
@@ -3677,15 +4207,69 @@ button {
   font-weight: 650;
 }
 
+.chatResultRow:not(.chatResultRowHead) > .chatSessionNameCell,
+.chatResultRow:not(.chatResultRowHead) > .chatSessionNameCell strong,
+.directoryResultRow:not(.chatResultRowHead) > .directoryNameCell strong,
+.phoneContactRow:not(.phoneContactRowHead) > :first-child,
+.phoneContactTable .contactResultMain > :first-child,
+.phoneContactTable .contactResultMain > :first-child strong,
+.phoneCallRow:not(.phoneCallRowHead) > :first-child,
+.phoneCallRow:not(.phoneCallRowHead) > :first-child strong,
+.phoneNumberRow:not(.phoneNumberRowHead) > :first-child,
+.phoneNumberRow:not(.phoneNumberRowHead) > :first-child strong,
+.phoneCallDataRow:not(.phoneCallDataRowHead) > :first-child,
+.phoneCallDataRow:not(.phoneCallDataRowHead) > :first-child strong,
+.scribesModelRow:not(.scribesModelRowHead) > :first-child,
+.scribesModelRow:not(.scribesModelRowHead) > :first-child strong,
+.scribesSessionRow:not(.scribesSessionRowHead) > :first-child,
+.scribesSessionRow:not(.scribesSessionRowHead) > :first-child strong,
+.driveFolderRow .driveFileNameCell,
+.workboardRowTitle .connectorTitle strong {
+  font-weight: 400;
+}
+
 .settingsProviderNameCell {
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
+  display: flex;
   align-items: center;
-  column-gap: 14px;
+  gap: 14px;
+  min-width: 0;
+}
+
+.chatResultRow > .directoryNameCell.settingsProviderNameCell,
+.chatResultRow > .directoryNameCell.modelsProviderNameCell,
+.directoryResultRow > .settingsProviderNameCell.modelsProviderNameCell {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
 }
 
 .directoryResultRow > .settingsProviderNameCell {
-  display: grid;
+  display: flex;
+}
+
+.settingsAuthDirectoryTable .directoryResultRow > .settingsProviderNameCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settingsAuthDirectoryTable .settingsProviderNameCell strong {
+  font-size: 13px;
+}
+
+.settingsProviderNameCell strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelsProviderNameCell strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settingsProviderLogoBox {
@@ -3716,6 +4300,22 @@ button {
   fill: none;
 }
 
+.settingsAuthDirectoryTable .settingsProviderLogoBox {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+}
+
+.settingsAuthDirectoryTable .settingsProviderLogoBox svg {
+  width: 14px;
+  height: 14px;
+}
+
+.settingsAuthDirectoryTable .settingsProviderLogoBox.telnyx svg {
+  width: 17px;
+  height: 17px;
+}
+
 .settingsProviderLogoMark {
   display: grid;
   place-items: center;
@@ -3733,6 +4333,10 @@ button {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 30px;
   font-weight: 800;
+}
+
+.settingsAuthDirectoryTable .settingsProviderLogoMark.google {
+  font-size: 20px;
 }
 
 .directoryRowActions {
@@ -3878,6 +4482,21 @@ button {
 .tableRowLifecycleActions .iconButton {
   width: 34px;
   height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.chatDetailView .pageHeader .tableRowLifecycleActions .iconButton {
+  width: var(--top-control-height);
+  height: var(--top-control-height);
+}
+
+.chatDetailBackButton:hover,
+.chatDetailBackButton:focus-visible,
+.tableRowLifecycleActions .iconButton:hover,
+.tableRowLifecycleActions .iconButton:focus-visible {
+  background: #f7f5f2;
 }
 
 .bulkEditControls {
@@ -4080,7 +4699,7 @@ button {
 }
 
 .driveFolderRow .driveFileNameCell {
-  font-weight: 720;
+  font-weight: 400;
 }
 
 .driveFileNameCell:hover span,
@@ -4125,6 +4744,9 @@ button {
   width: var(--top-control-height);
   height: var(--top-control-height);
   color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
 }
 
 .chatDetailView .pageHeader h1 {
@@ -4189,10 +4811,11 @@ button {
 .chatReviewTabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  padding: 8px;
-  border-bottom: 1px solid var(--border-soft);
-  background: #f7f5f2;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f1efeb;
 }
 
 .chatReviewTabs button {
@@ -4201,20 +4824,20 @@ button {
   justify-content: center;
   gap: 6px;
   min-width: 0;
-  min-height: 30px;
+  height: 30px;
   padding: 0 10px;
-  border-radius: 7px;
+  border-radius: 6px;
   color: var(--text-muted);
   background: transparent;
-  font-size: 12px;
-  font-weight: 740;
+  font-size: 13px;
+  font-weight: 700;
   white-space: nowrap;
 }
 
 .chatReviewTabs button.selected {
   color: var(--text);
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(31, 30, 28, 0.08);
+  box-shadow: inset 0 0 0 1px var(--border-soft);
 }
 
 .chatReviewPane {
@@ -4225,11 +4848,12 @@ button {
 }
 
 .chatReviewPaneHeader .phoneButtonRow {
+  justify-content: flex-end;
   margin: 0;
 }
 
 .chatReviewPaneBody {
-  padding: 16px 18px;
+  padding: 16px 18px 24px;
 }
 
 .chatPreviewMessages {
@@ -4446,7 +5070,7 @@ body.assistantPanelResizing {
 
 .assistantTabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   height: var(--top-control-height);
   padding: 4px;
@@ -4659,7 +5283,7 @@ body.assistantPanelResizing {
   --assistant-panel-edge-inset: 14px;
   --assistant-dock-edge-inset: 12px;
   --assistant-menu-divider-gap: 12px;
-  --assistant-popup-edge-inset: var(--assistant-panel-edge-inset);
+  --assistant-popup-edge-inset: calc(var(--assistant-panel-edge-inset) - var(--assistant-dock-edge-inset));
   --assistant-composer-actions-height: 42px;
   display: flex;
   flex: 1;
@@ -4769,6 +5393,92 @@ body.assistantPanelResizing {
   color: var(--text);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.assistantRuntimeSummary {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-raised) 86%, var(--accent-soft));
+}
+
+.assistantRuntimeSummary strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.assistantRuntimeSummary small {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.assistantSessionRouting {
+  display: grid;
+  gap: 8px;
+  margin-top: -2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-raised) 90%, var(--accent-soft));
+}
+
+.assistantSessionRoutingHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.assistantSessionRoutingHeader > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.assistantSessionRoutingHeader strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.assistantSessionRoutingHeader small,
+.assistantSessionRoutingMeta {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.assistantSessionRoutingBadges,
+.assistantSessionRoutingFallbacks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.assistantSessionRoutingBadges {
+  justify-content: flex-end;
+}
+
+.assistantSessionRoutingChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface-soft);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.assistantSessionRoutingMeta {
+  display: block;
 }
 
 .dataBoundaryChip {
@@ -4884,6 +5594,331 @@ body.assistantPanelResizing {
   background: transparent;
   font-size: 12px;
   font-weight: 650;
+}
+
+.scribeAssistantFrame {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.scribeAssistantFrame.loaded {
+  flex-direction: column;
+}
+
+.scribeAssistantBody {
+  position: relative;
+}
+
+.scribeLoadedRecordBar .assistantSessionBarTitle {
+  cursor: default;
+}
+
+.scribeLoadedRecordBar .assistantSessionBarTitle:hover strong,
+.scribeLoadedRecordBar .assistantSessionBarTitle:focus-visible strong {
+  color: var(--text);
+}
+
+.scribeRecentPanel {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  min-height: 0;
+  gap: 14px;
+  overflow: auto;
+  padding: 2px 2px 6px;
+}
+
+.scribeRecentPanel.empty {
+  align-content: stretch;
+  place-items: center;
+}
+
+.scribeRecentGroup {
+  display: grid;
+  gap: 8px;
+}
+
+.scribeRecentGroup h3 {
+  margin: 0;
+  padding: 0 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 820;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scribeRecentRows {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.scribeRecentRow {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr) minmax(94px, auto);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.scribeRecentRow:hover,
+.scribeRecentRow.selected {
+  background: var(--surface-soft);
+}
+
+.scribeRecentRow:last-child {
+  border-bottom: 0;
+}
+
+.scribeRecentRow span,
+.scribeRecentRow small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.scribeRecentRow strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 540;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scribeRecentRow small {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.scribeRecentEmpty {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  min-height: clamp(360px, 34vh, 560px);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.scribeRecentEmpty strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.scribeRecentEmpty small {
+  max-width: 260px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.scribeRecentLoadMore {
+  justify-self: center;
+}
+
+.scribeLiveComposer {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  min-height: 0;
+  overflow: visible;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.assistantChatDock .scribeLiveComposer {
+  grid-template-rows: auto auto auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.scribeLiveTextBox {
+  min-height: 0;
+  overflow: auto;
+  padding: 23px 20px 18px;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.45;
+  outline: 0;
+  white-space: pre-wrap;
+}
+
+.scribeLiveTextBox em {
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+.scribeLivePlaceholder {
+  color: var(--text-faint);
+}
+
+.scribeLiveStatus {
+  margin: 0 14px;
+}
+
+.scribeComposerActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 14px 14px;
+}
+
+.assistantChatDock .scribeLiveTextBox {
+  min-height: 58px;
+  padding: 0;
+}
+
+.assistantChatDock .scribeLiveStatus {
+  margin: 0;
+}
+
+.assistantChatDock .scribeComposerActions {
+  min-height: 42px;
+  padding: 0;
+}
+
+.scribeComposerTools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scribeComposerMenuRoot {
+  position: relative;
+}
+
+.scribeAssistantPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.scribeAssistantPill.ready {
+  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  color: var(--text);
+}
+
+.scribeAssistantPill.running {
+  color: var(--text);
+}
+
+.scribeAssistantField {
+  display: grid;
+  gap: 6px;
+}
+
+.scribeAssistantField span,
+.scribeAssistantToggleLine > span,
+.scribeAssistantStatusRows strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.scribeAssistantField select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.scribeAssistantToggleLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scribeAssistantStatusRows {
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.scribeAssistantStatusRows div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scribeAssistantStatusRows span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.scribeComposerMenu {
+  position: absolute;
+  z-index: 40;
+  bottom: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  gap: 6px;
+  width: min(300px, calc(100vw - 40px));
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 18px 42px rgba(34, 31, 28, 0.16);
+}
+
+.scribeSettingsMenu {
+  width: min(320px, calc(100vw - 40px));
+}
+
+.scribeComposerMenu button[role="menuitem"] {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+}
+
+.scribeComposerMenu button[role="menuitem"]:hover:not(:disabled) {
+  background: var(--surface-soft);
+}
+
+.scribeComposerMenu button[role="menuitem"]:disabled {
+  color: var(--text-faint);
 }
 
 .newSessionBotSearch input:focus {
@@ -5100,6 +6135,96 @@ body.assistantPanelResizing {
 .assistantSessionBarTitle:hover strong,
 .assistantSessionBarTitle:focus-visible strong {
   color: var(--accent-ink);
+}
+
+.assistantSessionSearchField {
+  cursor: text;
+}
+
+.assistantSessionSearchInput {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 780;
+  line-height: 1.15;
+  outline: 0;
+}
+
+.assistantSessionSearchInput::placeholder {
+  color: var(--text);
+  opacity: 1;
+}
+
+.assistantSessionSearchInput::-webkit-search-cancel-button {
+  display: none;
+}
+
+.assistantSessionSearchWrap {
+  display: grid;
+  gap: 8px;
+}
+
+.assistantSessionSearchResults {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.assistantSessionSearchResults button,
+.assistantSessionSearchEmpty {
+  display: grid;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+
+.assistantSessionSearchResults button:last-child,
+.assistantSessionSearchEmpty:last-child {
+  border-bottom: 0;
+}
+
+.assistantSessionSearchResults button:hover,
+.assistantSessionSearchResults button:focus-visible {
+  background: var(--surface-soft);
+  outline: none;
+}
+
+.assistantSessionSearchResults button > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.assistantSessionSearchResults button strong,
+.assistantSessionSearchResults button small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistantSessionSearchResults button strong {
+  font-size: 12px;
+  font-weight: 780;
+}
+
+.assistantSessionSearchResults button small,
+.assistantSessionSearchEmpty {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 720;
 }
 
 .assistantSessionMenuRoot {
@@ -5398,6 +6523,7 @@ body.assistantPanelResizing {
   width: 100%;
   min-width: 0;
   min-height: 72px;
+  padding-top: 5px;
   resize: none;
   overflow-x: hidden;
   border: 0;
@@ -5456,21 +6582,9 @@ body.assistantPanelResizing {
   position: static;
 }
 
-.assistantRuntimeMenu {
-  position: absolute;
-  bottom: calc(var(--assistant-composer-actions-height) + var(--assistant-menu-divider-gap));
-  right: var(--assistant-popup-edge-inset);
-  left: var(--assistant-popup-edge-inset);
-  z-index: 76;
+.assistantRuntimeMenuCard {
   display: grid;
-  gap: 12px;
-  width: auto;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  background: var(--surface-raised);
-  box-shadow: var(--shadow);
+  flex: 0 0 auto;
 }
 
 .assistantRuntimeMenuHeader {
@@ -6227,9 +7341,23 @@ body.assistantPanelResizing {
   box-shadow: inset 0 0 0 1px #6a655f;
 }
 
+.desktop[data-theme="dark"] .scribeRecentRows,
+.desktop[data-theme="dark"] .scribeLiveComposer,
+.desktop[data-theme="dark"] .scribeComposerMenu,
+.desktop[data-theme="dark"] .scribeAssistantField select {
+  background: #201f1d;
+  border-color: #514c46;
+}
+
+.desktop[data-theme="dark"] .scribeAssistantPill,
+.desktop[data-theme="dark"] .scribeComposerMenu button[role="menuitem"]:hover:not(:disabled) {
+  background: #2a2825;
+}
+
 .desktop[data-theme="dark"] .assistantAttachMenu,
 .desktop[data-theme="dark"] .assistantSkillPicker,
 .desktop[data-theme="dark"] .assistantSessionBar,
+.desktop[data-theme="dark"] .assistantSessionSearchResults,
 .desktop[data-theme="dark"] .assistantSessionEmpty,
 .desktop[data-theme="dark"] .assistantNewSessionCard,
 .desktop[data-theme="dark"] .assistantMessage,
@@ -6251,6 +7379,11 @@ body.assistantPanelResizing {
 .desktop[data-theme="dark"] .assistantSessionBarTitle:hover strong,
 .desktop[data-theme="dark"] .assistantSessionBarTitle:focus-visible strong {
   color: var(--accent);
+}
+
+.desktop[data-theme="dark"] .assistantSessionSearchResults button:hover,
+.desktop[data-theme="dark"] .assistantSessionSearchResults button:focus-visible {
+  background: #302e2b;
 }
 
 .desktop[data-theme="dark"] .assistantSessionMenu {
@@ -6306,6 +7439,19 @@ body.assistantPanelResizing {
 .desktop[data-theme="dark"] .assistantPanel .button:hover,
 .desktop[data-theme="dark"] .assistantPanel .iconButton:hover {
   background: #3a3733;
+}
+
+.desktop[data-theme="dark"] .chatDetailBackButton,
+.desktop[data-theme="dark"] .tableRowLifecycleActions .iconButton {
+  border-color: #4a4743;
+  background: #2d2b28;
+}
+
+.desktop[data-theme="dark"] .chatDetailBackButton:hover,
+.desktop[data-theme="dark"] .chatDetailBackButton:focus-visible,
+.desktop[data-theme="dark"] .tableRowLifecycleActions .iconButton:hover,
+.desktop[data-theme="dark"] .tableRowLifecycleActions .iconButton:focus-visible {
+  background: #3a3835;
 }
 
 .desktop[data-theme="dark"] .assistantPanel .button.primary {
@@ -6471,6 +7617,8 @@ body.assistantPanelResizing {
 
 .linkSoftphoneSetup,
 .linkSoftphoneIdentity,
+.linkSoftphoneActiveCallCard,
+.linkSoftphoneWrapUpCard,
 .linkSoftphoneContactCard,
 .linkSoftphoneFeatureModule,
 .linkSoftphoneAgentInvite,
@@ -6512,9 +7660,175 @@ body.assistantPanelResizing {
   align-items: stretch;
 }
 
+.linkSoftphoneActiveCallCard {
+  justify-items: center;
+  padding: 18px 14px;
+  text-align: center;
+}
+
+.linkSoftphoneActiveCallIcon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.linkSoftphoneActiveCallCard > span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.linkSoftphoneActiveCallCard > strong {
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.linkSoftphoneActiveCallCard > small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.linkSoftphoneActiveCallMeta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.linkSoftphoneActiveCallMeta span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  color: var(--text-muted);
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.linkSoftphoneActiveCallMeta strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.linkSoftphoneWrapUpCard {
+  gap: 12px;
+}
+
+.linkSoftphoneWrapUpHeader {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.linkSoftphoneWrapUpHeader > div:last-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.linkSoftphoneWrapUpHeader span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.linkSoftphoneWrapUpHeader strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linkSoftphoneWrapUpHeader small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linkSoftphoneWrapUpMetrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.linkSoftphoneWrapUpMetrics span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  color: var(--text-muted);
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.linkSoftphoneWrapUpMetrics strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
 .linkSoftphoneContactCard {
   grid-template-columns: minmax(0, 1fr) 44px;
   align-items: center;
+}
+
+.linkSoftphoneSearchCard {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 10px 0 14px;
+  border-color: var(--border);
+  background: #ffffff;
+}
+
+.linkSoftphoneSearchMain {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+
+.linkSoftphoneSearchMain small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .linkSoftphonePhaseModules {
@@ -6799,6 +8113,398 @@ body.assistantPanelResizing {
   width: 44px;
 }
 
+.linkSoftphoneSearchCard .linkSoftphoneContactShortcuts {
+  width: 34px;
+}
+
+.linkSoftphoneSearchMenuRoot {
+  position: relative;
+}
+
+.linkSoftphoneSearchMenuTrigger {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--text);
+  background: #eeebe7;
+}
+
+.linkSoftphoneSearchMenuTrigger:hover,
+.linkSoftphoneSearchMenuTrigger:focus-visible {
+  background: #e7e3de;
+  outline: none;
+}
+
+.linkSoftphoneSearchMenu {
+  position: absolute;
+  z-index: 70;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  gap: 4px;
+  width: min(300px, calc(100vw - 42px));
+  max-height: min(440px, calc(100vh - 180px));
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: #ffffff;
+  box-shadow: 0 16px 40px rgba(20, 19, 17, 0.18);
+}
+
+.linkSoftphoneSearchMenuHeader {
+  display: grid;
+  gap: 2px;
+  padding: 5px 6px 7px;
+}
+
+.linkSoftphoneSearchMenuHeader strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.linkSoftphoneSearchMenuHeader small,
+.linkSoftphoneSearchMenuLabel,
+.linkSoftphoneSearchMenuEmpty,
+.linkSoftphoneSearchResultEmpty {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.linkSoftphoneSearchMenuLabel {
+  padding: 5px 6px 2px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.linkSoftphoneSearchMenu button,
+.linkSoftphoneSearchMenuToggle {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.linkSoftphoneSearchMenu button:hover,
+.linkSoftphoneSearchMenu button:focus-visible,
+.linkSoftphoneSearchMenu button.selected {
+  background: var(--surface-soft);
+  outline: none;
+}
+
+.linkSoftphoneSearchMenu button > span,
+.linkSoftphoneSearchMenuToggle > span {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 780;
+  text-transform: none;
+}
+
+.linkSoftphoneSearchMenuToggle > span {
+  white-space: nowrap;
+}
+
+.linkSoftphoneSearchMenu button > span {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+
+.linkSoftphoneSearchMenu button strong,
+.linkSoftphoneSearchMenu button small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linkSoftphoneSearchMenu button strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.linkSoftphoneSearchMenu button small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.linkSoftphoneSearchMenuToggle input {
+  justify-self: end;
+}
+
+.linkSoftphoneSearchMenuDivider {
+  height: 1px;
+  margin: 3px 0;
+  background: var(--border-soft);
+}
+
+.linkSoftphoneSearchMenuEmpty,
+.linkSoftphoneSearchResultEmpty {
+  padding: 9px 8px;
+}
+
+.linkSoftphoneSearchResults {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 7px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 4px;
+  max-height: min(280px, calc(100vh - 220px));
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: #ffffff;
+  box-shadow: 0 16px 40px rgba(20, 19, 17, 0.14);
+}
+
+.linkSoftphoneSearchResults button {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 7px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+
+.linkSoftphoneSearchResults button:hover,
+.linkSoftphoneSearchResults button:focus-visible {
+  background: var(--surface-soft);
+  outline: none;
+}
+
+.linkSoftphoneSearchResultIcon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+.linkSoftphoneSearchResults button > span:not(.linkSoftphoneSearchResultIcon) {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.linkSoftphoneSearchResults strong,
+.linkSoftphoneSearchResults small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linkSoftphoneSearchResults strong {
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.linkSoftphoneSearchResults small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.linkSoftphoneSearchResults em {
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--surface-soft);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.linkSoftphoneHistoryPanel {
+  display: grid;
+  gap: 10px;
+  min-height: 140px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.linkSoftphoneHistoryPanel.empty {
+  align-content: start;
+}
+
+.linkSoftphoneHistoryHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+
+.linkSoftphoneHistoryHeader > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.linkSoftphoneHistoryHeader span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.linkSoftphoneHistoryHeader strong,
+.linkSoftphoneHistoryHeader small,
+.linkSoftphoneHistoryItemTop strong,
+.linkSoftphoneHistoryItemTop small,
+.linkSoftphoneHistoryItemBottom small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linkSoftphoneHistoryHeader strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 840;
+}
+
+.linkSoftphoneHistoryHeader small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.linkSoftphoneHistoryHeader em {
+  align-self: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--surface-soft);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.linkSoftphoneHistoryList {
+  display: grid;
+  gap: 8px;
+}
+
+.linkSoftphoneHistoryItem {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.linkSoftphoneHistoryItemTop {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+
+.linkSoftphoneHistoryItemTop > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.linkSoftphoneHistoryItemTop strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.linkSoftphoneHistoryItemTop small,
+.linkSoftphoneHistoryItemTop span,
+.linkSoftphoneHistoryItemBottom small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.linkSoftphoneHistoryItemBottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.linkSoftphoneHistoryDirection {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.linkSoftphoneHistoryDirection.inbound {
+  color: #14532d;
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.linkSoftphoneHistoryDirection.outbound {
+  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.linkSoftphoneHistoryEmpty {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  min-height: 72px;
+}
+
+.linkSoftphoneHistoryEmpty strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.linkSoftphoneHistoryEmpty small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
 .linkSoftphoneNumber {
   display: grid;
   gap: 7px;
@@ -6842,27 +8548,33 @@ body.assistantPanelResizing {
 }
 
 .linkSoftphoneDialInput {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
-  gap: 4px;
+  gap: 7px;
   min-width: 0;
-  height: 28px;
+  height: 40px;
 }
 
-.linkSoftphoneDialInput span {
-  color: #24211e;
-  font-size: 14px;
-  font-weight: 850;
-  line-height: 1;
-  text-transform: none;
+.linkSoftphoneDialInput svg {
+  color: var(--text-muted);
 }
 
 .linkSoftphoneDialInput input {
   min-width: 0;
   color: #24211e;
-  font-size: 14px;
-  font-weight: 850;
-  line-height: 1.2;
+  font-size: 13px;
+  font-weight: 780;
+  line-height: 1.15;
+}
+
+.linkSoftphoneDialInput input::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.linkSoftphoneDialInput input::-webkit-search-cancel-button {
+  display: none;
 }
 
 .linkSoftphoneNumber div > button {
@@ -6919,6 +8631,14 @@ body.assistantPanelResizing {
   letter-spacing: 0.08em;
 }
 
+.scribeAssistantSearchRow {
+  padding: 2px 2px 0;
+}
+
+.scribeAssistantSearchCard {
+  width: 100%;
+}
+
 @media (min-width: 900px) {
   .linkSoftphoneBody {
     display: flex;
@@ -6941,6 +8661,69 @@ body.assistantPanelResizing {
   border-top: 1px solid var(--border-soft);
   background: var(--surface);
   box-shadow: 0 -10px 22px rgba(31, 29, 26, 0.06);
+}
+
+.linkSoftphoneCallerIdBar {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.linkSoftphoneCallerIdBar > svg:first-child {
+  justify-self: center;
+  color: var(--text);
+}
+
+.linkSoftphoneCallerIdBar > svg:last-of-type {
+  color: var(--text-muted);
+}
+
+.linkSoftphoneCallerIdBar span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.linkSoftphoneCallerIdBar strong,
+.linkSoftphoneCallerIdBar small {
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.linkSoftphoneCallerIdBar strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.linkSoftphoneCallerIdBar small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.linkSoftphoneCallerIdBar select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.linkSoftphoneCallerIdBar select:disabled {
+  cursor: default;
 }
 
 .linkSoftphoneCallButton {
@@ -7086,11 +8869,19 @@ body.assistantPanelResizing {
 
 .desktop[data-theme="dark"] .linkSoftphoneSetup,
 .desktop[data-theme="dark"] .linkSoftphoneIdentity,
+.desktop[data-theme="dark"] .linkSoftphoneActiveCallCard,
+.desktop[data-theme="dark"] .linkSoftphoneWrapUpCard,
 .desktop[data-theme="dark"] .linkSoftphoneContactCard,
 .desktop[data-theme="dark"] .linkSoftphoneFeatureModule,
 .desktop[data-theme="dark"] .linkSoftphoneAgentInvite,
 .desktop[data-theme="dark"] .linkSoftphoneIncoming,
+.desktop[data-theme="dark"] .linkSoftphoneSearchMenu,
+.desktop[data-theme="dark"] .linkSoftphoneSearchResults,
+.desktop[data-theme="dark"] .linkSoftphoneSearchResultIcon,
+.desktop[data-theme="dark"] .linkSoftphoneCallerIdBar,
 .desktop[data-theme="dark"] .linkSoftphoneNumber input,
+.desktop[data-theme="dark"] .linkSoftphoneActiveCallMeta span,
+.desktop[data-theme="dark"] .linkSoftphoneWrapUpMetrics span,
 .desktop[data-theme="dark"] .linkSoftphoneAgentInvite select,
 .desktop[data-theme="dark"] .linkSoftphoneModuleButton,
 .desktop[data-theme="dark"] .linkSoftphoneModuleField textarea,
@@ -7106,6 +8897,11 @@ body.assistantPanelResizing {
 .desktop[data-theme="dark"] .linkSoftphoneKeypad button:hover,
 .desktop[data-theme="dark"] .linkSoftphoneNumber div > button:hover,
 .desktop[data-theme="dark"] .linkSoftphoneContactShortcut:hover,
+.desktop[data-theme="dark"] .linkSoftphoneSearchMenu button:hover,
+.desktop[data-theme="dark"] .linkSoftphoneSearchMenu button:focus-visible,
+.desktop[data-theme="dark"] .linkSoftphoneSearchMenu button.selected,
+.desktop[data-theme="dark"] .linkSoftphoneSearchResults button:hover,
+.desktop[data-theme="dark"] .linkSoftphoneSearchResults button:focus-visible,
 .desktop[data-theme="dark"] .linkSoftphoneModuleButton:hover,
 .desktop[data-theme="dark"] .linkSoftphoneAction:hover {
   background: #302e2b;
@@ -7119,6 +8915,22 @@ body.assistantPanelResizing {
 .desktop[data-theme="dark"] .linkSoftphoneModuleField span,
 .desktop[data-theme="dark"] .linkSoftphoneAgentInvite span,
 .desktop[data-theme="dark"] .linkSoftphoneAgentInvite small,
+.desktop[data-theme="dark"] .linkSoftphoneSearchMain small,
+.desktop[data-theme="dark"] .linkSoftphoneSearchMenuHeader small,
+.desktop[data-theme="dark"] .linkSoftphoneSearchMenuLabel,
+.desktop[data-theme="dark"] .linkSoftphoneSearchMenu button small,
+.desktop[data-theme="dark"] .linkSoftphoneSearchMenuEmpty,
+.desktop[data-theme="dark"] .linkSoftphoneSearchResults small,
+.desktop[data-theme="dark"] .linkSoftphoneSearchResults em,
+.desktop[data-theme="dark"] .linkSoftphoneSearchResultEmpty,
+.desktop[data-theme="dark"] .linkSoftphoneHistoryHeader span,
+.desktop[data-theme="dark"] .linkSoftphoneHistoryHeader small,
+.desktop[data-theme="dark"] .linkSoftphoneHistoryHeader em,
+.desktop[data-theme="dark"] .linkSoftphoneHistoryItemTop small,
+.desktop[data-theme="dark"] .linkSoftphoneHistoryItemTop span,
+.desktop[data-theme="dark"] .linkSoftphoneHistoryItemBottom small,
+.desktop[data-theme="dark"] .linkSoftphoneHistoryEmpty small,
+.desktop[data-theme="dark"] .linkSoftphoneCallerIdBar small,
 .desktop[data-theme="dark"] .linkSoftphoneNumber > span,
 .desktop[data-theme="dark"] .linkSoftphoneKeypad span {
   color: #d0c8bf;
@@ -7126,6 +8938,35 @@ body.assistantPanelResizing {
 
 .desktop[data-theme="dark"] .linkSoftphoneSetup p {
   color: #d0c8bf;
+}
+
+.desktop[data-theme="dark"] .linkSoftphoneDialInput input,
+.desktop[data-theme="dark"] .linkSoftphoneSearchMenuHeader strong,
+.desktop[data-theme="dark"] .linkSoftphoneSearchMenu button strong,
+.desktop[data-theme="dark"] .linkSoftphoneSearchMenu button > span,
+.desktop[data-theme="dark"] .linkSoftphoneSearchMenuToggle > span,
+.desktop[data-theme="dark"] .linkSoftphoneSearchResults strong,
+.desktop[data-theme="dark"] .linkSoftphoneHistoryHeader strong,
+.desktop[data-theme="dark"] .linkSoftphoneHistoryItemTop strong,
+.desktop[data-theme="dark"] .linkSoftphoneHistoryEmpty strong,
+.desktop[data-theme="dark"] .linkSoftphoneCallerIdBar strong {
+  color: #f7f3ee;
+}
+
+.desktop[data-theme="dark"] .linkSoftphoneHistoryPanel,
+.desktop[data-theme="dark"] .linkSoftphoneHistoryItem {
+  background: #262421;
+  border-color: #4a4743;
+}
+
+.desktop[data-theme="dark"] .linkSoftphoneHistoryDirection.inbound {
+  color: #bdf6cb;
+  background: rgba(34, 197, 94, 0.18);
+}
+
+.desktop[data-theme="dark"] .linkSoftphoneHistoryDirection.outbound {
+  color: #c5dcff;
+  background: rgba(59, 130, 246, 0.18);
 }
 
 .dialerBuilder {
@@ -7145,12 +8986,8 @@ body.assistantPanelResizing {
 .dialerBuilderLayout {
   display: grid;
   grid-template-columns: minmax(360px, 1fr) minmax(320px, 380px);
-  column-gap: 14px;
+  gap: 14px;
   min-height: 620px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  background: #ffffff;
 }
 
 .dialerBuilderSettings,
@@ -7162,6 +8999,17 @@ body.assistantPanelResizing {
 
 .dialerPreview {
   overflow-x: hidden;
+}
+
+.dialerBuilderFeatures,
+.dialerPreview {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.dialerBuilderFeatures {
+  overflow: hidden;
 }
 
 .dialerPreview .linkSoftphone {
@@ -7272,6 +9120,7 @@ body.assistantPanelResizing {
   display: grid;
   grid-template-rows: auto auto auto;
   align-content: start;
+  overflow: hidden;
 }
 
 .dialerPhaseTabs {
@@ -7392,6 +9241,45 @@ body.assistantPanelResizing {
   height: 18px;
 }
 
+.dialerFeatureDetailCard {
+  display: grid;
+  gap: 12px;
+  padding: 0 10px 12px 43px;
+}
+
+.dialerFeatureDetailCard p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dialerFeatureDetailRow {
+  display: grid;
+  grid-template-columns: minmax(110px, 140px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-raised);
+}
+
+.dialerFeatureDetailRow span,
+.dialerFeatureDetailRow em {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dialerFeatureDetailRow strong {
+  font-size: 15px;
+}
+
 .dialerActionBuilder {
   display: grid;
   gap: 10px;
@@ -7415,14 +9303,13 @@ body.assistantPanelResizing {
 
 .dialerSelectedActions,
 .dialerAvailableActions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 8px;
 }
 
 .dialerActionRow {
   display: grid;
-  grid-template-columns: 18px minmax(68px, 1fr) 26px 26px auto;
+  grid-template-columns: 18px minmax(0, 1fr) 26px 26px auto;
   align-items: center;
   gap: 7px;
   min-height: 38px;
@@ -7430,16 +9317,21 @@ body.assistantPanelResizing {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: #ffffff;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 800;
+  color: var(--text);
+}
+
+.dialerAvailableActionRow {
+  color: var(--text-muted);
 }
 
 .dialerActionRow.end {
   color: #d4482a;
 }
 
-.dialerActionRow button,
-.dialerAvailableActions button {
+.dialerActionRow button {
   min-height: 26px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -7450,16 +9342,8 @@ body.assistantPanelResizing {
   font-weight: 800;
 }
 
-.dialerActionRow button:disabled,
-.dialerAvailableActions button:disabled {
+.dialerActionRow button:disabled {
   opacity: 0.45;
-}
-
-.dialerAvailableActions button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 9px;
 }
 
 .dialerPreview {
@@ -7490,7 +9374,7 @@ body.assistantPanelResizing {
   font-weight: 850;
 }
 
-.desktop[data-theme="dark"] .dialerBuilderLayout,
+.desktop[data-theme="dark"] .dialerBuilderFeatures,
 .desktop[data-theme="dark"] .dialerFeatureItem,
 .desktop[data-theme="dark"] .dialerActionRow {
   background: var(--surface);
@@ -7595,7 +9479,7 @@ body.assistantPanelResizing {
 
 .agentControls {
   display: grid;
-  grid-template-columns: 44px minmax(280px, 1fr) 112px 44px;
+  grid-template-columns: 44px minmax(280px, 1fr) 44px;
   align-items: center;
   gap: 12px;
   margin-top: 0;
@@ -7636,10 +9520,6 @@ body.assistantPanelResizing {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 650;
-}
-
-.agentSortFilter {
-  align-self: center;
 }
 
 .agentFilter select {
@@ -8063,7 +9943,7 @@ body.assistantPanelResizing {
 
 .workboardSearchRow {
   display: grid;
-  grid-template-columns: 44px 44px minmax(280px, 1fr) 44px;
+  grid-template-columns: 44px minmax(280px, 1fr) 44px 44px;
   align-items: center;
   gap: 12px;
   margin: 0;
@@ -8175,6 +10055,23 @@ body.assistantPanelResizing {
   justify-content: flex-end;
 }
 
+.workboardDetailPane {
+  align-content: start;
+}
+
+.workboardDetailEditor {
+  margin-bottom: 0;
+}
+
+.workboardDetailSection {
+  display: grid;
+  gap: 10px;
+}
+
+.workboardDetailActions {
+  align-items: center;
+}
+
 .workboardCreateField {
   display: grid;
   gap: 7px;
@@ -8273,7 +10170,7 @@ body.assistantPanelResizing {
 .workboardRowCard {
   position: relative;
   display: grid;
-  grid-template-columns: 38px minmax(220px, 1.1fr) minmax(320px, 1.7fr) minmax(120px, 0.45fr) minmax(82px, 0.24fr);
+  grid-template-columns: 38px minmax(260px, 1.6fr) minmax(120px, 0.45fr) minmax(82px, 0.24fr) var(--table-action-column-width);
   align-items: center;
   gap: var(--table-row-gap);
   min-height: var(--table-row-min-height);
@@ -8286,7 +10183,7 @@ body.assistantPanelResizing {
 }
 
 .workboardRows.bulkEditing .workboardRowCard {
-  grid-template-columns: 28px 38px minmax(220px, 1.1fr) minmax(320px, 1.7fr) minmax(120px, 0.45fr) minmax(82px, 0.24fr);
+  grid-template-columns: 28px 38px minmax(260px, 1.6fr) minmax(120px, 0.45fr) minmax(82px, 0.24fr) var(--table-action-column-width);
 }
 
 .workboardRowCard:active,
@@ -8329,7 +10226,6 @@ body.assistantPanelResizing {
 }
 
 .workboardRowTitle,
-.workboardRowDescription,
 .workboardRowDetails,
 .workboardRowTime {
   min-width: 0;
@@ -8343,16 +10239,6 @@ body.assistantPanelResizing {
 .workboardRowTitle .connectorTitle strong {
   overflow: hidden;
   font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workboardRowDescription {
-  margin: 0;
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -8388,10 +10274,14 @@ body.assistantPanelResizing {
   white-space: nowrap;
 }
 
+.workboardRowOpenButton {
+  justify-self: end;
+}
+
 .workboardRowActions {
   position: absolute;
   top: 50%;
-  right: var(--table-row-inline-inset);
+  right: calc(var(--table-row-inline-inset) + var(--table-action-column-width) + 8px);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -8554,12 +10444,12 @@ body.assistantPanelResizing {
 }
 
 .calendarControls {
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  grid-template-columns: 44px minmax(0, 1fr) 44px 44px;
   margin-bottom: 0;
 }
 
 .canonicalChat > .calendarControls {
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  grid-template-columns: 44px minmax(0, 1fr) 44px 44px;
 }
 
 .calendarFilterPanel {
@@ -8585,6 +10475,40 @@ body.assistantPanelResizing {
   flex: 0 0 auto;
 }
 
+.calendarViewPanel {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 0 0 0 56px;
+  max-width: calc(100% - 56px);
+  min-width: 0;
+}
+
+.calendarViewPanel button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.calendarViewPanel button:hover,
+.calendarViewPanel button.selected {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
 .calendarView [class*="eventDot"],
 .calendarView [class*="eventMarker"],
 .calendarView [class*="eventColor"],
@@ -8594,6 +10518,8 @@ body.assistantPanelResizing {
 }
 
 .calendarEventTable {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -8607,43 +10533,6 @@ body.assistantPanelResizing {
 .calendarDirectorySection {
   flex: 1 1 auto;
   min-height: 0;
-}
-
-.calendarDirectorySectionHeader {
-  align-items: center;
-}
-
-.calendarViewToggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-raised);
-}
-
-.calendarViewToggle button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  color: var(--text-muted);
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.calendarViewToggle button.active {
-  color: var(--text);
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .calendarResultRow {
@@ -8663,8 +10552,42 @@ body.assistantPanelResizing {
 .calendarResultRow.chatResultRowHead > [role="columnheader"] {
   display: flex;
   align-items: center;
-  align-self: stretch;
+  justify-content: flex-start;
+  justify-self: stretch;
+  width: 100%;
   line-height: 1;
+  text-align: left;
+}
+
+.calendarResultRow.chatResultRowHead > .calendarWhenHeaderCell,
+.calendarResultRow.chatResultRowHead > .calendarJoinHeaderCell {
+  justify-self: stretch;
+  width: 100%;
+}
+
+.calendarEventNameCell,
+.calendarEventDateCell,
+.calendarJoinCell {
+  justify-self: stretch;
+  width: 100%;
+}
+
+.calendarEventDateCell {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+}
+
+.calendarJoinCell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.calendarJoinButton {
+  justify-content: center;
+  min-width: 74px;
+  margin-left: 0;
 }
 
 .calendarResultRow.sample {
@@ -8903,6 +10826,23 @@ body.assistantPanelResizing {
   line-height: 1.45;
 }
 
+.calendarScribesLinkHeader,
+.calendarScribesLinkBody {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.calendarScribesLinkBody {
+  align-items: flex-start;
+}
+
+.calendarScribesLinkBody span {
+  color: var(--text);
+  font-weight: 760;
+}
+
 .meetingInviteList {
   display: grid;
   gap: 8px;
@@ -8963,7 +10903,7 @@ body.assistantPanelResizing {
 .tableEmptyState {
   display: grid;
   place-items: center;
-  min-height: clamp(320px, 58vh, 760px);
+  min-height: clamp(360px, 34vh, 560px);
   padding: 32px;
   background: var(--surface);
 }
@@ -8997,6 +10937,39 @@ body.assistantPanelResizing {
   color: var(--text-muted);
   font-size: 14px;
   line-height: 1.45;
+}
+
+.agentMailAliasesTable.empty {
+  min-height: 0;
+}
+
+.agentMailAliasesTable.empty .chatResultRows {
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.agentMailAliasesEmptyState {
+  min-height: 180px;
+  padding: 20px 24px;
+}
+
+.agentMailAliasesEmptyState .emptyState {
+  width: min(100%, 420px);
+}
+
+.agentMailAliasesEmptyState .emptyState svg {
+  width: 28px;
+  height: 28px;
+}
+
+.agentMailAliasesEmptyState .emptyState h1 {
+  margin: 10px 0 6px;
+  font-size: 18px;
+}
+
+.agentMailAliasesEmptyState .emptyState p {
+  max-width: 340px;
+  font-size: 13px;
 }
 
 .cardEvidence {
@@ -9058,6 +11031,13 @@ body.assistantPanelResizing {
   scroll-padding-bottom: 0;
 }
 
+.onboardingView {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--app-top-inset) var(--app-inline-inset) var(--app-bottom-inset);
+  scroll-padding-bottom: var(--app-bottom-inset);
+}
+
 .agentsView .pageSectionShell {
   display: block;
 }
@@ -9113,7 +11093,7 @@ body.assistantPanelResizing {
 .phoneAssistantTable {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
   margin-bottom: 0;
   border: 1px solid var(--border);
@@ -9124,6 +11104,7 @@ body.assistantPanelResizing {
 
 .phoneAssistantTable {
   gap: 14px;
+  flex: 0 1 auto;
   margin-bottom: 0;
   border: 0;
   border-radius: 0;
@@ -9135,6 +11116,17 @@ body.assistantPanelResizing {
 .phoneCallsTable {
   display: flex;
   flex-direction: column;
+}
+
+.phoneContactTable.phoneContentTable,
+.phoneNumberTable.phoneContentTable {
+  flex: 0 1 auto;
+  max-height: calc(100vh - 224px);
+}
+
+.phoneCallsTable.phoneContentTable {
+  flex: 0 1 auto;
+  max-height: calc(100vh - 224px);
 }
 
 .phoneContactControls {
@@ -9153,12 +11145,12 @@ body.assistantPanelResizing {
 
 .phoneContactSearchRow {
   flex: 0 0 auto;
-  grid-template-columns: 44px minmax(280px, 1fr) minmax(120px, 160px) 44px;
+  grid-template-columns: 44px minmax(280px, 1fr) 44px;
 }
 
 .phoneNumberSearchRow {
   flex: 0 0 auto;
-  grid-template-columns: 44px minmax(280px, 1fr) minmax(120px, 160px) 44px;
+  grid-template-columns: 44px minmax(280px, 1fr) 44px;
 }
 
 .phoneCallFilterBar {
@@ -9193,11 +11185,12 @@ body.assistantPanelResizing {
 
 .phoneContactRows {
   display: grid;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   align-content: start;
   gap: 0;
   margin: 0;
   min-height: 0;
+  max-height: calc(100vh - 224px);
   overflow: auto;
 }
 
@@ -9240,6 +11233,10 @@ body.assistantPanelResizing {
 
 .phoneContactTable .contactResult:last-child {
   border-bottom: 0;
+}
+
+.phoneContactTable .contactResult.selected {
+  border-color: var(--border);
 }
 
 .phoneContactTable .contactResultMain {
@@ -9360,6 +11357,17 @@ body.assistantPanelResizing {
   scrollbar-gutter: stable;
 }
 
+.phoneInboxRows.empty {
+  flex: 1 1 auto;
+}
+
+.phoneInboxRows.empty .chatResultRows {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .standaloneInboxView .phoneInboxRows {
   border-top: 1px solid var(--border);
   border-radius: 8px;
@@ -9367,8 +11375,16 @@ body.assistantPanelResizing {
 }
 
 .phoneInboxRow {
-  grid-template-columns: minmax(140px, 220px) minmax(260px, 1fr) minmax(92px, 128px) var(--table-action-column-width);
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 220px) 112px var(--table-action-column-width);
   min-height: var(--table-row-min-height);
+}
+
+.phoneInboxRow > [role="columnheader"],
+.phoneInboxRow > [role="cell"],
+.phoneInboxRow > span {
+  justify-self: stretch;
+  width: 100%;
+  text-align: left;
 }
 
 .phoneInboxRowHead {
@@ -9524,7 +11540,7 @@ body.assistantPanelResizing {
 .phoneInboxDetailHeader {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
+  align-items: center;
   gap: 16px;
   padding: 18px;
   border-bottom: 1px solid var(--border);
@@ -9606,12 +11622,25 @@ body.assistantPanelResizing {
   white-space: pre-wrap;
 }
 
+.phoneInboxMessageFrame {
+  width: 100%;
+  min-height: 220px;
+  height: min(46vh, 420px);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
 .phoneInboxDraftComposer {
   display: grid;
-  gap: 12px;
-  padding: 16px 18px;
+  gap: 10px;
+  padding: 12px 18px 18px;
   border-top: 1px solid var(--border);
   background: var(--surface-raised);
+}
+
+.phoneInboxDraftSurface {
+  gap: 12px;
 }
 
 .phoneInboxDraftFields {
@@ -9644,32 +11673,106 @@ body.assistantPanelResizing {
   resize: vertical;
 }
 
+.phoneInboxDraftBodyTextarea {
+  min-height: 112px;
+}
+
+.phoneInboxDraftActionBar {
+  justify-content: space-between;
+}
+
+.phoneInboxDraftButtons {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.phoneInboxDraftMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.phoneInboxDraftMeta small {
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 .phoneInboxDraftComposer small {
   color: var(--text-muted);
   font-size: 11px;
   font-weight: 650;
 }
 
+.scribesGrammarHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.scribesGrammarHeader > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.scribesGrammarHeader > div:first-child span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.scribesGrammarSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.scribesGrammarFindings {
+  display: grid;
+  gap: 10px;
+}
+
+.scribesGrammarFindingList {
+  display: grid;
+  gap: 8px;
+}
+
+.scribesGrammarFinding {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.scribesGrammarFinding p {
+  margin: 4px 0;
+}
+
+.scribesGrammarFinding small {
+  color: var(--text-muted);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 .phoneCallRows {
   display: grid;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   align-content: start;
   min-height: 0;
-  overflow: hidden;
-}
-
-.phoneCallRows.empty {
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.phoneCallRows .tableEmptyState {
-  min-height: 100%;
-}
-
-.phoneCallRows.empty .tableEmptyState {
-  align-self: stretch;
-  min-height: 0;
-  height: 100%;
+  max-height: calc(100vh - 224px);
+  overflow: auto;
 }
 
 .phoneCallRow {
@@ -9812,6 +11915,10 @@ body.assistantPanelResizing {
 
 .phoneCallDataRow > strong {
   font-weight: 820;
+}
+
+.phoneCallDataRow:not(.phoneCallDataRowHead) > strong:first-child {
+  font-weight: 400;
 }
 
 .phoneCallDataRowHead {
@@ -10898,7 +13005,7 @@ body.assistantPanelResizing {
 
 .phoneNumberTable {
   width: 100%;
-  margin-bottom: 14px;
+  margin-bottom: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
@@ -10932,9 +13039,10 @@ body.assistantPanelResizing {
 
 .phoneNumberRows {
   display: grid;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   align-content: start;
   min-height: 0;
+  max-height: calc(100vh - 224px);
   overflow: auto;
 }
 
@@ -11430,7 +13538,7 @@ body.assistantPanelResizing {
 .wikiToolbar {
   display: grid;
   position: relative;
-  grid-template-columns: 44px minmax(260px, 1fr) 112px 44px;
+  grid-template-columns: 44px minmax(260px, 1fr) 44px;
   align-items: center;
   gap: 12px;
   width: min(1120px, 100%);
@@ -11582,6 +13690,9 @@ body.assistantPanelResizing {
 .explorerSearch input,
 .wikiSearchField input {
   appearance: none;
+  min-width: 0;
+  height: 40px;
+  padding: 0 2px;
   border: 0 !important;
   border-radius: 0;
   box-shadow: none !important;
@@ -11671,6 +13782,8 @@ body.assistantPanelResizing {
 }
 
 .agentsView .agentDirectoryList {
+  width: 100%;
+  max-width: none;
   margin-bottom: 0;
   overflow: auto;
 }
@@ -11682,42 +13795,6 @@ body.assistantPanelResizing {
 
 .agentsView .agentDirectoryTable {
   min-height: auto;
-}
-
-.agentsView .agentDirectorySection.empty .directoryTable {
-  flex: 0 0 auto;
-}
-
-.agentsView .agentDirectorySection.empty .directoryTable .chatResultRows {
-  flex: 0 0 auto;
-  overflow: hidden;
-}
-
-.agentsView .agentDirectorySection.empty .tableEmptyState {
-  min-height: 104px;
-  padding: 14px 18px;
-}
-
-.agentsView .agentDirectorySection.empty .tableEmptyState .emptyState {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-}
-
-.agentsView .agentDirectorySection.empty .tableEmptyState .emptyState svg {
-  width: 22px;
-  height: 22px;
-}
-
-.agentsView .agentDirectorySection.empty .tableEmptyState .emptyState h1 {
-  margin: 0;
-  font-size: 16px;
-}
-
-.agentsView .agentDirectorySection.empty .tableEmptyState .emptyState p {
-  display: none;
 }
 
 .wikiSkillList .skillResultRow {
@@ -11853,14 +13930,28 @@ body.assistantPanelResizing {
   gap: 8px;
 }
 
-.appDirectoryList {
+.appDirectoryList,
+.embeddedMarketplace.appDirectoryList {
   display: flex;
   align-self: stretch;
+  flex: 0 0 auto;
   flex-direction: column;
   gap: 18px;
+  min-height: 0;
   width: 100%;
   max-width: 100%;
+  overflow: visible;
   scrollbar-gutter: auto;
+}
+
+.wikiHubView .pageSectionShellSingle .embeddedMarketplace.appDirectoryList {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.wikiHubView .pageSectionShellSingle .embeddedMarketplace.appDirectoryList.scrolling {
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .appDirectorySection {
@@ -11876,40 +13967,48 @@ body.assistantPanelResizing {
   background: var(--surface);
 }
 
-.appDirectorySection.empty .directoryTable {
+.appDirectoryTable {
+  display: flex;
+  flex-direction: column;
   flex: 0 0 auto;
+  min-height: 0;
 }
 
-.appDirectorySection.empty .directoryTable .chatResultRows {
+.appDirectoryTable .chatResultRows {
   flex: 0 0 auto;
+  align-content: start;
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+
+.appDirectorySection.empty .appDirectoryTable .chatResultRows {
   overflow: hidden;
 }
 
-.appDirectorySection.empty .tableEmptyState {
-  min-height: 104px;
-  padding: 14px 18px;
+.appDirectoryTable .chatResultRow:not(.chatResultRowHead) {
+  min-height: var(--table-row-min-height);
 }
 
-.appDirectorySection.empty .tableEmptyState .emptyState {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
+.appDirectoryList.scrolling .appDirectorySection.scrollable {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
-.appDirectorySection.empty .tableEmptyState .emptyState svg {
-  width: 22px;
-  height: 22px;
+.appDirectoryList.balanced .appDirectorySection {
+  flex: 1 1 0;
+  max-height: calc((100% - 18px) / 2);
+  min-height: 0;
 }
 
-.appDirectorySection.empty .tableEmptyState .emptyState h1 {
-  margin: 0;
-  font-size: 16px;
+.appDirectoryList.scrolling .appDirectorySection.scrollable .appDirectoryTable {
+  flex: 1 1 auto;
 }
 
-.appDirectorySection.empty .tableEmptyState .emptyState p {
-  display: none;
+.appDirectoryList.scrolling .appDirectorySection.scrollable .chatResultRows {
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .appEmptyPanel {
@@ -12082,6 +14181,7 @@ body.assistantPanelResizing {
 }
 
 .settingsView .pageSectionSidebarHeading {
+  display: grid;
   border-bottom: 1px solid var(--border);
   background: #fbfaf9;
 }
@@ -12090,12 +14190,17 @@ body.assistantPanelResizing {
   border-top: 0;
 }
 
+.settingsView .pageSectionSidebarHeading + .pageSectionSidebarGroup {
+  margin-top: var(--top-row-gap);
+}
+
 .settingsView .pageSectionSidebarGroup {
   gap: 4px;
   padding-bottom: 10px;
 }
 
 .settingsView .pageSectionSidebarGroupTitle {
+  min-height: var(--top-control-height);
   margin-bottom: 8px;
   background: #f1efeb;
 }
@@ -12118,17 +14223,55 @@ body.assistantPanelResizing {
   border-top: 0;
 }
 
+.wikiHubView .pageSectionSidebarHeading + .pageSectionSidebarGroup {
+  margin-top: var(--top-row-gap);
+}
+
 .wikiHubView .pageSectionSidebarGroup {
   gap: 4px;
   padding-bottom: 14px;
 }
 
 .wikiHubView .pageSectionSidebarGroupTitle {
+  min-height: var(--top-control-height);
   margin-bottom: 8px;
   background: #f1efeb;
 }
 
 .wikiHubView .pageSectionSidebar button.selected {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border-soft);
+}
+
+.scribesView .pageSectionSidebar {
+  background: #fbfaf9;
+}
+
+.scribesView .pageSectionSidebarHeading {
+  border-bottom: 1px solid var(--border);
+  background: #fbfaf9;
+}
+
+.scribesView .pageSectionSidebarHeading + .pageSectionSidebarGroup .pageSectionSidebarGroupTitle {
+  border-top: 0;
+}
+
+.scribesView .pageSectionSidebarHeading + .pageSectionSidebarGroup {
+  margin-top: var(--top-row-gap);
+}
+
+.scribesView .pageSectionSidebarGroup {
+  gap: 4px;
+  padding-bottom: 14px;
+}
+
+.scribesView .pageSectionSidebarGroupTitle {
+  min-height: var(--top-control-height);
+  margin-bottom: 8px;
+  background: #f1efeb;
+}
+
+.scribesView .pageSectionSidebar button.selected {
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--border-soft);
 }
@@ -12171,6 +14314,247 @@ body.assistantPanelResizing {
   gap: 8px;
 }
 
+.onboardingHeroCombined {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.onboardingIntroWizard {
+  display: grid;
+  width: 100%;
+  min-height: 380px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.onboardingIntroFrame {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 380px;
+}
+
+.onboardingIntroBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.85fr);
+  gap: 18px;
+  min-width: 0;
+  padding: 22px;
+}
+
+.onboardingIntroCopy,
+.onboardingIntroVisual {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.onboardingIntroCopy {
+  padding: 2px 0;
+}
+
+.onboardingIntroMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.onboardingIntroEyebrow {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.onboardingIntroHeading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+
+.onboardingIntroIcon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgba(0, 227, 170, 0.22);
+  border-radius: 16px;
+  color: var(--text);
+  background: rgba(0, 227, 170, 0.12);
+}
+
+.onboardingIntroHeading h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 34px;
+  font-weight: 780;
+  line-height: 1.04;
+}
+
+.onboardingIntroHeading p {
+  margin: 10px 0 0;
+  max-width: 720px;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.onboardingIntroActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.onboardingIntroVisual {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.onboardingIntroVisualHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.onboardingIntroVisualHeader strong {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 760;
+}
+
+.onboardingIntroSurfaceChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: var(--accent-ink);
+  background: rgba(0, 227, 170, 0.18);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.onboardingIntroFacts {
+  display: grid;
+  gap: 10px;
+}
+
+.onboardingIntroFact {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.onboardingIntroFact span {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.onboardingIntroFact strong {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.onboardingIntroHint {
+  margin: auto 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.onboardingIntroFooter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.onboardingIntroArrow {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.onboardingIntroArrow:hover,
+.onboardingIntroArrow:focus-visible {
+  border-color: rgba(0, 227, 170, 0.42);
+  background: rgba(0, 227, 170, 0.12);
+  outline: none;
+}
+
+.onboardingIntroProgress {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.onboardingIntroProgressButton {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.55);
+  text-align: left;
+}
+
+.onboardingIntroProgressButton span {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.onboardingIntroProgressButton strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.onboardingIntroProgressButton.selected {
+  border-color: rgba(0, 227, 170, 0.34);
+  background: rgba(0, 227, 170, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(0, 227, 170, 0.14);
+}
+
+.onboardingIntroProgressButton:hover,
+.onboardingIntroProgressButton:focus-visible {
+  border-color: rgba(0, 227, 170, 0.28);
+  background: rgba(0, 227, 170, 0.1);
+  outline: none;
+}
+
 .startReadinessPanel,
 .startFirstUsePanel,
 .startTestingPanel {
@@ -12182,6 +14566,13 @@ body.assistantPanelResizing {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
+}
+
+.onboardingChecklistGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  width: 100%;
 }
 
 .startSectionHeader {
@@ -12206,36 +14597,32 @@ body.assistantPanelResizing {
   line-height: 1.35;
 }
 
-.startReadinessGrid {
+.startReadinessChecklist {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .startReadinessItem {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 52px;
-  padding: 10px;
+  min-height: 38px;
+  padding: 8px 8px 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
   text-align: left;
   background: var(--surface-raised);
-  cursor: pointer;
 }
 
-.startReadinessItem.ready {
-  border-color: rgba(0, 150, 112, 0.28);
-  background: rgba(0, 227, 170, 0.07);
+.startReadinessItem.checked {
+  border-color: var(--accent);
 }
 
-.startReadinessItem.needsSetup {
-  border-color: rgba(182, 123, 28, 0.28);
-  background: rgba(182, 123, 28, 0.08);
+.desktop[data-theme="dark"] .startReadinessItem.checked {
+  border-color: var(--accent);
 }
 
 .startReadinessItem:hover,
@@ -12244,17 +14631,12 @@ body.assistantPanelResizing {
   border-color: var(--accent);
 }
 
-.startReadinessIcon {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  color: var(--accent-ink);
-  background: var(--accent);
+.startReadinessItem input {
+  margin: 0;
+  accent-color: var(--accent);
 }
 
-.startReadinessItem span:nth-child(2) {
+.startReadinessText {
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -12277,22 +14659,72 @@ body.assistantPanelResizing {
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.35;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
 }
 
-.startReadinessItem em {
+.startReadinessAction {
+  justify-self: end;
+  min-width: 0;
+}
+
+.onboardingArrowActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.onboardingArrowAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 2px 0 10px;
+  border-radius: 999px;
+  color: var(--text);
+  background: transparent;
+}
+
+.onboardingArrowActionLabel {
+  display: inline-flex;
+  align-items: center;
+}
+
+.onboardingArrowAction svg,
+.testerChecklistArrow svg {
   color: var(--text-muted);
-  font-size: 11px;
-  font-style: normal;
+}
+
+.onboardingArrowActionLabel .button {
+  min-height: 0;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
   font-weight: 760;
-  text-transform: uppercase;
+}
+
+.onboardingArrowActionLabel .button:hover,
+.onboardingArrowActionLabel .button:focus-visible {
+  color: var(--text);
+  background: transparent;
+  outline: none;
 }
 
 .startActionGrid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
+}
+
+.startActionGrid.startActionList {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .startActionCard {
@@ -12310,8 +14742,27 @@ body.assistantPanelResizing {
   cursor: pointer;
 }
 
+.startActionList .startActionCard {
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  min-height: 0;
+  padding: 14px 16px;
+}
+
 .startActionCard svg {
   color: var(--text-muted);
+}
+
+.startActionList .startActionCard strong,
+.startActionList .startActionCard small {
+  white-space: normal;
+  text-overflow: clip;
+}
+
+.startActionList .startActionCard small {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
 }
 
 .startTestingGrid {
@@ -12357,6 +14808,25 @@ body.assistantPanelResizing {
   text-decoration: line-through;
 }
 
+.testerChecklistArrow {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.testerChecklistArrow:hover,
+.testerChecklistArrow:focus-visible {
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.04);
+  outline: none;
+}
+
 .startFeedbackButton {
   justify-self: start;
 }
@@ -12395,6 +14865,7 @@ body.assistantPanelResizing {
 .settingsView .credentialList,
 .settingsView .settingsDomainsPanel,
 .settingsView .settingsDesignPanel,
+.settingsView .settingsVpnPanel,
 .settingsView .wikiSettingsPanel {
   width: 100%;
   max-width: none;
@@ -12402,6 +14873,7 @@ body.assistantPanelResizing {
 
 .settingsDomainsPanel,
 .agentMailSettingsPanel,
+.settingsVpnPanel,
 .wikiSettingsPanel {
   display: grid;
   gap: 14px;
@@ -12412,11 +14884,15 @@ body.assistantPanelResizing {
   width: 100%;
 }
 
+.agentMailCompactCard {
+  display: grid;
+  gap: 14px;
+}
+
 .agentMailReadiness {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
-  margin-top: 16px;
   overflow: hidden;
   border: 1px solid var(--border-soft);
   border-radius: 8px;
@@ -12443,8 +14919,253 @@ body.assistantPanelResizing {
   color: var(--text);
 }
 
+.agentMailConnectionGrid {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.agentMailField {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.75fr) minmax(220px, 1fr) minmax(96px, auto);
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.agentMailField > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agentMailField strong {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.agentMailField small,
+.agentMailStatus {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.agentMailField input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: #ffffff;
+  font-size: 14px;
+}
+
+.agentMailField .button {
+  min-width: 96px;
+  justify-self: end;
+}
+
+.agentMailStatus {
+  padding: 0 2px;
+}
+
+.agentMailAliasesTable .agentMailAliasRow {
+  grid-template-columns: minmax(300px, 1fr) minmax(180px, 0.35fr) minmax(132px, 0.22fr) var(--table-action-column-width);
+}
+
+.agentMailAliasesTable .directoryNameCell {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agentMailAliasesTable .directoryNameCell small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .domainsSettingsCard {
   width: 100%;
+}
+
+.appVpnSettingsCard,
+.vpnTableSection {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+}
+
+.vpnHeaderActions,
+.vpnConfigActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.vpnSummaryGrid strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vpnSettingsControlGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.vpnSettingsControlGrid .speakSettingField {
+  grid-template-columns: minmax(126px, 156px) minmax(0, 1fr);
+}
+
+.vpnDetailGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--border-soft);
+}
+
+.vpnDetailGrid > div {
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--surface-raised);
+}
+
+.vpnDetailGrid span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.vpnDetailGrid strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vpnConfigCard {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.vpnConfigHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vpnConfigHeader strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.vpnConfigHeader p {
+  margin: 4px 0 0;
+}
+
+.vpnConfigDisclosure {
+  display: grid;
+  gap: 10px;
+}
+
+.vpnConfigDisclosure summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.vpnConfigPre {
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: #ffffff;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.vpnStatusStack {
+  display: grid;
+  gap: 4px;
+}
+
+.vpnInterfaceRow {
+  grid-template-columns: minmax(260px, 1fr) minmax(92px, 0.16fr) minmax(132px, 0.22fr) var(--table-action-column-width);
+}
+
+.vpnInterfaceRow.selected {
+  background: rgba(0, 227, 170, 0.06);
+}
+
+.vpnServiceTable {
+  min-height: 0;
+}
+
+.vpnServiceRow {
+  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.2fr) minmax(132px, 0.22fr);
+  min-height: var(--table-row-min-height);
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.vpnServiceUrl {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.vpnTableEmptyState {
+  min-height: 220px;
+}
+
+.vpnInterfaceTable.empty {
+  min-height: 0;
+}
+
+.vpnInterfaceTable.empty .chatResultRows {
+  flex: 0 0 auto;
 }
 
 .domainOptionList {
@@ -12845,6 +15566,12 @@ body.assistantPanelResizing {
   margin-top: 16px;
 }
 
+.accessCardHeader > .accessCardActions {
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
 .themeSettingsCard {
   grid-column: 1 / -1;
 }
@@ -12975,6 +15702,12 @@ body.assistantPanelResizing {
 
 .scribesView {
   overflow: auto;
+  padding: 0;
+  scroll-padding-bottom: 0;
+}
+
+.scribesView .pageSectionShell {
+  min-height: 100%;
 }
 
 .settingsScribesPanel {
@@ -12991,53 +15724,10 @@ body.assistantPanelResizing {
   width: 100%;
 }
 
-.scribesWorkspaceShell {
-  align-items: start;
-}
-
-.scribesWorkspaceMain,
 .scribesWorkspacePanel {
   display: grid;
   gap: 12px;
   min-width: 0;
-}
-
-.scribesSummaryGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  width: min(920px, 100%);
-}
-
-.scribesRouteCard {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-}
-
-.scribesRouteCard strong,
-.scribesRouteCard small {
-  display: block;
-  min-width: 0;
-}
-
-.scribesRouteCard strong {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 820;
-}
-
-.scribesRouteCard small {
-  margin-top: 2px;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.35;
 }
 
 .speakSettings {
@@ -13077,7 +15767,7 @@ body.assistantPanelResizing {
 
 .speakShortcutPanel {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(150px, auto) auto;
   align-items: center;
   gap: 10px;
   padding: 10px;
@@ -13100,6 +15790,63 @@ body.assistantPanelResizing {
   font-size: 16px;
 }
 
+.speakShortcutSelect {
+  min-width: 0;
+}
+
+.speakShortcutSelect select {
+  width: 100%;
+  height: 34px;
+  padding: 0 32px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.scribesGeneralSettings {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.scribesGeneralSettingRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(150px, auto);
+  align-items: center;
+  gap: 10px;
+  min-height: 62px;
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.scribesGeneralSettingRow > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.scribesGeneralSettingRow strong {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.scribesGeneralSettingRow small {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.scribesGeneralSettingRow .button {
+  min-width: 132px;
+  justify-self: end;
+}
+
 .speakStatusPill {
   justify-self: end;
   padding: 4px 9px;
@@ -13108,6 +15855,11 @@ body.assistantPanelResizing {
   color: var(--text-muted);
   font-size: 12px;
   white-space: nowrap;
+}
+
+.scribesGeneralSettings > .speakStatusPill {
+  justify-self: start;
+  margin: 10px;
 }
 
 .scribesModeNotice,
@@ -13200,7 +15952,7 @@ body.assistantPanelResizing {
 
 .scribesModelRow {
   display: grid;
-  grid-template-columns: minmax(240px, 1.4fr) minmax(120px, 0.58fr) minmax(86px, 0.32fr) minmax(118px, 0.42fr) minmax(210px, auto);
+  grid-template-columns: minmax(220px, 1fr) minmax(86px, 0.24fr) minmax(330px, auto) var(--table-action-column-width);
   align-items: center;
   gap: 12px;
   min-height: 58px;
@@ -13225,6 +15977,7 @@ body.assistantPanelResizing {
   font-size: 12px;
   font-weight: 820;
   letter-spacing: 0.04em;
+  text-align: left;
   text-transform: uppercase;
 }
 
@@ -13254,14 +16007,96 @@ body.assistantPanelResizing {
   gap: 8px;
 }
 
+.scribesModelStatusCell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.scribesModelDetailGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scribesModelDetailGrid > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.scribesModelDetailGrid strong {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 820;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.scribesModelDetailGrid p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.scribesCloudVoiceSection {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
 .scribesDraftCard,
-.scribesHistoryCard,
 .scribesCloudCard,
 .scribesMeetingCard {
   display: grid;
   gap: 12px;
   width: min(920px, 100%);
   padding: 16px;
+}
+
+.scribesHistoryCard {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+.scribesLibraryControls {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+}
+
+.scribesLibraryFilterPanel {
+  grid-template-columns: minmax(180px, 260px) minmax(160px, 220px);
+  align-items: end;
+}
+
+.scribesLibraryFilterStat {
+  display: grid;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.scribesLibraryFilterStat span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.scribesLibraryFilterStat strong {
+  color: var(--text);
+  font-size: 13px;
 }
 
 .scribesDraftFields {
@@ -13295,36 +16130,16 @@ body.assistantPanelResizing {
 }
 
 .scribesSessionTable {
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
+  width: 100%;
 }
 
 .scribesSessionRow {
-  display: grid;
-  grid-template-columns: minmax(230px, 1.3fr) minmax(126px, 0.52fr) minmax(86px, 0.32fr) minmax(88px, 0.32fr) minmax(280px, auto);
-  align-items: center;
-  gap: 12px;
-  min-height: 58px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 13px;
+  grid-template-columns: minmax(260px, 1fr) minmax(128px, 180px) minmax(92px, 120px) minmax(240px, auto);
 }
 
-.scribesSessionRow:last-child {
-  border-bottom: 0;
-}
-
-.scribesSessionRowHead {
-  min-height: 44px;
-  background: var(--surface-raised);
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 820;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.scribesSessionRow > .scribesModelActions {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
 }
 
 .scribesSessionRow strong,
@@ -13338,7 +16153,8 @@ body.assistantPanelResizing {
 
 .scribesSessionRow strong {
   color: var(--text);
-  font-size: 14px;
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 .scribesSessionRow small {
@@ -13406,6 +16222,13 @@ body.assistantPanelResizing {
   align-items: center;
 }
 
+.scribesMeetingActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .speakActionRow {
   display: flex;
   flex-wrap: wrap;
@@ -13471,6 +16294,12 @@ body.assistantPanelResizing {
   border-top: 1px solid var(--border);
 }
 
+.scribeLibraryPage {
+  align-content: start;
+  height: 100%;
+  padding: 18px;
+}
+
 .ttsLibraryHeader {
   display: flex;
   align-items: flex-start;
@@ -13478,6 +16307,7 @@ body.assistantPanelResizing {
   gap: 12px;
 }
 
+.ttsLibraryHeader h3,
 .ttsLibraryHeader h4 {
   margin: 0;
   color: var(--text);
@@ -13564,19 +16394,20 @@ body.assistantPanelResizing {
 .ttsVoiceTableHeader,
 .ttsVoiceRow {
   display: grid;
-  grid-template-columns: minmax(220px, 1.5fr) 110px 110px 90px minmax(190px, auto);
+  grid-template-columns: minmax(260px, 1.6fr) 120px 100px minmax(190px, auto);
   align-items: center;
   gap: 12px;
 }
 
 .ttsVoiceTableHeader {
-  padding: 10px 12px;
+  padding: 10px calc(12px + var(--table-scrollbar-gutter-width)) 10px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-raised);
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 820;
   letter-spacing: 0.04em;
+  text-align: left;
   text-transform: uppercase;
 }
 
@@ -13590,6 +16421,10 @@ body.assistantPanelResizing {
   border-bottom: 1px solid var(--border);
   color: var(--text-muted);
   font-size: 13px;
+}
+
+.ttsVoiceRows .ttsVoiceRow {
+  padding-right: calc(12px + var(--table-scrollbar-gutter-width));
 }
 
 .ttsVoiceRow:last-child {
@@ -13643,19 +16478,6 @@ body.assistantPanelResizing {
   border: 1px dashed var(--border);
   border-radius: 8px;
   background: var(--surface);
-}
-
-.speakLogPreview {
-  max-height: 130px;
-  overflow: auto;
-  margin: 0;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-raised);
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.45;
 }
 
 .myAgentsPanel {
@@ -14015,16 +16837,16 @@ body.assistantPanelResizing {
   }
 
   .workboardSearchRow {
-    grid-template-columns: var(--top-control-height) var(--top-control-height) minmax(0, 1fr) var(--top-control-height);
+    grid-template-columns: var(--top-control-height) minmax(0, 1fr) var(--top-control-height) var(--top-control-height);
   }
 
   .workboardRowCard,
   .workboardRows.bulkEditing .workboardRowCard {
-    grid-template-columns: 28px 38px minmax(180px, 1fr) minmax(220px, 1fr) minmax(96px, 0.35fr) minmax(74px, 0.2fr);
+    grid-template-columns: 28px 38px minmax(180px, 1fr) minmax(220px, 1fr) minmax(96px, 0.35fr) minmax(74px, 0.2fr) var(--table-action-column-width);
   }
 
   .workboardRows:not(.bulkEditing) .workboardRowCard {
-    grid-template-columns: 38px minmax(180px, 1fr) minmax(220px, 1fr) minmax(96px, 0.35fr) minmax(74px, 0.2fr);
+    grid-template-columns: 38px minmax(180px, 1fr) minmax(220px, 1fr) minmax(96px, 0.35fr) minmax(74px, 0.2fr) var(--table-action-column-width);
   }
 
   .acpSetupHeroIcon {
@@ -14050,12 +16872,27 @@ body.assistantPanelResizing {
     grid-template-columns: auto minmax(0, 1fr);
   }
 
+  .scribesGeneralSettingRow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .scribesGeneralSettingRow .speakShortcutSelect,
+  .scribesGeneralSettingRow .button {
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .speakShortcutSelect {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
   .speakStatusPill {
     grid-column: 1 / -1;
     justify-self: start;
   }
 
-  .scribesSummaryGrid,
   .scribesCloudGrid,
   .scribesCaptureGrid,
   .scribesMeetingItem,
@@ -14074,6 +16911,14 @@ body.assistantPanelResizing {
 
   .scribesModelActions {
     justify-content: flex-start;
+  }
+
+  .scribesModelStatusCell {
+    justify-content: flex-start;
+  }
+
+  .scribesModelDetailGrid {
+    grid-template-columns: 1fr;
   }
 
   .speakSettingField,
@@ -14210,6 +17055,259 @@ body.assistantPanelResizing {
   align-items: start;
 }
 
+.acpWizardShell {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px;
+  min-height: min(680px, calc(100vh - 176px));
+}
+
+.acpWizardSteps {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.acpWizardSteps button {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 42px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  color: var(--text-muted);
+  background: transparent;
+  text-align: left;
+}
+
+.acpWizardSteps button:hover,
+.acpWizardSteps button.selected {
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
+.acpWizardSteps button > span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--surface-raised);
+  font-size: 11px;
+  font-weight: 820;
+}
+
+.acpWizardSteps button.ready > span {
+  border-color: color-mix(in srgb, var(--primary) 44%, var(--border));
+  color: var(--text);
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+}
+
+.acpWizardSteps button strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acpWizardMain {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.acpWizardStatus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.acpWizardStatus > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.acpWizardStatus span,
+.acpWizardStepHeader span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 840;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.acpWizardStatus strong {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 840;
+}
+
+.acpWizardStep {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.acpWizardStepHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.acpWizardStepHeader > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.acpWizardStepHeader h3,
+.acpWizardColumns h4 {
+  margin: 0;
+  color: var(--text);
+}
+
+.acpWizardStepHeader h3 {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.acpWizardStepHeader p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.acpWizardColumns {
+  display: grid;
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+}
+
+.acpWizardColumns > div {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.acpWizardColumns h4 {
+  font-size: 13px;
+  font-weight: 820;
+}
+
+.acpWizardReviewGrid > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.acpWizardReviewGrid strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 820;
+}
+
+.acpWizardReviewGrid span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acpWizardReviewGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.acpWizardActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.acpWizardActions > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .acpWizardShell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .acpWizardSteps {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(116px, 1fr);
+    overflow-x: auto;
+  }
+
+  .acpWizardColumns,
+  .acpWizardReviewGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .acpWizardStepHeader,
+  .acpWizardActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .acpWizardActions > div {
+    justify-content: stretch;
+  }
+
+  .acpWizardActions .button {
+    flex: 1 1 auto;
+  }
+}
+
 .acpSetupCard {
   display: grid;
   gap: 14px;
@@ -14250,7 +17348,7 @@ body.assistantPanelResizing {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  width: min(100%, 360px);
+  width: min(100%, 460px);
   padding: 4px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -15887,11 +18985,11 @@ body.assistantPanelResizing {
   }
 
   .workspace.railExpanded {
-    grid-template-columns: 160px 224px minmax(0, 1fr);
+    grid-template-columns: var(--rail-width, 175px) 224px minmax(0, 1fr);
   }
 
   .workspaceNoSidebar.railExpanded {
-    grid-template-columns: 160px minmax(0, 1fr);
+    grid-template-columns: var(--rail-width, 175px) minmax(0, 1fr);
   }
 
   .content {
@@ -16003,9 +19101,24 @@ body.assistantPanelResizing {
   }
 
 	  .agentMailReadiness,
+	  .vpnSettingsControlGrid,
+	  .vpnDetailGrid,
 	  .wikiSourceMetrics,
 	  .wikiSourceFormGrid {
 	    grid-template-columns: 1fr;
+	  }
+
+	  .vpnSettingsControlGrid .speakSettingField {
+	    grid-template-columns: 1fr;
+	  }
+
+	  .agentMailField {
+	    grid-template-columns: 1fr;
+	  }
+
+	  .agentMailField .button {
+	    width: 100%;
+	    justify-self: stretch;
 	  }
 
 	  .domainOption {
@@ -16020,6 +19133,25 @@ body.assistantPanelResizing {
 	  .domainSettingsFooter {
 	    align-items: flex-start;
 	    flex-direction: column;
+	  }
+
+	  .vpnHeaderActions,
+	  .vpnConfigHeader,
+	  .vpnConfigActions {
+	    align-items: flex-start;
+	    justify-content: flex-start;
+	  }
+
+	  .vpnConfigHeader {
+	    flex-direction: column;
+	  }
+
+	  .vpnInterfaceRow {
+	    grid-template-columns: minmax(190px, 1fr) minmax(80px, 0.18fr) minmax(110px, 0.22fr) var(--table-action-column-width);
+	  }
+
+	  .vpnServiceRow {
+	    grid-template-columns: minmax(180px, 0.9fr) minmax(0, 1fr) minmax(110px, 0.22fr);
 	  }
 
 	  .wikiSourceHeaderActions,
@@ -16078,7 +19210,7 @@ body.assistantPanelResizing {
   }
 
   .wikiToolbar {
-    grid-template-columns: 44px minmax(0, 1fr) 112px 44px;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
   }
 
   .wikiSelectField {
@@ -16134,14 +19266,13 @@ body.assistantPanelResizing {
   }
 
   .agentControls {
-    grid-template-columns: 44px minmax(0, 1fr) 112px 44px;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
   }
 
   .phoneSetupGrid,
   .phoneAssistantGrid,
   .numberResults,
   .phoneSearchGrid,
-  .startReadinessGrid,
   .startActionGrid,
   .startTestingGrid,
   .workboardToolbar,
@@ -16152,9 +19283,69 @@ body.assistantPanelResizing {
     grid-template-columns: 1fr;
   }
 
+  .onboardingView .pageHeader {
+    flex: 0 0 auto;
+    gap: 10px;
+    margin-bottom: 8px;
+    min-height: calc(var(--top-control-height) * 2 + 10px);
+  }
+
+  .onboardingIntroBody {
+    grid-template-columns: 1fr;
+  }
+
+  .onboardingIntroHeading {
+    grid-template-columns: 1fr;
+  }
+
+  .onboardingIntroProgress {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .onboardingIntroFooter {
+    grid-template-columns: 1fr;
+  }
+
+  .onboardingIntroArrow {
+    display: none;
+  }
+
+  .onboardingChecklistGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .onboardingView .startReadinessItem {
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: flex-start;
+  }
+
+  .onboardingView .startReadinessItem input {
+    margin-top: 5px;
+  }
+
+  .onboardingView .startReadinessAction {
+    grid-column: 2 / -1;
+    justify-self: start;
+    width: 100%;
+  }
+
+  .onboardingView .startReadinessAction .onboardingActions {
+    justify-content: flex-start;
+  }
+
   .phoneInboxToolbar,
   .phoneInboxShell,
   .phoneInboxDraftFields {
+    grid-template-columns: 1fr;
+  }
+
+  .phoneInboxDraftMeta,
+  .scribesGrammarHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scribesGrammarFinding {
     grid-template-columns: 1fr;
   }
 
@@ -16199,21 +19390,21 @@ body.assistantPanelResizing {
   }
 
   .calendarControls {
-    grid-template-columns: var(--top-control-height) minmax(0, 1fr) var(--top-control-height);
+    grid-template-columns: var(--top-control-height) minmax(0, 1fr) var(--top-control-height) var(--top-control-height);
   }
 
-  .calendarFilterPanel {
+  .calendarFilterPanel,
+  .calendarViewPanel {
     grid-template-columns: 1fr;
     margin-left: 0;
     max-width: 100%;
   }
 
   .workboardRowCard {
-    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-columns: 40px minmax(0, 1fr) var(--table-action-column-width);
   }
 
   .workboardRowActions {
-    grid-column: 2;
     justify-content: flex-start;
   }
 
@@ -16321,6 +19512,48 @@ body.assistantPanelResizing {
 }
 
 @media (max-width: 760px) {
+  .modelsOverviewGrid,
+  .modelsRuntimeGrid,
+  .modelsDefaultsGrid,
+  .modelsRouteMeta,
+  .modelsRoutePairSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .modelsCapabilityRow {
+    grid-template-columns: 1fr;
+  }
+
+  .assistantSessionRoutingHeader {
+    flex-direction: column;
+  }
+
+  .assistantSessionRoutingBadges {
+    justify-content: flex-start;
+  }
+
+  .modelsRouteCardHeader {
+    flex-direction: column;
+  }
+
+  .modelsRouteBadges {
+    justify-content: flex-start;
+  }
+
+  .modelsProviderRow,
+  .chatSessionRows:not(.bulkEditing) .modelsProviderRow {
+    grid-template-columns: minmax(0, 1fr) 64px 104px var(--table-action-column-width);
+  }
+
+  .modelsModelRow,
+  .chatSessionRows:not(.bulkEditing) .modelsModelRow {
+    grid-template-columns: minmax(0, 1fr) minmax(110px, 0.7fr) 92px minmax(132px, 0.75fr);
+  }
+
+  .modelsModelActions {
+    justify-content: flex-start;
+  }
+
   .agentDirectoryResultRow,
   .chatSessionRows:not(.bulkEditing) .agentDirectoryResultRow,
   .skillDirectoryResultRow,
@@ -16330,14 +19563,13 @@ body.assistantPanelResizing {
 
   .workboardRowCard,
   .workboardRows:not(.bulkEditing) .workboardRowCard {
-    grid-template-columns: 38px minmax(0, 1fr) auto;
+    grid-template-columns: 38px minmax(0, 1fr) var(--table-action-column-width);
   }
 
   .workboardRows.bulkEditing .workboardRowCard {
-    grid-template-columns: 28px 38px minmax(0, 1fr) auto;
+    grid-template-columns: 28px 38px minmax(0, 1fr) var(--table-action-column-width);
   }
 
-  .workboardRowDescription,
   .workboardRowDetails {
     display: none;
   }
@@ -16358,4 +19590,478 @@ body.assistantPanelResizing {
 
 .desktop[data-theme="dark"] select {
   background-image: url("data:image/svg+xml,%3Csvg width='18' height='18' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m6 9 6 6 6-6' stroke='%23f4f1ec' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+}
+
+.modelCenterShell {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  min-height: calc(100vh - var(--app-top-inset) - var(--app-bottom-inset));
+}
+
+.modelCenterRail {
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  padding: 22px 16px 28px;
+}
+
+.modelCenterRailHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.modelCenterRailHeader h1 {
+  margin: 0;
+  font-size: 32px;
+}
+
+.modelCenterRailNav {
+  display: grid;
+  gap: 6px;
+}
+
+.modelCenterRailNav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  text-align: left;
+  padding: 0 12px;
+}
+
+.modelCenterRailNav button.selected {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-raised));
+  color: var(--text);
+}
+
+.modelCenterRailNav button:hover,
+.modelCenterRailNav button:focus-visible {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.modelCenterRailIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.modelCenterMain {
+  padding: 28px;
+  overflow: auto;
+}
+
+.modelCenterEmbedded {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+
+.modelCenterHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.modelCenterEyebrow {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.modelCenterHeader h2,
+.modelCenterHero h2 {
+  margin: 0;
+}
+
+.modelCenterHeaderMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modelCenterStack {
+  display: grid;
+  gap: 18px;
+}
+
+.modelCenterGrid {
+  display: grid;
+  gap: 18px;
+}
+
+.modelCenterGrid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.modelCenterHero,
+.modelCenterCard,
+.modelCenterEmptyState {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-raised);
+  padding: 20px;
+}
+
+.modelCenterHero {
+  display: grid;
+  gap: 18px;
+}
+
+.modelCenterSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.modelCenterSummaryStat {
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 14px;
+}
+
+.modelCenterSummaryStat strong {
+  display: block;
+  font-size: 22px;
+}
+
+.modelCenterSummaryStat span {
+  color: var(--text-dim);
+}
+
+.modelCenterCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.modelCenterCardHeader h3 {
+  margin: 0;
+}
+
+.modelCenterCardHeader p {
+  margin: 6px 0 0;
+  color: var(--text-dim);
+}
+
+.modelCenterField {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.modelCenterField > span {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.modelCenterField input,
+.modelCenterField select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  padding: 0 12px;
+}
+
+.modelCenterSplitFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.modelCenterToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  margin-bottom: 12px;
+}
+
+.modelCenterToggle.compact {
+  min-height: 34px;
+  margin-bottom: 0;
+}
+
+.modelCenterToggle span {
+  color: var(--text);
+}
+
+.modelCenterRoleToggleList {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.modelCenterInlineActions,
+.modelCenterHeaderActions,
+.modelCenterCatalogActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.modelCenterBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+}
+
+.modelCenterBadge.success {
+  background: color-mix(in srgb, #3aa26b 14%, var(--surface));
+  color: #1d6a43;
+}
+
+.modelCenterBadge.warning {
+  background: color-mix(in srgb, #e39d36 14%, var(--surface));
+  color: #8d5a16;
+}
+
+.modelCenterBadge.danger {
+  background: color-mix(in srgb, #d15f5f 14%, var(--surface));
+  color: #953636;
+}
+
+.modelCenterMetaGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.modelCenterMetaGrid > div {
+  display: grid;
+  gap: 4px;
+}
+
+.modelCenterMetaGrid strong {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.modelCenterRouteList,
+.modelCenterTable,
+.modelCenterCatalogList,
+.modelCenterProviderModels,
+.modelCenterShortcutList {
+  display: grid;
+  gap: 10px;
+}
+
+.modelCenterRouteRow,
+.modelCenterTableRow,
+.modelCenterCatalogRow,
+.modelCenterProviderModelRow,
+.modelCenterShortcutRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 14px;
+}
+
+.modelCenterRouteRow small,
+.modelCenterTableRow small,
+.modelCenterProviderModelRow small,
+.modelCenterCatalogRow small,
+.modelCenterShortcutRow small {
+  display: block;
+  color: var(--text-dim);
+}
+
+.modelCenterShortcutKeys {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.modelCenterShortcutKeys kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-family: "SFMono-Regular", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.modelCenterRouteMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modelCenterRouteMeta code,
+.modelCenterPathRow code {
+  color: var(--text-dim);
+  word-break: break-all;
+}
+
+.modelCenterTabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.modelCenterTabs button {
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font: inherit;
+  padding: 0 14px;
+}
+
+.modelCenterTabs button.selected {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--text);
+}
+
+.modelCenterImportRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.modelCenterImportRow input {
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  padding: 0 12px;
+}
+
+.modelCenterCatalogHeading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.modelCenterLogPanel {
+  min-height: 220px;
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: #161412;
+  color: #efe7dd;
+  font-family: "SFMono-Regular", ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 14px;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.modelCenterPathRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--border-soft);
+  padding: 12px 0;
+}
+
+.modelCenterPathRow:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.modelCenterChecklist {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-dim);
+  display: grid;
+  gap: 10px;
+}
+
+.modelCenterEmptyState strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.modelCenterError,
+.modelCenterBusy {
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 0 0 18px;
+}
+
+.modelCenterError {
+  background: color-mix(in srgb, #d15f5f 14%, var(--surface));
+  color: #953636;
+}
+
+.modelCenterBusy {
+  background: var(--surface-raised);
+  color: var(--text-dim);
+}
+
+@media (max-width: 1100px) {
+  .modelCenterShell {
+    grid-template-columns: 1fr;
+  }
+
+  .modelCenterRail {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modelCenterRailNav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .modelCenterGrid.two,
+  .modelCenterSplitFields,
+  .modelCenterSummaryGrid,
+  .modelCenterImportRow {
+    grid-template-columns: 1fr;
+  }
 }

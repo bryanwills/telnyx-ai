@@ -118,10 +118,24 @@ public final class ScribesLocalSTTStreamingClient: STTStreaming, @unchecked Send
 }
 
 public enum ScribesSTTStreamingFactory {
-    public static func makeStreamingClient(environment: [String: String] = ProcessInfo.processInfo.environment) -> any STTStreaming {
+    public static func makeStreamingClient(environment: [String: String] = ProcessInfo.processInfo.environment, language: String? = nil) -> any STTStreaming {
         if environment["TELNYX_WHISPER_STT_MODE"] == "local" {
-            return ScribesLocalSTTStreamingClient()
+            return ScribesLocalSTTStreamingClient(
+                endpointProvider: { environment["TELNYX_WHISPER_SCRIBES_ENDPOINT"] },
+                tokenProvider: { environment["TELNYX_WHISPER_SCRIBES_TOKEN"] },
+                provider: environment["TELNYX_WHISPER_STT_ENGINE"] ?? "openai-whisper",
+                model: environment["TELNYX_WHISPER_STT_MODEL"] ?? "whisper.cpp/base",
+                language: language ?? environment["TELNYX_WHISPER_LANGUAGE"] ?? "en-US"
+            )
         }
-        return TelnyxSTTStreamingClient()
+        return TelnyxSTTStreamingClient(
+            apiKeyProvider: { TelnyxAPIKeyResolver.resolve() },
+            languageProvider: { language ?? environment["TELNYX_WHISPER_LANGUAGE"] ?? "en-US" },
+            transportFactory: { request in
+                URLSessionWebSocketTransport(request: request) { line in
+                    TelnyxSTTStreamingClient.appendDebugLine(line)
+                }
+            }
+        )
     }
 }

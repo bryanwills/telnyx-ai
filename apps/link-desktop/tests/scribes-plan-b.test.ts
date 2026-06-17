@@ -58,8 +58,10 @@ test("Scribes Plan B exposes model manager IPC and allowlisted local STT routes"
   assert.match(api, /interface ScribesModel/);
   assert.match(api, /interface ScribesSession/);
   assert.match(api, /interface ScribesProviderRoute/);
-  assert.match(app, /function ScribesModelsPanel/);
-  assert.match(app, /aria-label="Scribes local STT models"/);
+  assert.match(app, /function ScribesLocalVoiceModelsPanel/);
+  assert.match(app, /aria-label="Scribe local voice models"/);
+  assert.match(app, /Local Voice Models/);
+  assert.match(app, /<ScribesLocalVoiceModelsPanel \/>/);
 });
 
 test("native helper keeps HUD and paste controller while routing local STT through Scribes", async () => {
@@ -67,16 +69,36 @@ test("native helper keeps HUD and paste controller while routing local STT throu
   const coordinator = await readFile("native/telnyx-whisper/Sources/TelnyxDictationLib/DictationCoordinator.swift", "utf8");
   const localClient = await readFile("native/telnyx-whisper/Sources/TelnyxDictationLib/ScribesLocalSTTStreamingClient.swift", "utf8");
   const appDelegate = await readFile("native/telnyx-whisper/Sources/TelnyxDictationLib/AppDelegate.swift", "utf8");
+  const menuBarHud = await readFile("native/telnyx-whisper/Sources/TelnyxDictationLib/MenuBarHUDPresenter.swift", "utf8");
+  const hotKeys = await readFile("native/telnyx-whisper/Sources/TelnyxDictationLib/GlobalHotKeyController.swift", "utf8");
 
   assert.match(session, /func finishAudio\(\) async throws/);
   assert.match(session, /public extension STTStreaming/);
   assert.match(coordinator, /try await sttStreaming\.finishAudio\(\)/);
-  assert.match(appDelegate, /sttStreaming:\s*ScribesSTTStreamingFactory\.makeStreamingClient\(\)/);
+  assert.match(appDelegate, /sttStreaming:\s*ScribesSTTStreamingFactory\.makeStreamingClient\(language: selectedLanguage\(\)\)/);
   assert.match(appDelegate, /textInserter:\s*PasteboardTextInserter\(\)/);
+  assert.match(appDelegate, /TELNYX_WHISPER_SHORTCUT_MODE/);
+  assert.match(appDelegate, /selectedShortcutModeDefaultsKey/);
+  assert.match(appDelegate, /selectedLanguageDefaultsKey/);
+  assert.match(appDelegate, /showFlowBarAlwaysDefaultsKey/);
+  assert.match(appDelegate, /Show Scribe Bar at All Times/);
+  assert.match(appDelegate, /Paste Last Transcript/);
+  assert.match(appDelegate, /NSMenu\(title: "Languages"\)/);
+  assert.match(appDelegate, /shortcutMode:\s*shortcutMode/);
+  assert.match(appDelegate, /title:\s*"\\\(dictationShortcutLabel\(\)\) to Dictate"/);
+  assert.match(menuBarHud, /setFlowBarVisibleAtAllTimes/);
+  assert.match(menuBarHud, /flowBarWindow/);
+  assert.match(menuBarHud, /positionFlowBar/);
+  assert.match(hotKeys, /enum ShortcutMode/);
+  assert.match(hotKeys, /case holdFunction/);
+  assert.match(hotKeys, /case commandShiftL/);
+  assert.match(hotKeys, /if shortcutMode == \.commandShiftL/);
+  assert.match(hotKeys, /guard shortcutMode == \.holdFunction else/);
   assert.match(localClient, /public final class ScribesLocalSTTStreamingClient/);
   assert.match(localClient, /TELNYX_WHISPER_SCRIBES_ENDPOINT/);
   assert.match(localClient, /TELNYX_WHISPER_SCRIBES_TOKEN/);
   assert.match(localClient, /TELNYX_WHISPER_STT_MODE"\] == "local"/);
-  assert.match(localClient, /return TelnyxSTTStreamingClient\(\)/);
+  assert.match(localClient, /language: language \?\? environment\["TELNYX_WHISPER_LANGUAGE"\] \?\? "en-US"/);
+  assert.match(localClient, /languageProvider:\s*\{ language \?\? environment\["TELNYX_WHISPER_LANGUAGE"\] \?\? "en-US" \}/);
   assert.match(localClient, /continuation\.yield\(\.final\(transcript\)\)/);
 });

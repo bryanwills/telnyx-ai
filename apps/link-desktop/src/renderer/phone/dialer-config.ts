@@ -71,6 +71,13 @@ export const dialpadKeys = [
 
 export const dialerFeatures: DialerFeature[] = [
   {
+    id: "local-calling",
+    name: "Local Calling",
+    description: "Let local calls use the outbound line country code automatically",
+    icon: "PhoneCall",
+    phase: "pre-call",
+  },
+  {
     id: "notes",
     name: "Call Notes",
     description: "Add notes during or after calls with auto-save",
@@ -128,17 +135,6 @@ export const dialerFeatures: DialerFeature[] = [
     ],
   },
   {
-    id: "call-timer",
-    name: "Call Timer",
-    description: "Show call duration and alert thresholds",
-    icon: "Timer",
-    phase: "in-call",
-    settings: [
-      { id: "timer-alert", label: "Alert", type: "select", options: ["None", "5 min", "10 min"], default: "None" },
-      { id: "timer-position", label: "Position", type: "select", options: ["Center", "Top"], default: "Center" },
-    ],
-  },
-  {
     id: "dispositions",
     name: "Dispositions",
     description: "Wrap-up codes and call outcome tracking",
@@ -178,7 +174,7 @@ const defaultDialerTimestamp = "1970-01-01T00:00:00.000Z";
 
 export const defaultDialerConfig: DialerConfig = {
   id: "link-dialer",
-  name: "Dialer",
+  name: "Dialpad",
   template: null,
   theme: "dark",
   shape: "rounded",
@@ -188,7 +184,7 @@ export const defaultDialerConfig: DialerConfig = {
   showCountryPrefix: true,
   callerIdName: "My Company",
   outboundNumber: "+1 (415) 555-0100",
-  enabledFeatures: ["crm", "transcription", "recording", "notes", "salesforce-notes-sync", "dispositions", "call-timer", "analytics"],
+  enabledFeatures: ["local-calling", "crm", "transcription", "recording", "notes", "salesforce-notes-sync", "dispositions", "analytics"],
   actions: ["mute", "hold", "transfer", "end", "speaker", "record"],
   featureSettings: {
     crm: { "crm-provider": "Salesforce MCP", "crm-show-history": true, "crm-show-deals": true },
@@ -197,7 +193,6 @@ export const defaultDialerConfig: DialerConfig = {
     notes: { "notes-autosave": "10s", "notes-template": "Basic" },
     "salesforce-notes-sync": { "sf-notes-sync": true, "sf-notes-target": "Contact notes" },
     dispositions: { "dispo-required": true, "dispo-codes": "Basic (5 codes)" },
-    "call-timer": { "timer-alert": "None", "timer-position": "Center" },
     analytics: { "analytics-display": "Detailed" },
   },
   createdAt: defaultDialerTimestamp,

@@ -50,7 +50,7 @@ cd tools/python && pip install -e ".[dev]"
 
 Run the relevant package's test suite before declaring a task done. Don't run all of them — pick the one you touched.
 
-For the Telnyx Link desktop shell, use `./script/build_and_run.sh` from the repo root as the default kill/build/run entrypoint. Use `./script/build_and_run.sh --verify` for a launch smoke test.
+For the Telnyx Link desktop shell, use `./script/build_and_run.sh` from the repo root as the default kill/build/run entrypoint. Use `./script/build_and_run.sh --verify` for a launch smoke test. Do not open additional Electron instances for handoff or QA; replace the existing Link process with this script, or quit the active app before launching another one.
 
 ### Where things live
 

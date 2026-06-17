@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT_DIR/apps/link-desktop"
 APP_NAME="Electron"
 MAIN_PROCESS_PATTERN="$APP_DIR/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
+MAIN_SCRIPT_PATTERN="$APP_DIR/src/main/main.js"
 ENV_FILE="$APP_DIR/.env.local"
 
 configure_node_path() {
@@ -47,10 +48,28 @@ load_env() {
 }
 
 stop_existing() {
-  local pids
-  pids="$(pgrep -f "$MAIN_PROCESS_PATTERN" || true)"
+  local pids remaining
+  pids="$(
+    {
+      pgrep -f "$MAIN_PROCESS_PATTERN" || true
+      pgrep -f "$MAIN_SCRIPT_PATTERN" || true
+    } | sort -u
+  )"
   if [[ -n "$pids" ]]; then
     kill -TERM $pids
+    for _ in {1..20}; do
+      remaining="$(
+        {
+          pgrep -f "$MAIN_PROCESS_PATTERN" || true
+          pgrep -f "$MAIN_SCRIPT_PATTERN" || true
+        } | sort -u
+      )"
+      if [[ -z "$remaining" ]]; then
+        return
+      fi
+      sleep 0.25
+    done
+    kill -KILL $remaining 2>/dev/null || true
   fi
 }
 

@@ -4,8 +4,9 @@ import crypto from "node:crypto";
 import { lookup as dnsLookup } from "node:dns/promises";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
+import { isIP } from "node:net";
 import http from "node:http";
-import { homedir, tmpdir } from "node:os";
+import { cpus, freemem, homedir, networkInterfaces, tmpdir, totalmem } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -22,6 +23,25 @@ import {
   metadataForTool,
   validateOkfBundle,
 } from "@telnyx/link";
+import { createHarperAddonManager, defaultHarperAddonSettings, normalizeHarperAddonSettings } from "./harper-addon.js";
+import { buildCalendarWorkspace } from "./view-models/calendar-workspace.js";
+import { buildInboxWorkspace } from "./view-models/inbox-workspace.js";
+import { buildPhoneWorkspace } from "./view-models/phone-workspace.js";
+import { buildScribesWorkspaceViewModel } from "./view-models/scribes-workspace.js";
+import { buildSurfaceManifests } from "./view-models/surface-manifests.js";
+import {
+  assessFit,
+  curatedModelCatalog,
+  defaultLocalApiServerConfig,
+  deriveAiModelRoutes,
+  isTaskRoutingEligible,
+  modelCenterRoleMeta,
+  normalizeCatalogModel,
+  normalizeHardwareProfile,
+  normalizeModelCenterPreferences,
+  providerRoutePrefix,
+  routeIdForModel,
+} from "./model-center.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const execFileAsync = promisify(execFile);
@@ -29,7 +49,7 @@ const sourceRepoRoot = path.resolve(__dirname, "../../../..");
 const auditLogger = new InMemoryAuditLogger();
 const runtime = new LinkRuntime({ auditLogger });
 const nativeFetch = globalThis.fetch.bind(globalThis);
-const stateVersion = 11;
+const stateVersion = 14;
 const defaultDialerConfigId = "link-dialer";
 const legacyDialerTemplateIds = new Set(["standard", "sales", "support"]);
 const defaultAgentControlPlaneUrl = "";
@@ -53,6 +73,7 @@ const defaultOllamaModel = "llama3.2";
 const defaultTelnyxInferenceBaseUrl = "https://api.telnyx.com/v2/ai/openai";
 const defaultAnthropicOpusModel = "claude-3-opus-20240229";
 const defaultAiModelRoute = "auto/ask-before-cloud";
+const localApiServerKeyField = "LINK_LOCAL_API_SERVER_KEY";
 const telnyxInferenceCatalogTtlMs = 24 * 60 * 60 * 1000;
 const defaultTelnyxInferenceModels = [
   {
@@ -183,6 +204,11 @@ const defaultGoogleOAuthTokenUrl = "https://oauth2.googleapis.com/token";
 const appDisplayName = "Link";
 const appIconPath = path.resolve(__dirname, "../../public/link-icon.png");
 const aidaMcpUrlField = "AIDA_MCP_URL";
+const singleInstanceLock = app.requestSingleInstanceLock();
+
+if (!singleInstanceLock) {
+  app.quit();
+}
 
 function desktopWorkspaceRoot() {
   return app.isPackaged ? path.join(app.getPath("userData"), "workspace") : sourceRepoRoot;
@@ -382,8 +408,30 @@ let localMessageGatewayService = null;
 let onboardingState = emptyOnboardingState();
 let dialerState = emptyDialerState();
 let speakSettings = emptySpeakSettings();
+let vpnSettings = emptyVpnSettings();
 let scribesState = emptyScribesState();
 let wikiSources = defaultWikiDocumentationSources();
+const harperAddonManager = createHarperAddonManager({
+  app,
+  fetchImpl: nativeFetch,
+  loadSettings: () => scribesState.settings.addons.harper,
+  saveSettings: async (nextHarperSettings) => {
+    const now = new Date().toISOString();
+    scribesState = normalizeScribesState({
+      ...scribesState,
+      settings: {
+        ...scribesState.settings,
+        addons: {
+          ...scribesState.settings.addons,
+          harper: nextHarperSettings,
+        },
+        updatedAt: now,
+      },
+      updatedAt: now,
+    });
+    await saveDesktopState();
+  },
+});
 let webRtcCredentialProvisionPromise = null;
 const slackAvatarCache = new Map();
 const meetingInviteJoinTimers = new Map();
@@ -460,6 +508,8 @@ let liteLlmLastExit = null;
 let liteLlmLastLogLines = [];
 let liteLlmLastError = "";
 let inMemoryLiteLlmMasterKey = "";
+const aiModelRouteHealthCacheTtlMs = 15000;
+let aiModelRouteHealthSnapshot = null;
 let telnyxInferenceCatalog = {
   source: "default",
   baseUrl: defaultTelnyxInferenceBaseUrl,
@@ -467,6 +517,40 @@ let telnyxInferenceCatalog = {
   error: "",
   models: defaultTelnyxInferenceModels,
 };
+let lastOllamaProbe = {
+  reachable: false,
+  modelAvailable: false,
+  modelIds: [],
+  models: [],
+  lastCheckedAt: "",
+  message: "Ollama has not been checked yet.",
+};
+let lastManagedGatewayProbe = {
+  configured: false,
+  reachable: null,
+  modelIds: [],
+  lastCheckedAt: "",
+  message: "Managed gateway has not been checked yet.",
+};
+let modelCenterPreferences = normalizeModelCenterPreferences({});
+let localApiServer = null;
+let localApiServerStatus = {
+  running: false,
+  ready: false,
+  host: defaultLocalApiServerConfig.host,
+  port: defaultLocalApiServerConfig.port,
+  endpoint: "",
+  apiKeyConfigured: false,
+  corsEnabled: defaultLocalApiServerConfig.corsEnabled,
+  exposedRoleIds: [...defaultLocalApiServerConfig.exposedRoleIds],
+  exposedModelIds: [],
+  message: "Local API server is stopped.",
+  lastError: "",
+  logs: [],
+  startedAt: null,
+  updatedAt: new Date().toISOString(),
+};
+const localModelOperations = new Map();
 const terminalSessions = new Map();
 let terminalSequence = 0;
 const defaultTerminalId = "terminal-1";
@@ -774,6 +858,12 @@ function defaultWikiDocumentationSources() {
 }
 
 function createWindow() {
+  const existingWindow = BrowserWindow.getAllWindows()[0];
+  if (existingWindow) {
+    restoreAndFocusWindow(existingWindow);
+    return existingWindow;
+  }
+
   const appIcon = nativeImage.createFromPath(appIconPath);
   const win = new BrowserWindow({
     width: 1440,
@@ -809,9 +899,24 @@ function createWindow() {
   } else {
     void win.loadFile(rendererFilePath());
   }
+
+  return win;
 }
 
-app.whenReady().then(async () => {
+function restoreAndFocusWindow(win) {
+  if (win.isMinimized()) win.restore();
+  if (!win.isVisible()) win.show();
+  win.focus();
+  if (process.platform === "darwin") app.focus({ steal: true });
+}
+
+if (singleInstanceLock) {
+  app.on("second-instance", () => {
+    createWindow();
+  });
+}
+
+if (singleInstanceLock) app.whenReady().then(async () => {
   app.setName(appDisplayName);
   app.setAboutPanelOptions({ applicationName: appDisplayName });
   const appIcon = nativeImage.createFromPath(appIconPath);
@@ -827,17 +932,18 @@ app.whenReady().then(async () => {
   createWindow();
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    createWindow();
   });
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  app.quit();
 });
 
 app.on("before-quit", () => {
   stopWhisperHelper();
   if (scribesLocalServer) scribesLocalServer.close();
+  if (localApiServer) localApiServer.close();
   stopLiteLlmProxy();
   stopTerminalProcess();
 });
@@ -995,12 +1101,24 @@ function registerIpc() {
   secureIpcHandle("link:save-credential", (_event, input) => saveCredential(input));
   secureIpcHandle("link:litellm-runtime-status", () => getLiteLlmRuntimeStatus());
   secureIpcHandle("link:refresh-telnyx-model-catalog", () => refreshTelnyxModelCatalog());
+  secureIpcHandle("link:model-center-state", () => getModelCenterSnapshot({ force: false }));
+  secureIpcHandle("link:model-center-save-provider", (_event, input) => saveProviderConfig(input));
+  secureIpcHandle("link:model-center-refresh-provider-models", (_event, input) => refreshProviderModels(input));
+  secureIpcHandle("link:model-center-pull-local-model", (_event, input) => pullLocalModel(input));
+  secureIpcHandle("link:model-center-import-local-model", (_event, input) => importLocalModel(input));
+  secureIpcHandle("link:model-center-remove-local-model", (_event, input) => removeLocalModel(input));
+  secureIpcHandle("link:model-center-assign-role", (_event, input) => assignModelRole(input));
+  secureIpcHandle("link:model-center-hardware", () => getHardwareProfile());
+  secureIpcHandle("link:model-center-refresh-fit", () => refreshFit());
+  secureIpcHandle("link:model-center-start-local-api", (_event, input) => startLocalApiServer(input));
+  secureIpcHandle("link:model-center-stop-local-api", () => stopLocalApiServer());
   secureIpcHandle("link:github-connect-device", () => connectGitHubWithDeviceFlow());
   secureIpcHandle("link:google-workspace-connect-skill", () => connectGoogleWorkspaceWithSkill());
   secureIpcHandle("link:guru-connect-oauth", () => connectGuruWithOAuth());
   secureIpcHandle("link:pylon-connect-oauth", () => connectPylonWithOAuth());
   secureIpcHandle("link:pylon-create-issue", (_event, input) => createPylonIssue(input));
   secureIpcHandle("link:google-calendar-events", () => listGoogleCalendarEvents());
+  secureIpcHandle("link:calendar-workspace", (_event, input) => getCalendarWorkspaceView(input));
   secureIpcHandle("link:meeting-bots", () => listMeetingBots());
   secureIpcHandle("link:meeting-bot-preflight", (_event, input) => preflightMeetingBotInvite(input));
   secureIpcHandle("link:meeting-bot-agentmail-identity", (_event, input) => ensureBotAgentMailIdentity(input));
@@ -1013,6 +1131,8 @@ function registerIpc() {
   secureIpcHandle("link:google-inbox-thread", (_event, input) => getGoogleInboxThread(input));
   secureIpcHandle("link:google-inbox-create-draft", (_event, input) => createGoogleInboxDraft(input));
   secureIpcHandle("link:google-inbox-update-draft", (_event, input) => updateGoogleInboxDraft(input));
+  secureIpcHandle("link:google-inbox-set-read-state", (_event, input) => setGoogleInboxReadState(input));
+  secureIpcHandle("link:google-inbox-workspace", (_event, input) => getGoogleInboxWorkspaceView(input));
   secureIpcHandle("link:google-tasks-connect-gog", () => connectGoogleTasksWithGog());
   secureIpcHandle("link:list-onboarding", () => listOnboarding());
   secureIpcHandle("link:update-onboarding", (_event, input) => updateOnboarding(input));
@@ -1032,7 +1152,16 @@ function registerIpc() {
   secureIpcHandle("link:get-webrtc-status", () => getWebRtcStatus());
   secureIpcHandle("link:get-speak-settings", () => getSpeakSettings());
   secureIpcHandle("link:save-speak-settings", (_event, input) => saveSpeakSettings(input));
+  secureIpcHandle("link:get-vpn-workspace", () => getVpnWorkspace());
+  secureIpcHandle("link:save-vpn-settings", (_event, input) => saveVpnSettings(input));
+  secureIpcHandle("link:create-vpn-peer", (_event, input) => createVpnPeer(input));
   secureIpcHandle("link:scribes-status", () => getScribesStatus());
+  secureIpcHandle("link:scribes-harper-status", (_event, input) => getHarperAddonStatus(input));
+  secureIpcHandle("link:scribes-harper-install", (_event, input) => installHarperAddon(input));
+  secureIpcHandle("link:scribes-harper-remove", () => removeHarperAddon());
+  secureIpcHandle("link:scribes-harper-review", (_event, input) => reviewTextWithHarperAddon(input));
+  secureIpcHandle("link:scribes-harper-polish", (_event, input) => polishTextWithHarperAddon(input));
+  secureIpcHandle("link:scribes-workspace", (_event, input) => getScribesWorkspaceHistoryView(input));
   secureIpcHandle("link:scribes-list-models", () => listScribesModels());
   secureIpcHandle("link:scribes-provider-route", (_event, input) => getScribesProviderRoute(input));
   secureIpcHandle("link:scribes-download-model", (_event, input) => downloadScribesModel(input));
@@ -1088,6 +1217,8 @@ function registerIpc() {
   secureIpcHandle("link:phone-list-call-history", (_event, input) => listPhoneCallHistory(input));
   secureIpcHandle("link:phone-list-assistants", () => listPhoneAssistants());
   secureIpcHandle("link:phone-start-ai-assistant", (_event, input) => startAiAssistantOnCall(input));
+  secureIpcHandle("link:phone-workspace", (_event, input) => getPhoneWorkspaceView(input));
+  secureIpcHandle("link:surface-manifests", () => getSurfaceManifestMap());
   secureIpcHandle("link:list-memory-banks", () => listMemoryBanks());
   secureIpcHandle("link:recall-memory", (_event, input) => recallMemory(input));
   secureIpcHandle("link:retain-memory", (_event, input) => retainMemory(input));
@@ -2117,7 +2248,9 @@ async function sendChatMessage({ sessionId, workspaceId = "workspace-link", cont
   const assistantDisplayName = agentName || (agentId ? targetAgent : "Link");
   const aidaRoute = isAidaAgentSelection(agentId, agentName);
   const a2aRoute = isA2aAgentSelection(agentId, agentSource);
-  const chatSettings = `Approval mode: ${approvalMode}. Runtime route: ${modelMode}. Context scope: ${contextScope}.`;
+  const routingLabel = aiModelRoutingRequestLabel(modelMode);
+  const requestedModelRoute = normalizeAiModelRoute(modelMode);
+  const chatSettings = `Approval mode: ${approvalMode}. Runtime route: ${routingLabel}. Context scope: ${contextScope}.`;
   const docsInstruction = telnyxDocsRouteInstruction();
   const hindsightInstruction = hindsightAgentCapabilityInstruction();
   const routeInstruction = a2aRoute
@@ -2132,7 +2265,8 @@ async function sendChatMessage({ sessionId, workspaceId = "workspace-link", cont
       id: `chat-${Date.now()}-${Math.random().toString(16).slice(2)}`,
       title: trimmed.slice(0, 54),
       workspaceId,
-      model: normalizeAiModelRoute(modelMode).id,
+      model: requestedModelRoute.id,
+      requestedModelRouteId: requestedModelRoute.id,
       status: "active",
       updatedAt: new Date().toISOString(),
       messages: [
@@ -2167,6 +2301,14 @@ async function sendChatMessage({ sessionId, workspaceId = "workspace-link", cont
   sessionItem.status = "active";
   sessionItem.updatedAt = new Date().toISOString();
   sessionItem.model = liveResponse.ok ? liveResponse.route : "live-runtime-unavailable";
+  sessionItem.requestedModelRouteId = requestedModelRoute.id;
+  if (liveResponse.routing) {
+    sessionItem.actualModelRouteId = liveResponse.routing.resolvedRouteId;
+    sessionItem.modelRouting = liveResponse.routing;
+  } else {
+    delete sessionItem.actualModelRouteId;
+    delete sessionItem.modelRouting;
+  }
   await syncWorkboardTaskCompletionFromAssistant(sessionItem, responseText);
 
   await saveDesktopState();
@@ -2244,7 +2386,9 @@ async function createChatSession({
   const isSelfHostedAgent = isSelfHostedAgentSelection(selectedAgentId, selectedAgentSource);
   const targetAgent = [selectedAgentName, selectedAgentId].filter(Boolean).join(" / ") || "Link";
   const assistantDisplayName = selectedAgentName || (selectedAgentId ? targetAgent : "Link");
-  const chatSettings = `Approval mode: ${approvalMode}. Runtime route: ${modelMode}. Context scope: ${contextScope}.`;
+  const routingLabel = aiModelRoutingRequestLabel(modelMode);
+  const requestedModelRoute = normalizeAiModelRoute(modelMode);
+  const chatSettings = `Approval mode: ${approvalMode}. Runtime route: ${routingLabel}. Context scope: ${contextScope}.`;
   const docsInstruction = telnyxDocsRouteInstruction();
   const hindsightInstruction = hindsightAgentCapabilityInstruction();
   const workboardInstruction = workboardStatusGuideInstruction();
@@ -2261,7 +2405,8 @@ async function createChatSession({
     id: `chat-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     title: sessionTitle.slice(0, 120),
     workspaceId,
-    model: isA2aAgent ? "a2a-discovery" : isSelfHostedAgent ? `self-hosted-${runtimeType}` : isHostedAgent ? runtimeType : normalizeAiModelRoute(modelMode).id,
+    model: isA2aAgent ? "a2a-discovery" : isSelfHostedAgent ? `self-hosted-${runtimeType}` : isHostedAgent ? runtimeType : requestedModelRoute.id,
+    requestedModelRouteId: requestedModelRoute.id,
     status: "active",
     updatedAt: now,
     ...(isA2aAgent ? { a2a: { targetAgentId: selectedAgentId } } : {}),
@@ -2606,8 +2751,91 @@ function selfHostedAgentChatArgCandidates(runtimeType, prompt) {
 }
 
 async function runLiteLlmChat(messages, modelMode = defaultAiModelRoute) {
-  const route = normalizeAiModelRoute(modelMode);
-  if (route.dataBoundary === "telnyx-cloud" && !credentialConfigured("TELNYX_API_KEY")) {
+  const snapshot = await getAiModelRouteHealthSnapshot({ force: false });
+  const { request, requestedRoute, routes } = resolveAiModelRouteChain(modelMode, snapshot.routes);
+  const attemptedRoutes = routes.length > 0 ? routes : [requestedRoute];
+  const attempts = [];
+  const requestedFallbackRouteIds = attemptedRoutes.slice(1).map((route) => route.id);
+
+  for (const route of attemptedRoutes) {
+    const attemptedAt = new Date().toISOString();
+    if (!route.available || route.health?.ready === false) {
+      attempts.push({
+        routeId: route.id,
+        label: route.label,
+        provider: route.provider,
+        dataBoundary: route.dataBoundary,
+        targetModel: route.targetModel,
+        status: "skipped",
+        attemptedAt,
+        message: route.health?.message || "Route is not currently ready.",
+      });
+      continue;
+    }
+    const startedAt = Date.now();
+    const result = await runLiteLlmChatRoute(route, messages);
+    const durationMs = Date.now() - startedAt;
+    if (result.ok) {
+      attempts.push({
+        routeId: route.id,
+        label: route.label,
+        provider: route.provider,
+        dataBoundary: route.dataBoundary,
+        targetModel: route.targetModel,
+        status: "succeeded",
+        attemptedAt,
+        durationMs,
+        message: result.route,
+      });
+      return {
+        ...result,
+        routeId: route.id,
+        routing: {
+          strategy: requestedFallbackRouteIds.length > 0 ? "fallback_chain" : "single",
+          requestedRouteId: requestedRoute.id,
+          requestedRouteLabel: requestedRoute.label,
+          requestedFallbackRouteIds,
+          resolvedRouteId: route.id,
+          resolvedRouteLabel: route.label,
+          finalStatus: "succeeded",
+          fallbackUsed: route.id !== requestedRoute.id,
+          attempts,
+        },
+      };
+    }
+    attempts.push({
+      routeId: route.id,
+      label: route.label,
+      provider: route.provider,
+      dataBoundary: route.dataBoundary,
+      targetModel: route.targetModel,
+      status: "failed",
+      attemptedAt,
+      durationMs,
+      error: result.error,
+    });
+  }
+
+  const error = attempts.length > 0
+    ? attempts.map((attempt) => attempt.error || attempt.message).filter(Boolean).join(" ")
+    : "No LiteLLM model routes are configured.";
+  return {
+    ok: false,
+    error,
+    routing: {
+      strategy: requestedFallbackRouteIds.length > 0 ? "fallback_chain" : "single",
+      requestedRouteId: requestedRoute.id,
+      requestedRouteLabel: requestedRoute.label,
+      requestedFallbackRouteIds,
+      finalStatus: "failed",
+      fallbackUsed: attempts.some((attempt) => attempt.routeId !== requestedRoute.id),
+      attempts,
+    },
+  };
+}
+
+async function runLiteLlmChatRoute(route, messages) {
+  if (route.dataBoundary === "telnyx-cloud" && route.provider !== "managed-telnyx" && !credentialConfigured("TELNYX_API_KEY")) {
     return { ok: false, error: "TELNYX_API_KEY is not configured. Save a Telnyx API key or choose a Local route." };
   }
   if (route.dataBoundary === "frontier-byo" && !credentialConfigured("ANTHROPIC_API_KEY")) {
@@ -2617,6 +2845,9 @@ async function runLiteLlmChat(messages, modelMode = defaultAiModelRoute) {
   const managedRoute = route.id === "managed/telnyx-cloud";
   const baseUrl = managedRoute ? managedLiteLlmBaseUrl() : localLiteLlmBaseUrl();
   const apiKey = managedRoute ? credentialValue("LITELLM_API_KEY") : await ensureLiteLlmMasterKey();
+  if (!baseUrl) {
+    return { ok: false, error: managedRoute ? "LITELLM_BASE_URL is not configured for the managed gateway." : "Local LiteLLM base URL is not configured." };
+  }
   if (managedRoute && !apiKey) {
     return { ok: false, error: "LITELLM_API_KEY is not configured for the managed Telnyx gateway." };
   }
@@ -2667,6 +2898,7 @@ async function ensureLiteLlmProxy() {
     const installed = await checkLiteLlmInstalled();
     if (!installed) {
       liteLlmLastError = "The litellm Python binary was not found on PATH. Install LiteLLM to use local model routing.";
+      invalidateAiModelRouteHealthCache();
       return getLiteLlmRuntimeStatus();
     }
 
@@ -2691,16 +2923,20 @@ async function ensureLiteLlmProxy() {
     liteLlmProcess.on("exit", (code, signal) => {
       liteLlmLastExit = { code, signal, at: new Date().toISOString() };
       liteLlmProcess = null;
+      invalidateAiModelRouteHealthCache();
     });
     liteLlmProcess.on("error", (error) => {
       liteLlmLastError = errorMessage(error);
       appendLiteLlmLog(liteLlmLastError);
       liteLlmProcess = null;
+      invalidateAiModelRouteHealthCache();
     });
 
     await waitForLiteLlmHealth(masterKey).catch((error) => {
       liteLlmLastError = errorMessage(error);
+      invalidateAiModelRouteHealthCache();
     });
+    invalidateAiModelRouteHealthCache();
     return getLiteLlmRuntimeStatus();
   })();
 
@@ -2735,27 +2971,27 @@ async function writeLiteLlmConfig() {
 function buildLiteLlmConfigYaml() {
   const entries = [];
   const addModel = (modelName, params) => entries.push({ modelName, params });
-  const ollamaModel = ollamaModelName();
   const ollamaBase = ollamaBaseUrl();
-  addModel("local/default", { model: `ollama/${ollamaModel}`, api_base: ollamaBase });
-  addModel("auto/local-only", { model: `ollama/${ollamaModel}`, api_base: ollamaBase });
-  addModel("auto/ask-before-cloud", { model: `ollama/${ollamaModel}`, api_base: ollamaBase });
-
-  if (credentialConfigured("TELNYX_API_KEY")) {
-    for (const route of buildAiModelRoutes().filter((item) => item.provider === "telnyx" && item.targetModel)) {
+  for (const route of buildAiModelRoutes()) {
+    if (!route.targetModel) continue;
+    if (route.provider === "local") {
+      addModel(route.modelName, { model: `ollama/${route.targetModel}`, api_base: ollamaBase });
+      continue;
+    }
+    if (route.provider === "telnyx" && credentialConfigured("TELNYX_API_KEY")) {
       addModel(route.modelName, {
         model: `openai/${route.targetModel}`,
         api_base: telnyxInferenceBaseUrl(),
         api_key: "os.environ/TELNYX_API_KEY",
       });
+      continue;
     }
-  }
-
-  if (credentialConfigured("ANTHROPIC_API_KEY")) {
-    addModel("frontier/opus", {
-      model: defaultAnthropicOpusModel,
-      api_key: "os.environ/ANTHROPIC_API_KEY",
-    });
+    if (route.provider === "anthropic" && credentialConfigured("ANTHROPIC_API_KEY")) {
+      addModel(route.modelName, {
+        model: route.targetModel || defaultAnthropicOpusModel,
+        api_key: "os.environ/ANTHROPIC_API_KEY",
+      });
+    }
   }
 
   const lines = ["model_list:"];
@@ -2806,6 +3042,7 @@ function stopLiteLlmProxy() {
   if (!liteLlmProcess) return;
   const child = liteLlmProcess;
   liteLlmProcess = null;
+  invalidateAiModelRouteHealthCache();
   child.kill("SIGTERM");
 }
 
@@ -2826,14 +3063,19 @@ async function ensureLiteLlmMasterKey() {
 }
 
 async function getLiteLlmRuntimeStatus() {
-  const installed = await checkLiteLlmInstalled();
   const running = Boolean(liteLlmProcess && !liteLlmProcess.killed);
-  const routes = buildAiModelRoutes();
-  const ready = installed && (!running || !liteLlmLastError);
+  const snapshot = await getAiModelRouteHealthSnapshot({ force: false });
+  const ready = snapshot.routes.some((route) => route.health?.ready);
+  const proxyMessage = snapshot.installed
+    ? running
+      ? "Local LiteLLM proxy is running on 127.0.0.1."
+      : "Local LiteLLM is installed and will start on demand."
+    : "Local LiteLLM is not installed. Local-only and direct-cloud routes require the litellm Python binary.";
   return {
-    installed,
+    installed: snapshot.installed,
     running,
     ready,
+    checkedAt: snapshot.checkedAt,
     baseUrl: localLiteLlmBaseUrl(),
     configPath: liteLlmConfigPath(),
     lastExit: liteLlmLastExit,
@@ -2843,32 +3085,306 @@ async function getLiteLlmRuntimeStatus() {
       provider: "ollama",
       model: ollamaModelName(),
       apiBase: ollamaBaseUrl(),
+      reachable: snapshot.ollama.reachable,
+      modelAvailable: snapshot.ollama.modelAvailable,
+      lastCheckedAt: snapshot.ollama.lastCheckedAt,
+      message: snapshot.ollama.message,
     },
     telnyx: {
       apiKeyConfigured: credentialConfigured("TELNYX_API_KEY"),
       baseUrl: telnyxInferenceBaseUrl(),
-      catalog: telnyxInferenceCatalog,
+      catalog: snapshot.catalog,
+      reachable: credentialConfigured("TELNYX_API_KEY") ? !snapshot.catalog.error : null,
+      lastCheckedAt: snapshot.checkedAt,
+      message: snapshot.catalog.error
+        ? `Telnyx catalog refresh failed: ${snapshot.catalog.error}`
+        : credentialConfigured("TELNYX_API_KEY")
+        ? "Telnyx model catalog is available."
+        : "Add TELNYX_API_KEY to enable Telnyx cloud routes.",
     },
     managedGateway: {
-      configured: Boolean(managedLiteLlmBaseUrl() && credentialConfigured("LITELLM_API_KEY")),
+      configured: snapshot.managed.configured,
       baseUrl: managedLiteLlmBaseUrl(),
+      reachable: snapshot.managed.reachable,
+      lastCheckedAt: snapshot.managed.lastCheckedAt,
+      message: snapshot.managed.message,
     },
     frontier: {
       anthropicConfigured: credentialConfigured("ANTHROPIC_API_KEY"),
+      reachable: credentialConfigured("ANTHROPIC_API_KEY") && snapshot.installed ? null : false,
+      lastCheckedAt: snapshot.checkedAt,
+      message: credentialConfigured("ANTHROPIC_API_KEY")
+        ? snapshot.installed
+          ? "Anthropic BYO routing is configured and will start on demand."
+          : "Install LiteLLM to use Anthropic BYO routing."
+        : "Add ANTHROPIC_API_KEY to enable Anthropic BYO routing.",
     },
-    routes,
-    message: installed
-      ? running
-        ? "Local LiteLLM proxy is running on 127.0.0.1."
-        : "Local LiteLLM is installed and will start on demand."
-      : "Local LiteLLM is not installed. Local-only chat requires the litellm Python binary.",
+    routes: snapshot.routes,
+    message: `${snapshot.message} ${proxyMessage}`.trim(),
   };
 }
 
 async function refreshTelnyxModelCatalog() {
   await fetchTelnyxInferenceCatalog({ force: true });
   await writeLiteLlmConfig().catch(() => {});
+  stopLiteLlmProxy();
+  invalidateAiModelRouteHealthCache();
   return getLiteLlmRuntimeStatus();
+}
+
+async function saveProviderConfig(input = {}) {
+  const providerId = String(input.providerId || "").trim();
+  if (!providerId) throw new Error("Choose a provider or engine to save.");
+  const next = {
+    ...modelCenterPreferences,
+    providers: { ...(modelCenterPreferences.providers || {}) },
+    engines: { ...(modelCenterPreferences.engines || {}) },
+  };
+
+  if (providerId === "ollama") {
+    next.engines.ollama = {
+      ...(next.engines.ollama || {}),
+      ...(typeof input.enabled === "boolean" ? { enabled: input.enabled } : {}),
+      ...(typeof input.baseUrl === "string" ? { baseUrl: input.baseUrl.trim() } : {}),
+      ...(typeof input.defaultModelId === "string" ? { defaultModelId: input.defaultModelId.trim() } : {}),
+      ...(input.engineSettings?.checkForUpdates !== undefined ? { checkForUpdates: Boolean(input.engineSettings.checkForUpdates) } : {}),
+      ...(input.engineSettings?.verifyDependencies !== undefined ? { verifyDependencies: Boolean(input.engineSettings.verifyDependencies) } : {}),
+      ...(input.engineSettings?.maxLoadedModels !== undefined ? { maxLoadedModels: Math.max(0, Math.round(Number(input.engineSettings.maxLoadedModels))) } : {}),
+      ...(input.engineSettings?.timeoutSeconds !== undefined ? { timeoutSeconds: Math.max(30, Math.round(Number(input.engineSettings.timeoutSeconds))) } : {}),
+    };
+  } else {
+    next.providers[providerId] = {
+      ...(next.providers[providerId] || {}),
+      ...(typeof input.enabled === "boolean" ? { enabled: input.enabled } : {}),
+      ...(typeof input.baseUrl === "string" ? { baseUrl: input.baseUrl.trim() } : {}),
+      ...(typeof input.defaultModelId === "string" ? { defaultModelId: input.defaultModelId.trim() } : {}),
+    };
+    if (typeof input.apiKey === "string" && input.apiKey.trim()) {
+      const credentialField = providerId === "telnyx"
+        ? "TELNYX_API_KEY"
+        : providerId === "managed-gateway"
+        ? "LITELLM_API_KEY"
+        : providerId === "anthropic"
+        ? "ANTHROPIC_API_KEY"
+        : "";
+      if (credentialField) await saveSecureCredential(credentialField, input.apiKey.trim());
+    }
+  }
+
+  modelCenterPreferences = normalizeModelCenterPreferences(next);
+  stopLiteLlmProxy();
+  invalidateAiModelRouteHealthCache();
+  await saveDesktopState();
+  return getModelCenterSnapshot({ force: true });
+}
+
+async function refreshProviderModels(input = {}) {
+  const providerId = String(input.providerId || "").trim();
+  if (!providerId || providerId === "telnyx") {
+    await fetchTelnyxInferenceCatalog({ force: true });
+  }
+  if (!providerId || providerId === "managed-gateway") {
+    await probeManagedLiteLlmGateway();
+  }
+  if (!providerId || providerId === "ollama") {
+    await probeOllamaRuntime();
+  }
+  invalidateAiModelRouteHealthCache();
+  return getModelCenterSnapshot({ force: false });
+}
+
+function catalogModelIdForLocalExternalId(externalId) {
+  return `ollama:${normalizeOllamaModelId(externalId)}`;
+}
+
+function resolveLocalExternalModelId(input = {}) {
+  return String(input.externalId || input.modelId || input.name || "")
+    .trim()
+    .replace(/^ollama:/, "");
+}
+
+async function pollOllamaPull(modelId, externalId) {
+  const response = await fetch(`${ollamaBaseUrl()}/api/pull`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: externalId, stream: true }),
+    timeoutMs: 10 * 60_000,
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Ollama pull failed with ${response.status} ${response.statusText}. ${detail.slice(0, 300)}`.trim());
+  }
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for await (const chunk of response.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const payload = JSON.parse(line);
+      const completed = Number(payload.completed || payload.completed_bytes || 0) || 0;
+      const total = Number(payload.total || payload.total_bytes || 0) || 0;
+      localModelOperations.set(modelId, {
+        status: "pulling",
+        completed,
+        total,
+        message: String(payload.status || "Pulling model"),
+      });
+    }
+  }
+}
+
+async function pullLocalModel(input = {}) {
+  const externalId = resolveLocalExternalModelId(input);
+  if (!externalId) throw new Error("Choose an Ollama model id to pull.");
+  const modelId = String(input.modelId || catalogModelIdForLocalExternalId(externalId));
+  localModelOperations.set(modelId, {
+    status: "pulling",
+    completed: 0,
+    total: 0,
+    message: `Pulling ${externalId} from Ollama.`,
+  });
+  invalidateAiModelRouteHealthCache();
+  void pollOllamaPull(modelId, externalId)
+    .then(async () => {
+      localModelOperations.delete(modelId);
+      stopLiteLlmProxy();
+      invalidateAiModelRouteHealthCache();
+      await writeLiteLlmConfig().catch(() => {});
+    })
+    .catch((error) => {
+      localModelOperations.set(modelId, {
+        status: "error",
+        message: errorMessage(error),
+      });
+    });
+  return getModelCenterSnapshot({ force: false });
+}
+
+async function importLocalModel(input = {}) {
+  const name = String(input.name || "").trim();
+  if (!name) throw new Error("Enter a model name before importing a GGUF or Modelfile.");
+  let importPath = String(input.path || "").trim();
+  if (!importPath) {
+    const selection = await dialog.showOpenDialog({
+      properties: ["openFile"],
+      filters: [
+        { name: "Model files", extensions: ["gguf", "txt", "modelfile"] },
+        { name: "All files", extensions: ["*"] },
+      ],
+    });
+    if (selection.canceled || selection.filePaths.length === 0) return getModelCenterSnapshot({ force: false });
+    importPath = selection.filePaths[0];
+  }
+
+  const modelId = catalogModelIdForLocalExternalId(name);
+  localModelOperations.set(modelId, {
+    status: "importing",
+    message: `Importing ${name} into Ollama.`,
+  });
+  const tempModelfile = path.join(modelImportsRoot(), `${name.replace(/[^a-z0-9._-]+/gi, "-")}.Modelfile`);
+  await fs.mkdir(modelImportsRoot(), { recursive: true });
+  const filename = path.basename(importPath).toLowerCase();
+  if (filename === "modelfile" || filename.endsWith(".txt") || filename.endsWith(".modelfile")) {
+    await execFileAsync("ollama", ["create", name, "-f", importPath], { timeout: 10 * 60_000, maxBuffer: 4 * 1024 * 1024 });
+  } else {
+    await fs.writeFile(tempModelfile, `FROM ${importPath}\n`, "utf8");
+    await execFileAsync("ollama", ["create", name, "-f", tempModelfile], { timeout: 10 * 60_000, maxBuffer: 4 * 1024 * 1024 });
+  }
+  localModelOperations.delete(modelId);
+  modelCenterPreferences = normalizeModelCenterPreferences({
+    ...modelCenterPreferences,
+    importedCatalogModels: [
+      ...(modelCenterPreferences.importedCatalogModels || []),
+      normalizeCatalogModel({
+        id: modelId,
+        label: modelLabelFromExternalId(name),
+        providerId: "ollama",
+        engineId: "ollama",
+        source: "imported",
+        description: `Imported from ${path.basename(importPath)}.`,
+        capabilities: ["chat", "offline"],
+        dataBoundary: "local",
+        recommended: false,
+        recommendedRoleEligibility: ["chatPrimary", "chatFallback", "agentDefault"],
+        taskRoutingEligible: false,
+        fallbackChain: [],
+        variants: [{ id: modelId, label: name, providerId: "ollama", engineId: "ollama", externalId: name, format: "ollama" }],
+        policy: { mcpSafe: false, speechCleanup: false, vision: false, coding: false, dataBoundary: "local" },
+      }),
+    ],
+  });
+  stopLiteLlmProxy();
+  await saveDesktopState();
+  invalidateAiModelRouteHealthCache();
+  return getModelCenterSnapshot({ force: true });
+}
+
+async function removeLocalModel(input = {}) {
+  const externalId = resolveLocalExternalModelId(input);
+  if (!externalId) throw new Error("Choose a local model to remove.");
+  const modelId = String(input.modelId || catalogModelIdForLocalExternalId(externalId));
+  localModelOperations.set(modelId, {
+    status: "removing",
+    message: `Removing ${externalId} from Ollama.`,
+  });
+  const response = await fetch(`${ollamaBaseUrl()}/api/delete`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: externalId }),
+  }).catch(async () => fetch(`${ollamaBaseUrl()}/api/delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: externalId }),
+  }));
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    localModelOperations.delete(modelId);
+    throw new Error(`Ollama remove failed with ${response.status} ${response.statusText}. ${detail.slice(0, 300)}`.trim());
+  }
+  localModelOperations.delete(modelId);
+  stopLiteLlmProxy();
+  invalidateAiModelRouteHealthCache();
+  return getModelCenterSnapshot({ force: true });
+}
+
+async function assignModelRole(input = {}) {
+  const roleId = String(input.roleId || "").trim();
+  const modelId = String(input.modelId || "").trim();
+  if (!modelCenterRoleMeta[roleId]) throw new Error("Choose a supported model role.");
+  const snapshot = await getModelCenterSnapshot({ force: false });
+  const model = [...snapshot.catalogModels, ...snapshot.installedModels.map((item) => ({
+    id: item.id,
+    label: item.label,
+    providerId: item.providerId,
+    engineId: item.engineId,
+    dataBoundary: "local",
+    taskRoutingEligible: isTaskRoutingEligible(item),
+  }))].find((candidate) => candidate.id === modelId);
+  if (!model) throw new Error("Choose a model that exists in the current Model Center.");
+  if (roleId === "taskRouting" && !isTaskRoutingEligible(model)) {
+    throw new Error("Task routing only accepts lightweight MCP-safe models.");
+  }
+  modelCenterPreferences = normalizeModelCenterPreferences({
+    ...modelCenterPreferences,
+    roles: {
+      ...(modelCenterPreferences.roles || {}),
+      [roleId]: {
+        roleId,
+        modelId,
+        updatedAt: new Date().toISOString(),
+      },
+    },
+  });
+  stopLiteLlmProxy();
+  await saveDesktopState();
+  invalidateAiModelRouteHealthCache();
+  return getModelCenterSnapshot({ force: false });
+}
+
+async function refreshFit() {
+  return getModelCenterSnapshot({ force: false });
 }
 
 async function fetchTelnyxInferenceCatalog({ force = false } = {}) {
@@ -2890,6 +3406,7 @@ async function fetchTelnyxInferenceCatalog({ force = false } = {}) {
         models: defaultTelnyxInferenceModels,
       };
     }
+    invalidateAiModelRouteHealthCache();
     return telnyxInferenceCatalog;
   }
 
@@ -2916,6 +3433,7 @@ async function fetchTelnyxInferenceCatalog({ force = false } = {}) {
       error: "",
       models,
     };
+    invalidateAiModelRouteHealthCache();
     await saveDesktopState();
     return telnyxInferenceCatalog;
   } catch (error) {
@@ -2926,6 +3444,7 @@ async function fetchTelnyxInferenceCatalog({ force = false } = {}) {
       error: errorMessage(error),
       models: telnyxInferenceCatalog.models?.length ? telnyxInferenceCatalog.models : defaultTelnyxInferenceModels,
     };
+    invalidateAiModelRouteHealthCache();
     await saveDesktopState().catch(() => {});
     return telnyxInferenceCatalog;
   }
@@ -2955,58 +3474,818 @@ function normalizeTelnyxInferenceModel(record) {
   };
 }
 
-function buildAiModelRoutes() {
-  const telnyxModels = telnyxCatalogModels();
-  const telnyxChatModels = telnyxModels.filter((model) => !model.capabilities?.includes("embedding"));
-  const telnyxEmbeddingModel = telnyxModels.find((model) => model.capabilities?.includes("embedding"));
-  const recommended = pickTelnyxModel(telnyxChatModels, [/kimi/i, /glm/i, /minimax/i]);
-  const reasoningTools = pickTelnyxModel(telnyxChatModels, [/glm/i, /kimi/i]);
-  const budgetLongContext = pickTelnyxModel(telnyxChatModels, [/minimax/i, /long/i]);
-  const telnyxAvailable = credentialConfigured("TELNYX_API_KEY");
-  const routes = [
-    {
-      id: "auto/ask-before-cloud",
-      modelName: "auto/ask-before-cloud",
-      label: "Auto: ask before cloud",
-      provider: "local",
+function normalizeAiModelRoutingRequest(modelMode) {
+  if (modelMode && typeof modelMode === "object" && !Array.isArray(modelMode)) {
+    const fallbackRouteIds = Array.isArray(modelMode.fallbackRouteIds)
+      ? modelMode.fallbackRouteIds.map((routeId) => String(routeId || "").trim()).filter(Boolean)
+      : [];
+    return {
+      routeId: String(modelMode.routeId || "").trim(),
+      fallbackRouteIds,
+      allowDefaultFallbacks: modelMode.allowDefaultFallbacks !== false,
+    };
+  }
+  return {
+    routeId: String(modelMode || "").trim(),
+    fallbackRouteIds: [],
+    allowDefaultFallbacks: true,
+  };
+}
+
+function uniqueStrings(values = []) {
+  return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
+}
+
+function modelCenterLogsPath() {
+  return path.join(app.getPath("userData"), "logs", "model-center.log");
+}
+
+function modelImportsRoot() {
+  return path.join(app.getPath("userData"), "model-imports");
+}
+
+function preferredOllamaModelId() {
+  return modelCenterPreferences.engines?.ollama?.defaultModelId || "";
+}
+
+function localEngineEnabled() {
+  return modelCenterPreferences.engines?.ollama?.enabled !== false;
+}
+
+function providerConfigForId(providerId) {
+  if (providerId === "ollama") {
+    return {
+      enabled: localEngineEnabled(),
+      baseUrl: modelCenterPreferences.engines?.ollama?.baseUrl || "",
+      defaultModelId: preferredOllamaModelId() || "",
+    };
+  }
+  return modelCenterPreferences.providers?.[providerId] || {
+    enabled: false,
+    baseUrl: "",
+    defaultModelId: "",
+  };
+}
+
+function cloneCatalogModel(model) {
+  return normalizeCatalogModel(JSON.parse(JSON.stringify(model)));
+}
+
+function modelLabelFromExternalId(externalId) {
+  return String(externalId || "")
+    .split(/[/:]/)
+    .filter(Boolean)
+    .slice(-2)
+    .join(" ")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase())
+    || String(externalId || "");
+}
+
+function catalogModelFromTelnyxModel(model) {
+  const existing = currentCatalogModelMap().get(`telnyx:${model.id}`);
+  const variant = {
+    id: `telnyx:${model.id}`,
+    label: model.id,
+    providerId: "telnyx",
+    externalId: model.id,
+    format: "openai",
+    contextWindow: Number(model.contextWindow) || null,
+  };
+  return normalizeCatalogModel({
+    ...(existing ? cloneCatalogModel(existing) : {}),
+    id: `telnyx:${model.id}`,
+    label: existing?.label || modelLabelFromExternalId(model.id),
+    providerId: "telnyx",
+    source: "telnyx-catalog",
+    description: existing?.description || `Telnyx cloud model ${model.id}.`,
+    capabilities: uniqueStrings([...(existing?.capabilities || []), ...(Array.isArray(model.capabilities) ? model.capabilities : [])]),
+    dataBoundary: "telnyx-cloud",
+    recommended: existing?.recommended || false,
+    recommendedRoleEligibility: existing?.recommendedRoleEligibility || [],
+    taskRoutingEligible: existing?.taskRoutingEligible || false,
+    fallbackChain: existing?.fallbackChain || [],
+    variants: [variant],
+    policy: {
+      ...(existing?.policy || {}),
+      dataBoundary: "telnyx-cloud",
+    },
+  });
+}
+
+function catalogModelFromManagedGatewayModelId(modelId) {
+  const existing = currentCatalogModelMap().get(`managed-gateway:${modelId}`);
+  return normalizeCatalogModel({
+    ...(existing ? cloneCatalogModel(existing) : {}),
+    id: `managed-gateway:${modelId}`,
+    label: existing?.label || modelLabelFromExternalId(modelId),
+    providerId: "managed-gateway",
+    source: "managed-gateway",
+    description: existing?.description || `Managed gateway model ${modelId}.`,
+    capabilities: existing?.capabilities || ["chat"],
+    dataBoundary: "telnyx-cloud",
+    recommended: existing?.recommended || false,
+    recommendedRoleEligibility: existing?.recommendedRoleEligibility || [],
+    taskRoutingEligible: existing?.taskRoutingEligible || false,
+    fallbackChain: existing?.fallbackChain || [],
+    variants: [
+      {
+        id: `managed-gateway:${modelId}`,
+        label: modelId,
+        providerId: "managed-gateway",
+        externalId: modelId,
+        format: "openai",
+      },
+    ],
+    policy: {
+      ...(existing?.policy || {}),
+      dataBoundary: "telnyx-cloud",
+    },
+  });
+}
+
+function catalogModelFromAnthropic() {
+  const existing = currentCatalogModelMap().get(`anthropic:${defaultAnthropicOpusModel}`);
+  return normalizeCatalogModel({
+    ...(existing ? cloneCatalogModel(existing) : {}),
+    id: `anthropic:${defaultAnthropicOpusModel}`,
+    label: existing?.label || "Claude 3 Opus",
+    providerId: "anthropic",
+    source: "byo",
+    description: existing?.description || "Optional frontier BYO provider for Anthropic.",
+    capabilities: existing?.capabilities || ["chat", "reasoning"],
+    dataBoundary: "frontier-byo",
+    recommended: existing?.recommended || false,
+    recommendedRoleEligibility: existing?.recommendedRoleEligibility || [],
+    taskRoutingEligible: false,
+    fallbackChain: existing?.fallbackChain || [],
+    variants: [
+      {
+        id: `anthropic:${defaultAnthropicOpusModel}`,
+        label: defaultAnthropicOpusModel,
+        providerId: "anthropic",
+        externalId: defaultAnthropicOpusModel,
+        format: "anthropic",
+      },
+    ],
+    policy: {
+      ...(existing?.policy || {}),
+      dataBoundary: "frontier-byo",
+    },
+  });
+}
+
+function currentCatalogModelMap() {
+  const map = new Map();
+  for (const model of curatedModelCatalog()) map.set(model.id, cloneCatalogModel(model));
+  for (const model of modelCenterPreferences.importedCatalogModels || []) map.set(model.id, cloneCatalogModel(model));
+  return map;
+}
+
+function buildCatalogModels({ managedModelIds = [] } = {}) {
+  const map = currentCatalogModelMap();
+  for (const telnyxModel of telnyxCatalogModels()) {
+    const model = catalogModelFromTelnyxModel(telnyxModel);
+    map.set(model.id, model);
+  }
+  for (const managedModelId of managedModelIds) {
+    const model = catalogModelFromManagedGatewayModelId(managedModelId);
+    map.set(model.id, model);
+  }
+  map.set(`anthropic:${defaultAnthropicOpusModel}`, catalogModelFromAnthropic());
+  return [...map.values()];
+}
+
+function findCatalogModelForOllamaExternalId(externalId, catalogModels = []) {
+  const normalizedExternalId = normalizeOllamaModelId(externalId);
+  return catalogModels.find((model) =>
+    model.providerId === "ollama" &&
+    model.variants?.some((variant) => matchesOllamaModelId(variant.externalId || variant.label, normalizedExternalId)),
+  ) || null;
+}
+
+function buildInstalledLocalModels(snapshot, hardwareProfile, catalogModels) {
+  const installed = [];
+  for (const record of snapshot.ollama.models || []) {
+    const matchedCatalog = findCatalogModelForOllamaExternalId(record.name, catalogModels);
+    const catalogModel = matchedCatalog || normalizeCatalogModel({
+      id: `ollama:${normalizeOllamaModelId(record.name)}`,
+      label: modelLabelFromExternalId(record.name),
+      providerId: "ollama",
+      engineId: "ollama",
+      source: "discovered",
+      description: `Imported or discovered local model ${record.name}.`,
+      capabilities: record.capabilities || ["chat", "offline"],
       dataBoundary: "local",
-      targetModel: ollamaModelName(),
-      description: "Default local-first route. It does not silently fall back to cloud.",
-      available: true,
-      default: true,
+      recommended: false,
+      recommendedRoleEligibility: ["chatPrimary", "chatFallback", "agentDefault"],
+      taskRoutingEligible: isTaskRoutingEligible({ variants: [{ sizeBytes: record.sizeBytes }], capabilities: record.capabilities || ["chat"] }),
+      fallbackChain: [],
+      variants: [
+        {
+          id: `ollama:${record.name}`,
+          label: record.name,
+          providerId: "ollama",
+          engineId: "ollama",
+          externalId: record.name,
+          format: "ollama",
+          quantization: record.quantization,
+          sizeBytes: record.sizeBytes,
+          contextWindow: record.contextWindow,
+        },
+      ],
+      policy: {
+        minimumRamBytes: 0,
+        minimumStorageBytes: 0,
+        mcpSafe: (record.capabilities || []).includes("mcp-safe"),
+        speechCleanup: false,
+        vision: (record.capabilities || []).includes("vision"),
+        coding: (record.capabilities || []).includes("coding"),
+        dataBoundary: "local",
+      },
+    });
+    const variant = catalogModel.variants?.[0] || null;
+    installed.push({
+      id: catalogModel.id,
+      label: catalogModel.label,
+      providerId: "ollama",
+      engineId: "ollama",
+      source: "discovered",
+      externalId: record.name,
+      sizeBytes: record.sizeBytes || variant?.sizeBytes || 0,
+      contextWindow: record.contextWindow || variant?.contextWindow || null,
+      capabilities: uniqueStrings([...(catalogModel.capabilities || []), ...(record.capabilities || [])]),
+      installedAt: record.modifiedAt || "",
+      lastUsedAt: record.modifiedAt || "",
+      health: {
+        state: snapshot.ollama.reachable ? "ready" : "offline",
+        message: snapshot.ollama.reachable ? "Installed in Ollama." : snapshot.ollama.message,
+      },
+      fit: assessFit({
+        hardwareProfile,
+        variant: {
+          ...(variant || {}),
+          sizeBytes: record.sizeBytes || variant?.sizeBytes || 0,
+          contextWindow: record.contextWindow || variant?.contextWindow || 0,
+        },
+        policy: catalogModel.policy,
+        engineId: "ollama",
+      }),
+      variant: variant ? {
+        ...variant,
+        externalId: record.name,
+        sizeBytes: record.sizeBytes || variant.sizeBytes,
+        contextWindow: record.contextWindow || variant.contextWindow,
+      } : null,
+      tags: [
+        ...(catalogModel.policy?.mcpSafe ? ["MCP-safe"] : []),
+        ...(catalogModel.policy?.coding ? ["Coding"] : []),
+        ...(catalogModel.policy?.vision ? ["Vision"] : []),
+      ],
+      ...(localModelOperations.get(catalogModel.id) ? { operation: localModelOperations.get(catalogModel.id) } : {}),
+    });
+  }
+  for (const [modelId, operation] of localModelOperations.entries()) {
+    if (installed.some((model) => model.id === modelId)) continue;
+    const catalogModel = findCatalogModelById(modelId, catalogModels) || normalizeCatalogModel({
+      id: modelId,
+      label: modelLabelFromExternalId(modelId.replace(/^ollama:/, "")),
+      providerId: "ollama",
+      engineId: "ollama",
+      source: "imported",
+      description: operation.message,
+      capabilities: ["chat", "offline"],
+      dataBoundary: "local",
+      recommended: false,
+      recommendedRoleEligibility: [],
+      taskRoutingEligible: false,
+      variants: [{ id: modelId, label: modelId, providerId: "ollama", engineId: "ollama", externalId: modelId.replace(/^ollama:/, ""), format: "ollama" }],
+      policy: { mcpSafe: false, speechCleanup: false, vision: false, coding: false, dataBoundary: "local" },
+    });
+    installed.push({
+      id: catalogModel.id,
+      label: catalogModel.label,
+      providerId: "ollama",
+      engineId: "ollama",
+      source: "imported",
+      externalId: catalogModel.variants?.[0]?.externalId || catalogModel.id.replace(/^ollama:/, ""),
+      capabilities: catalogModel.capabilities || [],
+      health: { state: operation.status === "error" ? "error" : "degraded", message: operation.message },
+      fit: assessFit({ hardwareProfile, variant: catalogModel.variants?.[0], policy: catalogModel.policy, engineId: "ollama" }),
+      variant: catalogModel.variants?.[0] || null,
+      operation,
+    });
+  }
+  return installed.sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
+}
+
+function findCatalogModelById(modelId, catalogModels) {
+  return catalogModels.find((model) => model.id === modelId) || null;
+}
+
+function buildRoleAssignments(models, catalogModels, installedModels) {
+  const allModels = [...installedModels.map((model) => ({
+    id: model.id,
+    label: model.label,
+    providerId: model.providerId,
+    engineId: model.engineId,
+    dataBoundary: "local",
+    taskRoutingEligible: isTaskRoutingEligible(model),
+  })), ...catalogModels];
+  const byId = new Map(allModels.map((model) => [model.id, model]));
+  const defaultLocalModel = installedModels.find((model) => matchesOllamaModelId(model.externalId, ollamaModelName())) || installedModels[0] || null;
+  const defaults = {
+    chatPrimary: defaultLocalModel?.id || "telnyx:moonshotai/Kimi-K2.6",
+    chatFallback: "telnyx:MiniMaxAI/MiniMax-M3-MXFP8",
+    taskRouting: installedModels.find((model) => isTaskRoutingEligible(model))?.id || "ollama:qwen2.5:3b-instruct-q4_K_M",
+    agentDefault: defaultLocalModel?.id || "telnyx:moonshotai/Kimi-K2.6",
+  };
+  const roleAssignments = {};
+  for (const [roleId, routeMeta] of Object.entries(modelCenterRoleMeta)) {
+    const configuredModelId = modelCenterPreferences.roles?.[roleId]?.modelId || defaults[roleId];
+    const model = byId.get(configuredModelId) || byId.get(defaults[roleId]) || null;
+    roleAssignments[roleId] = model ? {
+      roleId,
+      modelId: model.id,
+      label: model.label,
+      providerId: model.providerId,
+      engineId: model.engineId || "",
+      dataBoundary: model.dataBoundary || "local",
+      routeId: routeMeta.routeId,
+      taskRoutingEligible: isTaskRoutingEligible(model),
+      updatedAt: modelCenterPreferences.roles?.[roleId]?.updatedAt || new Date().toISOString(),
+    } : null;
+  }
+  return roleAssignments;
+}
+
+async function getHardwareProfile() {
+  let availableStorageBytes = 0;
+  try {
+    if (typeof fs.statfs === "function") {
+      const stats = await fs.statfs(app.getPath("userData"));
+      availableStorageBytes = Number(stats.bavail) * Number(stats.bsize);
+    }
+  } catch {
+    availableStorageBytes = 0;
+  }
+  return normalizeHardwareProfile({
+    totalMemoryBytes: totalmem(),
+    freeMemoryBytes: freemem(),
+    gpuMemoryBytes: 0,
+    availableStorageBytes,
+    architecture: process.arch,
+    platform: process.platform,
+    cpuModel: cpus()[0]?.model || "",
+    recommendedContextWindow: 32768,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+async function getModelCenterSnapshot({ force = false } = {}) {
+  if (force) await fetchTelnyxInferenceCatalog({ force: true });
+  const [runtime, ollamaProbe, managedProbe] = await Promise.all([
+    getLiteLlmRuntimeStatus(),
+    probeOllamaRuntime(),
+    probeManagedLiteLlmGateway(),
+  ]);
+  const hardware = await getHardwareProfile();
+  const catalogModels = buildCatalogModels({ managedModelIds: managedProbe.modelIds || [] });
+  const installedModels = buildInstalledLocalModels({ ollama: ollamaProbe }, hardware, catalogModels);
+  const roles = buildRoleAssignments([], catalogModels, installedModels);
+  const roleModelIds = new Set(Object.values(roles).map((assignment) => assignment?.modelId).filter(Boolean));
+  const recommendedCount = catalogModels.filter((model) => model.recommended && !model.policy.hiddenByPolicy).length;
+  const providerDefinitions = [
+    {
+      id: "telnyx",
+      label: "Telnyx",
+      category: "cloud",
+      description: "Direct Telnyx-hosted open model catalog.",
+      dataBoundary: "telnyx-cloud",
+      supportsDiscovery: true,
+      supportsKeyRotation: true,
     },
     {
-      id: "auto/local-only",
-      modelName: "auto/local-only",
-      label: "Auto: local only",
-      provider: "local",
-      dataBoundary: "local",
-      targetModel: ollamaModelName(),
-      description: "Only uses the local Ollama-compatible model.",
-      available: true,
+      id: "managed-gateway",
+      label: "Managed Gateway",
+      category: "cloud",
+      description: "Shared LiteLLM gateway with team policy and observability.",
+      dataBoundary: "telnyx-cloud",
+      supportsDiscovery: true,
+      supportsKeyRotation: true,
     },
     {
-      id: "local/default",
-      modelName: "local/default",
-      label: `Local: ${ollamaModelName()}`,
-      provider: "local",
-      dataBoundary: "local",
-      targetModel: ollamaModelName(),
-      description: "Offline Ollama-compatible local model.",
-      available: true,
+      id: "anthropic",
+      label: "Anthropic",
+      category: "cloud",
+      description: "Frontier BYO provider for exceptional cases.",
+      dataBoundary: "frontier-byo",
+      supportsDiscovery: false,
+      supportsKeyRotation: true,
     },
   ];
+  const providers = providerDefinitions.map((definition) => {
+    const config = providerConfigForId(definition.id);
+    const models = catalogModels.filter((model) => model.providerId === definition.id && !model.policy.hiddenByPolicy);
+    const healthy = definition.id === "telnyx"
+      ? credentialConfigured("TELNYX_API_KEY")
+      : definition.id === "managed-gateway"
+      ? Boolean(managedProbe.reachable)
+      : credentialConfigured("ANTHROPIC_API_KEY");
+    return {
+      definition,
+      config: {
+        id: definition.id,
+        enabled: config.enabled !== false,
+        apiKeyConfigured: definition.id === "telnyx"
+          ? credentialConfigured("TELNYX_API_KEY")
+          : definition.id === "managed-gateway"
+          ? credentialConfigured("LITELLM_API_KEY")
+          : credentialConfigured("ANTHROPIC_API_KEY"),
+        baseUrl: definition.id === "telnyx" ? telnyxInferenceBaseUrl() : definition.id === "managed-gateway" ? managedLiteLlmBaseUrl() : config.baseUrl || "",
+        defaultModelId: config.defaultModelId || "",
+        discoveredAt: new Date().toISOString(),
+        modelCount: models.length,
+        healthy,
+        message: definition.id === "managed-gateway" ? managedProbe.message : healthy ? `${definition.label} is configured.` : `Configure ${definition.label} to enable cloud routing.`,
+      },
+      models,
+    };
+  });
+  const engines = [{
+    id: "ollama",
+    definition: {
+      id: "ollama",
+      label: "Ollama",
+      kind: "local",
+      description: "Local Ollama engine managed by the Link Runtime Manager.",
+      engineFamily: "ollama",
+      dataBoundary: "local",
+    },
+    enabled: localEngineEnabled(),
+    installed: runtime.installed,
+    reachable: Boolean(runtime.local.reachable),
+    ready: Boolean(runtime.local.reachable && runtime.local.modelAvailable),
+    version: "ollama",
+    message: runtime.local.message,
+    baseUrl: ollamaBaseUrl(),
+    defaultModelId: preferredOllamaModelId() || `ollama:${ollamaModelName()}`,
+    discoveredModelCount: installedModels.length,
+    settings: {
+      checkForUpdates: modelCenterPreferences.engines?.ollama?.checkForUpdates !== false,
+      verifyDependencies: modelCenterPreferences.engines?.ollama?.verifyDependencies !== false,
+      maxLoadedModels: modelCenterPreferences.engines?.ollama?.maxLoadedModels || 1,
+      timeoutSeconds: modelCenterPreferences.engines?.ollama?.timeoutSeconds || 600,
+    },
+  }];
+  const routeModels = [
+    ...installedModels.map((model) => ({
+      id: model.id,
+      label: model.label,
+      providerId: model.providerId,
+      engineId: model.engineId,
+      dataBoundary: "local",
+      description: model.health.message,
+      capabilities: model.capabilities,
+      variants: [model.variant || { externalId: model.externalId, contextWindow: model.contextWindow, sizeBytes: model.sizeBytes }],
+      policy: {
+        mcpSafe: Boolean(model.tags?.includes("MCP-safe")),
+        coding: Boolean(model.tags?.includes("Coding")),
+        vision: Boolean(model.tags?.includes("Vision")),
+        hiddenByPolicy: false,
+        dataBoundary: "local",
+      },
+      fallbackChain: [],
+      taskRoutingEligible: isTaskRoutingEligible(model),
+    })),
+    ...catalogModels.filter((model) => !model.policy.hiddenByPolicy),
+  ];
+  const routes = deriveAiModelRoutes({
+    roles,
+    models: routeModels,
+    localEngineDefaultId: preferredOllamaModelId() || defaultLocalModelFromInstalled(installedModels),
+    includeDirectRoutes: true,
+  });
+  return {
+    updatedAt: new Date().toISOString(),
+    message: runtime.message,
+    overview: {
+      routeSummary: summarizeAiModelRouteStatus(routes),
+      recommendedCount,
+      installedCount: installedModels.length,
+      healthyProviderCount: providers.filter((provider) => provider.config.healthy).length,
+    },
+    storage: {
+      appDataPath: app.getPath("userData"),
+      statePath: statePath(),
+      liteLlmConfigPath: liteLlmConfigPath(),
+      importsPath: modelImportsRoot(),
+      logsPath: modelCenterLogsPath(),
+    },
+    engines,
+    providers,
+    installedModels,
+    catalogModels: catalogModels.filter((model) => !model.policy.hiddenByPolicy || roleModelIds.has(model.id)),
+    roles,
+    routes,
+    hardware,
+    localApiServer: currentLocalApiServerStatus(roles),
+    runtime: {
+      ...runtime,
+      routes,
+    },
+  };
+}
 
+function defaultLocalModelFromInstalled(installedModels) {
+  return installedModels.find((model) => matchesOllamaModelId(model.externalId, ollamaModelName()))?.id || installedModels[0]?.id || "";
+}
+
+function appendModelCenterLog(message) {
+  const line = `[${new Date().toISOString()}] ${String(message || "").trim()}`;
+  if (!line.trim()) return;
+  localApiServerStatus = {
+    ...localApiServerStatus,
+    logs: [...localApiServerStatus.logs, line].slice(-60),
+    updatedAt: new Date().toISOString(),
+  };
+  void fs.mkdir(path.dirname(modelCenterLogsPath()), { recursive: true })
+    .then(() => fs.appendFile(modelCenterLogsPath(), `${line}\n`))
+    .catch(() => {});
+}
+
+function currentLocalApiServerStatus(roles = null) {
+  const roleAssignments = roles || buildRoleAssignments([], buildCatalogModels({ managedModelIds: lastManagedGatewayProbe.modelIds || [] }), []);
+  const exposedRoleIds = (modelCenterPreferences.localApiServer?.exposedRoleIds || localApiServerStatus.exposedRoleIds || defaultLocalApiServerConfig.exposedRoleIds)
+    .filter((roleId) => modelCenterRoleMeta[roleId]);
+  const exposedModelIds = exposedRoleIds
+    .map((roleId) => roleAssignments?.[roleId]?.modelId || "")
+    .filter(Boolean);
+  return {
+    ...localApiServerStatus,
+    host: modelCenterPreferences.localApiServer?.host || localApiServerStatus.host || defaultLocalApiServerConfig.host,
+    port: modelCenterPreferences.localApiServer?.port || localApiServerStatus.port || defaultLocalApiServerConfig.port,
+    corsEnabled: modelCenterPreferences.localApiServer?.corsEnabled || false,
+    exposedRoleIds,
+    exposedModelIds,
+    apiKeyConfigured: credentialConfigured(localApiServerKeyField),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function exposedLocalApiRoutes(roles = null, routes = buildAiModelRoutes()) {
+  const status = currentLocalApiServerStatus(roles);
+  const allowedRouteIds = new Set(status.exposedRoleIds.map((roleId) => modelCenterRoleMeta[roleId]?.routeId).filter(Boolean));
+  return routes.filter((route) => allowedRouteIds.has(route.id) && (route.dataBoundary === "local" || route.dataBoundary === "self-hosted"));
+}
+
+async function startLocalApiServer(input = {}) {
+  const host = String(input.host || modelCenterPreferences.localApiServer?.host || defaultLocalApiServerConfig.host).trim() || defaultLocalApiServerConfig.host;
+  const port = Number(input.port || modelCenterPreferences.localApiServer?.port || defaultLocalApiServerConfig.port);
+  const corsEnabled = typeof input.corsEnabled === "boolean" ? input.corsEnabled : Boolean(modelCenterPreferences.localApiServer?.corsEnabled);
+  const exposedRoleIds = Array.isArray(input.exposedRoleIds)
+    ? uniqueStrings(input.exposedRoleIds).filter((roleId) => modelCenterRoleMeta[roleId])
+    : currentLocalApiServerStatus().exposedRoleIds;
+  if (typeof input.apiKey === "string" && input.apiKey.trim()) {
+    await saveSecureCredential(localApiServerKeyField, input.apiKey.trim());
+  } else if (!credentialConfigured(localApiServerKeyField)) {
+    await saveSecureCredential(localApiServerKeyField, `sk-link-local-${crypto.randomBytes(24).toString("hex")}`);
+  }
+
+  modelCenterPreferences = normalizeModelCenterPreferences({
+    ...modelCenterPreferences,
+    localApiServer: {
+      host,
+      port,
+      corsEnabled,
+      exposedRoleIds,
+    },
+  });
+  await saveDesktopState();
+
+  if (localApiServer) {
+    await stopLocalApiServer();
+  }
+
+  localApiServerStatus = {
+    ...currentLocalApiServerStatus(),
+    running: false,
+    ready: false,
+    endpoint: "",
+    message: "Starting local API server.",
+    lastError: "",
+    startedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const server = http.createServer((request, response) => {
+    void handleLocalApiServerRequest(request, response);
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, host, () => resolve());
+  });
+  localApiServer = server;
+  const address = server.address();
+  const boundPort = typeof address === "object" && address ? address.port : port;
+  localApiServerStatus = {
+    ...currentLocalApiServerStatus(),
+    running: true,
+    ready: true,
+    port: boundPort,
+    endpoint: `http://${host}:${boundPort}`,
+    message: "Local API server is running.",
+    startedAt: localApiServerStatus.startedAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  appendModelCenterLog(`Started local API server on ${localApiServerStatus.endpoint}.`);
+  server.once("close", () => {
+    localApiServer = null;
+    localApiServerStatus = {
+      ...currentLocalApiServerStatus(),
+      running: false,
+      ready: false,
+      endpoint: "",
+      message: "Local API server is stopped.",
+      updatedAt: new Date().toISOString(),
+    };
+    appendModelCenterLog("Stopped local API server.");
+  });
+  return getModelCenterSnapshot({ force: false });
+}
+
+async function stopLocalApiServer() {
+  if (!localApiServer) return getModelCenterSnapshot({ force: false });
+  const server = localApiServer;
+  await new Promise((resolve) => server.close(() => resolve()));
+  return getModelCenterSnapshot({ force: false });
+}
+
+async function handleLocalApiServerRequest(request, response) {
+  const status = currentLocalApiServerStatus();
+  const requestUrl = new URL(request.url || "/", status.endpoint || `http://${status.host}:${status.port}`);
+  const corsHeaders = status.corsEnabled
+    ? {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET,POST,OPTIONS",
+      "access-control-allow-headers": "Authorization,Content-Type",
+    }
+    : {};
+  const sendJson = (statusCode, payload) => {
+    response.writeHead(statusCode, {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      ...corsHeaders,
+    });
+    response.end(JSON.stringify(payload));
+  };
+
+  try {
+    if (request.method === "OPTIONS") {
+      response.writeHead(204, corsHeaders);
+      response.end();
+      return;
+    }
+    const expectedKey = credentialValue(localApiServerKeyField);
+    if (expectedKey) {
+      const authHeader = String(request.headers.authorization || "");
+      if (authHeader !== `Bearer ${expectedKey}`) {
+        sendJson(401, { error: { message: "Unauthorized" } });
+        return;
+      }
+    }
+    const routes = exposedLocalApiRoutes();
+    if (request.method === "GET" && requestUrl.pathname === "/healthz") {
+      sendJson(200, currentLocalApiServerStatus());
+      return;
+    }
+    if (request.method === "GET" && requestUrl.pathname === "/v1/models") {
+      sendJson(200, {
+        object: "list",
+        data: routes.map((route) => ({
+          id: route.modelName,
+          object: "model",
+          owned_by: route.provider,
+          permission: [],
+          data_boundary: route.dataBoundary,
+          target_model: route.targetModel,
+        })),
+      });
+      return;
+    }
+    if (request.method !== "POST" || requestUrl.pathname !== "/v1/chat/completions") {
+      sendJson(404, { error: { message: "Not found" } });
+      return;
+    }
+    if (routes.length === 0) {
+      sendJson(400, { error: { message: "No eligible local or self-hosted model roles are exposed by the local API server." } });
+      return;
+    }
+    const rawBody = await readRequestBody(request, 5 * 1024 * 1024);
+    const payload = JSON.parse(String(rawBody || "{}") || "{}");
+    const requestedModel = String(payload?.model || routes[0]?.modelName || "").trim();
+    const route = routes.find((candidate) =>
+      candidate.id === requestedModel ||
+      candidate.modelName === requestedModel ||
+      candidate.targetModel === requestedModel,
+    ) || routes[0];
+    const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+    const result = await runLiteLlmChatRoute(route, messages);
+    if (!result.ok) {
+      appendModelCenterLog(`Local API error for ${route.modelName}: ${result.error}`);
+      sendJson(502, { error: { message: result.error } });
+      return;
+    }
+    appendModelCenterLog(`Local API completion via ${route.modelName}.`);
+    sendJson(200, {
+      id: `chatcmpl-link-${Date.now()}`,
+      object: "chat.completion",
+      created: Math.floor(Date.now() / 1000),
+      model: route.modelName,
+      choices: [
+        {
+          index: 0,
+          finish_reason: "stop",
+          message: {
+            role: "assistant",
+            content: result.content,
+          },
+        },
+      ],
+    });
+  } catch (error) {
+    const message = errorMessage(error);
+    localApiServerStatus = {
+      ...currentLocalApiServerStatus(),
+      lastError: message,
+      updatedAt: new Date().toISOString(),
+    };
+    appendModelCenterLog(`Local API server error: ${message}`);
+    sendJson(500, { error: { message } });
+  }
+}
+
+function buildAiModelRoutes() {
+  const catalogModels = buildCatalogModels({ managedModelIds: lastManagedGatewayProbe.modelIds || [] });
+  const installedModels = (lastOllamaProbe.models || []).map((record) => {
+    const matchedCatalog = findCatalogModelForOllamaExternalId(record.name, catalogModels);
+    return {
+      id: matchedCatalog?.id || `ollama:${normalizeOllamaModelId(record.name)}`,
+      label: matchedCatalog?.label || modelLabelFromExternalId(record.name),
+      providerId: "ollama",
+      engineId: "ollama",
+      dataBoundary: "local",
+      capabilities: matchedCatalog?.capabilities || record.capabilities || ["chat", "offline"],
+      variant: matchedCatalog?.variants?.[0] || { externalId: record.name, sizeBytes: record.sizeBytes, contextWindow: record.contextWindow },
+      tags: matchedCatalog?.policy?.mcpSafe ? ["MCP-safe"] : [],
+    };
+  });
+  const roles = buildRoleAssignments([], catalogModels, installedModels);
+  const routeModels = [
+    ...installedModels.map((model) => ({
+      id: model.id,
+      label: model.label,
+      providerId: model.providerId,
+      engineId: model.engineId,
+      dataBoundary: "local",
+      description: "Local installed model.",
+      capabilities: model.capabilities,
+      variants: [model.variant],
+      policy: {
+        hiddenByPolicy: false,
+        mcpSafe: Boolean(model.tags?.includes("MCP-safe")),
+        speechCleanup: false,
+        vision: false,
+        coding: false,
+        dataBoundary: "local",
+      },
+      fallbackChain: [],
+      taskRoutingEligible: isTaskRoutingEligible(model),
+    })),
+    ...catalogModels.filter((model) => !model.policy.hiddenByPolicy),
+  ];
+  const routes = deriveAiModelRoutes({
+    roles,
+    models: routeModels,
+    localEngineDefaultId: preferredOllamaModelId() || defaultLocalModelFromInstalled(installedModels),
+    includeDirectRoutes: true,
+  });
+  const recommended = catalogModels.find((model) => model.id === "telnyx:moonshotai/Kimi-K2.6");
+  const reasoningTools = catalogModels.find((model) => model.id === "telnyx:zai-org/GLM-5.1-FP8");
+  const budgetLongContext = catalogModels.find((model) => model.id === "telnyx:MiniMaxAI/MiniMax-M3-MXFP8");
   if (recommended) {
     routes.push({
       id: "telnyx/recommended",
       modelName: "telnyx/recommended",
-      label: `Telnyx recommended: ${recommended.id}`,
+      label: `Telnyx recommended: ${recommended.label}`,
       provider: "telnyx",
       dataBoundary: "telnyx-cloud",
-      targetModel: recommended.id,
-      description: "Highest-intelligence Telnyx open-source model available to this account.",
-      available: telnyxAvailable,
+      targetModel: recommended.variants?.[0]?.externalId || recommended.id,
+      description: "Default Telnyx curated cloud route.",
+      available: credentialConfigured("TELNYX_API_KEY"),
+      capabilities: recommended.capabilities,
+      contextWindow: recommended.variants?.[0]?.contextWindow || null,
+      fallbackRouteIds: ["telnyx/reasoning-tools", "telnyx/budget-long-context"],
     });
     routes.push({
       id: "auto/telnyx-cloud",
@@ -3014,69 +4293,56 @@ function buildAiModelRoutes() {
       label: "Auto: Telnyx cloud",
       provider: "telnyx",
       dataBoundary: "telnyx-cloud",
-      targetModel: recommended.id,
-      description: "Cloud-first Telnyx route for users who opted into Telnyx Cloud mode.",
-      available: telnyxAvailable,
+      targetModel: recommended.variants?.[0]?.externalId || recommended.id,
+      description: "Cloud-first Telnyx route.",
+      available: credentialConfigured("TELNYX_API_KEY"),
+      capabilities: recommended.capabilities,
+      contextWindow: recommended.variants?.[0]?.contextWindow || null,
+      fallbackRouteIds: ["telnyx/recommended", "telnyx/reasoning-tools", "telnyx/budget-long-context", "local/default"],
     });
   }
   if (reasoningTools) {
     routes.push({
       id: "telnyx/reasoning-tools",
       modelName: "telnyx/reasoning-tools",
-      label: `Telnyx reasoning/tools: ${reasoningTools.id}`,
+      label: `Telnyx reasoning/tools: ${reasoningTools.label}`,
       provider: "telnyx",
       dataBoundary: "telnyx-cloud",
-      targetModel: reasoningTools.id,
-      description: "Function or reasoning-optimized Telnyx model.",
-      available: telnyxAvailable,
+      targetModel: reasoningTools.variants?.[0]?.externalId || reasoningTools.id,
+      description: "Reasoning and tool-optimized Telnyx route.",
+      available: credentialConfigured("TELNYX_API_KEY"),
+      capabilities: reasoningTools.capabilities,
+      contextWindow: reasoningTools.variants?.[0]?.contextWindow || null,
+      fallbackRouteIds: ["telnyx/recommended", "telnyx/budget-long-context"],
     });
   }
   if (budgetLongContext) {
     routes.push({
       id: "telnyx/budget-long-context",
       modelName: "telnyx/budget-long-context",
-      label: `Telnyx budget long-context: ${budgetLongContext.id}`,
+      label: `Telnyx budget long-context: ${budgetLongContext.label}`,
       provider: "telnyx",
       dataBoundary: "telnyx-cloud",
-      targetModel: budgetLongContext.id,
-      description: "Lower-cost long-context Telnyx model.",
-      available: telnyxAvailable,
-    });
-  }
-  if (telnyxEmbeddingModel) {
-    routes.push({
-      id: "telnyx/embed",
-      modelName: "telnyx/embed",
-      label: `Telnyx embeddings: ${telnyxEmbeddingModel.id}`,
-      provider: "telnyx",
-      dataBoundary: "telnyx-cloud",
-      targetModel: telnyxEmbeddingModel.id,
-      description: "Telnyx embedding model for vector search.",
-      available: telnyxAvailable,
-    });
-  }
-  for (const model of telnyxChatModels) {
-    const modelName = `telnyx/model/${model.id}`;
-    routes.push({
-      id: modelName,
-      modelName,
-      label: `Telnyx model: ${model.id}`,
-      provider: "telnyx",
-      dataBoundary: "telnyx-cloud",
-      targetModel: model.id,
-      description: model.capabilities?.join(", ") || "Telnyx open-source chat model.",
-      available: telnyxAvailable,
+      targetModel: budgetLongContext.variants?.[0]?.externalId || budgetLongContext.id,
+      description: "Budget-focused long-context Telnyx route.",
+      available: credentialConfigured("TELNYX_API_KEY"),
+      capabilities: budgetLongContext.capabilities,
+      contextWindow: budgetLongContext.variants?.[0]?.contextWindow || null,
+      fallbackRouteIds: ["telnyx/recommended"],
     });
   }
   routes.push({
     id: "managed/telnyx-cloud",
-    modelName: credentialValue("LITELLM_MODEL") || "telnyx/recommended",
+    modelName: "managed/telnyx-cloud",
     label: "Telnyx managed gateway",
     provider: "managed-telnyx",
     dataBoundary: "telnyx-cloud",
-    targetModel: credentialValue("LITELLM_MODEL") || "telnyx/recommended",
-    description: "Use a Telnyx-managed LiteLLM gateway for routing, billing, catalog updates, observability, and support.",
+    targetModel: providerConfigForId("managed-gateway").defaultModelId || credentialValue("LITELLM_MODEL") || "telnyx/recommended",
+    description: "Use a Telnyx-managed LiteLLM gateway for shared routing and policy.",
     available: Boolean(managedLiteLlmBaseUrl() && credentialConfigured("LITELLM_API_KEY")),
+    capabilities: ["chat", "routing"],
+    contextWindow: null,
+    fallbackRouteIds: [],
   });
   routes.push({
     id: "frontier/opus",
@@ -3085,8 +4351,11 @@ function buildAiModelRoutes() {
     provider: "anthropic",
     dataBoundary: "frontier-byo",
     targetModel: defaultAnthropicOpusModel,
-    description: "Optional Anthropic connector. Disabled unless the user supplies ANTHROPIC_API_KEY.",
+    description: "Optional Anthropic connector.",
     available: credentialConfigured("ANTHROPIC_API_KEY"),
+    capabilities: ["chat", "reasoning"],
+    contextWindow: null,
+    fallbackRouteIds: [],
   });
   return dedupeRoutes(routes);
 }
@@ -3094,15 +4363,461 @@ function buildAiModelRoutes() {
 function dedupeRoutes(routes) {
   const byId = new Map();
   for (const route of routes) byId.set(route.id, route);
-  return [...byId.values()];
+  const deduped = [...byId.values()];
+  const validIds = new Set(deduped.map((route) => route.id));
+  return deduped.map((route) => ({
+    ...route,
+    fallbackRouteIds: Array.from(new Set((route.fallbackRouteIds || []).filter((routeId) => routeId !== route.id && validIds.has(routeId)))),
+  }));
 }
 
-function normalizeAiModelRoute(modelMode) {
-  const requested = String(modelMode || defaultAiModelRoute).trim();
-  const routes = buildAiModelRoutes();
+function normalizeAiModelRoute(modelMode, routes = buildAiModelRoutes()) {
+  const request = normalizeAiModelRoutingRequest(modelMode);
+  const requested = request.routeId || defaultAiModelRoute;
   return routes.find((route) => route.id === requested || route.modelName === requested)
     || routes.find((route) => route.id === defaultAiModelRoute)
     || routes[0];
+}
+
+function aiModelRoutingRequestLabel(modelMode, routes = buildAiModelRoutes()) {
+  const request = normalizeAiModelRoutingRequest(modelMode);
+  const route = normalizeAiModelRoute(request.routeId, routes);
+  const fallbackRouteIds = [
+    ...(request.allowDefaultFallbacks === false ? [] : route.fallbackRouteIds || []),
+    ...request.fallbackRouteIds,
+  ].filter(Boolean);
+  return fallbackRouteIds.length > 0 ? `${route.id} -> ${Array.from(new Set(fallbackRouteIds)).join(" -> ")}` : route.id;
+}
+
+function invalidateAiModelRouteHealthCache() {
+  aiModelRouteHealthSnapshot = null;
+}
+
+function createAiModelRouteHealth({ state, ready, configured, reachable, lastCheckedAt, message, checks }) {
+  return {
+    state,
+    ready,
+    configured,
+    reachable,
+    lastCheckedAt,
+    message,
+    checks,
+  };
+}
+
+function normalizeOllamaModelId(modelId) {
+  return String(modelId || "").trim().replace(/:latest$/i, "");
+}
+
+function matchesOllamaModelId(candidate, expected) {
+  const normalizedCandidate = normalizeOllamaModelId(candidate);
+  const normalizedExpected = normalizeOllamaModelId(expected);
+  return normalizedCandidate === normalizedExpected
+    || normalizedCandidate.startsWith(`${normalizedExpected}:`)
+    || normalizedExpected.startsWith(`${normalizedCandidate}:`);
+}
+
+function extractOllamaModelIds(payload) {
+  const records = Array.isArray(payload?.models) ? payload.models : Array.isArray(payload) ? payload : [];
+  return records.map((record) => String(record?.name ?? record?.model ?? "").trim()).filter(Boolean);
+}
+
+function normalizeOllamaTagRecord(record = {}) {
+  const name = String(record?.name ?? record?.model ?? "").trim();
+  if (!name) return null;
+  const details = record?.details && typeof record.details === "object" ? record.details : {};
+  const families = Array.isArray(details.families) ? details.families.map((item) => String(item || "").toLowerCase()) : [];
+  const lower = name.toLowerCase();
+  const capabilities = new Set(["chat", "offline"]);
+  if (lower.includes("coder") || lower.includes("code")) capabilities.add("coding");
+  if (lower.includes("vision") || lower.includes("vl")) capabilities.add("vision");
+  if (lower.includes("embed")) {
+    capabilities.clear();
+    capabilities.add("embedding");
+  }
+  if (lower.includes("qwen2.5:3b") || lower.includes("phi3")) capabilities.add("mcp-safe");
+  if (lower.includes("qwen2.5:3b")) capabilities.add("routing");
+  if (families.some((family) => family.includes("clip") || family.includes("llava"))) capabilities.add("vision");
+  const contextWindow = Number(record?.model_info?.context_length ?? record?.details?.context_length ?? record?.context_length ?? 0) || null;
+  return {
+    name,
+    modifiedAt: String(record?.modified_at ?? record?.modifiedAt ?? ""),
+    sizeBytes: Number(record?.size ?? record?.details?.size ?? 0) || 0,
+    digest: String(record?.digest ?? ""),
+    quantization: String(details.quantization_level ?? details.quantization ?? ""),
+    parameterSize: String(details.parameter_size ?? ""),
+    families,
+    capabilities: [...capabilities],
+    contextWindow,
+  };
+}
+
+function extractModelIdsFromCatalogPayload(payload) {
+  const records = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.models) ? payload.models : Array.isArray(payload) ? payload : [];
+  return records.map((record) => String(record?.id ?? record?.model ?? record?.name ?? "").trim()).filter(Boolean);
+}
+
+async function probeOllamaRuntime() {
+  const checkedAt = new Date().toISOString();
+  try {
+    const response = await fetch(`${ollamaBaseUrl()}/api/tags`, {
+      headers: { Accept: "application/json" },
+      timeoutMs: 2500,
+    });
+    if (!response.ok) {
+      lastOllamaProbe = {
+        reachable: false,
+        modelAvailable: false,
+        modelIds: [],
+        models: [],
+        lastCheckedAt: checkedAt,
+        message: `Ollama returned ${response.status} ${response.statusText}.`,
+      };
+      return lastOllamaProbe;
+    }
+    const payload = await response.json().catch(() => ({}));
+    const models = (Array.isArray(payload?.models) ? payload.models : []).map(normalizeOllamaTagRecord).filter(Boolean);
+    const modelIds = models.map((model) => model.name);
+    const modelAvailable = modelIds.some((modelId) => matchesOllamaModelId(modelId, ollamaModelName()));
+    lastOllamaProbe = {
+      reachable: true,
+      modelAvailable,
+      modelIds,
+      models,
+      lastCheckedAt: checkedAt,
+      message: modelAvailable
+        ? `Ollama is reachable and exposes ${ollamaModelName()}.`
+        : `Ollama is reachable, but ${ollamaModelName()} was not found in /api/tags.`,
+    };
+    return lastOllamaProbe;
+  } catch (error) {
+    lastOllamaProbe = {
+      reachable: false,
+      modelAvailable: false,
+      modelIds: [],
+      models: [],
+      lastCheckedAt: checkedAt,
+      message: `Ollama health check failed: ${errorMessage(error)}`,
+    };
+    return lastOllamaProbe;
+  }
+}
+
+async function probeManagedLiteLlmGateway() {
+  const checkedAt = new Date().toISOString();
+  const baseUrl = managedLiteLlmBaseUrl();
+  const apiKey = credentialValue("LITELLM_API_KEY");
+  if (!baseUrl || !apiKey) {
+    lastManagedGatewayProbe = {
+      configured: Boolean(baseUrl && apiKey),
+      reachable: null,
+      modelIds: [],
+      lastCheckedAt: checkedAt,
+      message: !baseUrl
+        ? "Add LITELLM_BASE_URL to enable the managed gateway."
+        : "Add LITELLM_API_KEY to enable the managed gateway.",
+    };
+    return lastManagedGatewayProbe;
+  }
+  try {
+    const response = await fetch(`${baseUrl}/v1/models`, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      timeoutMs: 5000,
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      lastManagedGatewayProbe = {
+        configured: true,
+        reachable: false,
+        modelIds: [],
+        lastCheckedAt: checkedAt,
+        message: `Managed gateway returned ${response.status} ${response.statusText}. ${detail.slice(0, 160)}`.trim(),
+      };
+      return lastManagedGatewayProbe;
+    }
+    const payload = await response.json().catch(() => ({}));
+    const modelIds = extractModelIdsFromCatalogPayload(payload);
+    lastManagedGatewayProbe = {
+      configured: true,
+      reachable: true,
+      modelIds,
+      lastCheckedAt: checkedAt,
+      message: modelIds.length > 0
+        ? `Managed gateway is reachable and returned ${modelIds.length} model${modelIds.length === 1 ? "" : "s"}.`
+        : "Managed gateway is reachable.",
+    };
+    return lastManagedGatewayProbe;
+  } catch (error) {
+    lastManagedGatewayProbe = {
+      configured: true,
+      reachable: false,
+      modelIds: [],
+      lastCheckedAt: checkedAt,
+      message: `Managed gateway health check failed: ${errorMessage(error)}`,
+    };
+    return lastManagedGatewayProbe;
+  }
+}
+
+function buildAiModelRouteHealths(routes, snapshot) {
+  const byRouteId = new Map();
+  const telnyxConfigured = credentialConfigured("TELNYX_API_KEY");
+  const anthropicConfigured = credentialConfigured("ANTHROPIC_API_KEY");
+  const localProxyReady = snapshot.installed;
+  const catalogModelIds = new Set(snapshot.catalog.models.map((model) => String(model.id || "").trim()).filter(Boolean));
+
+  for (const route of routes) {
+    if (route.provider === "local") {
+      const routeModelAvailable = snapshot.ollama.modelIds.some((modelId) => matchesOllamaModelId(modelId, route.targetModel || ollamaModelName()));
+      const checks = [
+        {
+          name: "litellm",
+          ok: snapshot.installed,
+          detail: snapshot.installed
+            ? "LiteLLM is installed and can start on demand."
+            : "Install the litellm Python binary to enable local or direct-cloud routing.",
+        },
+        {
+          name: "ollama",
+          ok: snapshot.ollama.reachable,
+          detail: snapshot.ollama.message,
+        },
+        {
+          name: "ollama_model",
+          ok: routeModelAvailable,
+          detail: routeModelAvailable
+            ? `${route.targetModel || ollamaModelName()} is available in Ollama.`
+            : `${route.targetModel || ollamaModelName()} is not available in Ollama.`,
+        },
+      ];
+      const ready = snapshot.installed && snapshot.ollama.reachable && routeModelAvailable;
+      const state = !snapshot.installed ? "setup_required" : !snapshot.ollama.reachable ? "offline" : !routeModelAvailable ? "degraded" : "ready";
+      const message = !snapshot.installed
+        ? "Install LiteLLM to route local chat through Ollama."
+        : !snapshot.ollama.reachable
+        ? snapshot.ollama.message
+        : !routeModelAvailable
+        ? `Ollama is online, but ${route.targetModel || ollamaModelName()} is missing. Pull the model before using this route.`
+        : `Local route is ready on ${ollamaBaseUrl()} using ${route.targetModel || ollamaModelName()}.`;
+      byRouteId.set(route.id, createAiModelRouteHealth({
+        state,
+        ready,
+        configured: true,
+        reachable: snapshot.ollama.reachable,
+        lastCheckedAt: snapshot.ollama.lastCheckedAt,
+        message,
+        checks,
+      }));
+      continue;
+    }
+
+    if (route.provider === "telnyx") {
+      const modelKnown = !route.targetModel || catalogModelIds.has(route.targetModel);
+      const checks = [
+        {
+          name: "litellm",
+          ok: localProxyReady,
+          detail: localProxyReady
+            ? "LiteLLM is installed and can start direct Telnyx routing on demand."
+            : "Install the litellm Python binary to use direct Telnyx routes.",
+        },
+        {
+          name: "telnyx_api_key",
+          ok: telnyxConfigured,
+          detail: telnyxConfigured ? "TELNYX_API_KEY is configured." : "Add TELNYX_API_KEY to enable Telnyx cloud routes.",
+        },
+        {
+          name: "telnyx_catalog",
+          ok: !snapshot.catalog.error,
+          detail: snapshot.catalog.error || "Telnyx model catalog is fresh.",
+        },
+        {
+          name: "target_model",
+          ok: modelKnown,
+          detail: modelKnown ? `${route.targetModel || route.id} is present in the current catalog.` : `${route.targetModel || route.id} is not present in the current catalog.`,
+        },
+      ];
+      let state = "ready";
+      let ready = localProxyReady && telnyxConfigured && modelKnown;
+      let reachable = telnyxConfigured ? !snapshot.catalog.error : null;
+      let message = `Direct Telnyx route is ready for ${route.targetModel || route.id}.`;
+      if (!localProxyReady) {
+        state = "setup_required";
+        ready = false;
+        reachable = false;
+        message = "Install LiteLLM to use direct Telnyx cloud routes from Link Desktop.";
+      } else if (!telnyxConfigured) {
+        state = "setup_required";
+        ready = false;
+        reachable = null;
+        message = "Add TELNYX_API_KEY to enable direct Telnyx cloud routes.";
+      } else if (!modelKnown) {
+        state = "degraded";
+        ready = false;
+        reachable = snapshot.catalog.error ? false : true;
+        message = `${route.targetModel || route.id} is not in the current Telnyx model catalog. Refresh the catalog or choose another route.`;
+      } else if (snapshot.catalog.error) {
+        state = "degraded";
+        ready = true;
+        reachable = false;
+        message = `Telnyx catalog refresh failed, but cached routes remain usable. ${snapshot.catalog.error}`;
+      }
+      byRouteId.set(route.id, createAiModelRouteHealth({
+        state,
+        ready,
+        configured: telnyxConfigured,
+        reachable,
+        lastCheckedAt: snapshot.checkedAt,
+        message,
+        checks,
+      }));
+      continue;
+    }
+
+    if (route.provider === "managed-telnyx") {
+      const checks = [
+        {
+          name: "gateway_url",
+          ok: Boolean(managedLiteLlmBaseUrl()),
+          detail: managedLiteLlmBaseUrl() ? `Managed gateway base URL is ${managedLiteLlmBaseUrl()}.` : "Add LITELLM_BASE_URL to configure the managed gateway.",
+        },
+        {
+          name: "gateway_key",
+          ok: credentialConfigured("LITELLM_API_KEY"),
+          detail: credentialConfigured("LITELLM_API_KEY") ? "LITELLM_API_KEY is configured." : "Add LITELLM_API_KEY to enable the managed gateway.",
+        },
+        {
+          name: "gateway_reachable",
+          ok: snapshot.managed.reachable === true,
+          detail: snapshot.managed.message,
+        },
+      ];
+      const ready = snapshot.managed.configured && snapshot.managed.reachable === true;
+      const state = !snapshot.managed.configured ? "setup_required" : snapshot.managed.reachable === false ? "offline" : ready ? "ready" : "unknown";
+      byRouteId.set(route.id, createAiModelRouteHealth({
+        state,
+        ready,
+        configured: snapshot.managed.configured,
+        reachable: snapshot.managed.reachable,
+        lastCheckedAt: snapshot.managed.lastCheckedAt,
+        message: snapshot.managed.message,
+        checks,
+      }));
+      continue;
+    }
+
+    const checks = [
+      {
+        name: "litellm",
+        ok: snapshot.installed,
+        detail: snapshot.installed
+          ? "LiteLLM is installed and can proxy Anthropic requests on demand."
+          : "Install the litellm Python binary to enable Anthropic BYO routing.",
+      },
+      {
+        name: "anthropic_api_key",
+        ok: anthropicConfigured,
+        detail: anthropicConfigured ? "ANTHROPIC_API_KEY is configured." : "Add ANTHROPIC_API_KEY to enable Anthropic BYO routing.",
+      },
+    ];
+    const ready = snapshot.installed && anthropicConfigured;
+    const state = !snapshot.installed || !anthropicConfigured ? "setup_required" : "ready";
+    byRouteId.set(route.id, createAiModelRouteHealth({
+      state,
+      ready,
+      configured: anthropicConfigured,
+      reachable: ready ? null : false,
+      lastCheckedAt: snapshot.checkedAt,
+      message: ready
+        ? "Anthropic BYO route is configured and will start LiteLLM on demand."
+        : !snapshot.installed
+        ? "Install LiteLLM to use Anthropic BYO routing."
+        : "Add ANTHROPIC_API_KEY to use Anthropic BYO routing.",
+      checks,
+    }));
+  }
+
+  return byRouteId;
+}
+
+function summarizeAiModelRouteStatus(routes) {
+  const ready = routes.filter((route) => route.health?.ready).length;
+  const degraded = routes.filter((route) => route.health?.state === "degraded" && !route.health?.ready).length;
+  const setupRequired = routes.filter((route) => route.health?.state === "setup_required").length;
+  const offline = routes.filter((route) => route.health?.state === "offline").length;
+  const parts = [];
+  if (ready > 0) parts.push(`${ready} ready`);
+  if (degraded > 0) parts.push(`${degraded} degraded`);
+  if (offline > 0) parts.push(`${offline} offline`);
+  if (setupRequired > 0) parts.push(`${setupRequired} need setup`);
+  return parts.length > 0 ? `Model routes: ${parts.join(", ")}.` : "No model routes are currently ready.";
+}
+
+async function getAiModelRouteHealthSnapshot({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && aiModelRouteHealthSnapshot && now - aiModelRouteHealthSnapshot.cachedAt < aiModelRouteHealthCacheTtlMs) {
+    return aiModelRouteHealthSnapshot;
+  }
+  const checkedAt = new Date().toISOString();
+  const installed = await checkLiteLlmInstalled();
+  const [ollama, managed, catalog] = await Promise.all([
+    probeOllamaRuntime(),
+    probeManagedLiteLlmGateway(),
+    fetchTelnyxInferenceCatalog({ force: false }),
+  ]);
+  const baseRoutes = buildAiModelRoutes();
+  const healthByRouteId = buildAiModelRouteHealths(baseRoutes, {
+    installed,
+    checkedAt,
+    ollama,
+    managed,
+    catalog,
+  });
+  const routes = baseRoutes.map((route) => {
+    const health = healthByRouteId.get(route.id);
+    return {
+      ...route,
+      available: health ? health.ready : route.available,
+      health,
+    };
+  });
+  aiModelRouteHealthSnapshot = {
+    cachedAt: now,
+    checkedAt,
+    installed,
+    ollama,
+    managed,
+    catalog,
+    routes,
+    message: summarizeAiModelRouteStatus(routes),
+  };
+  return aiModelRouteHealthSnapshot;
+}
+
+function resolveAiModelRouteChain(modelMode, routes) {
+  const request = normalizeAiModelRoutingRequest(modelMode);
+  const requestedRoute = normalizeAiModelRoute(request.routeId || defaultAiModelRoute, routes);
+  const chainIds = [
+    requestedRoute.id,
+    ...(request.allowDefaultFallbacks === false ? [] : requestedRoute.fallbackRouteIds || []),
+    ...request.fallbackRouteIds,
+  ];
+  const seen = new Set();
+  const chain = [];
+  for (const routeId of chainIds) {
+    const route = routes.find((candidate) => candidate.id === routeId || candidate.modelName === routeId);
+    if (!route || seen.has(route.id)) continue;
+    seen.add(route.id);
+    chain.push(route);
+  }
+  return {
+    request,
+    requestedRoute,
+    routes: chain,
+  };
 }
 
 function telnyxCatalogModels() {
@@ -3250,19 +4965,20 @@ function localLiteLlmPort() {
 }
 
 function managedLiteLlmBaseUrl() {
-  return (credentialValue("LITELLM_BASE_URL") || "").replace(/\/$/, "").replace(/\/v1$/, "");
+  return (providerConfigForId("managed-gateway").baseUrl || credentialValue("LITELLM_BASE_URL") || "").replace(/\/$/, "").replace(/\/v1$/, "");
 }
 
 function telnyxInferenceBaseUrl() {
-  return (credentialValue("TELNYX_INFERENCE_BASE_URL") || process.env.TELNYX_INFERENCE_BASE_URL || defaultTelnyxInferenceBaseUrl).replace(/\/$/, "");
+  return (providerConfigForId("telnyx").baseUrl || credentialValue("TELNYX_INFERENCE_BASE_URL") || process.env.TELNYX_INFERENCE_BASE_URL || defaultTelnyxInferenceBaseUrl).replace(/\/$/, "");
 }
 
 function ollamaBaseUrl() {
-  return (credentialValue("OLLAMA_BASE_URL") || process.env.OLLAMA_BASE_URL || defaultOllamaBaseUrl).replace(/\/$/, "");
+  return (providerConfigForId("ollama").baseUrl || credentialValue("OLLAMA_BASE_URL") || process.env.OLLAMA_BASE_URL || defaultOllamaBaseUrl).replace(/\/$/, "");
 }
 
 function ollamaModelName() {
-  return credentialValue("OLLAMA_MODEL") || process.env.OLLAMA_MODEL || defaultOllamaModel;
+  const configured = preferredOllamaModelId().replace(/^ollama:/, "");
+  return configured || credentialValue("OLLAMA_MODEL") || process.env.OLLAMA_MODEL || defaultOllamaModel;
 }
 
 function liteLlmConfigPath() {
@@ -5976,9 +7692,9 @@ function clampInteger(value, min, max, fallback) {
   return Math.min(max, Math.max(min, parsed));
 }
 
-function requireTelnyxApiKey(apiKey) {
-  const key = apiKey || credentialValue("TELNYX_API_KEY") || "";
-  if (!key.trim()) throw new Error("Enter a Telnyx API key to search phone numbers.");
+function requireTelnyxApiKey(label = "this Telnyx account") {
+  const key = credentialValue("TELNYX_API_KEY") || "";
+  if (!key.trim()) throw new Error(`Save TELNYX_API_KEY before using ${label}.`);
   return key.trim();
 }
 
@@ -6505,9 +8221,17 @@ async function listTools() {
 async function getScribesStatus() {
   const settings = getSpeakSettings();
   const models = await listScribesModels();
+  const harperStatus = await harperAddonManager.getStatus({ forceRefresh: false, allowAutoUpdate: true });
+  const workspace = {
+    ...scribesState.settings,
+    addons: {
+      ...scribesState.settings.addons,
+      harper: harperStatus,
+    },
+  };
   return {
-    settings: { ...settings, workspace: scribesState.settings },
-    workspace: scribesState.settings,
+    settings: { ...settings, workspace },
+    workspace,
     sessions: listScribesSessions(),
     models,
     route: getScribesProviderRoute(settings),
@@ -6516,6 +8240,32 @@ async function getScribesStatus() {
     modelRoot: scribesModelsRoot(),
     updatedAt: new Date().toISOString(),
   };
+}
+
+async function getHarperAddonStatus(input = {}) {
+  return harperAddonManager.getStatus({
+    forceRefresh: Boolean(input?.forceRefresh),
+    allowAutoUpdate: input?.allowAutoUpdate !== false,
+  });
+}
+
+async function installHarperAddon(input = {}) {
+  return harperAddonManager.installAddon({
+    version: normalizeOptionalString(input?.version),
+    enableAfterInstall: input?.enable !== false,
+  });
+}
+
+async function removeHarperAddon() {
+  return harperAddonManager.removeAddon();
+}
+
+async function reviewTextWithHarperAddon(input = {}) {
+  return harperAddonManager.reviewText(input);
+}
+
+async function polishTextWithHarperAddon(input = {}) {
+  return harperAddonManager.polishText(input);
 }
 
 async function listScribesModels() {
@@ -6554,6 +8304,7 @@ function getScribesProviderRoute(input = {}) {
     return {
       mode: "telnyx-cloud",
       provider: "telnyx",
+      label: "Telnyx Cloud",
       modelId: settings.sttModel || "telnyx/stt",
       engine: "Telnyx",
       ready,
@@ -6573,6 +8324,7 @@ function getScribesProviderRoute(input = {}) {
     return {
       mode: "local",
       provider: settings.sttProvider,
+      label: settings.sttProvider === "nvidia-parakeet" ? "NVIDIA Parakeet" : "Local Whisper",
       modelId: settings.sttModel,
       engine: settings.sttEngine,
       ready: false,
@@ -6590,6 +8342,7 @@ function getScribesProviderRoute(input = {}) {
   return {
     mode: "local",
     provider: model.provider,
+    label: model.label,
     modelId: model.id,
     engine: model.engine,
     ready: downloaded && diagnostics.ready,
@@ -6709,7 +8462,7 @@ function listScribesSessions() {
 async function saveScribesSettings(input = {}) {
   const value = input && typeof input === "object" ? input : {};
   const workspacePatch = value.workspace && typeof value.workspace === "object" ? value.workspace : value;
-  const speakKeys = ["whisperEnabled", "shortcutMode", "shortcutLabel", "sttMode", "sttProvider", "sttEngine", "sttModel", "sttLanguage", "silenceThreshold", "llmCleanupEnabled", "ttsMode", "localTtsProvider", "ttsProvider", "ttsVoice"];
+  const speakKeys = ["whisperEnabled", "shortcutMode", "localShortcutMode", "cloudShortcutMode", "shortcutLabel", "sttMode", "sttProvider", "sttEngine", "sttModel", "sttLanguage", "silenceThreshold", "llmCleanupEnabled", "ttsMode", "localTtsProvider", "ttsProvider", "ttsVoice"];
   const speakPatch = Object.fromEntries(Object.entries(value).filter(([key]) => speakKeys.includes(key)));
   if (Object.keys(speakPatch).length > 0) {
     speakSettings = normalizeSpeakSettings({
@@ -6718,11 +8471,29 @@ async function saveScribesSettings(input = {}) {
       updatedAt: new Date().toISOString(),
     });
   }
+  const meetingCapturePatch = workspacePatch.meetingCapture && typeof workspacePatch.meetingCapture === "object" ? workspacePatch.meetingCapture : null;
+  const harperPatch = workspacePatch.addons?.harper && typeof workspacePatch.addons.harper === "object" ? workspacePatch.addons.harper : null;
   scribesState = normalizeScribesState({
     ...scribesState,
     settings: {
       ...scribesState.settings,
       ...workspacePatch,
+      addons: harperPatch
+        ? {
+            ...scribesState.settings.addons,
+            ...(workspacePatch.addons && typeof workspacePatch.addons === "object" ? workspacePatch.addons : {}),
+            harper: {
+              ...scribesState.settings.addons.harper,
+              ...harperPatch,
+            },
+          }
+        : scribesState.settings.addons,
+      meetingCapture: meetingCapturePatch
+        ? {
+            ...scribesState.settings.meetingCapture,
+            ...meetingCapturePatch,
+          }
+        : scribesState.settings.meetingCapture,
       updatedAt: new Date().toISOString(),
     },
     updatedAt: new Date().toISOString(),
@@ -7289,6 +9060,9 @@ function emptyScribesWorkspaceSettings() {
     customVocabulary: [],
     activeCleanupProfileId: "punctuation",
     cleanupProfiles: defaultScribesCleanupProfiles(updatedAt),
+    addons: {
+      harper: defaultHarperAddonSettings(updatedAt),
+    },
     editModeEnabled: true,
     meetingCapture: {
       microphone: true,
@@ -7349,6 +9123,7 @@ function normalizeScribesWorkspaceSettings(input = {}) {
     : [];
   const nextProfiles = cleanupProfiles.length > 0 ? cleanupProfiles : defaults.cleanupProfiles;
   const activeCleanupProfileId = normalizeOptionalString(value.activeCleanupProfileId) || nextProfiles.find((profile) => profile.applyByDefault)?.id || nextProfiles[0]?.id || "punctuation";
+  const addons = value.addons && typeof value.addons === "object" ? value.addons : {};
   const meetingCapture = value.meetingCapture && typeof value.meetingCapture === "object" ? value.meetingCapture : {};
   return {
     retainAudio: Boolean(value.retainAudio),
@@ -7356,6 +9131,9 @@ function normalizeScribesWorkspaceSettings(input = {}) {
     customVocabulary: normalizeStringList(value.customVocabulary).slice(0, 200),
     activeCleanupProfileId,
     cleanupProfiles: nextProfiles,
+    addons: {
+      harper: normalizeHarperAddonSettings(addons.harper),
+    },
     editModeEnabled: value.editModeEnabled !== false,
     meetingCapture: {
       microphone: meetingCapture.microphone !== false,
@@ -7472,6 +9250,10 @@ function normalizeScribesMeetingState(value = {}, segments = []) {
     diarizationStatus: normalizeScribesDiarizationStatus(meeting.diarizationStatus),
     speakerLabels,
     summaryStatus: normalizeOptionalString(meeting.summaryStatus || "not_started"),
+    calendarEventId: normalizeOptionalString(meeting.calendarEventId || meeting.eventId),
+    calendarEventUrl: normalizeOptionalString(meeting.calendarEventUrl || meeting.eventUrl || meeting.meetUrl),
+    calendarEventStart: normalizeOptionalString(meeting.calendarEventStart || meeting.eventStart || meeting.start),
+    calendarEventEnd: normalizeOptionalString(meeting.calendarEventEnd || meeting.eventEnd || meeting.end),
   };
 }
 
@@ -7604,13 +9386,493 @@ function getSpeakSettings() {
 }
 
 async function saveSpeakSettings(input = {}) {
+  const previousSettings = getSpeakSettings();
+  const wasRunning = Boolean(whisperHelperProcess && !whisperHelperProcess.killed && whisperHelperProcess.exitCode === null);
   speakSettings = normalizeSpeakSettings({
     ...speakSettings,
     ...(input && typeof input === "object" ? input : {}),
     updatedAt: new Date().toISOString(),
   });
   await saveDesktopState();
-  return getSpeakSettings();
+  const nextSettings = getSpeakSettings();
+  if (
+    wasRunning
+    && (
+      previousSettings.shortcutMode !== nextSettings.shortcutMode
+      || previousSettings.localShortcutMode !== nextSettings.localShortcutMode
+      || previousSettings.cloudShortcutMode !== nextSettings.cloudShortcutMode
+      || previousSettings.sttMode !== nextSettings.sttMode
+      || previousSettings.sttProvider !== nextSettings.sttProvider
+      || previousSettings.sttModel !== nextSettings.sttModel
+      || previousSettings.sttLanguage !== nextSettings.sttLanguage
+    )
+  ) {
+    stopWhisperHelper();
+    try {
+      await startWhisperHelper();
+    } catch (error) {
+      appendWhisperLog(`Failed to restart Scribes dictation after shortcut or language change: ${errorMessage(error)}`);
+    }
+  }
+  return nextSettings;
+}
+
+function emptyVpnSettings() {
+  return {
+    selectedInterfaceId: "",
+    toolAccessMode: "preferred",
+    managedPeerIds: {},
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function normalizeVpnSettings(input = {}) {
+  const managedPeerIds = Object.fromEntries(
+    Object.entries(input.managedPeerIds && typeof input.managedPeerIds === "object" ? input.managedPeerIds : {})
+      .map(([interfaceId, peerId]) => [String(interfaceId || "").trim(), String(peerId || "").trim()])
+      .filter(([interfaceId, peerId]) => interfaceId && peerId),
+  );
+  const toolAccessMode = ["off", "preferred", "required"].includes(String(input.toolAccessMode || ""))
+    ? String(input.toolAccessMode)
+    : "preferred";
+  return {
+    selectedInterfaceId: String(input.selectedInterfaceId || "").trim(),
+    toolAccessMode,
+    managedPeerIds,
+    updatedAt: String(input.updatedAt || new Date().toISOString()),
+  };
+}
+
+function getVpnSettings() {
+  vpnSettings = normalizeVpnSettings(vpnSettings);
+  return {
+    ...vpnSettings,
+    managedPeerIds: { ...vpnSettings.managedPeerIds },
+  };
+}
+
+async function saveVpnSettings(input = {}) {
+  const previous = getVpnSettings();
+  vpnSettings = normalizeVpnSettings({
+    ...previous,
+    ...(input && typeof input === "object" ? input : {}),
+    managedPeerIds: input.managedPeerIds && typeof input.managedPeerIds === "object"
+      ? { ...previous.managedPeerIds, ...input.managedPeerIds }
+      : previous.managedPeerIds,
+    updatedAt: new Date().toISOString(),
+  });
+  await saveDesktopState();
+  return getVpnWorkspace();
+}
+
+function vpnPeerPrivateKeyField(peerId) {
+  return `LINK_VPN_PEER_PRIVATE_KEY_${String(peerId || "").trim()}`;
+}
+
+async function telnyxTextRequest(apiKey, method, pathName) {
+  const response = await fetch(`${telnyxApiBaseUrl()}/v2${pathName}`, {
+    method,
+    headers: telnyxHeaders(apiKey),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Telnyx ${method} ${pathName} returned ${response.status}: ${detail.slice(0, 700)}`);
+  }
+  return response.text();
+}
+
+async function listTelnyxVpnNetworks(apiKey) {
+  const payload = await telnyxRequest(apiKey, "GET", "/networks?page[size]=100");
+  const items = Array.isArray(payload?.data) ? payload.data : [];
+  return items.map((item) => ({
+    id: String(item.id || "").trim(),
+    name: String(item.name || item.id || "Network").trim(),
+    createdAt: String(item.created_at || item.createdAt || ""),
+    updatedAt: String(item.updated_at || item.updatedAt || item.created_at || item.createdAt || ""),
+  })).filter((item) => item.id);
+}
+
+async function listTelnyxVpnInterfaces(apiKey) {
+  const payload = await telnyxRequest(apiKey, "GET", "/wireguard_interfaces?page[size]=100");
+  const items = Array.isArray(payload?.data) ? payload.data : [];
+  return items.map((item) => ({
+    id: String(item.id || "").trim(),
+    name: String(item.name || item.id || "Cloud VPN").trim(),
+    networkId: String(item.network_id || item.networkId || "").trim(),
+    status: String(item.status || "").trim().toLowerCase(),
+    endpoint: String(item.endpoint || "").trim(),
+    publicKey: String(item.public_key || item.publicKey || "").trim(),
+    serverIpAddress: String(item.server_ip_address || item.serverIpAddress || "").trim(),
+    regionCode: String(item.region_code || item.regionCode || item.region?.code || "").trim(),
+    regionName: String(item.region?.name || item.region_name || item.regionName || item.region_code || item.regionCode || "").trim(),
+    createdAt: String(item.created_at || item.createdAt || ""),
+    updatedAt: String(item.updated_at || item.updatedAt || item.created_at || item.createdAt || ""),
+  })).filter((item) => item.id);
+}
+
+async function listTelnyxVpnPeers(apiKey) {
+  const payload = await telnyxRequest(apiKey, "GET", "/wireguard_peers?page[size]=100");
+  const items = Array.isArray(payload?.data) ? payload.data : [];
+  return items.map((item) => ({
+    id: String(item.id || "").trim(),
+    interfaceId: String(item.wireguard_interface_id || item.wireguardInterfaceId || "").trim(),
+    publicKey: String(item.public_key || item.publicKey || "").trim(),
+    lastSeenAt: String(item.last_seen || item.lastSeen || ""),
+    createdAt: String(item.created_at || item.createdAt || ""),
+    updatedAt: String(item.updated_at || item.updatedAt || item.created_at || item.createdAt || ""),
+  })).filter((item) => item.id);
+}
+
+async function listTelnyxVpnCoverage(apiKey) {
+  const payload = await telnyxRequest(apiKey, "GET", "/network_coverage?filter[available_services][contains]=cloud_vpn&page[size]=100");
+  const items = Array.isArray(payload?.data) ? payload.data : [];
+  return items.map((item) => ({
+    code: String(item.location?.code || "").trim(),
+    name: String(item.location?.name || item.location?.code || "").trim(),
+    region: String(item.location?.region || "").trim(),
+    site: String(item.location?.site || "").trim(),
+    availableServices: Array.isArray(item.available_services) ? item.available_services.map((value) => String(value || "").trim()).filter(Boolean) : [],
+  })).filter((item) => item.code);
+}
+
+function ipv4ToInt(ipAddress) {
+  const octets = String(ipAddress || "").split(".").map((part) => Number.parseInt(part, 10));
+  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return null;
+  return (((octets[0] << 24) >>> 0) + (octets[1] << 16) + (octets[2] << 8) + octets[3]) >>> 0;
+}
+
+function ipv4InCidr(ipAddress, cidr) {
+  const [cidrAddress, prefixValue] = String(cidr || "").trim().split("/");
+  const prefix = Number.parseInt(prefixValue || "", 10);
+  const ipInt = ipv4ToInt(ipAddress);
+  const cidrInt = ipv4ToInt(cidrAddress);
+  if (ipInt == null || cidrInt == null || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) return false;
+  const mask = prefix === 0 ? 0 : ((0xffffffff << (32 - prefix)) >>> 0);
+  return (ipInt & mask) === (cidrInt & mask);
+}
+
+function loopbackHostname(hostname) {
+  const normalized = String(hostname || "").trim().toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
+}
+
+function localVpnDeviceAddresses(cidr) {
+  if (!cidr) return [];
+  return Object.values(networkInterfaces())
+    .flatMap((entries) => Array.isArray(entries) ? entries : [])
+    .filter((entry) => entry && entry.family === "IPv4" && !entry.internal)
+    .map((entry) => entry.address)
+    .filter((address, index, values) => values.indexOf(address) === index)
+    .filter((address) => ipv4InCidr(address, cidr));
+}
+
+async function resolveVpnProtectedService(service, selectedInterface) {
+  if (!service.url) {
+    return {
+      id: service.id,
+      label: service.label,
+      url: "",
+      hostname: "",
+      resolvedIp: "",
+      match: "missing",
+      detail: "Not configured yet.",
+      configured: false,
+      insideSelectedVpn: false,
+    };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(service.url);
+  } catch {
+    return {
+      id: service.id,
+      label: service.label,
+      url: service.url,
+      hostname: "",
+      resolvedIp: "",
+      match: "unresolved",
+      detail: "URL is invalid.",
+      configured: true,
+      insideSelectedVpn: false,
+    };
+  }
+
+  const hostname = parsed.hostname;
+  if (loopbackHostname(hostname)) {
+    return {
+      id: service.id,
+      label: service.label,
+      url: service.url,
+      hostname,
+      resolvedIp: hostname,
+      match: "local",
+      detail: "Loopback only. This service stays on the current Mac until you host it on a VPN-connected address.",
+      configured: true,
+      insideSelectedVpn: false,
+    };
+  }
+
+  if (parsed.protocol !== "https:") {
+    return {
+      id: service.id,
+      label: service.label,
+      url: service.url,
+      hostname,
+      resolvedIp: "",
+      match: "unresolved",
+      detail: "HTTPS is required for non-loopback service URLs.",
+      configured: true,
+      insideSelectedVpn: false,
+    };
+  }
+
+  let resolvedIp = "";
+  try {
+    resolvedIp = isIP(hostname) ? hostname : (await dnsLookup(hostname)).address || "";
+  } catch (error) {
+    return {
+      id: service.id,
+      label: service.label,
+      url: service.url,
+      hostname,
+      resolvedIp: "",
+      match: "unresolved",
+      detail: `Cannot resolve ${hostname}: ${errorMessage(error)}`,
+      configured: true,
+      insideSelectedVpn: false,
+    };
+  }
+
+  const insideSelectedVpn = Boolean(selectedInterface?.serverIpAddress && ipv4InCidr(resolvedIp, selectedInterface.serverIpAddress));
+  return {
+    id: service.id,
+    label: service.label,
+    url: service.url,
+    hostname,
+    resolvedIp,
+    match: insideSelectedVpn ? "vpn" : "public",
+    detail: insideSelectedVpn
+      ? `Resolves inside ${selectedInterface.serverIpAddress}.`
+      : selectedInterface?.serverIpAddress
+        ? `Resolves to ${resolvedIp}, outside ${selectedInterface.serverIpAddress}.`
+        : `Resolves to ${resolvedIp}. Choose a Cloud VPN to validate private access.`,
+    configured: true,
+    insideSelectedVpn,
+  };
+}
+
+function vpnServiceDefinitions() {
+  return [
+    { id: "link-app-publisher", label: "App Publisher", url: credentialValue("LINK_APP_PUBLISHER_URL") || process.env.LINK_APP_PUBLISHER_URL || "" },
+    { id: "link-message-gateway", label: "Message Gateway", url: credentialValue("LINK_MESSAGE_GATEWAY_URL") || process.env.LINK_MESSAGE_GATEWAY_URL || "" },
+    { id: "link-skill-registry", label: "Skill Registry", url: credentialValue("LINK_SKILL_REGISTRY_URL") || process.env.LINK_SKILL_REGISTRY_URL || "" },
+    { id: "mcp-proxy", label: "MCP Proxy", url: credentialValue("MCP_PROXY_URL") || process.env.MCP_PROXY_URL || "" },
+  ];
+}
+
+async function managedVpnPeerConfig(apiKey, settings, selectedInterfaceId) {
+  const peerId = settings.managedPeerIds[selectedInterfaceId];
+  if (!peerId) return { peerId: "", config: "" };
+  const privateKey = String(credentialValue(vpnPeerPrivateKeyField(peerId)) || "").trim();
+  if (!privateKey) return { peerId, config: "" };
+  try {
+    const template = await telnyxTextRequest(apiKey, "GET", `/wireguard_peers/${encodeURIComponent(peerId)}/config`);
+    return {
+      peerId,
+      config: String(template || "").replace("<! INSERT PEER PRIVATE KEY HERE !>", privateKey),
+    };
+  } catch {
+    return { peerId, config: "" };
+  }
+}
+
+function vpnWorkspaceMessage({ apiKeyConfigured, interfaces, selectedInterface, deviceConnected, services, toolAccessMode, reachable }) {
+  if (!apiKeyConfigured) return "Save TELNYX_API_KEY to list Cloud VPNs from this Telnyx account.";
+  if (!reachable) return "Telnyx Cloud VPN inventory could not be loaded right now.";
+  if (interfaces.length === 0) return "No Telnyx Cloud VPNs were found on this account. Create one in Mission Control, then refresh Link.";
+  if (!selectedInterface) return "Choose a Cloud VPN to evaluate how Link services stay private.";
+  if (!deviceConnected) return "Selected Cloud VPN is loaded, but this Mac is not on that WireGuard subnet yet.";
+  if (toolAccessMode === "required" && services.some((service) => service.configured && service.match !== "vpn")) {
+    return "VPN-only mode is on, but one or more Link service URLs still resolve outside the selected VPN.";
+  }
+  return "Selected Cloud VPN is ready. Link services that resolve inside its subnet stay private to peers on that VPN.";
+}
+
+async function getVpnWorkspace() {
+  const settings = getVpnSettings();
+  const apiKey = String(credentialValue("TELNYX_API_KEY") || "").trim();
+  if (!apiKey) {
+    return {
+      apiKeyConfigured: false,
+      reachable: false,
+      message: "Save TELNYX_API_KEY to list Cloud VPNs from this Telnyx account.",
+      checks: [
+        { name: "Telnyx API key", ok: false, detail: "TELNYX_API_KEY is missing." },
+        { name: "Cloud VPNs", ok: false, detail: "Add a Telnyx API key before loading WireGuard interfaces." },
+      ],
+      settings,
+      networks: [],
+      interfaces: [],
+      peers: [],
+      coverageRegions: [],
+      services: vpnServiceDefinitions().map((service) => ({
+        id: service.id,
+        label: service.label,
+        url: service.url,
+        hostname: "",
+        resolvedIp: "",
+        match: service.url ? "unresolved" : "missing",
+        detail: service.url ? "Save TELNYX_API_KEY to validate this URL against a Cloud VPN." : "Not configured yet.",
+        configured: Boolean(service.url),
+        insideSelectedVpn: false,
+      })),
+      deviceConnected: false,
+      deviceAddresses: [],
+      selectedPeerId: "",
+      selectedPeerConfig: "",
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  try {
+    const [networks, interfaces, peers, coverageRegions] = await Promise.all([
+      listTelnyxVpnNetworks(apiKey),
+      listTelnyxVpnInterfaces(apiKey),
+      listTelnyxVpnPeers(apiKey),
+      listTelnyxVpnCoverage(apiKey).catch(() => []),
+    ]);
+    const networkNames = new Map(networks.map((network) => [network.id, network.name]));
+    const peerCounts = new Map();
+    const latestPeerSeen = new Map();
+    for (const peer of peers) {
+      if (!peer.interfaceId) continue;
+      peerCounts.set(peer.interfaceId, (peerCounts.get(peer.interfaceId) || 0) + 1);
+      if (peer.lastSeenAt) {
+        const current = latestPeerSeen.get(peer.interfaceId);
+        if (!current || Date.parse(peer.lastSeenAt) > Date.parse(current)) latestPeerSeen.set(peer.interfaceId, peer.lastSeenAt);
+      }
+    }
+
+    const managedPeerIds = new Set(Object.values(settings.managedPeerIds));
+    const hydratedInterfaces = interfaces.map((item) => ({
+      ...item,
+      networkName: networkNames.get(item.networkId) || item.networkId || "Network",
+      peerCount: peerCounts.get(item.id) || 0,
+      lastSeenAt: latestPeerSeen.get(item.id) || "",
+      managedPeer: Boolean(settings.managedPeerIds[item.id]),
+    }));
+    const hydratedPeers = peers.map((item) => ({
+      ...item,
+      interfaceName: hydratedInterfaces.find((vpn) => vpn.id === item.interfaceId)?.name || item.interfaceId || "Cloud VPN",
+      managedByLink: managedPeerIds.has(item.id),
+    }));
+    const hydratedNetworks = networks.map((network) => ({
+      ...network,
+      interfaceCount: hydratedInterfaces.filter((item) => item.networkId === network.id).length,
+      peerCount: hydratedPeers.filter((peer) => hydratedInterfaces.some((item) => item.networkId === network.id && item.id === peer.interfaceId)).length,
+    }));
+
+    const selectedInterface = hydratedInterfaces.find((item) => item.id === settings.selectedInterfaceId) || hydratedInterfaces[0] || null;
+    const services = await Promise.all(vpnServiceDefinitions().map((service) => resolveVpnProtectedService(service, selectedInterface)));
+    const deviceAddresses = selectedInterface?.serverIpAddress ? localVpnDeviceAddresses(selectedInterface.serverIpAddress) : [];
+    const deviceConnected = deviceAddresses.length > 0;
+    const selectedPeer = selectedInterface ? await managedVpnPeerConfig(apiKey, settings, selectedInterface.id) : { peerId: "", config: "" };
+    const toolUrlChecksOk = settings.toolAccessMode === "off"
+      || services.every((service) => !service.configured || service.match === "vpn");
+    return {
+      apiKeyConfigured: true,
+      reachable: true,
+      message: vpnWorkspaceMessage({
+        apiKeyConfigured: true,
+        interfaces: hydratedInterfaces,
+        selectedInterface,
+        deviceConnected,
+        services,
+        toolAccessMode: settings.toolAccessMode,
+        reachable: true,
+      }),
+      checks: [
+        { name: "Telnyx API key", ok: true, detail: "TELNYX_API_KEY is configured." },
+        { name: "Cloud VPNs", ok: hydratedInterfaces.length > 0, detail: hydratedInterfaces.length > 0 ? `${hydratedInterfaces.length} Cloud VPNs found.` : "No Cloud VPNs found on this account." },
+        { name: "This Mac", ok: !selectedInterface || deviceConnected, detail: selectedInterface ? (deviceConnected ? `Connected on ${deviceAddresses.join(", ")}.` : "This Mac is not connected to the selected VPN.") : "Choose a Cloud VPN to check local connectivity." },
+        { name: "Tool URLs", ok: toolUrlChecksOk, detail: toolUrlChecksOk ? "Configured Link services match the selected VPN or are still unset." : "One or more configured Link services resolve outside the selected VPN." },
+      ],
+      settings,
+      networks: hydratedNetworks,
+      interfaces: hydratedInterfaces,
+      peers: hydratedPeers,
+      coverageRegions,
+      services,
+      deviceConnected,
+      deviceAddresses,
+      selectedPeerId: selectedPeer.peerId,
+      selectedPeerConfig: selectedPeer.config,
+      updatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    return {
+      apiKeyConfigured: true,
+      reachable: false,
+      message: errorMessage(error),
+      checks: [
+        { name: "Telnyx API key", ok: true, detail: "TELNYX_API_KEY is configured." },
+        { name: "Cloud VPNs", ok: false, detail: errorMessage(error) },
+      ],
+      settings,
+      networks: [],
+      interfaces: [],
+      peers: [],
+      coverageRegions: [],
+      services: await Promise.all(vpnServiceDefinitions().map((service) => resolveVpnProtectedService(service, null))),
+      deviceConnected: false,
+      deviceAddresses: [],
+      selectedPeerId: "",
+      selectedPeerConfig: "",
+      updatedAt: new Date().toISOString(),
+    };
+  }
+}
+
+async function createVpnPeer(input = {}) {
+  const wireguardInterfaceId = String(input.wireguardInterfaceId || "").trim();
+  if (!wireguardInterfaceId) throw new Error("Choose a Cloud VPN before creating a WireGuard peer.");
+  const apiKey = requireTelnyxApiKey("Cloud VPN");
+  const current = getVpnSettings();
+  const existingPeerId = current.managedPeerIds[wireguardInterfaceId];
+  if (existingPeerId && credentialValue(vpnPeerPrivateKeyField(existingPeerId))) {
+    const workspace = await saveVpnSettings({ selectedInterfaceId: wireguardInterfaceId });
+    return {
+      workspace,
+      peerId: existingPeerId,
+      created: false,
+      message: "Existing Link WireGuard peer config is ready.",
+    };
+  }
+
+  const payload = await telnyxRequest(apiKey, "POST", "/wireguard_peers", {
+    wireguard_interface_id: wireguardInterfaceId,
+  });
+  const peerId = String(payload?.data?.id || "").trim();
+  const privateKey = String(payload?.data?.private_key || payload?.data?.privateKey || "").trim();
+  if (!peerId || !privateKey) throw new Error("Telnyx created a WireGuard peer but did not return the peer id and private key.");
+  await saveSecureCredential(vpnPeerPrivateKeyField(peerId), privateKey);
+  vpnSettings = normalizeVpnSettings({
+    ...current,
+    selectedInterfaceId: wireguardInterfaceId,
+    managedPeerIds: {
+      ...current.managedPeerIds,
+      [wireguardInterfaceId]: peerId,
+    },
+    updatedAt: new Date().toISOString(),
+  });
+  await saveDesktopState();
+  return {
+    workspace: await getVpnWorkspace(),
+    peerId,
+    created: true,
+    message: "WireGuard peer config is ready for this Mac.",
+  };
 }
 
 function getWhisperStatus(extra = {}) {
@@ -7625,21 +9887,22 @@ function getWhisperStatus(extra = {}) {
   const localSelected = settings.sttMode === "local" && settings.sttProvider !== "telnyx";
   const scribesRoute = getScribesProviderRoute(settings);
   const localReady = localSelected && scribesRoute.ready;
+  const providerLabel = cloudSelected ? "Telnyx Cloud" : settings.sttProvider === "nvidia-parakeet" ? "NVIDIA Parakeet" : "Local Whisper";
   const message = process.platform !== "darwin"
     ? "Scribes dictation helper is only available on macOS."
     : !sourceAvailable
     ? "Scribes dictation source is not bundled with this Link build."
     : running
-    ? "Hold fn while focused in any textbox to dictate with Scribes."
+    ? `${settings.shortcutLabel} is active for ${providerLabel} dictation.`
     : localSelected && !localReady
     ? scribesRoute.diagnostics.message
     : localReady
-    ? "Scribes local dictation is ready to start."
+    ? `${providerLabel} dictation is ready. Link will manage the helper automatically.`
     : !apiKeyReady
     ? "Save TELNYX_API_KEY in Settings before starting Scribes cloud dictation."
     : built
-    ? "Scribes cloud dictation is built and ready to start."
-    : "Build Scribes dictation before starting the fn hold flow.";
+    ? "Telnyx Cloud dictation is ready. Link will manage the helper automatically."
+    : "Scribe dictation will be prepared automatically when you start.";
 
   return {
     available: process.platform === "darwin" && sourceAvailable,
@@ -7683,7 +9946,7 @@ async function buildWhisperHelper() {
   });
   appendWhisperLog(stdout);
   appendWhisperLog(stderr);
-  return getWhisperStatus({ buildOutput: stripAnsi([stdout, stderr].filter(Boolean).join("\n")).trim().slice(-2000) });
+  return getWhisperStatus({ message: "Scribe dictation helper is ready." });
 }
 
 async function startWhisperHelper() {
@@ -7776,7 +10039,12 @@ function whisperRootPath() {
 }
 
 function whisperAppBundlePath() {
-  return path.join(whisperRootPath(), "TelnyxDictation.app");
+  const root = whisperRootPath();
+  const appBundlePath = path.join(root, "Telnyx Link.app");
+  if (fsSync.existsSync(appBundlePath)) {
+    return appBundlePath;
+  }
+  return path.join(root, "TelnyxDictation.app");
 }
 
 function whisperExecutablePath() {
@@ -8259,7 +10527,6 @@ function normalizeDialerState(input = {}) {
 
 function normalizeSpeakSettings(input = {}) {
   const source = input && typeof input === "object" ? input : {};
-  const shortcutMode = source.shortcutMode === "cmd-shift-l" ? "cmd-shift-l" : "hold-fn";
   const silenceThreshold = Number(source.silenceThreshold);
   const providerFromLegacyEngine = legacySttProvider(source.sttEngine);
   let sttProvider = ["openai-whisper", "nvidia-parakeet", "telnyx"].includes(source.sttProvider)
@@ -8272,10 +10539,15 @@ function normalizeSpeakSettings(input = {}) {
     : "local";
   if (sttMode === "telnyx-cloud") sttProvider = "telnyx";
   if (sttMode === "local" && sttProvider === "telnyx") sttProvider = "openai-whisper";
+  const localShortcutMode = source.localShortcutMode === "cmd-shift-l" || source.shortcutMode === "cmd-shift-l" ? "cmd-shift-l" : "hold-fn";
+  const cloudShortcutMode = source.cloudShortcutMode === "hold-fn" ? "hold-fn" : "cmd-shift-l";
+  const shortcutMode = sttMode === "telnyx-cloud" ? cloudShortcutMode : localShortcutMode;
   const ttsMode = source.ttsMode === "local" ? "local" : "telnyx-cloud";
   return {
     whisperEnabled: typeof source.whisperEnabled === "boolean" ? source.whisperEnabled : true,
     shortcutMode,
+    localShortcutMode,
+    cloudShortcutMode,
     shortcutLabel: shortcutMode === "cmd-shift-l" ? "Cmd+Shift+L" : "Hold fn",
     sttMode,
     sttProvider,
@@ -8358,7 +10630,7 @@ function builtInDialerConfigs() {
   return [
     {
       id: defaultDialerConfigId,
-      name: "Dialer",
+      name: "Dialpad",
       template: null,
       theme: "dark",
       shape: "rounded",
@@ -8368,7 +10640,7 @@ function builtInDialerConfigs() {
       showCountryPrefix: true,
       callerIdName: "My Company",
       outboundNumber: "+1 (415) 555-0100",
-      enabledFeatures: ["crm", "transcription", "recording", "notes", "salesforce-notes-sync", "dispositions", "call-timer", "analytics"],
+      enabledFeatures: ["local-calling", "crm", "transcription", "recording", "notes", "salesforce-notes-sync", "dispositions", "call-timer", "analytics"],
       actions: ["mute", "hold", "transfer", "end", "speaker", "record"],
       featureSettings: {
         crm: { "crm-provider": "Salesforce MCP", "crm-show-history": true, "crm-show-deals": true },
@@ -8388,7 +10660,7 @@ function builtInDialerConfigs() {
 }
 
 function dialerFeatureIds() {
-  return ["notes", "salesforce-notes-sync", "crm", "recording", "transcription", "dispositions", "call-timer", "analytics"];
+  return ["local-calling", "notes", "salesforce-notes-sync", "crm", "recording", "transcription", "dispositions", "call-timer", "analytics"];
 }
 
 function dialerActionIds() {
@@ -11317,7 +13589,113 @@ async function saveCredential(input = {}) {
   if (!allowedNames.has(name)) throw new Error(`Unsupported credential field: ${name}`);
   if (!value.trim()) throw new Error(`Enter a value for ${name}.`);
   await saveSecureCredential(name, value);
+  if (new Set(["TELNYX_API_KEY", "ANTHROPIC_API_KEY", "LITELLM_API_KEY", "LITELLM_BASE_URL", "LITELLM_MODEL", "LITELLM_MASTER_KEY"]).has(name)) {
+    stopLiteLlmProxy();
+    invalidateAiModelRouteHealthCache();
+  }
   return listCredentials();
+}
+
+async function getSurfaceManifestMap() {
+  const [connectors, credentials, acpStatus] = await Promise.all([
+    listConnectors(),
+    listCredentials(),
+    getAgentControlPlaneAuthStatus(),
+  ]);
+  let meetingBots = [];
+  try {
+    meetingBots = await listMeetingBots();
+  } catch {
+    meetingBots = [];
+  }
+  const { manifests } = buildSurfaceManifests({
+    connectors,
+    credentials,
+    agentRuntimeReady: credentialConfigured("LITELLM_API_KEY") || Boolean(acpStatus?.ready),
+    meetingBotCount: meetingBots.length,
+    scribesSurfaceEnabled: true,
+  });
+  return manifests;
+}
+
+async function getPhoneWorkspaceView(input = {}) {
+  const manifests = await getSurfaceManifestMap();
+  const calls = manifests.call?.ready
+    ? await listPhoneCallHistory({ maxResults: Number(input.maxResults || 50) || 50 }).catch(() => [])
+    : [];
+  return buildPhoneWorkspace({
+    ...input,
+    calls,
+    ready: manifests.call?.ready,
+    status: manifests.call?.message,
+    capability: manifests.call,
+    searchSchema: manifests.call?.search || null,
+  });
+}
+
+async function getGoogleInboxWorkspaceView(input = {}) {
+  const manifests = await getSurfaceManifestMap();
+  const maxResults = Number(input.maxResults || 20) || 20;
+  const threads = manifests.gmail?.ready
+    ? await listGoogleInboxThreads({ query: input.query, maxResults }).catch(() => [])
+    : [];
+  const selectedThread = manifests.gmail?.ready && input.selectedThreadId && !input.creatingNewDraft
+    ? await getGoogleInboxThread({ threadId: input.selectedThreadId }).catch(() => null)
+    : null;
+  return buildInboxWorkspace({
+    ...input,
+    threads,
+    selectedThread,
+    ready: manifests.gmail?.ready,
+    status: manifests.gmail?.message,
+    capability: manifests.gmail,
+    searchSchema: manifests.gmail?.search || null,
+    composerSchema: manifests.gmail?.composer || null,
+    agentRuntimeReady: Boolean(manifests.gmail?.features?.agentRuntimeReady),
+  });
+}
+
+async function getCalendarWorkspaceView(input = {}) {
+  const manifests = await getSurfaceManifestMap();
+  let events = [];
+  let meetingBots = [];
+  let meetingInvites = [];
+  let scribesSessions = [];
+  if (manifests.events?.ready) {
+    [events, meetingBots, meetingInvites, scribesSessions] = await Promise.all([
+      listGoogleCalendarEvents().catch(() => []),
+      listMeetingBots().catch(() => []),
+      listMeetingBotInvites().catch(() => []),
+      listScribesSessions().catch(() => []),
+    ]);
+  }
+  return buildCalendarWorkspace({
+    ...input,
+    events,
+    meetingBots,
+    meetingInvites,
+    scribesSessions,
+    ready: manifests.events?.ready,
+    status: manifests.events?.message,
+    capability: manifests.events,
+    searchSchema: manifests.events?.search || null,
+  });
+}
+
+async function getScribesWorkspaceHistoryView(input = {}) {
+  const manifests = await getSurfaceManifestMap();
+  const status = await getScribesStatus();
+  const calendarEvents = manifests.events?.ready
+    ? await listGoogleCalendarEvents().catch(() => [])
+    : [];
+  return buildScribesWorkspaceViewModel({
+    ...input,
+    status,
+    calendarEvents,
+    capability: manifests.scribe,
+    searchSchema: manifests.scribe?.search || null,
+    composerSchema: manifests.scribe?.composer || null,
+  });
 }
 
 function listWikiSources() {
@@ -11918,6 +14296,8 @@ const googleInboxGogExactCommandAllowlist = Object.freeze([
   "gmail.get",
   "gmail.thread.get",
   "gmail.url",
+  "gmail.mark-read",
+  "gmail.unread",
   "gmail.drafts.list",
   "gmail.drafts.get",
   "gmail.drafts.create",
@@ -12024,6 +14404,37 @@ async function updateGoogleInboxDraft(input = {}) {
   return normalizeGoogleInboxDraft(payload, { ...draft, draftId });
 }
 
+async function setGoogleInboxReadState(input = {}) {
+  const unread = Boolean(input.unread);
+  const messageIds = Array.isArray(input.messageIds)
+    ? input.messageIds.map((value) => normalizeOptionalString(value)).filter(Boolean)
+    : [];
+  if (messageIds.length === 0) throw new Error("Choose at least one Gmail message before changing read state.");
+  const command = unread ? "unread" : "mark-read";
+  await runSafeGoogleInboxGogJson(
+    ["gmail", command, ...messageIds],
+    unread ? "Google Inbox unread" : "Google Inbox mark read",
+    { read: false },
+  );
+  auditLogger.record({
+    actorId: "desktop_user",
+    surface: "desktop",
+    eventType: unread ? "google_inbox.mark_unread" : "google_inbox.mark_read",
+    action: unread ? "mark_google_inbox_unread" : "mark_google_inbox_read",
+    target: "google-inbox",
+    metadata: {
+      messageIds,
+      count: messageIds.length,
+      safety: "gmail-no-send",
+    },
+  });
+  return {
+    ok: true,
+    unread,
+    messageIds,
+  };
+}
+
 function appendGoogleInboxDraftArgs(args, draft) {
   if (draft.to) args.push("--to", draft.to);
   if (draft.cc) args.push("--cc", draft.cc);
@@ -12063,6 +14474,8 @@ function googleInboxGogCommandPath(commandArgs = []) {
   if (args[1] === "search") return "gmail.search";
   if (args[1] === "get") return "gmail.get";
   if (args[1] === "url") return "gmail.url";
+  if (args[1] === "mark-read") return "gmail.mark-read";
+  if (args[1] === "unread") return "gmail.unread";
   if (args[1] === "thread" && args[2] === "get") return "gmail.thread.get";
   if (args[1] === "drafts" && ["list", "get", "create", "update"].includes(args[2])) {
     return `gmail.drafts.${args[2]}`;
@@ -12128,12 +14541,38 @@ function normalizeGoogleInboxThreadSummary(record, index = 0) {
   const threadId = normalizeOptionalString(record?.threadId ?? record?.thread_id ?? record?.thread?.id ?? record?.id);
   if (!threadId) return null;
   const messageId = normalizeOptionalString(record?.messageId ?? record?.message_id ?? record?.latestMessageId ?? record?.messages?.[0]?.id ?? record?.id);
-  const subject = googleInboxHeader(record, "subject") || normalizeOptionalString(record?.subject ?? record?.title) || "(No subject)";
-  const from = googleInboxHeader(record, "from") || normalizeOptionalString(record?.from ?? record?.sender ?? record?.author) || "Unknown sender";
-  const to = googleInboxHeader(record, "to") || normalizeOptionalString(record?.to ?? record?.recipient) || "";
-  const cc = googleInboxHeader(record, "cc") || normalizeOptionalString(record?.cc) || "";
-  const deliveredTo = googleInboxHeader(record, "delivered-to") || normalizeOptionalString(record?.deliveredTo ?? record?.delivered_to) || "";
-  const date = googleInboxHeader(record, "date") || normalizeOptionalString(record?.date ?? record?.time ?? record?.lastMessageAt ?? record?.internalDate) || "";
+  const primaryMessage = firstGoogleInboxMessageRecord(record);
+  const subjectMetadata = parseGoogleInboxSubjectMetadata(record?.subject ?? record?.title)
+    || parseGoogleInboxSubjectMetadata(googleInboxHeader(record, "subject"))
+    || parseGoogleInboxSubjectMetadata(primaryMessage?.subject)
+    || parseGoogleInboxSubjectMetadata(googleInboxHeader(primaryMessage, "subject"));
+  const subject = subjectMetadata?.subject
+    || "(No subject)";
+  const from = googleInboxHeader(record, "from")
+    || googleInboxHeader(primaryMessage, "from")
+    || normalizeGoogleInboxAddress(record?.from ?? record?.sender ?? record?.author)
+    || normalizeGoogleInboxAddress(primaryMessage?.from ?? primaryMessage?.sender ?? primaryMessage?.author)
+    || "Unknown sender";
+  const to = googleInboxHeader(record, "to")
+    || googleInboxHeader(primaryMessage, "to")
+    || normalizeGoogleInboxAddressList(record?.to ?? record?.recipient)
+    || normalizeGoogleInboxAddressList(primaryMessage?.to ?? primaryMessage?.recipient)
+    || "";
+  const cc = googleInboxHeader(record, "cc")
+    || googleInboxHeader(primaryMessage, "cc")
+    || normalizeGoogleInboxAddressList(record?.cc)
+    || normalizeGoogleInboxAddressList(primaryMessage?.cc)
+    || "";
+  const deliveredTo = googleInboxHeader(record, "delivered-to")
+    || googleInboxHeader(primaryMessage, "delivered-to")
+    || normalizeGoogleInboxAddress(record?.deliveredTo ?? record?.delivered_to)
+    || normalizeGoogleInboxAddress(primaryMessage?.deliveredTo ?? primaryMessage?.delivered_to)
+    || "";
+  const date = googleInboxHeader(record, "date")
+    || googleInboxHeader(primaryMessage, "date")
+    || normalizeOptionalString(record?.date ?? record?.time ?? record?.lastMessageAt ?? record?.internalDate)
+    || normalizeOptionalString(primaryMessage?.date ?? primaryMessage?.time ?? primaryMessage?.internalDate)
+    || "";
   const snippet = cleanGoogleInboxText(record?.snippet ?? record?.preview ?? record?.summary ?? record?.body ?? "");
   const labels = normalizeGoogleInboxLabels(record);
   const unread = Boolean(record?.unread ?? record?.isUnread ?? labels.some((label) => label.toUpperCase() === "UNREAD"));
@@ -12143,6 +14582,7 @@ function normalizeGoogleInboxThreadSummary(record, index = 0) {
     threadId,
     messageId,
     subject,
+    source: subjectMetadata?.source || "",
     from,
     to,
     cc,
@@ -12161,19 +14601,26 @@ function normalizeGoogleInboxThread(payload, requestedThreadId) {
   const messages = normalizeGoogleInboxMessages(payload, requestedThreadId);
   const summary = normalizeGoogleInboxThreadSummary(payload, 0);
   const threadId = normalizeOptionalString(payload?.threadId ?? payload?.thread_id ?? payload?.id ?? requestedThreadId);
-  const subject = summary?.subject || messages.find((message) => message.subject)?.subject || "(No subject)";
+  const messageSubject = messages.find((message) => !isGoogleInboxPlaceholderSubject(message.subject))?.subject || "";
+  const messageSource = messages.find((message) => message.source)?.source || "";
+  const messageFrom = messages.find((message) => !isGoogleInboxPlaceholderSender(message.from))?.from || "";
+  const summarySubject = isGoogleInboxPlaceholderSubject(summary?.subject) ? "" : summary?.subject || "";
+  const summaryFrom = isGoogleInboxPlaceholderSender(summary?.from) ? "" : summary?.from || "";
+  const subject = summarySubject || messageSubject || "(No subject)";
+  const source = summary?.source || messageSource || "";
   const account = safeGoogleWorkspaceAccountEmail().toLowerCase();
   const replyMessage = [...messages].reverse().find((message) => {
     const fromEmail = extractEmailAddress(message.from).toLowerCase();
     return fromEmail && fromEmail !== account;
   }) ?? messages[messages.length - 1];
-  const participants = [...new Set(messages.flatMap((message) => [message.from, message.to]).flatMap(splitEmailList).filter(Boolean))];
+  const participants = [...new Set(messages.flatMap((message) => [message.from, message.to, message.cc]).flatMap(splitEmailList).filter(Boolean))];
   return {
     id: threadId,
     threadId,
     subject,
+    source,
     snippet: summary?.snippet || messages.map((message) => message.snippet).filter(Boolean).join(" ").slice(0, 240),
-    from: summary?.from || messages[0]?.from || "",
+    from: summaryFrom || messageFrom || "Unknown sender",
     to: summary?.to || messages[0]?.to || "",
     cc: summary?.cc || messages[0]?.cc || "",
     deliveredTo: summary?.deliveredTo || "",
@@ -12213,19 +14660,22 @@ function normalizeGoogleInboxMessage(message, fallbackThreadId, index = 0) {
   const messageId = normalizeOptionalString(message?.messageId ?? message?.message_id ?? message?.id);
   const threadId = normalizeOptionalString(message?.threadId ?? message?.thread_id ?? fallbackThreadId);
   if (!messageId && !threadId) return null;
-  const subject = googleInboxHeader(message, "subject") || normalizeOptionalString(message?.subject) || "";
-  const from = googleInboxHeader(message, "from") || normalizeOptionalString(message?.from ?? message?.sender) || "Unknown sender";
-  const to = googleInboxHeader(message, "to") || normalizeOptionalString(message?.to ?? message?.recipient) || "";
-  const cc = googleInboxHeader(message, "cc") || normalizeOptionalString(message?.cc) || "";
-  const replyTo = googleInboxHeader(message, "reply-to") || normalizeOptionalString(message?.replyTo ?? message?.reply_to) || "";
+  const subjectMetadata = parseGoogleInboxSubjectMetadata(message?.subject) || parseGoogleInboxSubjectMetadata(googleInboxHeader(message, "subject"));
+  const subject = subjectMetadata?.subject || "";
+  const from = googleInboxHeader(message, "from") || normalizeGoogleInboxAddress(message?.from ?? message?.sender) || "Unknown sender";
+  const to = googleInboxHeader(message, "to") || normalizeGoogleInboxAddressList(message?.to ?? message?.recipient) || "";
+  const cc = googleInboxHeader(message, "cc") || normalizeGoogleInboxAddressList(message?.cc) || "";
+  const replyTo = googleInboxHeader(message, "reply-to") || normalizeGoogleInboxAddress(message?.replyTo ?? message?.reply_to) || "";
   const date = googleInboxHeader(message, "date") || normalizeOptionalString(message?.date ?? message?.time ?? message?.internalDate) || "";
-  const body = cleanGoogleInboxText(extractGoogleInboxMessageBody(message));
+  const { text, html } = extractGoogleInboxMessageBody(message);
+  const body = cleanGoogleInboxText(text || stripHtml(html));
   const snippet = cleanGoogleInboxText(message?.snippet ?? message?.preview ?? body).slice(0, 260);
   return {
     id: messageId || `${threadId}-${index}`,
     messageId,
     threadId,
     subject,
+    source: subjectMetadata?.source || "",
     from,
     to,
     cc,
@@ -12233,6 +14683,7 @@ function normalizeGoogleInboxMessage(message, fallbackThreadId, index = 0) {
     date: formatGoogleInboxDate(date),
     snippet,
     body,
+    htmlBody: cleanGoogleInboxHtml(html),
   };
 }
 
@@ -12263,34 +14714,73 @@ function normalizeGoogleInboxLabels(record) {
 }
 
 function googleInboxHeader(record, headerName) {
-  const headers = [
-    ...(Array.isArray(record?.headers) ? record.headers : []),
-    ...(Array.isArray(record?.payload?.headers) ? record.payload.headers : []),
+  if (!record || typeof record !== "object") return "";
+  const normalizedName = String(headerName || "").toLowerCase();
+  const headerCollections = [
+    ...(Array.isArray(record?.headers) ? [record.headers] : []),
+    ...(Array.isArray(record?.payload?.headers) ? [record.payload.headers] : []),
   ];
-  const match = headers.find((header) => String(header?.name || "").toLowerCase() === headerName.toLowerCase());
-  return normalizeOptionalString(match?.value);
+  for (const headers of headerCollections) {
+    const match = headers.find((header) => {
+      const candidate = String(header?.name ?? header?.key ?? header?.header ?? "").toLowerCase();
+      return candidate === normalizedName;
+    });
+    const value = normalizeOptionalString(match?.value ?? match?.text ?? match?.content);
+    if (value) return value;
+  }
+  const headerObjects = [record?.headerMap, record?.headers, record?.payload?.headerMap, record?.payload?.headers]
+    .filter((value) => value && typeof value === "object" && !Array.isArray(value));
+  for (const headers of headerObjects) {
+    for (const [key, value] of Object.entries(headers)) {
+      if (String(key).toLowerCase() !== normalizedName) continue;
+      const normalized = normalizeGoogleInboxAddressList(value) || normalizeOptionalString(value);
+      if (normalized) return normalized;
+    }
+  }
+  return "";
 }
 
 function extractGoogleInboxMessageBody(message) {
   const direct = message?.bodyText ?? message?.body_text ?? message?.text ?? message?.plainText ?? message?.plain_text ?? message?.body;
-  if (typeof direct === "string") return direct;
+  if (typeof direct === "string") {
+    if (looksLikeGoogleInboxHtml(direct)) {
+      return { text: stripHtml(direct), html: direct };
+    }
+    return { text: direct, html: "" };
+  }
   const bodyData = message?.payload?.body?.data ?? message?.body?.data;
-  if (typeof bodyData === "string") return decodeGoogleInboxBodyData(bodyData);
-  const partText = extractGoogleInboxPartText(message?.payload?.parts ?? message?.parts);
-  return partText || message?.snippet || "";
+  const payloadMimeType = String(message?.payload?.mimeType ?? message?.payload?.mime_type ?? message?.mimeType ?? message?.mime_type ?? "").toLowerCase();
+  if (typeof bodyData === "string") {
+    const decoded = decodeGoogleInboxBodyData(bodyData);
+    if (payloadMimeType.includes("text/html") || looksLikeGoogleInboxHtml(decoded)) {
+      return { text: stripHtml(decoded), html: decoded };
+    }
+    return { text: decoded, html: "" };
+  }
+  const partBodies = extractGoogleInboxPartBodies(message?.payload?.parts ?? message?.parts);
+  return {
+    text: partBodies.text || stripHtml(partBodies.html) || message?.snippet || "",
+    html: partBodies.html || "",
+  };
 }
 
-function extractGoogleInboxPartText(parts) {
-  if (!Array.isArray(parts)) return "";
+function extractGoogleInboxPartBodies(parts) {
+  const bodies = { text: "", html: "" };
+  if (!Array.isArray(parts)) return bodies;
   for (const part of parts) {
-    const mimeType = String(part?.mimeType || part?.mime_type || "");
+    const mimeType = String(part?.mimeType || part?.mime_type || "").toLowerCase();
     if (mimeType === "text/plain" && typeof part?.body?.data === "string") {
-      return decodeGoogleInboxBodyData(part.body.data);
+      bodies.text ||= decodeGoogleInboxBodyData(part.body.data);
     }
-    const nested = extractGoogleInboxPartText(part?.parts);
-    if (nested) return nested;
+    if (mimeType === "text/html" && typeof part?.body?.data === "string") {
+      bodies.html ||= decodeGoogleInboxBodyData(part.body.data);
+    }
+    const nested = extractGoogleInboxPartBodies(part?.parts);
+    bodies.text ||= nested.text;
+    bodies.html ||= nested.html;
+    if (bodies.text && bodies.html) return bodies;
   }
-  return "";
+  return bodies;
 }
 
 function decodeGoogleInboxBodyData(value) {
@@ -12307,6 +14797,95 @@ function cleanGoogleInboxText(value) {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{4,}/g, "\n\n\n")
     .trim();
+}
+
+function cleanGoogleInboxHtml(value) {
+  return String(value || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
+    .replace(/<(object|embed|applet|meta|base|form|input|button|textarea|select|option|video|audio|source|picture|svg|math)[\s\S]*?<\/\1>/gi, "")
+    .replace(/<(object|embed|applet|meta|base|form|input|button|textarea|select|option|video|audio|source|picture|svg|math)\b[^>]*\/?>/gi, "")
+    .replace(/\son[a-z-]+\s*=\s*(".*?"|'.*?'|[^\s>]+)/gi, "")
+    .replace(/\s(srcdoc|srcset)\s*=\s*(".*?"|'.*?'|[^\s>]+)/gi, "")
+    .replace(/\s(href|src|poster|background|xlink:href)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi, "")
+    .replace(/\s(style)\s*=\s*(['"])([\s\S]*?)\2/gi, (_match, attr, quote, styleValue) => {
+      const cleanedStyle = String(styleValue || "")
+        .replace(/url\s*\(\s*(['"]?)(?!data:|cid:)[^)]+\1\s*\)/gi, "none")
+        .replace(/@import[\s\S]*?(;|$)/gi, "");
+      return cleanedStyle.trim() ? ` ${attr}=${quote}${cleanedStyle}${quote}` : "";
+    })
+    .replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gi, (_match, styleText) => {
+      const cleanedStyle = String(styleText || "")
+        .replace(/@import[\s\S]*?(;|$)/gi, "")
+        .replace(/url\s*\(\s*(['"]?)(?!data:|cid:)[^)]+\1\s*\)/gi, "none");
+      return cleanedStyle.trim() ? `<style>${cleanedStyle}</style>` : "";
+    })
+    .replace(/\s(href|src|poster|background|xlink:href)\s*=\s*(['"])(.*?)\2/gi, (_match, attr, quote, rawValue) => {
+      const normalized = String(rawValue || "").trim();
+      if (!normalized) return "";
+      if (/^(data:|cid:|mailto:|https?:|#)/i.test(normalized)) {
+        if (/^(https?:)/i.test(normalized) && attr.toLowerCase() !== "href") return "";
+        return ` ${attr}=${quote}${normalized}${quote}`;
+      }
+      return "";
+    })
+    .trim();
+}
+
+function firstGoogleInboxMessageRecord(record) {
+  if (Array.isArray(record?.messages) && record.messages[0] && typeof record.messages[0] === "object") return record.messages[0];
+  if (Array.isArray(record?.thread?.messages) && record.thread.messages[0] && typeof record.thread.messages[0] === "object") return record.thread.messages[0];
+  return null;
+}
+
+function normalizeGoogleInboxAddress(value) {
+  if (!value) return "";
+  if (typeof value === "string") return normalizeOptionalString(value);
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeGoogleInboxAddress(entry)).filter(Boolean).join(", ");
+  }
+  if (typeof value !== "object") return normalizeOptionalString(value);
+  const name = normalizeOptionalString(value.name ?? value.displayName ?? value.label);
+  const email = normalizeOptionalString(value.address ?? value.email ?? value.emailAddress ?? value.mail);
+  if (name && email) return `${name} <${email}>`;
+  return name || email || normalizeOptionalString(value.value ?? value.text ?? value.id);
+}
+
+function normalizeGoogleInboxAddressList(value) {
+  if (Array.isArray(value)) return value.map((entry) => normalizeGoogleInboxAddress(entry)).filter(Boolean).join(", ");
+  return normalizeGoogleInboxAddress(value);
+}
+
+function cleanGoogleInboxSubject(value) {
+  return cleanGoogleInboxText(value)
+    .replace(/<<<\s*\/?\s*EXTERNAL_UNTRUSTED[^>]*>>>/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function looksLikeGoogleInboxHtml(value) {
+  const text = String(value || "").trim();
+  return /^<!doctype html/i.test(text) || /<(html|body|table|div|span|p|br)\b/i.test(text);
+}
+
+function isGoogleInboxPlaceholderSubject(value) {
+  return !cleanGoogleInboxSubject(value) || cleanGoogleInboxSubject(value) === "(No subject)";
+}
+
+function isGoogleInboxPlaceholderSender(value) {
+  const sender = normalizeOptionalString(value);
+  return !sender || sender === "Unknown sender";
+}
+
+function parseGoogleInboxSubjectMetadata(value) {
+  const subject = cleanGoogleInboxSubject(value);
+  if (!subject) return { subject: "", source: "" };
+  const sourceMatch = subject.match(/^source:\s*(.*?)\s*---\s*(.+)$/i);
+  if (!sourceMatch) return { subject, source: "" };
+  return {
+    source: sourceMatch[1].trim(),
+    subject: cleanGoogleInboxSubject(sourceMatch[2]) || "(No subject)",
+  };
 }
 
 function formatGoogleInboxDate(value) {
@@ -13871,7 +16450,7 @@ function credentialConfigured(name) {
 async function loadDesktopState() {
   try {
     const saved = JSON.parse(await fs.readFile(statePath(), "utf8"));
-    const useSavedState = saved.version === stateVersion || saved.version === 10 || saved.version === 9 || saved.version === 8 || saved.version === 7 || saved.version === 6 || saved.version === 5 || saved.version === 4;
+    const useSavedState = saved.version === stateVersion || saved.version === 13 || saved.version === 12 || saved.version === 11 || saved.version === 10 || saved.version === 9 || saved.version === 8 || saved.version === 7 || saved.version === 6 || saved.version === 5 || saved.version === 4;
     connectorOverrides = saved.connectorOverrides && typeof saved.connectorOverrides === "object" ? saved.connectorOverrides : {};
     meetingBotIdentities = useSavedState && saved.meetingBotIdentities && typeof saved.meetingBotIdentities === "object" ? saved.meetingBotIdentities : {};
     meetingBotInvites = useSavedState && Array.isArray(saved.meetingBotInvites) ? saved.meetingBotInvites.map(normalizeMeetingInvite).filter(Boolean) : [];
@@ -13889,8 +16468,19 @@ async function loadDesktopState() {
     onboardingState = useSavedState && saved.onboardingState && typeof saved.onboardingState === "object" ? normalizeOnboardingState(saved.onboardingState) : emptyOnboardingState();
     dialerState = useSavedState && saved.dialerState && typeof saved.dialerState === "object" ? normalizeDialerState(saved.dialerState) : emptyDialerState();
     speakSettings = useSavedState && saved.speakSettings && typeof saved.speakSettings === "object" ? normalizeSpeakSettings(saved.speakSettings) : emptySpeakSettings();
+    vpnSettings = useSavedState && saved.vpnSettings && typeof saved.vpnSettings === "object" ? normalizeVpnSettings(saved.vpnSettings) : emptyVpnSettings();
     scribesState = useSavedState && saved.scribesState && typeof saved.scribesState === "object" ? normalizeScribesState(saved.scribesState) : emptyScribesState();
     wikiSources = mergeWikiDocumentationSources(saved.wikiSources);
+    modelCenterPreferences = useSavedState && saved.modelCenterPreferences && typeof saved.modelCenterPreferences === "object"
+      ? normalizeModelCenterPreferences(saved.modelCenterPreferences)
+      : normalizeModelCenterPreferences({});
+    localApiServerStatus = {
+      ...localApiServerStatus,
+      host: modelCenterPreferences.localApiServer.host,
+      port: modelCenterPreferences.localApiServer.port,
+      corsEnabled: modelCenterPreferences.localApiServer.corsEnabled,
+      exposedRoleIds: [...modelCenterPreferences.localApiServer.exposedRoleIds],
+    };
     telnyxInferenceCatalog = useSavedState && saved.telnyxInferenceCatalog && typeof saved.telnyxInferenceCatalog === "object"
       ? normalizeStoredTelnyxInferenceCatalog(saved.telnyxInferenceCatalog)
       : {
@@ -13919,8 +16509,17 @@ async function loadDesktopState() {
     onboardingState = emptyOnboardingState();
     dialerState = emptyDialerState();
     speakSettings = emptySpeakSettings();
+    vpnSettings = emptyVpnSettings();
     scribesState = emptyScribesState();
     wikiSources = defaultWikiDocumentationSources();
+    modelCenterPreferences = normalizeModelCenterPreferences({});
+    localApiServerStatus = {
+      ...localApiServerStatus,
+      host: modelCenterPreferences.localApiServer.host,
+      port: modelCenterPreferences.localApiServer.port,
+      corsEnabled: modelCenterPreferences.localApiServer.corsEnabled,
+      exposedRoleIds: [...modelCenterPreferences.localApiServer.exposedRoleIds],
+    };
     telnyxInferenceCatalog = {
       source: "default",
       baseUrl: defaultTelnyxInferenceBaseUrl,
@@ -13953,8 +16552,10 @@ async function saveDesktopState() {
     onboardingState,
     dialerState,
     speakSettings,
+    vpnSettings,
     scribesState,
     wikiSources,
+    modelCenterPreferences,
     telnyxInferenceCatalog,
   };
   await fs.mkdir(path.dirname(statePath()), { recursive: true });

@@ -5,9 +5,9 @@
 	<key>CFBundleIdentifier</key>
 	<string>com.telnyx.dictation</string>
 	<key>CFBundleName</key>
-	<string>TelnyxDictation</string>
+	<string>Telnyx Link</string>
 	<key>CFBundleDisplayName</key>
-	<string>Telnyx Dictation</string>
+	<string>Telnyx Link</string>
 	<key>CFBundleExecutable</key>
 	<string>TelnyxDictation</string>
 	<key>CFBundlePackageType</key>
@@ -23,7 +23,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Telnyx Dictation needs microphone access to transcribe your speech in real-time.</string>
+	<string>Telnyx Link needs microphone access to transcribe your speech in real-time.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 </dict>

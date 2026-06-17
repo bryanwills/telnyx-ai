@@ -94,7 +94,7 @@ async function placeMockedCall(page: Page, url: string) {
 }
 
 async function openAssistantPhone(page: Page) {
-  await page.getByLabel("Assistant").getByRole("button", { name: "Phone" }).click();
+  await page.getByLabel("Assistant").getByRole("button", { name: /Call|Phone/ }).click();
   await page.locator(".linkSoftphone").waitFor({ state: "visible" });
   await page.waitForSelector("#link-phone-remote-audio", { state: "attached" });
 }
@@ -120,11 +120,14 @@ async function hangUpIfPossible(page: Page) {
 }
 
 async function assertPreCallModules(page: Page) {
+  const softphone = page.locator(".linkSoftphone");
+  await softphone.locator(".linkSoftphoneSearchCard").waitFor({ state: "visible", timeout: 10_000 });
+  await softphone.locator(".linkSoftphoneCallerIdBar").waitFor({ state: "visible", timeout: 10_000 });
   await assertSidebarModules(page, ["Contact Preview"]);
 }
 
 async function assertInCallModules(page: Page) {
-  await assertSidebarModules(page, ["Live Transcription", "Call Recording", "Call Timer"]);
+  await assertSidebarModules(page, ["Live Transcription", "Call Recording"]);
   await page.locator(".linkSoftphoneCallTimer").waitFor({ state: "visible", timeout: 10_000 });
 }
 

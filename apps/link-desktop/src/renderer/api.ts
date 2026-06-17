@@ -389,11 +389,14 @@ export interface ChatSession {
   title: string;
   workspaceId: string;
   model: string;
+  requestedModelRouteId?: string;
+  actualModelRouteId?: string;
   status: "active" | "idle";
   updatedAt: string;
   pinnedAt?: string;
   archivedAt?: string;
   messages: ChatMessage[];
+  modelRouting?: ChatModelRouting;
   task?: {
     provider: WorkboardProvider;
     boardId: string;
@@ -432,6 +435,54 @@ export interface CredentialGroupStatus {
 }
 
 export type AiDataBoundary = "local" | "telnyx-cloud" | "frontier-byo" | "self-hosted";
+export type AiModelRouteHealthState = "ready" | "degraded" | "offline" | "setup_required" | "unknown";
+
+export interface AiModelRouteHealthCheck {
+  name: string;
+  ok: boolean;
+  detail?: string;
+}
+
+export interface AiModelRouteHealth {
+  state: AiModelRouteHealthState;
+  ready: boolean;
+  configured: boolean;
+  reachable: boolean | null;
+  lastCheckedAt: string;
+  message: string;
+  checks: AiModelRouteHealthCheck[];
+}
+
+export interface ChatModelRoutingRequest {
+  routeId?: string;
+  fallbackRouteIds?: string[];
+  allowDefaultFallbacks?: boolean;
+}
+
+export interface ChatModelRouteAttempt {
+  routeId: string;
+  label: string;
+  provider: string;
+  dataBoundary: AiDataBoundary;
+  targetModel?: string;
+  status: "succeeded" | "failed" | "skipped";
+  attemptedAt: string;
+  durationMs?: number;
+  message?: string;
+  error?: string;
+}
+
+export interface ChatModelRouting {
+  strategy: "single" | "fallback_chain";
+  requestedRouteId: string;
+  requestedRouteLabel: string;
+  requestedFallbackRouteIds: string[];
+  resolvedRouteId?: string;
+  resolvedRouteLabel?: string;
+  finalStatus: "succeeded" | "failed";
+  fallbackUsed: boolean;
+  attempts: ChatModelRouteAttempt[];
+}
 
 export interface TelnyxInferenceModel {
   id: string;
@@ -462,12 +513,17 @@ export interface AiModelRoute {
   description: string;
   available: boolean;
   default?: boolean;
+  capabilities?: string[];
+  contextWindow?: number | null;
+  fallbackRouteIds?: string[];
+  health?: AiModelRouteHealth;
 }
 
 export interface LiteLlmRuntimeStatus {
   installed: boolean;
   running: boolean;
   ready: boolean;
+  checkedAt?: string;
   baseUrl: string;
   configPath: string;
   lastExit?: { code: number | null; signal: string | null; at: string } | null;
@@ -477,21 +533,238 @@ export interface LiteLlmRuntimeStatus {
     provider: "ollama" | string;
     model: string;
     apiBase: string;
+    reachable?: boolean;
+    modelAvailable?: boolean;
+    lastCheckedAt?: string;
+    message?: string;
   };
   telnyx: {
     apiKeyConfigured: boolean;
     baseUrl: string;
     catalog: TelnyxInferenceCatalog;
+    reachable?: boolean | null;
+    lastCheckedAt?: string;
+    message?: string;
   };
   managedGateway: {
     configured: boolean;
     baseUrl: string;
+    reachable?: boolean | null;
+    lastCheckedAt?: string;
+    message?: string;
   };
   frontier: {
     anthropicConfigured: boolean;
+    reachable?: boolean | null;
+    lastCheckedAt?: string;
+    message?: string;
   };
   routes: AiModelRoute[];
   message: string;
+}
+
+export interface EngineDefinition {
+  id: string;
+  label: string;
+  kind: "local";
+  description: string;
+  engineFamily: "ollama" | "llama.cpp" | "mlx" | string;
+  dataBoundary: "local" | "self-hosted";
+}
+
+export interface EngineStatus {
+  id: string;
+  definition: EngineDefinition;
+  enabled: boolean;
+  installed: boolean;
+  reachable: boolean;
+  ready: boolean;
+  version?: string;
+  message: string;
+  baseUrl?: string;
+  defaultModelId?: string;
+  discoveredModelCount: number;
+  settings: {
+    checkForUpdates: boolean;
+    verifyDependencies: boolean;
+    maxLoadedModels: number;
+    timeoutSeconds: number;
+  };
+}
+
+export interface ModelVariant {
+  id: string;
+  label: string;
+  providerId: string;
+  engineId?: string;
+  externalId: string;
+  format: string;
+  quantization?: string;
+  sizeBytes?: number;
+  contextWindow?: number | null;
+}
+
+export interface FitAssessment {
+  status: "fits" | "slow" | "wont_fit" | "unknown";
+  label: string;
+  reason: string;
+  requiredMemoryBytes?: number;
+  recommendedMemoryBytes?: number;
+  requiredStorageBytes?: number;
+}
+
+export interface CatalogModel {
+  id: string;
+  label: string;
+  providerId: string;
+  engineId?: string;
+  source: string;
+  description: string;
+  capabilities: string[];
+  dataBoundary: AiDataBoundary;
+  recommended: boolean;
+  recommendedRoleEligibility: string[];
+  taskRoutingEligible: boolean;
+  fallbackChain: string[];
+  variants: ModelVariant[];
+  policy: {
+    minimumRamBytes?: number;
+    minimumStorageBytes?: number;
+    hiddenByPolicy?: boolean;
+    mcpSafe: boolean;
+    speechCleanup: boolean;
+    vision: boolean;
+    coding: boolean;
+    dataBoundary?: string;
+  };
+}
+
+export interface InstalledModel {
+  id: string;
+  label: string;
+  providerId: string;
+  engineId: string;
+  source: "pulled" | "imported" | "discovered";
+  externalId: string;
+  sizeBytes?: number;
+  contextWindow?: number | null;
+  capabilities: string[];
+  installedAt?: string;
+  lastUsedAt?: string;
+  health: {
+    state: "ready" | "degraded" | "offline" | "error";
+    message: string;
+  };
+  fit?: FitAssessment;
+  variant?: ModelVariant | null;
+  tags?: string[];
+  operation?: {
+    status: "pulling" | "importing" | "removing" | "error";
+    completed?: number;
+    total?: number;
+    message: string;
+  };
+}
+
+export interface ProviderDefinition {
+  id: string;
+  label: string;
+  category: "cloud" | "local";
+  description: string;
+  dataBoundary: AiDataBoundary;
+  supportsDiscovery: boolean;
+  supportsKeyRotation: boolean;
+}
+
+export interface ProviderConfig {
+  id: string;
+  enabled: boolean;
+  apiKeyConfigured: boolean;
+  baseUrl?: string;
+  defaultModelId?: string;
+  discoveredAt?: string;
+  modelCount: number;
+  healthy: boolean;
+  message: string;
+}
+
+export interface HardwareProfile {
+  totalMemoryBytes: number;
+  freeMemoryBytes: number;
+  gpuMemoryBytes?: number;
+  availableStorageBytes: number;
+  architecture: string;
+  platform: string;
+  cpuModel: string;
+  recommendedContextWindow: number;
+  updatedAt: string;
+}
+
+export interface ModelRoleAssignment {
+  roleId: "chatPrimary" | "chatFallback" | "taskRouting" | "agentDefault";
+  modelId: string;
+  label: string;
+  providerId: string;
+  engineId?: string;
+  dataBoundary: AiDataBoundary;
+  routeId: string;
+  taskRoutingEligible: boolean;
+  updatedAt: string;
+}
+
+export interface ModelRoleAssignments {
+  chatPrimary: ModelRoleAssignment | null;
+  chatFallback: ModelRoleAssignment | null;
+  taskRouting: ModelRoleAssignment | null;
+  agentDefault: ModelRoleAssignment | null;
+}
+
+export interface LocalApiServerStatus {
+  running: boolean;
+  ready: boolean;
+  host: string;
+  port: number;
+  endpoint: string;
+  apiKeyConfigured: boolean;
+  corsEnabled: boolean;
+  exposedRoleIds: string[];
+  exposedModelIds: string[];
+  message: string;
+  lastError?: string;
+  logs: string[];
+  startedAt?: string | null;
+  updatedAt: string;
+}
+
+export interface ModelCenterState {
+  updatedAt: string;
+  message: string;
+  overview: {
+    routeSummary: string;
+    recommendedCount: number;
+    installedCount: number;
+    healthyProviderCount: number;
+  };
+  storage: {
+    appDataPath: string;
+    statePath: string;
+    liteLlmConfigPath: string;
+    importsPath: string;
+    logsPath: string;
+  };
+  engines: EngineStatus[];
+  providers: Array<{
+    definition: ProviderDefinition;
+    config: ProviderConfig;
+    models: CatalogModel[];
+  }>;
+  installedModels: InstalledModel[];
+  catalogModels: CatalogModel[];
+  roles: ModelRoleAssignments;
+  routes: AiModelRoute[];
+  hardware: HardwareProfile;
+  localApiServer: LocalApiServerStatus;
+  runtime: LiteLlmRuntimeStatus;
 }
 
 export interface EdgeComputeStatus {
@@ -592,6 +865,105 @@ export interface PhoneAssistantOption {
   phoneNumber?: string;
 }
 
+export type VpnToolAccessMode = "off" | "preferred" | "required";
+export type VpnServiceMatch = "vpn" | "local" | "public" | "unresolved" | "missing";
+
+export interface VpnSettings {
+  selectedInterfaceId: string;
+  toolAccessMode: VpnToolAccessMode;
+  managedPeerIds: Record<string, string>;
+  updatedAt: string;
+}
+
+export interface VpnCheck {
+  name: string;
+  ok: boolean;
+  detail?: string;
+}
+
+export interface VpnCoverageRegion {
+  code: string;
+  name: string;
+  region: string;
+  site: string;
+  availableServices: string[];
+}
+
+export interface VpnNetwork {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  interfaceCount: number;
+  peerCount: number;
+}
+
+export interface VpnInterface {
+  id: string;
+  name: string;
+  networkId: string;
+  networkName: string;
+  status: string;
+  endpoint: string;
+  publicKey: string;
+  serverIpAddress: string;
+  regionCode: string;
+  regionName: string;
+  peerCount: number;
+  lastSeenAt: string;
+  managedPeer: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VpnPeer {
+  id: string;
+  interfaceId: string;
+  interfaceName: string;
+  publicKey: string;
+  lastSeenAt: string;
+  createdAt: string;
+  updatedAt: string;
+  managedByLink: boolean;
+}
+
+export interface VpnProtectedService {
+  id: string;
+  label: string;
+  url: string;
+  hostname: string;
+  resolvedIp: string;
+  match: VpnServiceMatch;
+  detail: string;
+  configured: boolean;
+  insideSelectedVpn: boolean;
+}
+
+export interface VpnWorkspace {
+  apiKeyConfigured: boolean;
+  reachable: boolean;
+  message: string;
+  checks: VpnCheck[];
+  settings: VpnSettings;
+  networks: VpnNetwork[];
+  interfaces: VpnInterface[];
+  peers: VpnPeer[];
+  coverageRegions: VpnCoverageRegion[];
+  services: VpnProtectedService[];
+  deviceConnected: boolean;
+  deviceAddresses: string[];
+  selectedPeerId: string;
+  selectedPeerConfig: string;
+  updatedAt: string;
+}
+
+export interface VpnPeerProvisionResult {
+  workspace: VpnWorkspace;
+  peerId: string;
+  created: boolean;
+  message: string;
+}
+
 export interface PhoneCallHistoryRow {
   id: string;
   contact: string;
@@ -611,6 +983,89 @@ export interface PhoneCallHistoryRow {
   transcriptionId?: string;
   transcriptionText?: string;
   rawStatus?: string;
+}
+
+export interface PhoneCallNumberRollup extends PhoneCallHistoryRow {
+  lastCall: PhoneCallHistoryRow;
+  calls: PhoneCallHistoryRow[];
+  agentNames: string[];
+  directions: PhoneCallHistoryRow["direction"][];
+  statuses: PhoneCallHistoryRow["status"][];
+  totalDurationSeconds: number;
+  answeredCount: number;
+  missedCount: number;
+  voicemailCount: number;
+  failedCount: number;
+  recordingCount: number;
+  transcriptionCount: number;
+}
+
+export interface SurfaceActionDescriptor {
+  id: string;
+  label: string;
+  enabled: boolean;
+  reason?: string;
+  tone?: string;
+  kind?: string;
+  visible?: boolean;
+}
+
+export interface SurfaceEmptyState {
+  kind: "empty" | "setup_required" | "error";
+  title: string;
+  body: string;
+  cta?: SurfaceActionDescriptor | null;
+}
+
+export interface SurfaceSearchSchema {
+  placeholder: string;
+  menuActions: SurfaceActionDescriptor[];
+  filters: Array<{
+    id: string;
+    label: string;
+    options: Array<{ id: string; label: string }>;
+  }>;
+  sorts: Array<{ id: string; label: string }>;
+  canRestoreSearch: boolean;
+  restoreAction?: SurfaceActionDescriptor | null;
+}
+
+export interface SurfaceComposerSchema {
+  placeholder: string;
+  multiline: boolean;
+  autoGrow: boolean;
+  maxHeightRatio: number;
+  supportsAttachments: boolean;
+  supportsAudio: boolean;
+  primaryAction: SurfaceActionDescriptor;
+  aiAction?: SurfaceActionDescriptor | null;
+}
+
+export interface SurfaceCapabilityManifest {
+  surface: string;
+  label: string;
+  enabled: boolean;
+  ready: boolean;
+  requiresAgent: boolean;
+  requiresConnector: boolean;
+  requiresCredential: boolean;
+  reasons: string[];
+  connectorIds: string[];
+  credentialNames: string[];
+  message: string;
+  search?: SurfaceSearchSchema | null;
+  composer?: SurfaceComposerSchema | null;
+  features?: Record<string, unknown>;
+  updatedAt: string;
+}
+
+export interface SurfaceManifestMap {
+  chat: SurfaceCapabilityManifest;
+  call: SurfaceCapabilityManifest;
+  gmail: SurfaceCapabilityManifest;
+  events: SurfaceCapabilityManifest;
+  scribe: SurfaceCapabilityManifest;
+  contacts?: SurfaceCapabilityManifest;
 }
 
 export type ChatAgentSource = AgentSummary["source"] | "link" | "voice-assistant";
@@ -746,7 +1201,7 @@ export interface WorkboardTaskSessionInput {
   agentSource?: ChatAgentSource;
   agentType?: string;
   approvalMode?: string;
-  modelMode?: string;
+  modelMode?: string | ChatModelRoutingRequest;
   contextScope?: string;
 }
 
@@ -897,6 +1352,8 @@ export interface WebRtcStatus {
 export interface SpeakSettings {
   whisperEnabled: boolean;
   shortcutMode: "hold-fn" | "cmd-shift-l";
+  localShortcutMode: "hold-fn" | "cmd-shift-l";
+  cloudShortcutMode: "hold-fn" | "cmd-shift-l";
   shortcutLabel: string;
   sttMode: "local" | "telnyx-cloud";
   sttProvider: "openai-whisper" | "nvidia-parakeet" | "telnyx";
@@ -925,12 +1382,73 @@ export interface ScribesCleanupProfile {
   updatedAt: string;
 }
 
+export type HarperAddonDialect = "american" | "british" | "australian" | "canadian" | "indian";
+export type HarperAddonDefaultAction = "review" | "polish";
+export type HarperAddonInstallState = "not_installed" | "installing" | "updating" | "ready" | "removing";
+
+export interface HarperAddonDownload {
+  status: "installing" | "updating";
+  receivedBytes: number;
+  totalBytes: number;
+  startedAt: string;
+  updatedAt: string;
+}
+
+export interface HarperFinding {
+  id: string;
+  message: string;
+  lintKind: string;
+  problemText: string;
+  start: number;
+  end: number;
+  replacementText: string;
+  suggestionKind: "replace" | "remove" | "insert_after" | null;
+}
+
+export interface HarperReviewResult {
+  findings: HarperFinding[];
+  warning: string;
+  checkedAt: string;
+}
+
+export interface HarperPolishResult extends HarperReviewResult {
+  text: string;
+  appliedFindings: HarperFinding[];
+}
+
+export interface HarperAddonSettings {
+  installed: boolean;
+  enabled: boolean;
+  autoUpdate: boolean;
+  defaultAction: HarperAddonDefaultAction;
+  surfaces: {
+    scribeSessions: boolean;
+    inboxDrafts: boolean;
+  };
+  dialect: HarperAddonDialect;
+  installState: HarperAddonInstallState;
+  installedVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+  lastCheckedAt: string;
+  lastInstalledAt: string;
+  lastError: string;
+  packageName: string;
+  registryUrl: string;
+  projectUrl: string;
+  download?: HarperAddonDownload | null;
+  updatedAt: string;
+}
+
 export interface ScribesWorkspaceSettings {
   retainAudio: boolean;
   audioRetentionDays: number;
   customVocabulary: string[];
   activeCleanupProfileId: string;
   cleanupProfiles: ScribesCleanupProfile[];
+  addons: {
+    harper: HarperAddonSettings;
+  };
   editModeEnabled: boolean;
   meetingCapture: {
     microphone: boolean;
@@ -982,6 +1500,7 @@ export interface ScribesModel {
 export interface ScribesProviderRoute {
   mode: SpeakSettings["sttMode"];
   provider: SpeakSettings["sttProvider"];
+  label: string;
   modelId: string;
   engine: SpeakSettings["sttEngine"] | "whisper.cpp" | "sherpa-onnx";
   ready: boolean;
@@ -1057,6 +1576,10 @@ export interface ScribesSession {
     diarizationStatus: "available" | "running" | "complete" | "disabled";
     speakerLabels: string[];
     summaryStatus: string;
+    calendarEventId?: string;
+    calendarEventUrl?: string;
+    calendarEventStart?: string;
+    calendarEventEnd?: string;
   };
 }
 
@@ -1444,6 +1967,7 @@ export interface GoogleInboxThreadSummary {
   threadId: string;
   messageId?: string;
   subject: string;
+  source?: string;
   from: string;
   to?: string;
   cc?: string;
@@ -1462,6 +1986,7 @@ export interface GoogleInboxMessage {
   messageId?: string;
   threadId: string;
   subject: string;
+  source?: string;
   from: string;
   to: string;
   cc?: string;
@@ -1469,6 +1994,7 @@ export interface GoogleInboxMessage {
   date: string;
   snippet: string;
   body: string;
+  htmlBody?: string;
 }
 
 export interface GoogleInboxThread extends GoogleInboxThreadSummary {
@@ -1502,6 +2028,156 @@ export interface GoogleInboxDraft {
   body: string;
   updatedAt: string;
   url: string;
+}
+
+export interface GoogleInboxReadStateResult {
+  ok: boolean;
+  unread: boolean;
+  messageIds: string[];
+}
+
+export interface InboxWorkspaceView {
+  capability: SurfaceCapabilityManifest | null;
+  searchSchema: SurfaceSearchSchema | null;
+  composerSchema: SurfaceComposerSchema | null;
+  threads: GoogleInboxThreadSummary[];
+  visibleThreads: GoogleInboxThreadSummary[];
+  selectedThread: GoogleInboxThread | null;
+  selectedThreadId: string;
+  recipientCounts: { direct: number; group: number };
+  showDetail: boolean;
+  listRows: Array<{
+    id: string;
+    threadId: string;
+    subject: string;
+    snippet: string;
+    fromLabel: string;
+    dateLabel: string;
+    recipientType: "direct" | "group";
+    unread: boolean;
+    action: SurfaceActionDescriptor;
+  }>;
+  detail: null | {
+    mode: "compose" | "thread";
+    header: {
+      title: string;
+      subtitle: string;
+      badgeLabel: string;
+      badgeTone: string;
+    };
+    messages: GoogleInboxMessage[];
+    actions: SurfaceActionDescriptor[];
+    composer: {
+      to: string;
+      subject: string;
+      body: string;
+      actions: SurfaceActionDescriptor[];
+    };
+  };
+  emptyState: SurfaceEmptyState | null;
+  updatedAt: string;
+}
+
+export interface CalendarWorkspaceView {
+  capability: SurfaceCapabilityManifest | null;
+  searchSchema: SurfaceSearchSchema | null;
+  meetingBots: MeetingBotOption[];
+  meetingInvites: MeetingInvite[];
+  calendarEvents: GoogleCalendarEvent[];
+  visibleEvents: GoogleCalendarEvent[];
+  futureVisibleEvents: GoogleCalendarEvent[];
+  selectedEvent: GoogleCalendarEvent | null;
+  selectedEventScribesSession: ScribesSession | null;
+  listRows: Array<{
+    id: string;
+    title: string;
+    dateLabel: string;
+    timeLabel: string;
+    attendees: string;
+    joinUrl: string;
+    joinAction: SurfaceActionDescriptor;
+    openAction: SurfaceActionDescriptor;
+  }>;
+  detail: null | {
+    event: GoogleCalendarEvent;
+    joinUrl: string;
+    whenLabel: string;
+    linkedScribes: null | {
+      id: string;
+      title: string;
+      transcriptText: string;
+    };
+    invites: MeetingInvite[];
+    actions: SurfaceActionDescriptor[];
+  };
+  stats: {
+    futureCount: number;
+    meetingBotCount: number;
+    linkedMeetingNotes: number;
+  };
+  emptyState: SurfaceEmptyState | null;
+  updatedAt: string;
+}
+
+export interface PhoneWorkspaceView {
+  capability: SurfaceCapabilityManifest | null;
+  searchSchema: SurfaceSearchSchema | null;
+  callRollups: PhoneCallNumberRollup[];
+  filteredCallRollups: PhoneCallNumberRollup[];
+  selectedCallDetail: PhoneCallNumberRollup | null;
+  selectedCallRecordings: PhoneCallHistoryRow[];
+  selectedCallTranscripts: PhoneCallHistoryRow[];
+  previousCalls: Array<{
+    id: string;
+    startedAt: string;
+    label: string;
+    detail: string;
+    agentName: string;
+    hasRecording: boolean;
+    hasTranscript: boolean;
+  }>;
+  stats: {
+    visibleNumbers: number;
+    visibleCalls: number;
+    totalNumbers: number;
+  };
+  actions: {
+    primary: SurfaceActionDescriptor;
+    restoreSearch: SurfaceActionDescriptor;
+  };
+  emptyState: SurfaceEmptyState | null;
+  previousCallsEmptyState: SurfaceEmptyState | null;
+  rowViewModels: Array<{
+    id: string;
+    title: string;
+    subtitle: string;
+    status: string;
+    meta: string;
+    openAction: SurfaceActionDescriptor;
+  }>;
+  updatedAt: string;
+}
+
+export interface ScribesWorkspaceView {
+  capability: SurfaceCapabilityManifest | null;
+  searchSchema: SurfaceSearchSchema | null;
+  composerSchema: SurfaceComposerSchema | null;
+  status: ScribesStatus | null;
+  calendarEvents: GoogleCalendarEvent[];
+  filteredSessions: ScribesSession[];
+  meetingSessions: ScribesSession[];
+  linkedMeetingCount: number;
+  rows: Array<{
+    id: string;
+    title: string;
+    typeLabel: string;
+    detail: string;
+    updatedLabel: string;
+    actions: SurfaceActionDescriptor[];
+  }>;
+  deepSyncAction: SurfaceActionDescriptor;
+  emptyState: SurfaceEmptyState | null;
+  updatedAt: string;
 }
 
 export interface GoogleInboxConnectionResult {
@@ -1616,12 +2292,38 @@ export interface LinkDesktopApi {
   saveCredential(input: { name: string; value: string }): Promise<CredentialGroupStatus[]>;
   getLiteLlmRuntimeStatus(): Promise<LiteLlmRuntimeStatus>;
   refreshTelnyxModelCatalog(): Promise<LiteLlmRuntimeStatus>;
+  getModelCenterState(): Promise<ModelCenterState>;
+  saveProviderConfig(input: {
+    providerId: string;
+    enabled?: boolean;
+    baseUrl?: string;
+    apiKey?: string;
+    defaultModelId?: string;
+    engineSettings?: Partial<EngineStatus["settings"]>;
+  }): Promise<ModelCenterState>;
+  refreshProviderModels(input?: { providerId?: string }): Promise<ModelCenterState>;
+  pullLocalModel(input: { modelId?: string; externalId?: string }): Promise<ModelCenterState>;
+  importLocalModel(input?: { name?: string; path?: string }): Promise<ModelCenterState>;
+  removeLocalModel(input: { modelId?: string; externalId?: string }): Promise<ModelCenterState>;
+  assignModelRole(input: { roleId: ModelRoleAssignment["roleId"]; modelId: string }): Promise<ModelCenterState>;
+  getHardwareProfile(): Promise<HardwareProfile>;
+  refreshFit(): Promise<ModelCenterState>;
+  startLocalApiServer(input?: {
+    host?: string;
+    port?: number;
+    apiKey?: string;
+    corsEnabled?: boolean;
+    exposedRoleIds?: string[];
+  }): Promise<ModelCenterState>;
+  stopLocalApiServer(): Promise<ModelCenterState>;
+  getSurfaceManifests(): Promise<SurfaceManifestMap>;
   connectGitHubWithDeviceFlow(): Promise<GitHubDeviceConnectionResult>;
   connectGoogleWorkspaceWithSkill(): Promise<GoogleWorkspaceSkillConnectionResult>;
   connectGuruWithOAuth(): Promise<GuruOAuthConnectionResult>;
   connectPylonWithOAuth(): Promise<PylonOAuthConnectionResult>;
   createPylonIssue(input: PylonCreateIssueInput): Promise<PylonCreateIssueResult>;
   listGoogleCalendarEvents(): Promise<GoogleCalendarEvent[]>;
+  getCalendarWorkspace(input?: { query?: string; selectedEventId?: string }): Promise<CalendarWorkspaceView>;
   listMeetingBots(): Promise<MeetingBotOption[]>;
   preflightMeetingBotInvite(input: { calendarId?: string; eventId: string; botId: string }): Promise<MeetingBotInvitePreflight>;
   ensureBotAgentMailIdentity(input: { botId: string }): Promise<MeetingBotIdentity>;
@@ -1640,6 +2342,17 @@ export interface LinkDesktopApi {
   getGoogleInboxThread(input: { threadId: string }): Promise<GoogleInboxThread>;
   createGoogleInboxDraft(input: GoogleInboxDraftInput): Promise<GoogleInboxDraft>;
   updateGoogleInboxDraft(input: GoogleInboxDraftInput & { draftId: string }): Promise<GoogleInboxDraft>;
+  setGoogleInboxReadState(input: { messageIds: string[]; unread: boolean }): Promise<GoogleInboxReadStateResult>;
+  getGoogleInboxWorkspace(input?: {
+    query?: string;
+    maxResults?: number;
+    selectedThreadId?: string;
+    recipientFilter?: "all" | "direct" | "group";
+    hiddenThreadIds?: string[];
+    creatingNewDraft?: boolean;
+    draft?: { to?: string; subject?: string; body?: string };
+    savedDraft?: GoogleInboxDraft | null;
+  }): Promise<InboxWorkspaceView>;
   connectGoogleTasksWithGog(): Promise<GoogleInboxConnectionResult>;
   updateConnectorStatus(id: string, status: ConnectorStatus["status"]): Promise<ConnectorStatus[]>;
   listDialerConfigs(): Promise<DialerState>;
@@ -1650,7 +2363,16 @@ export interface LinkDesktopApi {
   getWebRtcStatus(): Promise<WebRtcStatus>;
   getSpeakSettings(): Promise<SpeakSettings>;
   saveSpeakSettings(input: Partial<SpeakSettings>): Promise<SpeakSettings>;
+  getVpnWorkspace(): Promise<VpnWorkspace>;
+  saveVpnSettings(input: Partial<VpnSettings>): Promise<VpnWorkspace>;
+  createVpnPeer(input: { wireguardInterfaceId: string }): Promise<VpnPeerProvisionResult>;
   getScribesStatus(): Promise<ScribesStatus>;
+  getHarperAddonStatus(input?: { forceRefresh?: boolean; allowAutoUpdate?: boolean }): Promise<HarperAddonSettings>;
+  installHarperAddon(input?: { version?: string; enable?: boolean }): Promise<HarperAddonSettings>;
+  removeHarperAddon(): Promise<HarperAddonSettings>;
+  reviewHarperText(input: { text: string; settings?: Partial<HarperAddonSettings>; customVocabulary?: string[] }): Promise<HarperReviewResult>;
+  polishHarperText(input: { text: string; settings?: Partial<HarperAddonSettings>; customVocabulary?: string[] }): Promise<HarperPolishResult>;
+  getScribesWorkspaceView(input?: { query?: string; typeFilter?: "all" | ScribesSessionType }): Promise<ScribesWorkspaceView>;
   listScribesModels(): Promise<ScribesModel[]>;
   getScribesProviderRoute(input?: Partial<ScribesSettings>): Promise<ScribesProviderRoute>;
   downloadScribesModel(input: { modelId: string; provider?: SpeakSettings["sttProvider"] }): Promise<ScribesModel>;
@@ -1697,7 +2419,7 @@ export interface LinkDesktopApi {
     agentType?: string;
     agentSource?: ChatAgentSource;
     approvalMode?: string;
-    modelMode?: string;
+    modelMode?: string | ChatModelRoutingRequest;
     contextScope?: string;
     title?: string;
   }): Promise<ChatSession>;
@@ -1714,7 +2436,7 @@ export interface LinkDesktopApi {
     agentSource?: ChatAgentSource;
     agentType?: string;
     approvalMode?: string;
-    modelMode?: string;
+    modelMode?: string | ChatModelRoutingRequest;
     contextScope?: string;
   }): Promise<ChatSession>;
   selectChatAttachments(): Promise<ChatAttachmentSelection>;
@@ -1731,6 +2453,16 @@ export interface LinkDesktopApi {
   listPhoneCallHistory(input?: { maxResults?: number }): Promise<PhoneCallHistoryRow[]>;
   listPhoneAssistants(): Promise<PhoneAssistantOption[]>;
   startAiAssistantOnCall(input: { callControlId: string; assistantId: string }): Promise<unknown>;
+  getPhoneWorkspace(input?: {
+    query?: string;
+    agentFilter?: string;
+    directionFilter?: string;
+    statusFilter?: string;
+    selectedCallId?: string;
+    hiddenIds?: string[];
+    focusNumber?: string;
+    maxResults?: number;
+  }): Promise<PhoneWorkspaceView>;
   listMemoryBanks(): Promise<MemoryBank[]>;
   recallMemory(input: { query: string; bankId?: string }): Promise<MemoryRecallResult[]>;
   retainMemory(input: { content: string; context?: string; bankId?: string; source?: string }): Promise<MemoryRetainResult>;
@@ -1942,6 +2674,8 @@ const previewMeetingBots: MeetingBotOption[] = [
 let previewSpeakSettings: SpeakSettings = {
   whisperEnabled: true,
   shortcutMode: "hold-fn",
+  localShortcutMode: "hold-fn",
+  cloudShortcutMode: "cmd-shift-l",
   shortcutLabel: "Hold fn",
   sttMode: "local",
   sttProvider: "openai-whisper",
@@ -1956,6 +2690,104 @@ let previewSpeakSettings: SpeakSettings = {
   ttsVoice: "Telnyx.NaturalHD.astra",
   updatedAt: now,
 };
+let previewVpnSettings: VpnSettings = {
+  selectedInterfaceId: "preview-vpn-ashburn",
+  toolAccessMode: "preferred",
+  managedPeerIds: { "preview-vpn-ashburn": "preview-peer-link-mac" },
+  updatedAt: now,
+};
+const previewVpnNetworks: VpnNetwork[] = [
+  {
+    id: "preview-network-east",
+    name: "Link Workspace East",
+    createdAt: now,
+    updatedAt: now,
+    interfaceCount: 1,
+    peerCount: 2,
+  },
+  {
+    id: "preview-network-eu",
+    name: "Link Workspace EU",
+    createdAt: now,
+    updatedAt: now,
+    interfaceCount: 1,
+    peerCount: 1,
+  },
+];
+const previewVpnInterfaces: VpnInterface[] = [
+  {
+    id: "preview-vpn-ashburn",
+    name: "Workspace VPN East",
+    networkId: "preview-network-east",
+    networkName: "Link Workspace East",
+    status: "provisioned",
+    endpoint: "64.16.243.3:5107",
+    publicKey: "preview-wireguard-public-key-east",
+    serverIpAddress: "172.27.0.1/24",
+    regionCode: "ashburn-va",
+    regionName: "Ashburn VA, US",
+    peerCount: 2,
+    lastSeenAt: now,
+    managedPeer: true,
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: "preview-vpn-amsterdam",
+    name: "Workspace VPN EU",
+    networkId: "preview-network-eu",
+    networkName: "Link Workspace EU",
+    status: "provisioning",
+    endpoint: "64.16.243.4:5107",
+    publicKey: "preview-wireguard-public-key-eu",
+    serverIpAddress: "172.28.10.1/24",
+    regionCode: "amsterdam-nl",
+    regionName: "Amsterdam NL",
+    peerCount: 1,
+    lastSeenAt: "",
+    managedPeer: false,
+    createdAt: now,
+    updatedAt: now,
+  },
+];
+const previewVpnPeers: VpnPeer[] = [
+  {
+    id: "preview-peer-link-mac",
+    interfaceId: "preview-vpn-ashburn",
+    interfaceName: "Workspace VPN East",
+    publicKey: "preview-wireguard-peer-key-link",
+    lastSeenAt: now,
+    createdAt: now,
+    updatedAt: now,
+    managedByLink: true,
+  },
+  {
+    id: "preview-peer-ci",
+    interfaceId: "preview-vpn-ashburn",
+    interfaceName: "Workspace VPN East",
+    publicKey: "preview-wireguard-peer-key-ci",
+    lastSeenAt: now,
+    createdAt: now,
+    updatedAt: now,
+    managedByLink: false,
+  },
+];
+const previewVpnCoverageRegions: VpnCoverageRegion[] = [
+  { code: "ashburn-va", name: "Ashburn VA, US", region: "AMER", site: "IAD", availableServices: ["cloud_vpn"] },
+  { code: "chicago-il", name: "Chicago IL, US", region: "AMER", site: "ORD", availableServices: ["cloud_vpn"] },
+  { code: "amsterdam-nl", name: "Amsterdam NL", region: "EMEA", site: "AMS", availableServices: ["cloud_vpn"] },
+];
+const previewVpnPeerConfig = [
+  "[Interface]",
+  "PrivateKey = preview-private-key",
+  "Address = 172.27.0.3/32",
+  "",
+  "[Peer]",
+  "PublicKey = preview-wireguard-public-key-east",
+  "AllowedIPs = 172.27.0.0/24",
+  "Endpoint = 64.16.243.3:5107",
+  "PersistentKeepalive = 25",
+].join("\n");
 let previewScribesServer: ScribesLocalServerStatus = {
   running: false,
   ready: false,
@@ -1964,13 +2796,13 @@ let previewScribesServer: ScribesLocalServerStatus = {
   port: null,
   startedAt: null,
   updatedAt: now,
-  message: "Scribes local STT server is stopped in preview.",
+  message: "Scribe local STT server is stopped in preview.",
   lastError: "",
 };
 let previewScribesWorkspace: ScribesWorkspaceSettings = {
   retainAudio: false,
   audioRetentionDays: 0,
-  customVocabulary: ["Telnyx", "Conversation Relay", "Scribes"],
+  customVocabulary: ["Telnyx", "Conversation Relay", "Scribe"],
   activeCleanupProfileId: "punctuation",
   cleanupProfiles: [
     {
@@ -1990,6 +2822,31 @@ let previewScribesWorkspace: ScribesWorkspaceSettings = {
       updatedAt: now,
     },
   ],
+  addons: {
+    harper: {
+      installed: false,
+      enabled: false,
+      autoUpdate: true,
+      defaultAction: "review",
+      surfaces: {
+        scribeSessions: true,
+        inboxDrafts: true,
+      },
+      dialect: "american",
+      installState: "not_installed",
+      installedVersion: "",
+      latestVersion: "preview-latest",
+      updateAvailable: false,
+      lastCheckedAt: now,
+      lastInstalledAt: "",
+      lastError: "",
+      packageName: "harper.js",
+      registryUrl: "https://registry.npmjs.org/harper.js",
+      projectUrl: "https://github.com/automattic/harper",
+      download: null,
+      updatedAt: now,
+    },
+  },
   editModeEnabled: true,
   meetingCapture: {
     microphone: true,
@@ -2036,6 +2893,10 @@ let previewScribesSessions: ScribesSession[] = [
       diarizationStatus: "disabled",
       speakerLabels: ["Speaker 1", "Speaker 2"],
       summaryStatus: "not_started",
+      calendarEventId: "preview-google-calendar-event",
+      calendarEventUrl: "",
+      calendarEventStart: now,
+      calendarEventEnd: now,
     },
   },
 ];
@@ -2122,10 +2983,11 @@ function previewScribesRoute(input: Partial<ScribesSettings> = {}): ScribesProvi
     return {
       mode: "telnyx-cloud",
       provider: "telnyx",
+      label: "Telnyx Cloud",
       modelId: settings.sttModel || "telnyx/stt",
       engine: "Telnyx",
       ready: false,
-      diagnostics: { ready: false, message: "Save TELNYX_API_KEY in Link to use Scribes Cloud STT." },
+      diagnostics: { ready: false, message: "Save TELNYX_API_KEY in Link to use Scribe Cloud STT." },
       endpoint: "https://api.telnyx.com/v2/speech-to-text",
       updatedAt: new Date().toISOString(),
     };
@@ -2136,6 +2998,7 @@ function previewScribesRoute(input: Partial<ScribesSettings> = {}): ScribesProvi
   return {
     mode: "local",
     provider: model.provider,
+    label: model.label,
     modelId: model.id,
     engine: model.engine,
     ready: model.downloaded && model.diagnostics.ready,
@@ -2168,6 +3031,35 @@ function previewScribesArtifact(session: ScribesSession, kind: ScribesArtifactKi
   };
 }
 
+function previewModelRoutingRequest(modelMode?: string | ChatModelRoutingRequest) {
+  if (typeof modelMode === "string") return { routeId: modelMode.trim(), fallbackRouteIds: [], allowDefaultFallbacks: true };
+  return {
+    routeId: modelMode?.routeId?.trim() || "",
+    fallbackRouteIds: Array.isArray(modelMode?.fallbackRouteIds)
+      ? modelMode.fallbackRouteIds.map((routeId) => String(routeId || "").trim()).filter(Boolean)
+      : [],
+    allowDefaultFallbacks: modelMode?.allowDefaultFallbacks !== false,
+  };
+}
+
+function previewRouteHealth(
+  state: AiModelRouteHealthState,
+  configured: boolean,
+  reachable: boolean | null,
+  message: string,
+  checks: AiModelRouteHealthCheck[],
+): AiModelRouteHealth {
+  return {
+    state,
+    ready: state === "ready" || state === "degraded",
+    configured,
+    reachable,
+    lastCheckedAt: new Date().toISOString(),
+    message,
+    checks,
+  };
+}
+
 function previewLiteLlmRuntimeStatus(): LiteLlmRuntimeStatus {
   const telnyxConfigured = previewCredentials.some((group) =>
     group.id === "telnyx" && group.fields.some((field) => field.name === "TELNYX_API_KEY" && field.configured),
@@ -2184,7 +3076,90 @@ function previewLiteLlmRuntimeStatus(): LiteLlmRuntimeStatus {
     { id: "MiniMaxAI/MiniMax-M3-MXFP8", provider: "telnyx", capabilities: ["chat", "long-context", "budget"] },
     { id: "thenlper/gte-large", provider: "telnyx", capabilities: ["embedding"] },
   ];
-  const route = (id: string, label: string, provider: string, dataBoundary: AiDataBoundary, targetModel: string, available = true, description = ""): AiModelRoute => ({
+  const checkedAt = new Date().toISOString();
+  const localHealth = previewRouteHealth(
+    "ready",
+    true,
+    true,
+    "Local Ollama model is reachable in preview mode.",
+    [
+      { name: "litellm", ok: true, detail: "Preview assumes LiteLLM is installed." },
+      { name: "ollama", ok: true, detail: "Preview assumes Ollama is reachable on 127.0.0.1:11434." },
+    ],
+  );
+  const telnyxHealth = telnyxConfigured
+    ? previewRouteHealth(
+      "ready",
+      true,
+      true,
+      "Telnyx catalog and direct cloud routes are available in preview mode.",
+      [
+        { name: "litellm", ok: true, detail: "Preview assumes LiteLLM can start local routing." },
+        { name: "telnyx_api_key", ok: true, detail: "TELNYX_API_KEY is configured." },
+      ],
+    )
+    : previewRouteHealth(
+      "setup_required",
+      false,
+      null,
+      "Add TELNYX_API_KEY to enable Telnyx cloud routes.",
+      [
+        { name: "litellm", ok: true, detail: "Preview assumes LiteLLM can start local routing." },
+        { name: "telnyx_api_key", ok: false, detail: "TELNYX_API_KEY is missing." },
+      ],
+    );
+  const managedHealth = managedConfigured
+    ? previewRouteHealth(
+      "ready",
+      true,
+      true,
+      "Managed gateway is configured in preview mode.",
+      [
+        { name: "gateway_url", ok: true, detail: "Managed base URL is configured." },
+        { name: "gateway_key", ok: true, detail: "LITELLM_API_KEY is configured." },
+      ],
+    )
+    : previewRouteHealth(
+      "setup_required",
+      false,
+      null,
+      "Add LITELLM_BASE_URL and LITELLM_API_KEY to enable the managed gateway.",
+      [
+        { name: "gateway_url", ok: false, detail: "Managed base URL is missing." },
+        { name: "gateway_key", ok: false, detail: "LITELLM_API_KEY is missing." },
+      ],
+    );
+  const frontierHealth = anthropicConfigured
+    ? previewRouteHealth(
+      "ready",
+      true,
+      true,
+      "Anthropic BYO routing is configured in preview mode.",
+      [
+        { name: "litellm", ok: true, detail: "Preview assumes LiteLLM can start local routing." },
+        { name: "anthropic_api_key", ok: true, detail: "ANTHROPIC_API_KEY is configured." },
+      ],
+    )
+    : previewRouteHealth(
+      "setup_required",
+      false,
+      null,
+      "Add ANTHROPIC_API_KEY to enable Anthropic BYO routing.",
+      [
+        { name: "litellm", ok: true, detail: "Preview assumes LiteLLM can start local routing." },
+        { name: "anthropic_api_key", ok: false, detail: "ANTHROPIC_API_KEY is missing." },
+      ],
+    );
+  const route = (
+    id: string,
+    label: string,
+    provider: string,
+    dataBoundary: AiDataBoundary,
+    targetModel: string,
+    health: AiModelRouteHealth,
+    description = "",
+    options: { capabilities?: string[]; contextWindow?: number | null; fallbackRouteIds?: string[]; default?: boolean } = {},
+  ): AiModelRoute => ({
     id,
     modelName: id,
     label,
@@ -2192,18 +3167,32 @@ function previewLiteLlmRuntimeStatus(): LiteLlmRuntimeStatus {
     dataBoundary,
     targetModel,
     description,
-    available,
+    available: health.ready,
+    capabilities: options.capabilities,
+    contextWindow: options.contextWindow,
+    fallbackRouteIds: options.fallbackRouteIds ?? [],
+    default: options.default,
+    health,
   });
   return {
     installed: true,
     running: false,
     ready: true,
+    checkedAt,
     baseUrl: "http://127.0.0.1:4000",
     configPath: "preview/litellm/config.yaml",
     lastExit: null,
     lastError: "",
     lastLogLines: [],
-    local: { provider: "ollama", model: "llama3.2", apiBase: "http://127.0.0.1:11434" },
+    local: {
+      provider: "ollama",
+      model: "llama3.2",
+      apiBase: "http://127.0.0.1:11434",
+      reachable: true,
+      modelAvailable: true,
+      lastCheckedAt: checkedAt,
+      message: localHealth.message,
+    },
     telnyx: {
       apiKeyConfigured: telnyxConfigured,
       baseUrl: "https://api.telnyx.com/v2/ai/openai",
@@ -2214,22 +3203,368 @@ function previewLiteLlmRuntimeStatus(): LiteLlmRuntimeStatus {
         error: "",
         models: telnyxModels,
       },
+      reachable: telnyxHealth.reachable,
+      lastCheckedAt: checkedAt,
+      message: telnyxHealth.message,
     },
-    managedGateway: { configured: managedConfigured, baseUrl: managedConfigured ? "https://managed-gateway.example" : "" },
-    frontier: { anthropicConfigured },
+    managedGateway: {
+      configured: managedConfigured,
+      baseUrl: managedConfigured ? "https://managed-gateway.example" : "",
+      reachable: managedHealth.reachable,
+      lastCheckedAt: checkedAt,
+      message: managedHealth.message,
+    },
+    frontier: {
+      anthropicConfigured,
+      reachable: frontierHealth.reachable,
+      lastCheckedAt: checkedAt,
+      message: frontierHealth.message,
+    },
     routes: [
-      { ...route("auto/ask-before-cloud", "Auto: ask before cloud", "local", "local", "llama3.2", true, "Default local-first route. It does not silently fall back to cloud."), default: true },
-      route("auto/local-only", "Auto: local only", "local", "local", "llama3.2"),
-      route("local/default", "Local: llama3.2", "local", "local", "llama3.2"),
-      route("telnyx/recommended", "Telnyx recommended: moonshotai/Kimi-K2.6", "telnyx", "telnyx-cloud", "moonshotai/Kimi-K2.6", telnyxConfigured),
-      route("telnyx/reasoning-tools", "Telnyx reasoning/tools: zai-org/GLM-5.1-FP8", "telnyx", "telnyx-cloud", "zai-org/GLM-5.1-FP8", telnyxConfigured),
-      route("telnyx/budget-long-context", "Telnyx budget long-context: MiniMaxAI/MiniMax-M3-MXFP8", "telnyx", "telnyx-cloud", "MiniMaxAI/MiniMax-M3-MXFP8", telnyxConfigured),
-      route("telnyx/embed", "Telnyx embeddings: thenlper/gte-large", "telnyx", "telnyx-cloud", "thenlper/gte-large", telnyxConfigured),
-      route("auto/telnyx-cloud", "Auto: Telnyx cloud", "telnyx", "telnyx-cloud", "moonshotai/Kimi-K2.6", telnyxConfigured),
-      route("managed/telnyx-cloud", "Telnyx managed gateway", "managed-telnyx", "telnyx-cloud", "telnyx/recommended", managedConfigured),
-      route("frontier/opus", "Frontier BYO: Claude 3 Opus", "anthropic", "frontier-byo", "claude-3-opus-20240229", anthropicConfigured),
+      route("auto/ask-before-cloud", "Auto: ask before cloud", "local", "local", "llama3.2", localHealth, "Default local-first route. It does not silently fall back to cloud.", {
+        capabilities: ["chat", "offline"],
+        fallbackRouteIds: ["local/default"],
+        default: true,
+      }),
+      route("auto/local-only", "Auto: local only", "local", "local", "llama3.2", localHealth, "Only uses the local Ollama-compatible model.", {
+        capabilities: ["chat", "offline"],
+        fallbackRouteIds: ["local/default"],
+      }),
+      route("local/default", "Local: llama3.2", "local", "local", "llama3.2", localHealth, "Offline Ollama-compatible local model.", {
+        capabilities: ["chat", "offline"],
+      }),
+      route("telnyx/recommended", "Telnyx recommended: moonshotai/Kimi-K2.6", "telnyx", "telnyx-cloud", "moonshotai/Kimi-K2.6", telnyxHealth, "", {
+        capabilities: ["chat", "reasoning"],
+        fallbackRouteIds: ["telnyx/reasoning-tools", "telnyx/budget-long-context"],
+      }),
+      route("telnyx/reasoning-tools", "Telnyx reasoning/tools: zai-org/GLM-5.1-FP8", "telnyx", "telnyx-cloud", "zai-org/GLM-5.1-FP8", telnyxHealth, "", {
+        capabilities: ["chat", "reasoning", "tools"],
+        fallbackRouteIds: ["telnyx/recommended", "telnyx/budget-long-context"],
+      }),
+      route("telnyx/budget-long-context", "Telnyx budget long-context: MiniMaxAI/MiniMax-M3-MXFP8", "telnyx", "telnyx-cloud", "MiniMaxAI/MiniMax-M3-MXFP8", telnyxHealth, "", {
+        capabilities: ["chat", "long-context", "budget"],
+        fallbackRouteIds: ["telnyx/recommended"],
+      }),
+      route("telnyx/embed", "Telnyx embeddings: thenlper/gte-large", "telnyx", "telnyx-cloud", "thenlper/gte-large", telnyxHealth, "", {
+        capabilities: ["embedding"],
+      }),
+      route("auto/telnyx-cloud", "Auto: Telnyx cloud", "telnyx", "telnyx-cloud", "moonshotai/Kimi-K2.6", telnyxHealth, "", {
+        capabilities: ["chat", "reasoning"],
+        fallbackRouteIds: ["telnyx/recommended", "telnyx/reasoning-tools", "telnyx/budget-long-context", "local/default"],
+      }),
+      route("managed/telnyx-cloud", "Telnyx managed gateway", "managed-telnyx", "telnyx-cloud", "telnyx/recommended", managedHealth, "", {
+        capabilities: ["chat", "routing"],
+      }),
+      route("frontier/opus", "Frontier BYO: Claude 3 Opus", "anthropic", "frontier-byo", "claude-3-opus-20240229", frontierHealth, "", {
+        capabilities: ["chat", "reasoning"],
+      }),
     ],
     message: "Preview model gateway status. Local-first routes are available; cloud routes require credentials in Link.",
+  };
+}
+
+let previewModelRoleAssignments: Record<ModelRoleAssignment["roleId"], string> = {
+  chatPrimary: "ollama:llama3.2",
+  chatFallback: "telnyx:MiniMaxAI/MiniMax-M3-MXFP8",
+  taskRouting: "ollama:qwen2.5:3b-instruct-q4_K_M",
+  agentDefault: "ollama:llama3.2",
+};
+
+let previewLocalApiServerStatus: LocalApiServerStatus = {
+  running: false,
+  ready: false,
+  host: "127.0.0.1",
+  port: 4090,
+  endpoint: "",
+  apiKeyConfigured: false,
+  corsEnabled: false,
+  exposedRoleIds: ["chatPrimary", "taskRouting"],
+  exposedModelIds: [],
+  message: "Local API server is stopped.",
+  lastError: "",
+  logs: [],
+  startedAt: null,
+  updatedAt: new Date().toISOString(),
+};
+
+let previewProviderConfigs: Record<string, { enabled: boolean; baseUrl: string; apiKeyConfigured: boolean; defaultModelId?: string }> = {
+  ollama: {
+    enabled: true,
+    baseUrl: "http://127.0.0.1:11434",
+    apiKeyConfigured: false,
+    defaultModelId: "ollama:llama3.2",
+  },
+  telnyx: {
+    enabled: true,
+    baseUrl: "https://api.telnyx.com/v2/ai/openai",
+    apiKeyConfigured: false,
+    defaultModelId: "telnyx:moonshotai/Kimi-K2.6",
+  },
+  "managed-gateway": {
+    enabled: false,
+    baseUrl: "https://managed-gateway.example",
+    apiKeyConfigured: false,
+    defaultModelId: "telnyx:moonshotai/Kimi-K2.6",
+  },
+  anthropic: {
+    enabled: false,
+    baseUrl: "",
+    apiKeyConfigured: false,
+    defaultModelId: "anthropic:claude-3-opus-20240229",
+  },
+};
+
+function previewCatalogModels(): CatalogModel[] {
+  return [
+    {
+      id: "ollama:llama3.2",
+      label: "Llama 3.2 3B Instruct",
+      providerId: "ollama",
+      engineId: "ollama",
+      source: "telnyx-curated",
+      description: "Balanced local default for on-device chat.",
+      capabilities: ["chat", "offline", "mcp-safe"],
+      dataBoundary: "local",
+      recommended: true,
+      recommendedRoleEligibility: ["chatPrimary", "chatFallback", "agentDefault"],
+      taskRoutingEligible: true,
+      fallbackChain: ["ollama:qwen2.5:3b-instruct-q4_K_M"],
+      variants: [{ id: "ollama:llama3.2", label: "llama3.2", providerId: "ollama", engineId: "ollama", externalId: "llama3.2", format: "ollama", quantization: "Q4_K_M", sizeBytes: 2.2 * 1024 ** 3, contextWindow: 8192 }],
+      policy: { minimumRamBytes: 8 * 1024 ** 3, minimumStorageBytes: 4 * 1024 ** 3, hiddenByPolicy: false, mcpSafe: true, speechCleanup: true, vision: false, coding: false, dataBoundary: "local" },
+    },
+    {
+      id: "ollama:qwen2.5:3b-instruct-q4_K_M",
+      label: "Qwen 2.5 3B Instruct",
+      providerId: "ollama",
+      engineId: "ollama",
+      source: "telnyx-curated",
+      description: "Lightweight local routing model.",
+      capabilities: ["chat", "offline", "routing", "mcp-safe", "coding"],
+      dataBoundary: "local",
+      recommended: true,
+      recommendedRoleEligibility: ["taskRouting", "chatFallback"],
+      taskRoutingEligible: true,
+      fallbackChain: ["ollama:llama3.2"],
+      variants: [{ id: "ollama:qwen2.5:3b-instruct-q4_K_M", label: "qwen2.5:3b-instruct-q4_K_M", providerId: "ollama", engineId: "ollama", externalId: "qwen2.5:3b-instruct-q4_K_M", format: "ollama", quantization: "Q4_K_M", sizeBytes: 2.3 * 1024 ** 3, contextWindow: 32768 }],
+      policy: { minimumRamBytes: 8 * 1024 ** 3, minimumStorageBytes: 4 * 1024 ** 3, hiddenByPolicy: false, mcpSafe: true, speechCleanup: false, vision: false, coding: true, dataBoundary: "local" },
+    },
+    {
+      id: "ollama:phi3:mini",
+      label: "Phi 3 Mini",
+      providerId: "ollama",
+      engineId: "ollama",
+      source: "telnyx-curated",
+      description: "Compact fallback for constrained laptops.",
+      capabilities: ["chat", "offline"],
+      dataBoundary: "local",
+      recommended: false,
+      recommendedRoleEligibility: ["chatFallback"],
+      taskRoutingEligible: true,
+      fallbackChain: [],
+      variants: [{ id: "ollama:phi3:mini", label: "phi3:mini", providerId: "ollama", engineId: "ollama", externalId: "phi3:mini", format: "ollama", quantization: "Q4_K_M", sizeBytes: 2.4 * 1024 ** 3, contextWindow: 4096 }],
+      policy: { minimumRamBytes: 8 * 1024 ** 3, minimumStorageBytes: 4 * 1024 ** 3, hiddenByPolicy: false, mcpSafe: true, speechCleanup: false, vision: false, coding: false, dataBoundary: "local" },
+    },
+    {
+      id: "telnyx:moonshotai/Kimi-K2.6",
+      label: "Kimi K2.6",
+      providerId: "telnyx",
+      source: "telnyx-curated",
+      description: "Best-quality Telnyx cloud default.",
+      capabilities: ["chat", "reasoning"],
+      dataBoundary: "telnyx-cloud",
+      recommended: true,
+      recommendedRoleEligibility: ["chatPrimary", "agentDefault"],
+      taskRoutingEligible: false,
+      fallbackChain: ["telnyx:zai-org/GLM-5.1-FP8", "telnyx:MiniMaxAI/MiniMax-M3-MXFP8"],
+      variants: [{ id: "telnyx:moonshotai/Kimi-K2.6", label: "moonshotai/Kimi-K2.6", providerId: "telnyx", externalId: "moonshotai/Kimi-K2.6", format: "openai", contextWindow: null }],
+      policy: { minimumRamBytes: 0, minimumStorageBytes: 0, hiddenByPolicy: false, mcpSafe: false, speechCleanup: false, vision: false, coding: false, dataBoundary: "telnyx-cloud" },
+    },
+    {
+      id: "telnyx:zai-org/GLM-5.1-FP8",
+      label: "GLM 5.1 FP8",
+      providerId: "telnyx",
+      source: "telnyx-curated",
+      description: "Reasoning and tool-capable Telnyx model.",
+      capabilities: ["chat", "reasoning", "tools"],
+      dataBoundary: "telnyx-cloud",
+      recommended: true,
+      recommendedRoleEligibility: ["chatFallback", "agentDefault"],
+      taskRoutingEligible: false,
+      fallbackChain: ["telnyx:MiniMaxAI/MiniMax-M3-MXFP8"],
+      variants: [{ id: "telnyx:zai-org/GLM-5.1-FP8", label: "zai-org/GLM-5.1-FP8", providerId: "telnyx", externalId: "zai-org/GLM-5.1-FP8", format: "openai", contextWindow: null }],
+      policy: { minimumRamBytes: 0, minimumStorageBytes: 0, hiddenByPolicy: false, mcpSafe: false, speechCleanup: false, vision: false, coding: true, dataBoundary: "telnyx-cloud" },
+    },
+    {
+      id: "telnyx:MiniMaxAI/MiniMax-M3-MXFP8",
+      label: "MiniMax M3 MXFP8",
+      providerId: "telnyx",
+      source: "telnyx-curated",
+      description: "Budget long-context Telnyx fallback.",
+      capabilities: ["chat", "budget", "long-context"],
+      dataBoundary: "telnyx-cloud",
+      recommended: true,
+      recommendedRoleEligibility: ["chatFallback", "taskRouting"],
+      taskRoutingEligible: true,
+      fallbackChain: ["ollama:qwen2.5:3b-instruct-q4_K_M"],
+      variants: [{ id: "telnyx:MiniMaxAI/MiniMax-M3-MXFP8", label: "MiniMaxAI/MiniMax-M3-MXFP8", providerId: "telnyx", externalId: "MiniMaxAI/MiniMax-M3-MXFP8", format: "openai", contextWindow: null }],
+      policy: { minimumRamBytes: 0, minimumStorageBytes: 0, hiddenByPolicy: false, mcpSafe: false, speechCleanup: false, vision: false, coding: false, dataBoundary: "telnyx-cloud" },
+    },
+  ];
+}
+
+function previewHardwareProfile(): HardwareProfile {
+  return {
+    totalMemoryBytes: 32 * 1024 ** 3,
+    freeMemoryBytes: 18 * 1024 ** 3,
+    gpuMemoryBytes: 0,
+    availableStorageBytes: 240 * 1024 ** 3,
+    architecture: "arm64",
+    platform: "darwin",
+    cpuModel: "Apple Silicon",
+    recommendedContextWindow: 32768,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function previewFit(sizeBytes = 0): FitAssessment {
+  if (!sizeBytes) return { status: "unknown", label: "Unknown fit", reason: "Preview metadata is incomplete for this model." };
+  if (sizeBytes > 8 * 1024 ** 3) return { status: "slow", label: "May be slow", reason: "This preview machine can run it, but the model is large for local multitasking." };
+  return { status: "fits", label: "Fits", reason: "This preview machine has enough RAM and storage for the recommended variant." };
+}
+
+function previewModelCenterState(): ModelCenterState {
+  const runtime = previewLiteLlmRuntimeStatus();
+  const hardware = previewHardwareProfile();
+  const catalogModels = previewCatalogModels();
+  const installedModels: InstalledModel[] = catalogModels
+    .filter((model) => model.providerId === "ollama")
+    .map((model) => ({
+      id: model.id,
+      label: model.label,
+      providerId: model.providerId,
+      engineId: model.engineId || "ollama",
+      source: "pulled",
+      externalId: model.variants[0]?.externalId || model.id,
+      sizeBytes: model.variants[0]?.sizeBytes,
+      contextWindow: model.variants[0]?.contextWindow ?? null,
+      capabilities: model.capabilities,
+      installedAt: new Date().toISOString(),
+      lastUsedAt: new Date().toISOString(),
+      health: { state: "ready", message: "Installed in preview." },
+      fit: previewFit(model.variants[0]?.sizeBytes || 0),
+      variant: model.variants[0] || null,
+      tags: model.policy.mcpSafe ? ["MCP-safe"] : [],
+    }));
+  const roleLookup = (roleId: ModelRoleAssignment["roleId"], routeId: string): ModelRoleAssignment | null => {
+    const model = [...catalogModels, ...installedModels.map((item) => ({
+      id: item.id,
+      label: item.label,
+      providerId: item.providerId,
+      engineId: item.engineId,
+      dataBoundary: item.providerId === "ollama" ? "local" as const : "telnyx-cloud" as const,
+      taskRoutingEligible: item.capabilities.includes("routing") || item.capabilities.includes("mcp-safe"),
+    }))].find((entry) => entry.id === previewModelRoleAssignments[roleId]);
+    if (!model) return null;
+    return {
+      roleId,
+      modelId: model.id,
+      label: model.label,
+      providerId: model.providerId,
+      engineId: "engineId" in model ? model.engineId : undefined,
+      dataBoundary: model.dataBoundary,
+      routeId,
+      taskRoutingEligible: Boolean(model.taskRoutingEligible),
+      updatedAt: new Date().toISOString(),
+    };
+  };
+  const roles: ModelRoleAssignments = {
+    chatPrimary: roleLookup("chatPrimary", "auto/ask-before-cloud"),
+    chatFallback: roleLookup("chatFallback", "auto/local-only"),
+    taskRouting: roleLookup("taskRouting", "role/task-routing"),
+    agentDefault: roleLookup("agentDefault", "role/agent-default"),
+  };
+  const engineDefinition: EngineDefinition = {
+    id: "ollama",
+    label: "Ollama",
+    kind: "local",
+    description: "Local Ollama engine backed by the Link Runtime Manager.",
+    engineFamily: "ollama",
+    dataBoundary: "local",
+  };
+  const engines: EngineStatus[] = [{
+    id: "ollama",
+    definition: engineDefinition,
+    enabled: true,
+    installed: true,
+    reachable: true,
+    ready: true,
+    version: "preview",
+    message: "Ollama is reachable in preview mode.",
+    baseUrl: previewProviderConfigs.ollama.baseUrl,
+    defaultModelId: previewProviderConfigs.ollama.defaultModelId,
+    discoveredModelCount: installedModels.length,
+    settings: {
+      checkForUpdates: true,
+      verifyDependencies: true,
+      maxLoadedModels: 1,
+      timeoutSeconds: 600,
+    },
+  }];
+  const providerDefinitions: ProviderDefinition[] = [
+    { id: "telnyx", label: "Telnyx", category: "cloud", description: "Direct Telnyx-hosted open model catalog.", dataBoundary: "telnyx-cloud", supportsDiscovery: true, supportsKeyRotation: true },
+    { id: "managed-gateway", label: "Managed Gateway", category: "cloud", description: "Team-managed LiteLLM gateway for shared routing and policy.", dataBoundary: "telnyx-cloud", supportsDiscovery: true, supportsKeyRotation: true },
+    { id: "anthropic", label: "Anthropic", category: "cloud", description: "Optional frontier BYO provider.", dataBoundary: "frontier-byo", supportsDiscovery: false, supportsKeyRotation: true },
+  ];
+  const providers = providerDefinitions.map((definition) => {
+    const config = previewProviderConfigs[definition.id];
+    const models = definition.id === "telnyx" ? catalogModels.filter((model) => model.providerId === "telnyx" && !model.policy.hiddenByPolicy) : [];
+    return {
+      definition,
+      config: {
+        id: definition.id,
+        enabled: config?.enabled ?? false,
+        apiKeyConfigured: config?.apiKeyConfigured ?? false,
+        baseUrl: config?.baseUrl ?? "",
+        defaultModelId: config?.defaultModelId,
+        discoveredAt: new Date().toISOString(),
+        modelCount: models.length,
+        healthy: definition.id !== "managed-gateway",
+        message: definition.id === "managed-gateway" ? "Save a managed gateway key to enable shared routing." : "Preview configuration is available.",
+      },
+      models,
+    };
+  });
+  return {
+    updatedAt: new Date().toISOString(),
+    message: "Preview Model Center state.",
+    overview: {
+      routeSummary: runtime.message,
+      recommendedCount: catalogModels.filter((model) => model.recommended).length,
+      installedCount: installedModels.length,
+      healthyProviderCount: providers.filter((provider) => provider.config.healthy).length,
+    },
+    storage: {
+      appDataPath: "~/Library/Application Support/Link",
+      statePath: "~/Library/Application Support/Link/link-desktop-state.json",
+      liteLlmConfigPath: "~/Library/Application Support/Link/litellm/config.yaml",
+      importsPath: "~/Library/Application Support/Link/model-imports",
+      logsPath: "~/Library/Application Support/Link/logs",
+    },
+    engines,
+    providers,
+    installedModels,
+    catalogModels,
+    roles,
+    routes: runtime.routes,
+    hardware,
+    localApiServer: {
+      ...previewLocalApiServerStatus,
+      exposedModelIds: previewLocalApiServerStatus.exposedRoleIds
+        .map((roleId) => roles[roleId as keyof ModelRoleAssignments]?.modelId || "")
+        .filter(Boolean),
+      updatedAt: new Date().toISOString(),
+    },
+    runtime,
   };
 }
 
@@ -2276,6 +3611,171 @@ const emptyWikiState: WikiState = {
   kits: [],
   sessions: [],
 };
+
+function previewSurfaceManifests(): SurfaceManifestMap {
+  const gmailReady = previewGoogleConnected;
+  const eventsReady = previewGoogleConnected || previewGoogleWorkspaceEnabled();
+  const callReady = previewPhoneE2EEnabled();
+  const scribeReady = true;
+  const agentRuntimeReady = previewAuthEnabled();
+  return {
+    chat: {
+      surface: "chat",
+      label: "Chat",
+      enabled: true,
+      ready: true,
+      requiresAgent: false,
+      requiresConnector: false,
+      requiresCredential: false,
+      reasons: [],
+      connectorIds: [],
+      credentialNames: [],
+      message: "Chat is available in preview.",
+      search: { placeholder: "Search sessions, tasks, or agents", menuActions: [], filters: [], sorts: [], canRestoreSearch: true },
+      composer: {
+        placeholder: "Ask your agent...",
+        multiline: true,
+        autoGrow: true,
+        maxHeightRatio: 0.5,
+        supportsAttachments: true,
+        supportsAudio: true,
+        primaryAction: { id: "send-chat", label: "Send", enabled: true, tone: "primary" },
+        aiAction: { id: "choose-runtime", label: "Runtime", enabled: true },
+      },
+      features: { agentRuntimeReady },
+      updatedAt: new Date().toISOString(),
+    },
+    call: {
+      surface: "call",
+      label: "Call",
+      enabled: true,
+      ready: callReady,
+      requiresAgent: false,
+      requiresConnector: false,
+      requiresCredential: !callReady,
+      reasons: callReady ? [] : ["Save TELNYX_API_KEY to load calls and assistants."],
+      connectorIds: ["telnyx"],
+      credentialNames: ["TELNYX_API_KEY"],
+      message: callReady ? "Call preview is ready." : "Call preview needs a Telnyx API key.",
+      search: { placeholder: "Search calls, numbers, contacts, or bots", menuActions: [], filters: [], sorts: [], canRestoreSearch: true },
+      composer: null,
+      features: { telnyxReady: callReady },
+      updatedAt: new Date().toISOString(),
+    },
+    gmail: {
+      surface: "gmail",
+      label: "Gmail",
+      enabled: true,
+      ready: gmailReady,
+      requiresAgent: false,
+      requiresConnector: !gmailReady,
+      requiresCredential: false,
+      reasons: gmailReady ? [] : ["Connect Google Inbox to read threads and save Gmail drafts."],
+      connectorIds: ["google-inbox"],
+      credentialNames: [],
+      message: gmailReady ? "Inbox preview is connected." : "Inbox preview is disconnected.",
+      search: {
+        placeholder: "Search inbox messages, senders, subjects, or snippets",
+        menuActions: [],
+        filters: [{ id: "recipientType", label: "Recipient", options: [{ id: "all", label: "All unread" }, { id: "direct", label: "My alias" }, { id: "group", label: "Group alias" }] }],
+        sorts: [],
+        canRestoreSearch: true,
+      },
+      composer: {
+        placeholder: "Ask an agent to draft a reply, or write one here...",
+        multiline: true,
+        autoGrow: true,
+        maxHeightRatio: 0.5,
+        supportsAttachments: false,
+        supportsAudio: false,
+        primaryAction: { id: "save-gmail-draft", label: "Save Gmail draft", enabled: gmailReady, tone: "primary" },
+        aiAction: { id: "draft-with-agent", label: "Draft with Agent", enabled: agentRuntimeReady, reason: agentRuntimeReady ? "" : "Connect a chat runtime first." },
+      },
+      features: { agentRuntimeReady },
+      updatedAt: new Date().toISOString(),
+    },
+    events: {
+      surface: "events",
+      label: "Events",
+      enabled: true,
+      ready: eventsReady,
+      requiresAgent: false,
+      requiresConnector: !eventsReady,
+      requiresCredential: false,
+      reasons: eventsReady ? [] : ["Connect Google Workspace to load calendar events."],
+      connectorIds: ["google-calendar", "google-drive"],
+      credentialNames: [],
+      message: eventsReady ? "Calendar preview is connected." : "Calendar preview is disconnected.",
+      search: { placeholder: "Search calendar events", menuActions: [], filters: [], sorts: [], canRestoreSearch: true },
+      composer: null,
+      features: { meetingBotsAvailable: previewMeetingBots.length > 0 },
+      updatedAt: new Date().toISOString(),
+    },
+    scribe: {
+      surface: "scribe",
+      label: "Scribe",
+      enabled: true,
+      ready: scribeReady,
+      requiresAgent: false,
+      requiresConnector: false,
+      requiresCredential: false,
+      reasons: [],
+      connectorIds: [],
+      credentialNames: [],
+      message: "Scribe preview is available.",
+      search: {
+        placeholder: "Search recordings, meetings, transcripts, or artifacts",
+        menuActions: [],
+        filters: [{ id: "sessionType", label: "Type", options: [{ id: "all", label: "All records" }, { id: "dictation", label: "Recordings" }, { id: "meeting", label: "Meetings" }, { id: "import", label: "Imports" }, { id: "tts", label: "TTS" }] }],
+        sorts: [],
+        canRestoreSearch: true,
+      },
+      composer: {
+        placeholder: "Speak to Scribe...",
+        multiline: true,
+        autoGrow: true,
+        maxHeightRatio: 0.5,
+        supportsAttachments: false,
+        supportsAudio: true,
+        primaryAction: { id: "start-scribe", label: "Record", enabled: true, tone: "primary" },
+        aiAction: { id: "cleanup-with-agent", label: "Draft with Agent", enabled: agentRuntimeReady, reason: agentRuntimeReady ? "" : "Connect a chat runtime first." },
+      },
+      features: { calendarLinked: eventsReady },
+      updatedAt: new Date().toISOString(),
+    },
+  };
+}
+
+function previewCallRollups(calls: PhoneCallHistoryRow[]): PhoneCallNumberRollup[] {
+  const buckets = new Map<string, PhoneCallHistoryRow[]>();
+  for (const call of calls) {
+    const key = String(call.number || call.id);
+    buckets.set(key, [...(buckets.get(key) ?? []), call]);
+  }
+  return [...buckets.entries()].map(([id, bucket]) => {
+    const sorted = [...bucket];
+    const lastCall = sorted[0] ?? bucket[0];
+    const agentNames = [...new Set(sorted.map((item) => item.agentName).filter(Boolean))];
+    const directions = [...new Set(sorted.map((item) => item.direction))];
+    const statuses = [...new Set(sorted.map((item) => item.status))];
+    return {
+      ...lastCall,
+      id,
+      lastCall,
+      calls: sorted,
+      agentNames,
+      directions,
+      statuses,
+      totalDurationSeconds: sorted.reduce((total, item) => total + Number(item.durationSeconds || 0), 0),
+      answeredCount: sorted.filter((item) => item.status === "answered").length,
+      missedCount: sorted.filter((item) => item.status === "missed").length,
+      voicemailCount: sorted.filter((item) => item.status === "voicemail").length,
+      failedCount: sorted.filter((item) => item.status === "failed").length,
+      recordingCount: sorted.filter((item) => item.recordingId || item.recordingUrl).length,
+      transcriptionCount: sorted.filter((item) => item.transcriptionId || item.transcriptionText).length,
+    };
+  });
+}
 
 const previewLinkApi: LinkDesktopApi = {
   async chat(prompt) {
@@ -2440,6 +3940,83 @@ const previewLinkApi: LinkDesktopApi = {
   async refreshTelnyxModelCatalog() {
     return previewLiteLlmRuntimeStatus();
   },
+  async getModelCenterState() {
+    return previewModelCenterState();
+  },
+  async saveProviderConfig(input) {
+    const providerId = String(input?.providerId || "");
+    if (providerId) {
+      previewProviderConfigs = {
+        ...previewProviderConfigs,
+        [providerId]: {
+          ...(previewProviderConfigs[providerId] || { enabled: false, baseUrl: "", apiKeyConfigured: false }),
+          ...(typeof input?.enabled === "boolean" ? { enabled: input.enabled } : {}),
+          ...(typeof input?.baseUrl === "string" ? { baseUrl: input.baseUrl } : {}),
+          ...(typeof input?.defaultModelId === "string" ? { defaultModelId: input.defaultModelId } : {}),
+          ...(typeof input?.apiKey === "string" ? { apiKeyConfigured: input.apiKey.trim().length > 0 } : {}),
+        },
+      };
+    }
+    return previewModelCenterState();
+  },
+  async refreshProviderModels() {
+    return previewModelCenterState();
+  },
+  async pullLocalModel() {
+    return previewModelCenterState();
+  },
+  async importLocalModel(input) {
+    if (input?.name?.trim()) {
+      previewModelRoleAssignments = { ...previewModelRoleAssignments };
+    }
+    return previewModelCenterState();
+  },
+  async removeLocalModel() {
+    return previewModelCenterState();
+  },
+  async assignModelRole(input) {
+    if (input?.roleId && input?.modelId) previewModelRoleAssignments[input.roleId] = input.modelId;
+    return previewModelCenterState();
+  },
+  async getHardwareProfile() {
+    return previewHardwareProfile();
+  },
+  async refreshFit() {
+    return previewModelCenterState();
+  },
+  async startLocalApiServer(input = {}) {
+    previewLocalApiServerStatus = {
+      ...previewLocalApiServerStatus,
+      running: true,
+      ready: true,
+      host: input.host || previewLocalApiServerStatus.host,
+      port: input.port || previewLocalApiServerStatus.port,
+      endpoint: `http://${input.host || previewLocalApiServerStatus.host}:${input.port || previewLocalApiServerStatus.port}`,
+      apiKeyConfigured: typeof input.apiKey === "string" ? input.apiKey.trim().length > 0 : previewLocalApiServerStatus.apiKeyConfigured,
+      corsEnabled: typeof input.corsEnabled === "boolean" ? input.corsEnabled : previewLocalApiServerStatus.corsEnabled,
+      exposedRoleIds: Array.isArray(input.exposedRoleIds) ? input.exposedRoleIds : previewLocalApiServerStatus.exposedRoleIds,
+      message: "Preview local API server is running.",
+      logs: [...previewLocalApiServerStatus.logs, "Started preview local API server."].slice(-20),
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    return previewModelCenterState();
+  },
+  async stopLocalApiServer() {
+    previewLocalApiServerStatus = {
+      ...previewLocalApiServerStatus,
+      running: false,
+      ready: false,
+      endpoint: "",
+      message: "Preview local API server is stopped.",
+      logs: [...previewLocalApiServerStatus.logs, "Stopped preview local API server."].slice(-20),
+      updatedAt: new Date().toISOString(),
+    };
+    return previewModelCenterState();
+  },
+  async getSurfaceManifests() {
+    return previewSurfaceManifests();
+  },
   async connectGitHubWithDeviceFlow() {
     previewCredentials = previewCredentials.map((group) => ({
       ...group,
@@ -2558,6 +4135,65 @@ const previewLinkApi: LinkDesktopApi = {
         status: "upcoming",
       },
     ];
+  },
+  async getCalendarWorkspace(input = {}) {
+    const manifests = previewSurfaceManifests();
+    const calendarEvents = await this.listGoogleCalendarEvents();
+    const query = String(input.query || "").trim().toLowerCase();
+    const visibleEvents = calendarEvents.filter((event) => !query || `${event.title} ${event.attendees} ${event.notes ?? ""}`.toLowerCase().includes(query));
+    const futureVisibleEvents = visibleEvents.filter((event) => event.status !== "past");
+    const selectedEvent = input.selectedEventId ? visibleEvents.find((event) => event.id === input.selectedEventId) ?? null : null;
+    const status = await this.getScribesStatus();
+    const selectedEventScribesSession = selectedEvent
+      ? status.sessions.find((session) => session.sessionType === "meeting" && (session.meeting.calendarEventId === selectedEvent.id || session.title === selectedEvent.title)) ?? null
+      : null;
+    return {
+      capability: manifests.events,
+      searchSchema: manifests.events.search ?? null,
+      meetingBots: await this.listMeetingBots(),
+      meetingInvites: await this.listMeetingBotInvites(),
+      calendarEvents,
+      visibleEvents,
+      futureVisibleEvents,
+      selectedEvent,
+      selectedEventScribesSession,
+      listRows: futureVisibleEvents.map((event) => ({
+        id: event.id,
+        title: event.title,
+        dateLabel: event.start ? new Date(event.start).toLocaleDateString() : event.time,
+        timeLabel: event.start ? new Date(event.start).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : event.time,
+        attendees: event.attendees,
+        joinUrl: event.meetUrl || "",
+        joinAction: { id: "join-event", label: "Join", enabled: Boolean(event.meetUrl), reason: event.meetUrl ? "" : "No meeting link is saved for this event." },
+        openAction: { id: "open-event", label: "Open", enabled: true, kind: "row" },
+      })),
+      detail: selectedEvent ? {
+        event: selectedEvent,
+        joinUrl: selectedEvent.meetUrl || "",
+        whenLabel: selectedEvent.time,
+        linkedScribes: selectedEventScribesSession ? {
+          id: selectedEventScribesSession.id,
+          title: selectedEventScribesSession.title,
+          transcriptText: selectedEventScribesSession.transcriptText || "",
+        } : null,
+        invites: (await this.listMeetingBotInvites()).filter((invite) => invite.eventId === selectedEvent.id),
+        actions: [
+          { id: "join-event", label: "Join", enabled: Boolean(selectedEvent.meetUrl), tone: "primary", reason: selectedEvent.meetUrl ? "" : "No meeting link is saved for this event." },
+          { id: "invite-bot", label: "Invite bot", enabled: previewMeetingBots.length > 0, reason: previewMeetingBots.length > 0 ? "" : "No meeting bots are available." },
+        ],
+      } : null,
+      stats: {
+        futureCount: futureVisibleEvents.length,
+        meetingBotCount: previewMeetingBots.length,
+        linkedMeetingNotes: status.sessions.filter((session) => session.meeting.calendarEventId).length,
+      },
+      emptyState: futureVisibleEvents.length === 0 ? {
+        kind: manifests.events.ready ? "empty" : "setup_required",
+        title: manifests.events.ready ? (query ? "No events found" : "No upcoming events") : "Calendar not connected",
+        body: manifests.events.ready ? (query ? "Try another search term or filter." : "Upcoming events will appear here.") : manifests.events.message,
+      } : null,
+      updatedAt: new Date().toISOString(),
+    };
   },
   async listMeetingBots() {
     return previewMeetingBots;
@@ -2752,10 +4388,78 @@ const previewLinkApi: LinkDesktopApi = {
       bcc: Array.isArray(input.bcc) ? input.bcc.join(",") : input.bcc,
       subject: input.subject,
       body: input.body,
-      updatedAt: new Date().toISOString(),
+	      updatedAt: new Date().toISOString(),
 	      url: input.threadId ? `https://mail.google.com/mail/u/0/#inbox/${input.threadId}` : "https://mail.google.com/mail/u/0/#drafts",
 	    };
 	  },
+  async setGoogleInboxReadState(input) {
+    return {
+      ok: true,
+      unread: Boolean(input.unread),
+      messageIds: Array.isArray(input.messageIds) ? input.messageIds.filter(Boolean) : [],
+    };
+  },
+  async getGoogleInboxWorkspace(input = {}) {
+    const manifests = previewSurfaceManifests();
+    const threads = await this.listGoogleInboxThreads({ query: input.query, maxResults: input.maxResults });
+    const visibleThreads = threads.filter((thread) => input.recipientFilter && input.recipientFilter !== "all" ? (thread.recipientType || "group") === input.recipientFilter : true);
+    const selectedThread = input.selectedThreadId && !input.creatingNewDraft ? await this.getGoogleInboxThread({ threadId: input.selectedThreadId }) : null;
+    const recipientCounts = threads.reduce((counts, thread) => {
+      const type = thread.recipientType === "direct" ? "direct" : "group";
+      counts[type] += 1;
+      return counts;
+    }, { direct: 0, group: 0 });
+    return {
+      capability: manifests.gmail,
+      searchSchema: manifests.gmail.search ?? null,
+      composerSchema: manifests.gmail.composer ?? null,
+      threads,
+      visibleThreads,
+      selectedThread,
+      selectedThreadId: input.selectedThreadId || "",
+      recipientCounts,
+      showDetail: Boolean(input.selectedThreadId || input.creatingNewDraft),
+      listRows: visibleThreads.map((thread) => ({
+        id: thread.threadId,
+        threadId: thread.threadId,
+        subject: thread.subject || "(No subject)",
+        snippet: thread.snippet,
+        fromLabel: thread.from || "Unknown sender",
+        dateLabel: thread.date,
+        recipientType: thread.recipientType || "group",
+        unread: thread.unread,
+        action: { id: "open-thread", label: "Open", enabled: true, kind: "row" },
+      })),
+      detail: (input.selectedThreadId || input.creatingNewDraft) ? {
+        mode: input.creatingNewDraft ? "compose" : "thread",
+        header: {
+          title: input.creatingNewDraft ? (input.draft?.subject?.trim() || "New email") : (selectedThread?.subject || "(No subject)"),
+          subtitle: input.creatingNewDraft ? (input.draft?.to?.trim() || "Manual Gmail draft") : (selectedThread?.from || "Unknown sender"),
+          badgeLabel: input.creatingNewDraft ? "Draft" : (selectedThread?.unread ? "Unread" : "Read"),
+          badgeTone: input.creatingNewDraft ? "default" : (selectedThread?.unread ? "warning" : "success"),
+        },
+        messages: selectedThread?.messages || [],
+        actions: [{ id: "open-in-gmail", label: "Open in Gmail", enabled: Boolean(input.savedDraft?.url || selectedThread?.url), kind: "link" }],
+        composer: {
+          to: input.draft?.to || "",
+          subject: input.draft?.subject || "",
+          body: input.draft?.body || "",
+          actions: [
+            { id: "open-draft-workflow", label: "Open draft workflow in Chat", enabled: Boolean(manifests.gmail.features?.agentRuntimeReady), kind: "menu", reason: manifests.gmail.features?.agentRuntimeReady ? "" : "Connect a chat runtime first." },
+            { id: "reset-draft", label: "Reset draft fields", enabled: true, kind: "menu" },
+            { id: "draft-with-agent", label: "Draft with Agent", enabled: Boolean(manifests.gmail.features?.agentRuntimeReady), reason: manifests.gmail.features?.agentRuntimeReady ? "" : "Connect a chat runtime first." },
+            { id: "save-gmail-draft", label: input.savedDraft?.draftId ? "Update Gmail draft" : "Save Gmail draft", enabled: manifests.gmail.ready, tone: "primary", reason: manifests.gmail.ready ? "" : manifests.gmail.message },
+          ],
+        },
+      } : null,
+      emptyState: visibleThreads.length === 0 ? {
+        kind: manifests.gmail.ready ? "empty" : "setup_required",
+        title: manifests.gmail.ready ? (input.query ? "No messages found" : "No messages") : "Inbox not connected",
+        body: manifests.gmail.ready ? (input.query ? "Try another search term or filter." : "Unread inbox messages will appear here.") : manifests.gmail.message,
+      } : null,
+      updatedAt: new Date().toISOString(),
+    };
+  },
 	  async connectGoogleTasksWithGog() {
 	    previewCredentials = previewCredentials.map((group) =>
 	      group.id === "google-tasks"
@@ -2860,6 +4564,35 @@ const previewLinkApi: LinkDesktopApi = {
     };
     return previewSpeakSettings;
   },
+  async getVpnWorkspace() {
+    return previewVpnWorkspace();
+  },
+  async saveVpnSettings(input) {
+    previewVpnSettings = {
+      ...previewVpnSettings,
+      ...input,
+      managedPeerIds: input.managedPeerIds ?? previewVpnSettings.managedPeerIds,
+      updatedAt: new Date().toISOString(),
+    };
+    return previewVpnWorkspace();
+  },
+  async createVpnPeer(input) {
+    previewVpnSettings = {
+      ...previewVpnSettings,
+      selectedInterfaceId: input.wireguardInterfaceId,
+      managedPeerIds: {
+        ...previewVpnSettings.managedPeerIds,
+        [input.wireguardInterfaceId]: "preview-peer-link-mac",
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    return {
+      workspace: previewVpnWorkspace(),
+      peerId: "preview-peer-link-mac",
+      created: false,
+      message: "Preview WireGuard config is ready.",
+    };
+  },
   async getScribesStatus() {
     return {
       settings: { ...previewSpeakSettings, workspace: previewScribesWorkspace },
@@ -2870,6 +4603,122 @@ const previewLinkApi: LinkDesktopApi = {
       server: previewScribesServer,
       telnyxCloudReady: false,
       modelRoot: "~/Library/Application Support/Link/scribes/models",
+      updatedAt: new Date().toISOString(),
+    };
+  },
+  async getHarperAddonStatus(input = {}) {
+    if (input.forceRefresh) {
+      previewScribesWorkspace = {
+        ...previewScribesWorkspace,
+        addons: {
+          ...previewScribesWorkspace.addons,
+          harper: {
+            ...previewScribesWorkspace.addons.harper,
+            latestVersion: previewScribesWorkspace.addons.harper.latestVersion || "preview-latest",
+            lastCheckedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      };
+    }
+    return previewScribesWorkspace.addons.harper;
+  },
+  async installHarperAddon(input = {}) {
+    const version = input.version || "preview-latest";
+    previewScribesWorkspace = {
+      ...previewScribesWorkspace,
+      addons: {
+        ...previewScribesWorkspace.addons,
+        harper: {
+          ...previewScribesWorkspace.addons.harper,
+          installed: true,
+          enabled: input.enable !== false,
+          installState: "ready",
+          installedVersion: version,
+          latestVersion: version,
+          updateAvailable: false,
+          lastCheckedAt: new Date().toISOString(),
+          lastInstalledAt: new Date().toISOString(),
+          lastError: "",
+          download: null,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    return previewScribesWorkspace.addons.harper;
+  },
+  async removeHarperAddon() {
+    previewScribesWorkspace = {
+      ...previewScribesWorkspace,
+      addons: {
+        ...previewScribesWorkspace.addons,
+        harper: {
+          ...previewScribesWorkspace.addons.harper,
+          installed: false,
+          enabled: false,
+          installState: "not_installed",
+          installedVersion: "",
+          updateAvailable: false,
+          lastError: "",
+          download: null,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+      updatedAt: new Date().toISOString(),
+    };
+    return previewScribesWorkspace.addons.harper;
+  },
+  async reviewHarperText() {
+    return {
+      findings: [],
+      warning: "",
+      checkedAt: new Date().toISOString(),
+    };
+  },
+  async polishHarperText(input) {
+    return {
+      findings: [],
+      appliedFindings: [],
+      warning: "",
+      text: String(input?.text || ""),
+      checkedAt: new Date().toISOString(),
+    };
+  },
+  async getScribesWorkspaceView(input = {}) {
+    const manifests = previewSurfaceManifests();
+    const status = await this.getScribesStatus();
+    const query = String(input.query || "").trim().toLowerCase();
+    const typeFilter = input.typeFilter || "all";
+    const calendarEvents = await this.listGoogleCalendarEvents().catch(() => []);
+    const filteredSessions = status.sessions.filter((session) => {
+      if (typeFilter !== "all" && session.sessionType !== typeFilter) return false;
+      if (!query) return true;
+      return `${session.title} ${session.transcriptText} ${session.provider} ${session.model}`.toLowerCase().includes(query);
+    });
+    return {
+      capability: manifests.scribe,
+      searchSchema: manifests.scribe.search ?? null,
+      composerSchema: manifests.scribe.composer ?? null,
+      status,
+      calendarEvents,
+      filteredSessions,
+      meetingSessions: status.sessions.filter((session) => session.sessionType === "meeting"),
+      linkedMeetingCount: status.sessions.filter((session) => session.meeting.calendarEventId).length,
+      rows: filteredSessions.map((session) => ({
+        id: session.id,
+        title: session.title,
+        typeLabel: session.sessionType,
+        detail: session.artifacts[0]?.path || "",
+        updatedLabel: session.updatedAt,
+        actions: [{ id: "summary", label: "Summary", enabled: true }, { id: "actions", label: "Actions", enabled: true }, { id: "delete", label: "Delete", enabled: true, tone: "danger" }],
+      })),
+      deepSyncAction: { id: "deep-sync-calendar", label: "Deep sync", enabled: true },
+      emptyState: filteredSessions.length === 0 ? {
+        kind: "empty",
+        title: status.sessions.length === 0 ? "No records yet" : "No matching records",
+        body: "Recordings, meetings, and transcripts will appear here.",
+      } : null,
       updatedAt: new Date().toISOString(),
     };
   },
@@ -2907,7 +4756,7 @@ const previewLinkApi: LinkDesktopApi = {
     return { modelId: input.modelId, canceled: false, updatedAt: new Date().toISOString() };
   },
   async transcribeScribesLocal() {
-    throw new Error("Scribes local transcription is only available in Link.");
+    throw new Error("Scribe local transcription is only available in Link.");
   },
   async startScribesLocalServer(input) {
     previewScribesServer = {
@@ -2918,7 +4767,7 @@ const previewLinkApi: LinkDesktopApi = {
       port: 49152,
       startedAt: previewScribesServer.startedAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      message: "Preview Scribes local STT server placeholder is running.",
+      message: "Preview Scribe local STT server placeholder is running.",
       lastError: "",
     };
     return previewScribesServer;
@@ -2932,7 +4781,7 @@ const previewLinkApi: LinkDesktopApi = {
       port: null,
       startedAt: null,
       updatedAt: new Date().toISOString(),
-      message: "Scribes local STT server is stopped in preview.",
+      message: "Scribe local STT server is stopped in preview.",
       lastError: "",
     };
     return previewScribesServer;
@@ -2966,6 +4815,10 @@ const previewLinkApi: LinkDesktopApi = {
         diarizationStatus: "disabled",
         speakerLabels: ["Speaker 1"],
         summaryStatus: "not_started",
+        calendarEventId: "",
+        calendarEventUrl: "",
+        calendarEventStart: "",
+        calendarEventEnd: "",
       },
     };
     session.artifacts = input.artifacts || [previewScribesArtifact(session, session.sessionType === "meeting" ? "meeting-notes" : "transcript")];
@@ -2976,7 +4829,7 @@ const previewLinkApi: LinkDesktopApi = {
     const id = input.id;
     const patch = "patch" in input ? input.patch : input;
     const existing = previewScribesSessions.find((session) => session.id === id);
-    if (!existing) throw new Error("Scribes session was not found.");
+    if (!existing) throw new Error("Scribe session was not found.");
     const updated = { ...existing, ...patch, id, updatedAt: new Date().toISOString() };
     previewScribesSessions = previewScribesSessions.map((session) => session.id === id ? updated : session);
     return updated;
@@ -2989,7 +4842,7 @@ const previewLinkApi: LinkDesktopApi = {
   },
   async generateScribesArtifact(input) {
     const session = previewScribesSessions.find((item) => item.id === input.sessionId);
-    if (!session) throw new Error("Scribes session was not found.");
+    if (!session) throw new Error("Scribe session was not found.");
     const artifact = previewScribesArtifact(session, input.kind);
     previewScribesSessions = previewScribesSessions.map((item) => item.id === session.id ? { ...item, artifacts: [artifact, ...item.artifacts], updatedAt: artifact.updatedAt } : item);
     return artifact;
@@ -2999,6 +4852,14 @@ const previewLinkApi: LinkDesktopApi = {
     previewScribesWorkspace = {
       ...previewScribesWorkspace,
       ...workspacePatch,
+      addons: {
+        ...previewScribesWorkspace.addons,
+        ...(workspacePatch.addons || {}),
+        harper: {
+          ...previewScribesWorkspace.addons.harper,
+          ...(workspacePatch.addons?.harper || {}),
+        },
+      },
       meetingCapture: {
         ...previewScribesWorkspace.meetingCapture,
         ...(workspacePatch.meetingCapture || {}),
@@ -3026,15 +4887,15 @@ const previewLinkApi: LinkDesktopApi = {
       sttMode: previewSpeakSettings.sttMode,
       sttProvider: previewSpeakSettings.sttProvider,
       providerRoute: route,
-      message: "Scribes dictation is available in Link on macOS.",
+      message: "Scribe dictation is available in Link on macOS.",
       updatedAt: new Date().toISOString(),
     };
   },
   async buildWhisper() {
-    throw new Error("Scribes dictation build is only available in Link on macOS.");
+    throw new Error("Scribe dictation build is only available in Link on macOS.");
   },
   async startWhisper() {
-    throw new Error("Scribes dictation launch is only available in Link on macOS.");
+    throw new Error("Scribe dictation launch is only available in Link on macOS.");
   },
   async stopWhisper() {
     const route = previewScribesRoute();
@@ -3054,7 +4915,7 @@ const previewLinkApi: LinkDesktopApi = {
       sttMode: previewSpeakSettings.sttMode,
       sttProvider: previewSpeakSettings.sttProvider,
       providerRoute: route,
-      message: "Scribes dictation is available in Link on macOS.",
+      message: "Scribe dictation is available in Link on macOS.",
       updatedAt: new Date().toISOString(),
     };
   },
@@ -3196,13 +5057,15 @@ const previewLinkApi: LinkDesktopApi = {
   async listChatSessions() {
     return previewChatSessions;
   },
-  async createChatSession({ workspaceId, agentName = "Link", agentType = "openclaw", title } = {}) {
+  async createChatSession({ workspaceId, agentName = "Link", agentType = "openclaw", title, modelMode } = {}) {
     const now = new Date().toISOString();
+    const requestedRouteId = previewModelRoutingRequest(modelMode).routeId || "auto/ask-before-cloud";
     const session: ChatSession = {
       id: `chat-${Date.now()}`,
       title: title?.trim() || `New ${agentType === "hermes" ? "Hermes" : "OpenClaw"} session`,
       workspaceId: workspaceId ?? "workspace-link",
       model: agentType,
+      requestedModelRouteId: requestedRouteId,
       status: "active",
       updatedAt: now,
       messages: [
@@ -3232,14 +5095,17 @@ const previewLinkApi: LinkDesktopApi = {
     previewChatSessions = sortChatSessions(previewChatSessions);
     return session;
   },
-  async sendChatMessage({ sessionId, workspaceId, content, title, systemInstruction }) {
+  async sendChatMessage({ sessionId, workspaceId, content, title, systemInstruction, modelMode }) {
     let session = previewChatSessions.find((item) => item.id === sessionId);
+    const routingRequest = previewModelRoutingRequest(modelMode);
+    const requestedRouteId = routingRequest.routeId || session?.requestedModelRouteId || "auto/ask-before-cloud";
     if (!session) {
       session = {
         id: `chat-${Date.now()}`,
         title: title?.trim().slice(0, 120) || content.slice(0, 54),
         workspaceId: workspaceId ?? "workspace-link",
         model: "live-runtime-unavailable",
+        requestedModelRouteId: requestedRouteId,
         status: "active",
         updatedAt: new Date().toISOString(),
         messages: [message("system", "You are Telnyx Link.")],
@@ -3253,6 +5119,27 @@ const previewLinkApi: LinkDesktopApi = {
       message("user", content),
       message("assistant", "No live desktop bridge or model runtime is connected.", createChatArtifacts(content)),
     ];
+    session.requestedModelRouteId = requestedRouteId;
+    session.actualModelRouteId = undefined;
+    session.modelRouting = {
+      strategy: routingRequest.fallbackRouteIds.length > 0 ? "fallback_chain" : "single",
+      requestedRouteId,
+      requestedRouteLabel: requestedRouteId,
+      requestedFallbackRouteIds: routingRequest.fallbackRouteIds,
+      finalStatus: "failed",
+      fallbackUsed: false,
+      attempts: [
+        {
+          routeId: requestedRouteId,
+          label: requestedRouteId,
+          provider: "preview",
+          dataBoundary: "local",
+          status: "failed",
+          attemptedAt: new Date().toISOString(),
+          error: "No live desktop bridge or preview runtime is connected.",
+        },
+      ],
+    };
     session.workspaceId = workspaceId ?? session.workspaceId;
     session.updatedAt = new Date().toISOString();
     return session;
@@ -3381,12 +5268,69 @@ const previewLinkApi: LinkDesktopApi = {
   },
   async listPhoneAssistants() {
     if (previewPhoneE2EEnabled()) {
-      return [{ id: "assistant-preview", name: "Preview Voice AI", status: "active" }];
+      return [{ id: "assistant-preview", name: "Preview Voice AI", description: "Preview Voice AI assistant contact.", status: "active", phoneNumber: "+15551234567" }];
     }
     return [];
   },
   async startAiAssistantOnCall() {
     return { started: true, mode: "preview" };
+  },
+  async getPhoneWorkspace(input = {}) {
+    const manifests = previewSurfaceManifests();
+    const calls = await this.listPhoneCallHistory({ maxResults: input.maxResults });
+    const callRollups = previewCallRollups(calls);
+    const filteredCallRollups = callRollups.filter((call) => {
+      const term = String(input.query || "").trim().toLowerCase();
+      return !term || `${call.contact} ${call.number} ${call.agentName}`.toLowerCase().includes(term);
+    });
+    const selectedCallDetail = input.selectedCallId ? callRollups.find((call) => call.id === input.selectedCallId) ?? null : null;
+    const previousCalls = (selectedCallDetail?.calls || []).map((call) => ({
+      id: call.id,
+      startedAt: call.startedAt || "",
+      label: call.startedAt || call.time,
+      detail: `${call.direction} · ${call.status}`,
+      agentName: call.agentName,
+      hasRecording: Boolean(call.recordingId || call.recordingUrl),
+      hasTranscript: Boolean(call.transcriptionId || call.transcriptionText),
+    }));
+    return {
+      capability: manifests.call,
+      searchSchema: manifests.call.search ?? null,
+      callRollups,
+      filteredCallRollups,
+      selectedCallDetail,
+      selectedCallRecordings: selectedCallDetail?.calls.filter((call) => call.recordingId || call.recordingUrl) || [],
+      selectedCallTranscripts: selectedCallDetail?.calls.filter((call) => call.transcriptionId || call.transcriptionText) || [],
+      previousCalls,
+      stats: {
+        visibleNumbers: filteredCallRollups.length,
+        visibleCalls: filteredCallRollups.reduce((total, rollup) => total + rollup.calls.length, 0),
+        totalNumbers: callRollups.length,
+      },
+      actions: {
+        primary: { id: "new-call", label: "New Call", enabled: manifests.call.ready, tone: "primary", reason: manifests.call.ready ? "" : manifests.call.message },
+        restoreSearch: { id: "restore-search", label: "Show search", enabled: true, kind: "menu" },
+      },
+      emptyState: filteredCallRollups.length === 0 ? {
+        kind: manifests.call.ready ? "empty" : "setup_required",
+        title: manifests.call.ready ? (input.query ? "No calls found" : "No calls yet") : "Call history is not connected",
+        body: manifests.call.ready ? (input.query ? "Try another search term or filter." : "Recent calls will appear here.") : manifests.call.message,
+      } : null,
+      previousCallsEmptyState: previousCalls.length === 0 ? {
+        kind: "empty",
+        title: "Previous calls",
+        body: input.focusNumber ? "No previous calls were found for this number yet." : "Choose a matching contact or number to see prior calls here.",
+      } : null,
+      rowViewModels: filteredCallRollups.map((call) => ({
+        id: call.id,
+        title: call.contact,
+        subtitle: `${call.number} · ${call.calls.length} ${call.calls.length === 1 ? "call" : "calls"}`,
+        status: call.status,
+        meta: `${call.recordingCount} recordings · ${call.transcriptionCount} transcripts`,
+        openAction: { id: "open-call", label: "Open", enabled: true, kind: "row" },
+      })),
+      updatedAt: new Date().toISOString(),
+    };
   },
   async listMemoryBanks() {
     return [{
@@ -4511,4 +6455,78 @@ function previewPhoneE2EEnabled(): boolean {
   } catch {
     return false;
   }
+}
+
+function previewVpnWorkspace(): VpnWorkspace {
+  const selectedInterface = previewVpnInterfaces.find((item) => item.id === previewVpnSettings.selectedInterfaceId) ?? previewVpnInterfaces[0];
+  const selectedPeerId = selectedInterface ? previewVpnSettings.managedPeerIds[selectedInterface.id] || "" : "";
+  return {
+    apiKeyConfigured: true,
+    reachable: true,
+    message: selectedInterface
+      ? "Preview VPN is connected and Link service URLs can be checked against the selected Cloud VPN."
+      : "Create a Telnyx Cloud VPN, then refresh Link.",
+    checks: [
+      { name: "Telnyx API key", ok: true, detail: "TELNYX_API_KEY is configured." },
+      { name: "Cloud VPNs", ok: previewVpnInterfaces.length > 0, detail: `${previewVpnInterfaces.length} Cloud VPNs found.` },
+      { name: "This Mac", ok: true, detail: "The preview device is already attached to the selected VPN." },
+      { name: "Tool URLs", ok: true, detail: "Publisher and gateway URLs resolve inside the selected VPN subnet." },
+    ],
+    settings: previewVpnSettings,
+    networks: previewVpnNetworks,
+    interfaces: previewVpnInterfaces,
+    peers: previewVpnPeers,
+    coverageRegions: previewVpnCoverageRegions,
+    services: [
+      {
+        id: "link-app-publisher",
+        label: "App Publisher",
+        url: "https://172.27.0.10:4300",
+        hostname: "172.27.0.10",
+        resolvedIp: "172.27.0.10",
+        match: "vpn",
+        detail: "Resolves inside the selected VPN subnet.",
+        configured: true,
+        insideSelectedVpn: true,
+      },
+      {
+        id: "link-message-gateway",
+        label: "Message Gateway",
+        url: "https://172.27.0.11:4310",
+        hostname: "172.27.0.11",
+        resolvedIp: "172.27.0.11",
+        match: "vpn",
+        detail: "Resolves inside the selected VPN subnet.",
+        configured: true,
+        insideSelectedVpn: true,
+      },
+      {
+        id: "link-skill-registry",
+        label: "Skill Registry",
+        url: "",
+        hostname: "",
+        resolvedIp: "",
+        match: "missing",
+        detail: "Not configured yet.",
+        configured: false,
+        insideSelectedVpn: false,
+      },
+      {
+        id: "mcp-proxy",
+        label: "MCP Proxy",
+        url: "https://public.example.com/mcp",
+        hostname: "public.example.com",
+        resolvedIp: "203.0.113.40",
+        match: "public",
+        detail: "Resolves outside the selected VPN subnet.",
+        configured: true,
+        insideSelectedVpn: false,
+      },
+    ],
+    deviceConnected: true,
+    deviceAddresses: ["172.27.0.3"],
+    selectedPeerId,
+    selectedPeerConfig: selectedPeerId ? previewVpnPeerConfig : "",
+    updatedAt: new Date().toISOString(),
+  };
 }
