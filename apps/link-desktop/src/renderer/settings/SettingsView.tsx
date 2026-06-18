@@ -39,13 +39,12 @@ type ActualSettingsTab =
   | "mcp-routing"
   | "diagnostics";
 
-type ModelsTab = "overview" | "installed" | "catalog" | "providers";
+type GeneralModelsTab = "general" | "installed" | "catalog" | "providers";
 
 const tabs: Array<{ id: ActualSettingsTab; label: string; icon: typeof SlidersHorizontal }> = [
   { id: "general", label: "General", icon: SlidersHorizontal },
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
   { id: "storage-privacy", label: "Storage & Privacy", icon: Shield },
-  { id: "models", label: "Models", icon: Database },
   { id: "local-engines", label: "Local Engines", icon: HardDrive },
   { id: "cloud-providers", label: "Cloud Providers", icon: Cloud },
   { id: "local-api-server", label: "Local API Server", icon: Server },
@@ -55,7 +54,7 @@ const tabs: Array<{ id: ActualSettingsTab; label: string; icon: typeof SlidersHo
 
 const legacyTabMap: Record<string, ActualSettingsTab> = {
   auth: "cloud-providers",
-  models: "models",
+  models: "general",
   plugins: "mcp-routing",
   agentmail: "diagnostics",
   contacts: "diagnostics",
@@ -70,9 +69,17 @@ const legacyTabMap: Record<string, ActualSettingsTab> = {
 };
 
 function normalizeTab(tab: string): ActualSettingsTab {
+  if (tab === "models") return "general";
   if (tabs.some((candidate) => candidate.id === tab)) return tab as ActualSettingsTab;
   return legacyTabMap[tab] || "general";
 }
+
+const generalModelTabs: Array<{ id: GeneralModelsTab; label: string; icon: typeof SlidersHorizontal }> = [
+  { id: "general", label: "General", icon: SlidersHorizontal },
+  { id: "installed", label: "Installed", icon: HardDrive },
+  { id: "catalog", label: "Catalog", icon: Database },
+  { id: "providers", label: "Providers", icon: Cloud },
+];
 
 function badgeTone(label: string) {
   if (/fits|ready|healthy|configured|running/i.test(label)) return "success";
@@ -137,7 +144,7 @@ export function SettingsView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyAction, setBusyAction] = useState("");
-  const [modelsTab, setModelsTab] = useState<ModelsTab>("overview");
+  const [generalModelsTab, setGeneralModelsTab] = useState<GeneralModelsTab>("general");
   const [catalogQuery, setCatalogQuery] = useState("");
   const [customOllamaId, setCustomOllamaId] = useState("");
   const [importName, setImportName] = useState("");
@@ -300,198 +307,74 @@ export function SettingsView({
     if (!modelCenter) return null;
     return (
       <div className="modelCenterStack">
-        <section className="modelCenterHero">
-          <div>
-            <p className="modelCenterEyebrow">Enterprise Hybrid Model Center</p>
-            <h2>Roles, engines, providers, and policy now drive routing.</h2>
-            <p>{modelCenter.message}</p>
-          </div>
-          <div className="modelCenterSummaryGrid">
-            <SummaryStat label="Installed local models" value={String(modelCenter.overview.installedCount)} />
-            <SummaryStat label="Recommended catalog entries" value={String(modelCenter.overview.recommendedCount)} />
-            <SummaryStat label="Healthy providers" value={String(modelCenter.overview.healthyProviderCount)} />
-          </div>
-        </section>
-        <div className="modelCenterGrid two">
-          {renderRolePicker("chatPrimary", modelCenter.roles.chatPrimary)}
-          {renderRolePicker("chatFallback", modelCenter.roles.chatFallback)}
+        <div className="designTabs modelCenterDesignTabs" role="tablist" aria-label="General model sections">
+          {generalModelTabs.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                className={generalModelsTab === item.id ? "selected" : ""}
+                type="button"
+                role="tab"
+                aria-selected={generalModelsTab === item.id}
+                onClick={() => setGeneralModelsTab(item.id)}
+              >
+                <Icon size={15} />
+                {item.label}
+              </button>
+            );
+          })}
         </div>
-        <section className="modelCenterCard">
-          <header className="modelCenterCardHeader">
-            <div>
-              <h3>Route Summary</h3>
-              <p>Legacy `AiModelRoute` entries now derive from these assignments.</p>
-            </div>
-            <button className="button secondary" type="button" onClick={() => void refreshModelCenter()}>
-              <RefreshCw size={14} />
-              Refresh
-            </button>
-          </header>
-          <div className="modelCenterRouteList">
-            {modelCenter.routes.map((route) => (
-              <div key={route.id} className="modelCenterRouteRow">
-                <div>
-                  <strong>{route.label}</strong>
-                  <small>{route.description}</small>
-                </div>
-                <div className="modelCenterRouteMeta">
-                  <StatusBadge>{route.dataBoundary}</StatusBadge>
-                  <code>{route.id}</code>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-    );
-  }
 
-  function formatShortcutKeys(keys: string[]) {
-    return (
-      <div className="modelCenterShortcutKeys" aria-label={keys.join(" + ")}>
-        {keys.map((key) => <kbd key={key}>{key}</kbd>)}
-      </div>
-    );
-  }
-
-  function renderShortcutsTab() {
-    const localDictationShortcut = speakSettings?.localShortcutMode === "cmd-shift-l"
-      ? ["Cmd", "Shift", "L"]
-      : ["Hold", "fn"];
-    const cloudDictationShortcut = speakSettings?.cloudShortcutMode === "cmd-shift-l"
-      ? ["Cmd", "Shift", "L"]
-      : ["Hold", "fn"];
-    const sections = [
-      {
-        title: "Application",
-        rows: [
-          { label: "Open Start", description: "Show the Get Started screen.", keys: ["Click", "Start"] },
-          { label: "Open Chat", description: "Jump to the chat workspace.", keys: ["Click", "Chat"] },
-          { label: "Open Settings", description: "Jump to desktop settings.", keys: ["Click", "Settings"] },
-        ],
-      },
-      {
-        title: "Chat",
-        rows: [
-          { label: "Send Message", description: "Send the current message from the composer.", keys: ["Enter"] },
-          { label: "New Line", description: "Insert a line break without sending.", keys: ["Shift", "Enter"] },
-        ],
-      },
-      {
-        title: "Scribe",
-        rows: [
-          {
-            label: "Local Dictation",
-            description: `Start local dictation using ${speakSettings?.localShortcutMode === "cmd-shift-l" ? "the keyboard shortcut" : "the hold shortcut"}.`,
-            keys: localDictationShortcut,
-          },
-          {
-            label: "Cloud Dictation",
-            description: `Start cloud dictation using ${speakSettings?.cloudShortcutMode === "cmd-shift-l" ? "the keyboard shortcut" : "the hold shortcut"}.`,
-            keys: cloudDictationShortcut,
-          },
-        ],
-      },
-      {
-        title: "Navigation",
-        rows: [
-          { label: "Rail Navigation", description: "Use the left rail to switch between Chat, Taskbox, Inbox, Calendar, Calls, Agents, Skills, and Apps.", keys: ["Click", "Rail"] },
-          { label: "Model Center", description: "Use the Settings rail to move between General, Shortcuts, Models, engines, providers, MCP routing, and diagnostics.", keys: ["Click", "Sections"] },
-        ],
-      },
-    ] as const;
-
-    return (
-      <div className="modelCenterStack">
-        {sections.map((section) => (
-          <section key={section.title} className="modelCenterCard">
-            <header className="modelCenterCardHeader">
+        {generalModelsTab === "general" && (
+          <div className="modelCenterStack">
+            <section className="modelCenterHero">
               <div>
-                <h3>{section.title}</h3>
-                <p>Current Link shortcuts and quick actions.</p>
+                <h2>Roles, engines, providers, and policy now drive routing.</h2>
+                <p>{modelCenter.message}</p>
               </div>
-            </header>
-            <div className="modelCenterShortcutList">
-              {section.rows.map((row) => (
-                <div key={row.label} className="modelCenterShortcutRow">
-                  <div>
-                    <strong>{row.label}</strong>
-                    <small>{row.description}</small>
-                  </div>
-                  {formatShortcutKeys([...row.keys])}
+              <div className="modelCenterSummaryGrid">
+                <SummaryStat label="Installed local models" value={String(modelCenter.overview.installedCount)} />
+                <SummaryStat label="Recommended catalog entries" value={String(modelCenter.overview.recommendedCount)} />
+                <SummaryStat label="Healthy providers" value={String(modelCenter.overview.healthyProviderCount)} />
+              </div>
+            </section>
+            <div className="modelCenterStack">
+              {renderRolePicker("chatPrimary", modelCenter.roles.chatPrimary)}
+              {renderRolePicker("chatFallback", modelCenter.roles.chatFallback)}
+              {renderRolePicker("taskRouting", modelCenter.roles.taskRouting)}
+              {renderRolePicker("agentDefault", modelCenter.roles.agentDefault)}
+            </div>
+            <section className="modelCenterCard">
+              <header className="modelCenterCardHeader">
+                <div>
+                  <h3>Route Summary</h3>
+                  <p>Legacy `AiModelRoute` entries now derive from these assignments.</p>
                 </div>
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-    );
-  }
-
-  function renderStorageTab() {
-    if (!modelCenter) return null;
-    return (
-      <div className="modelCenterGrid two">
-        <section className="modelCenterCard">
-          <header className="modelCenterCardHeader">
-            <div>
-              <h3>Storage Paths</h3>
-              <p>Local state, model imports, and LiteLLM config stay on-device.</p>
-            </div>
-            <FolderOpen size={18} />
-          </header>
-          <PathRow label="App data" value={modelCenter.storage.appDataPath} />
-          <PathRow label="Desktop state" value={modelCenter.storage.statePath} />
-          <PathRow label="LiteLLM config" value={modelCenter.storage.liteLlmConfigPath} />
-          <PathRow label="Imports" value={modelCenter.storage.importsPath} />
-          <PathRow label="Logs" value={modelCenter.storage.logsPath} />
-        </section>
-        <section className="modelCenterCard">
-          <header className="modelCenterCardHeader">
-            <div>
-              <h3>Privacy Policy</h3>
-              <p>Link keeps desktop model policy separate from ACP-hosted agents.</p>
-            </div>
-            <Shield size={18} />
-          </header>
-          <ul className="modelCenterChecklist">
-            <li>Desktop role overrides affect only local and self-hosted routing.</li>
-            <li>Task routing is isolated from the primary chat role.</li>
-            <li>Policy-hidden models are excluded from assignment pickers.</li>
-            <li>The local API server exposes only explicitly selected local roles.</li>
-          </ul>
-        </section>
-      </div>
-    );
-  }
-
-  function renderModelsTab() {
-    if (!modelCenter) return null;
-    return (
-      <div className="modelCenterStack">
-        <div className="modelCenterTabs" role="tablist" aria-label="Model Center sections">
-          {([
-            ["overview", "Overview"],
-            ["installed", "Installed"],
-            ["catalog", "Catalog"],
-            ["providers", "Providers"],
-          ] as const).map(([id, label]) => (
-            <button key={id} className={modelsTab === id ? "selected" : ""} type="button" onClick={() => setModelsTab(id)}>
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {modelsTab === "overview" && (
-          <div className="modelCenterGrid two">
-            {renderRolePicker("chatPrimary", modelCenter.roles.chatPrimary)}
-            {renderRolePicker("chatFallback", modelCenter.roles.chatFallback)}
-            {renderRolePicker("taskRouting", modelCenter.roles.taskRouting)}
-            {renderRolePicker("agentDefault", modelCenter.roles.agentDefault)}
+                <button className="button secondary" type="button" onClick={() => void refreshModelCenter()}>
+                  <RefreshCw size={14} />
+                  Refresh
+                </button>
+              </header>
+              <div className="modelCenterRouteList">
+                {modelCenter.routes.map((route) => (
+                  <div key={route.id} className="modelCenterRouteRow">
+                    <div>
+                      <strong>{route.label}</strong>
+                      <small>{route.description}</small>
+                    </div>
+                    <div className="modelCenterRouteMeta">
+                      <StatusBadge>{route.dataBoundary}</StatusBadge>
+                      <code>{route.id}</code>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
           </div>
         )}
 
-        {modelsTab === "installed" && (
+        {generalModelsTab === "installed" && (
           <section className="modelCenterCard">
             <header className="modelCenterCardHeader">
               <div>
@@ -527,7 +410,7 @@ export function SettingsView({
           </section>
         )}
 
-        {modelsTab === "catalog" && (
+        {generalModelsTab === "catalog" && (
           <section className="modelCenterCard">
             <header className="modelCenterCardHeader">
               <div>
@@ -585,14 +468,133 @@ export function SettingsView({
           </section>
         )}
 
-        {modelsTab === "providers" && renderProvidersCards(modelCenter.providers)}
+        {generalModelsTab === "providers" && renderProvidersCards(modelCenter.providers)}
+      </div>
+    );
+  }
+
+  function formatShortcutKeys(keys: string[]) {
+    return (
+      <div className="modelCenterShortcutKeys" aria-label={keys.join(" + ")}>
+        {keys.map((key) => <kbd key={key}>{key}</kbd>)}
+      </div>
+    );
+  }
+
+  function renderShortcutsTab() {
+    const localDictationShortcut = speakSettings?.localShortcutMode === "cmd-shift-l"
+      ? ["Cmd", "Shift", "L"]
+      : ["Hold", "fn"];
+    const cloudDictationShortcut = speakSettings?.cloudShortcutMode === "cmd-shift-l"
+      ? ["Cmd", "Shift", "L"]
+      : ["Hold", "fn"];
+    const sections = [
+      {
+        title: "Application",
+        rows: [
+          { label: "Open Start", description: "Show the Get Started screen.", keys: ["Click", "Start"] },
+          { label: "Open Chat", description: "Jump to the chat workspace.", keys: ["Click", "Chat"] },
+          { label: "Open Settings", description: "Jump to desktop settings.", keys: ["Click", "Settings"] },
+        ],
+      },
+      {
+        title: "Chat",
+        rows: [
+          { label: "Send Message", description: "Send the current message from the composer.", keys: ["Enter"] },
+          { label: "New Line", description: "Insert a line break without sending.", keys: ["Shift", "Enter"] },
+        ],
+      },
+      {
+        title: "Scribe",
+        rows: [
+          {
+            label: "Local Dictation",
+            description: `Start local dictation using ${speakSettings?.localShortcutMode === "cmd-shift-l" ? "the keyboard shortcut" : "the hold shortcut"}.`,
+            keys: localDictationShortcut,
+          },
+          {
+            label: "Cloud Dictation",
+            description: `Start cloud dictation using ${speakSettings?.cloudShortcutMode === "cmd-shift-l" ? "the keyboard shortcut" : "the hold shortcut"}.`,
+            keys: cloudDictationShortcut,
+          },
+        ],
+      },
+      {
+        title: "Navigation",
+        rows: [
+          { label: "Rail Navigation", description: "Use the left rail to switch between Chat, Taskbox, Inbox, Calendar, Calls, Agents, Skills, and Apps.", keys: ["Click", "Rail"] },
+          { label: "Model Center", description: "Use the Models workspace to move between General, Installed, Catalog, Providers, engines, routing, and diagnostics.", keys: ["Click", "Sections"] },
+        ],
+      },
+    ] as const;
+
+    return (
+      <div className="modelCenterStack">
+        {sections.map((section) => (
+          <section key={section.title} className="modelCenterCard">
+            <header className="modelCenterCardHeader">
+              <div>
+                <h3>{section.title}</h3>
+                <p>Current Link shortcuts and quick actions.</p>
+              </div>
+            </header>
+            <div className="modelCenterShortcutList">
+              {section.rows.map((row) => (
+                <div key={row.label} className="modelCenterShortcutRow">
+                  <div>
+                    <strong>{row.label}</strong>
+                    <small>{row.description}</small>
+                  </div>
+                  {formatShortcutKeys([...row.keys])}
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
+  function renderStorageTab() {
+    if (!modelCenter) return null;
+    return (
+      <div className="modelCenterStack">
+        <section className="modelCenterCard">
+          <header className="modelCenterCardHeader">
+            <div>
+              <h3>Storage Paths</h3>
+              <p>Local state, model imports, and LiteLLM config stay on-device.</p>
+            </div>
+            <FolderOpen size={18} />
+          </header>
+          <PathRow label="App data" value={modelCenter.storage.appDataPath} />
+          <PathRow label="Desktop state" value={modelCenter.storage.statePath} />
+          <PathRow label="LiteLLM config" value={modelCenter.storage.liteLlmConfigPath} />
+          <PathRow label="Imports" value={modelCenter.storage.importsPath} />
+          <PathRow label="Logs" value={modelCenter.storage.logsPath} />
+        </section>
+        <section className="modelCenterCard">
+          <header className="modelCenterCardHeader">
+            <div>
+              <h3>Privacy Policy</h3>
+              <p>Link keeps desktop model policy separate from ACP-hosted agents.</p>
+            </div>
+            <Shield size={18} />
+          </header>
+          <ul className="modelCenterChecklist">
+            <li>Desktop role overrides affect only local and self-hosted routing.</li>
+            <li>Task routing is isolated from the primary chat role.</li>
+            <li>Policy-hidden models are excluded from assignment pickers.</li>
+            <li>The local API server exposes only explicitly selected local roles.</li>
+          </ul>
+        </section>
       </div>
     );
   }
 
   function renderProvidersCards(providers: Array<{ definition: ProviderDefinition; config: ProviderConfig; models: CatalogModel[] }>) {
     return (
-      <div className="modelCenterGrid two">
+      <div className="modelCenterStack">
         {providers.map((provider) => {
           const draft = providerDrafts[provider.definition.id];
           return (
@@ -646,7 +648,7 @@ export function SettingsView({
   function renderLocalEnginesTab() {
     if (!modelCenter) return null;
     return (
-      <div className="modelCenterGrid two">
+      <div className="modelCenterStack">
         {modelCenter.engines.map((engine) => {
           const draft = engineDrafts[engine.id];
           return (
@@ -713,7 +715,7 @@ export function SettingsView({
   function renderLocalApiTab() {
     if (!modelCenter) return null;
     return (
-      <div className="modelCenterGrid two">
+      <div className="modelCenterStack">
         <section className="modelCenterCard">
           <header className="modelCenterCardHeader">
             <div>
@@ -722,6 +724,7 @@ export function SettingsView({
             </div>
             <StatusBadge>{modelCenter.localApiServer.running ? "Running" : "Stopped"}</StatusBadge>
           </header>
+          <div className="modelCenterSectionLabel">Server settings</div>
           <div className="modelCenterSplitFields">
             <label className="modelCenterField">
               <span>Host</span>
@@ -736,14 +739,22 @@ export function SettingsView({
             <span>API key</span>
             <input value={localApiDraft.apiKey} onChange={(event) => setLocalApiDraft((current) => ({ ...current, apiKey: event.target.value }))} placeholder={modelCenter.localApiServer.apiKeyConfigured ? "Configured. Enter a new key to rotate it." : "Set a loopback API key"} />
           </label>
-          <label className="modelCenterToggle">
-            <span>Allow CORS</span>
-            <input type="checkbox" checked={localApiDraft.corsEnabled} onChange={(event) => setLocalApiDraft((current) => ({ ...current, corsEnabled: event.target.checked }))} />
-          </label>
-          <div className="modelCenterRoleToggleList">
+
+          <div className="modelCenterSectionLabel">Access</div>
+          <div className="modelCenterOptionList">
+            <label className="modelCenterToggleRow">
+              <div>
+                <strong>Allow CORS</strong>
+                <small>Permit browser clients on this Mac to call the loopback API.</small>
+              </div>
+              <input type="checkbox" checked={localApiDraft.corsEnabled} onChange={(event) => setLocalApiDraft((current) => ({ ...current, corsEnabled: event.target.checked }))} />
+            </label>
             {(["chatPrimary", "chatFallback", "taskRouting", "agentDefault"] as const).map((roleId) => (
-              <label key={roleId} className="modelCenterToggle compact">
-                <span>{roleLabel(roleId)}</span>
+              <label key={roleId} className="modelCenterToggleRow compact">
+                <div>
+                  <strong>{roleLabel(roleId)}</strong>
+                  <small>Expose this role through the local API.</small>
+                </div>
                 <input
                   type="checkbox"
                   checked={localApiDraft.exposedRoleIds.includes(roleId)}
@@ -757,7 +768,8 @@ export function SettingsView({
               </label>
             ))}
           </div>
-          <div className="modelCenterInlineActions">
+
+          <div className="modelCenterInlineActions modelCenterPrimaryActions">
             <button className="button primary" type="button" onClick={() => void runAction("start-local-api", () => linkApi.startLocalApiServer({
               host: localApiDraft.host,
               port: Number(localApiDraft.port),
@@ -771,7 +783,8 @@ export function SettingsView({
               Stop server
             </button>
           </div>
-          <div className="modelCenterMetaGrid">
+
+          <div className="modelCenterMetaGrid modelCenterStatusGrid">
             <div>
               <strong>Endpoint</strong>
               <span>{valueOrDash(modelCenter.localApiServer.endpoint)}</span>
@@ -799,7 +812,7 @@ export function SettingsView({
   function renderMcpRoutingTab() {
     if (!modelCenter) return null;
     return (
-      <div className="modelCenterGrid two">
+      <div className="modelCenterStack">
         {renderRolePicker("taskRouting", modelCenter.roles.taskRouting)}
         {renderRolePicker("agentDefault", modelCenter.roles.agentDefault)}
         <section className="modelCenterCard">
@@ -882,7 +895,6 @@ export function SettingsView({
   const header = (
     <header className="modelCenterHeader">
       <div>
-        <p className="modelCenterEyebrow">Model Center</p>
         <h2>{tabs.find((candidate) => candidate.id === activeTab)?.label || "Settings"}</h2>
       </div>
       <div className="modelCenterHeaderMeta">
@@ -908,7 +920,6 @@ export function SettingsView({
           {activeTab === "general" && renderGeneralTab()}
           {activeTab === "shortcuts" && renderShortcutsTab()}
           {activeTab === "storage-privacy" && renderStorageTab()}
-          {activeTab === "models" && renderModelsTab()}
           {activeTab === "local-engines" && renderLocalEnginesTab()}
           {activeTab === "cloud-providers" && renderCloudProvidersTab()}
           {activeTab === "local-api-server" && renderLocalApiTab()}

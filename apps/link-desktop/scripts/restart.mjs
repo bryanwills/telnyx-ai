@@ -4,11 +4,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { macDevExecutablePath, prepareMacDevRuntime } from "./mac-dev-runtime.mjs";
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appDir = path.resolve(__dirname, "..");
-const electronBin = path.join(appDir, "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron");
+const rawElectronBin = path.join(appDir, "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron");
 const mainEntry = path.join(appDir, "src/main/main.js");
 const rendererEntry = path.join(appDir, "dist/renderer/index.html");
 const pidFile = "/tmp/telnyx-link-desktop.pid";
@@ -24,7 +25,7 @@ async function sleep(ms) {
 
 async function killExisting() {
   const { stdout } = await sh(
-    "ps aux | rg 'apps/link-desktop/node_modules/electron|Electron.app/Contents/MacOS/Electron .*apps/link-desktop|default_app.asar' | rg -v 'rg ' | awk '{print $2}'",
+    "ps aux | rg 'apps/link-desktop/node_modules/electron|Electron.app/Contents/MacOS/Electron|Link.app/Contents/MacOS/Link|default_app.asar|apps/link-desktop/src/main/main.js' | rg -v 'rg ' | awk '{print $2}'",
   ).catch(() => ({ stdout: "" }));
   const pids = stdout.split(/\s+/).filter(Boolean);
   for (const pid of pids) {
@@ -48,8 +49,8 @@ async function raiseWindow() {
   if (process.platform !== "darwin") return;
   await sh(`osascript <<'APPLESCRIPT'
 tell application "System Events"
-  if exists process "Electron" then
-    tell process "Electron"
+  if exists process "Link" then
+    tell process "Link"
       try
         set frontmost to true
       end try
@@ -65,21 +66,29 @@ tell application "System Events"
           perform action "AXRaise" of w
         end try
       end repeat
-      return {frontmost, count of windows}
+      return {"Link", frontmost, count of windows}
     end tell
-  else
-    return "No Electron process"
   end if
+  return "No Link process"
 end tell
 APPLESCRIPT`).catch(() => undefined);
 }
 
+async function resolveDesktopExecutable() {
+  if (process.platform !== "darwin") return rawElectronBin;
+  await prepareMacDevRuntime(appDir);
+  return macDevExecutablePath;
+}
+
 async function verify() {
   const { stdout } = await sh(
-    "ps aux | rg 'default_app.asar|apps/link-desktop/src/main|Electron.app/Contents/MacOS/Electron' | rg -v 'rg '",
+    "ps aux | rg 'default_app.asar|apps/link-desktop/src/main|Electron.app/Contents/MacOS/Electron|Link.app/Contents/MacOS/Link' | rg -v 'rg '",
   ).catch(() => ({ stdout: "" }));
   if (stdout.includes("default_app.asar")) {
     throw new Error("Electron default app launched instead of Link.");
+  }
+  if (stdout.includes(rawElectronBin)) {
+    throw new Error("Raw Electron.app process survived restart.");
   }
   if (!stdout.includes("apps/link-desktop/src/main")) {
     throw new Error("Link renderer process was not found.");
@@ -90,8 +99,9 @@ async function verify() {
 await fs.writeFile(logFile, "");
 await killExisting();
 const logFd = fsSync.openSync(logFile, "a");
+const desktopExecutable = await resolveDesktopExecutable();
 
-const child = spawn(electronBin, [mainEntry], {
+const child = spawn(desktopExecutable, [mainEntry], {
   cwd: appDir,
   detached: true,
   env: {

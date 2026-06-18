@@ -1,7 +1,13 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { createServer } from "vite";
+import { prepareMacDevRuntime } from "./mac-dev-runtime.mjs";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const appDir = path.resolve(__dirname, "..");
 
 loadEnvLocal();
 
@@ -14,10 +20,12 @@ const urls = server.resolvedUrls?.local ?? ["http://127.0.0.1:5173/"];
 const rendererUrl = urls[0] ?? "http://127.0.0.1:5173/";
 console.log(`Renderer: ${rendererUrl}`);
 
+const { executablePath } = await prepareMacDevRuntime(appDir);
 const electron = spawn(
-  process.platform === "win32" ? "npx.cmd" : "npx",
-  ["electron", "src/main/main.js"],
+  process.platform === "darwin" ? executablePath : (process.platform === "win32" ? "npx.cmd" : "npx"),
+  process.platform === "darwin" ? ["src/main/main.js"] : ["electron", "src/main/main.js"],
   {
+    cwd: appDir,
     stdio: "inherit",
     env: {
       ...process.env,

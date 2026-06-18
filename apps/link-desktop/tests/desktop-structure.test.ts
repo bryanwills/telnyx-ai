@@ -14,6 +14,7 @@ test("desktop package exposes expected local scripts", async () => {
     overrides: Record<string, string>;
   };
   const gogInstaller = await readFile("scripts/install-gog-cli.mjs", "utf8");
+  const whisperBundler = await readFile("scripts/install-whisper-helper.mjs", "utf8");
   const readme = await readFile("README.md", "utf8");
 
   assert.equal(pkg.productName, "Link");
@@ -22,6 +23,7 @@ test("desktop package exposes expected local scripts", async () => {
   assert.equal(pkg.repository.directory, "apps/link-desktop");
   assert.equal(pkg.scripts.dev, "node scripts/dev.mjs");
   assert.equal(pkg.scripts["bundle:gog"], "node scripts/install-gog-cli.mjs");
+  assert.equal(pkg.scripts["bundle:whisper"], "node scripts/install-whisper-helper.mjs");
   assert.equal(pkg.scripts.build, "vite build");
   assert.equal(pkg.scripts["metadata:check"], "scripts/check-service-metadata.sh");
   assert.equal(pkg.scripts.typecheck, "tsc --noEmit");
@@ -29,8 +31,11 @@ test("desktop package exposes expected local scripts", async () => {
   assert.equal(pkg.dependencies["@telnyx/link"], "file:../../tools/link");
   assert.equal(pkg.overrides.uuid, "^11.1.1");
   assert.doesNotMatch(gogInstaller, /path\.join\(binDir,\s*"gog"\)/);
+  assert.match(whisperBundler, /Telnyx Link\.app/);
+  assert.match(whisperBundler, /Package `native\/telnyx-whisper\/Telnyx Link\.app` into Link app resources/);
   assert.match(readme, /live-ready service adapters with deterministic local fallbacks/);
   assert.doesNotMatch(readme, /does not connect to production systems/);
+  assert.match(readme, /npm run bundle:whisper/);
 });
 
 test("desktop app carries PADR service metadata", async () => {
@@ -80,6 +85,28 @@ test("Electron windows follow the internal app security baseline", async () => {
   assert.match(main, /app\.setName\(appDisplayName\)/);
   assert.match(main, /app\.setAboutPanelOptions\(\{ applicationName:\s*appDisplayName \}\)/);
   assert.match(main, /app\.dock\.setIcon\(appIcon\)/);
+  assert.match(main, /new Notification\(\{\s*title,\s*body,\s*silent:\s*true,\s*\.\.\.\(icon\.isEmpty\(\) \? \{\} : \{ icon \}\),\s*\}\)\.show\(\)/);
+  assert.match(main, /import \{ app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, safeStorage, session, shell, Tray \} from "electron"/);
+  assert.match(main, /function trayIconImage\(\)/);
+  assert.match(main, /const appTrayTemplateIconPath = path\.resolve\(__dirname,\s*"\.\.\/\.\.\/public\/scribeTrayTemplate\.png"\)/);
+  assert.match(main, /createFromPath\(appTrayTemplateIconPath\)/);
+  assert.match(main, /setTemplateImage\(true\)/);
+  assert.match(main, /function buildAppTrayMenu/);
+  assert.match(main, /function canStartWhisperFromTray/);
+  assert.match(main, /new Tray\(trayIconSource\(\)\)/);
+  assert.match(main, /appTray\.setTitle\(""\)/);
+  assert.match(main, /label: "Dictation Enabled"/);
+  assert.match(main, /label: "Copy Last Transcript"/);
+  assert.match(main, /label: "Transcription Route"/);
+  assert.match(main, /label: "Shortcuts"/);
+  assert.match(main, /label: "Languages"/);
+  assert.match(main, /Dictation is unavailable right now\. Open Link to finish setup\./);
+  assert.match(main, /available: process\.platform === "darwin" && \(sourceAvailable \|\| built\)/);
+  assert.match(main, /function whisperRootCandidates\(\)/);
+  assert.match(main, /process\.env\.LINK_DESKTOP_RENDERER/);
+  assert.doesNotMatch(main, /Scribe Dictation Enabled/);
+  assert.doesNotMatch(main, /Microphone uses the current macOS default input\./);
+  assert.match(main, /await ensureAppTray\(\)/);
   assert.match(main, /const singleInstanceLock = app\.requestSingleInstanceLock\(\)/);
   assert.match(main, /if \(!singleInstanceLock\) \{\s*app\.quit\(\);\s*\}/);
   assert.match(main, /app\.on\("second-instance", \(\) => \{\s*createWindow\(\);\s*\}\)/);
@@ -133,6 +160,8 @@ test("desktop launch notes prevent duplicate Electron apps", async () => {
   const packageAgents = await readFile("AGENTS.md", "utf8");
   const bootstrap = await readFile("docs/bootstrap.md", "utf8");
   const launchScript = await readFile("../../script/build_and_run.sh", "utf8");
+  const macDevRuntime = await readFile("scripts/mac-dev-runtime.mjs", "utf8");
+  const restartScript = await readFile("scripts/restart.mjs", "utf8");
 
   assert.match(rootAgents, /Do not open additional Electron instances/);
   assert.match(packageAgents, /do not leave multiple Electron copies open/);
@@ -143,6 +172,14 @@ test("desktop launch notes prevent duplicate Electron apps", async () => {
   assert.match(launchScript, /MAIN_SCRIPT_PATTERN=/);
   assert.match(launchScript, /kill -TERM \$pids/);
   assert.match(launchScript, /kill -KILL \$remaining/);
+  assert.match(macDevRuntime, /copyIfPresent\(sourceIconPath, path\.join\(bundleResourcesPath, macDevIconName\)\)/);
+  assert.match(macDevRuntime, /copyIfPresent\(sourceIconPath, path\.join\(bundleResourcesPath, "electron\.icns"\)\)/);
+  assert.match(macDevRuntime, /setPlistValue\(infoPlistPath, "CFBundleName", "string", "Link"\)/);
+  assert.match(macDevRuntime, /setPlistValue\(infoPlistPath, "CFBundleDisplayName", "string", "Link"\)/);
+  assert.match(macDevRuntime, /setPlistValue\(infoPlistPath, "CFBundleIconFile", "string", macDevIconName\)/);
+  assert.match(restartScript, /if exists process "Link" then/);
+  assert.doesNotMatch(restartScript, /process targetName/);
+  assert.match(restartScript, /Raw Electron\.app process survived restart\./);
 });
 
 test("main-process privileged entrypoints fail closed", async () => {
@@ -427,7 +464,7 @@ test("renderer includes canonical Link pages in the primary navigation", async (
   const chatResultRowHeadStyles = styles.slice(styles.indexOf(".chatResultRowHead"), styles.indexOf(".chatSessionRows"));
   const navItemsSource = app.slice(app.indexOf("const navItems"), app.indexOf("const linkGettingStartedAgentId"));
 
-  for (const view of ["chats", "inbox", "agents", "workboard", "scribes", "drive", "phone", "calendar", "apps", "skills", "wiki"]) {
+  for (const view of ["chats", "inbox", "agents", "workboard", "scribes", "storage", "phone", "calendar", "apps", "skills", "wiki"]) {
     assert.match(app, new RegExp(`id: "${view}"`));
   }
   const navOrder = [
@@ -482,7 +519,7 @@ test("renderer includes canonical Link pages in the primary navigation", async (
   assert.match(app, /calendar:\s*\{\s*label:\s*"Calendar",\s*icon:\s*CalendarDays\s*\}/);
   assert.match(app, /workboard:\s*\{\s*label:\s*"Taskbox",\s*icon:\s*SquareCheck\s*\}/);
   assert.match(app, /scribes:\s*\{\s*label:\s*"Scribe",\s*icon:\s*ScribesWaveformIcon\s*\}/);
-  assert.match(app, /drive:\s*\{\s*label:\s*"Drive",\s*icon:\s*FolderOpen\s*\}/);
+  assert.match(app, /storage:\s*\{\s*label:\s*"Storage",\s*icon:\s*FolderOpen\s*\}/);
   assert.match(app, /apps:\s*\{\s*label:\s*"Apps",\s*icon:\s*Grid2X2Plus\s*\}/);
   assert.match(app, /skills:\s*\{\s*label:\s*"Skills",\s*icon:\s*Zap\s*\}/);
   assert.match(app, /<span className="railIconSlot"><Icon size=\{17\} \/><\/span>/);
@@ -672,7 +709,7 @@ test("Wiki owns the tools and apps catalog", async () => {
   assert.doesNotMatch(app, /setWikiSourceTab\(source\.id\)/);
   assert.match(app, /filteredApps\.map\(renderPublishedAppRow\)/);
   assert.match(app, /\.filter\(isEdgeHostedPublishedApp\)/);
-  assert.match(app, /No Team apps found/);
+  assert.match(app, /No company tools found/);
   assert.doesNotMatch(app, /No Telnyx apps found/);
   assert.match(app, /function isEdgeHostedPublishedApp\(app: LinkPublishedApp\)/);
   assert.match(app, /approvedPublishedAppHostSuffixes/);
@@ -943,7 +980,7 @@ test("onboarding is persisted, dismissible, and tied to setup steps", async () =
   assert.match(app, /onboarding:\s*\{\s*label:\s*"Get Started",\s*icon:\s*Flag\s*\}/);
   assert.match(app, /\{renderRailButton\(\{ id: "onboarding", label: "Start", icon: Flag \}\)\}/);
   assert.doesNotMatch(app, /\{renderRailButton\(\{ id: "memory", label: "Archive", icon: ArchiveIcon \}\)\}/);
-  assert.match(app, /\{renderRailButton\(\{ id: "scribes", label: "Scribe", icon: ScribesWaveformIcon \}\)\}\n\s*\{renderRailButton\(\{ id: "wiki", label: "Wiki", icon: BookOpen \}\)\}\n\s*\{renderRailButton\(\{ id: "drive", label: "Drive", icon: FolderOpen \}\)\}\n\s*\{renderRailButton\(\{ id: "settings", label: "Settings", icon: Settings \}\)\}/);
+  assert.match(app, /\{renderRailButton\(\{ id: "scribes", label: "Scribe", icon: ScribesWaveformIcon \}\)\}\n\s*\{renderRailButton\(\{ id: "wiki", label: "Docs", icon: BookOpen \}\)\}\n\s*<div className="railSecondaryGroup">[\s\S]*?\{renderRailButton\(\{ id: "storage", label: "Storage", icon: FolderOpen \}\)\}[\s\S]*?\{renderRailButton\(\{ id: "models", label: "Models", icon: ModelsIcon \}\)\}[\s\S]*?\{renderRailButton\(\{ id: "settings", label: "Settings", icon: Settings \}\)\}/);
   assert.match(app, /view === "scribes" && <ScribesView setView=\{setView\} \/>/);
   assert.match(app, /<SidebarSection title="Scribe" count=\{0\} icon=\{<ScribesWaveformIcon size=\{13\} \/>\} compact active=\{view === "scribes"\} \/>/);
   assert.match(app, /\{renderRailButton\(\{ id: "settings", label: "Settings", icon: Settings \}\)\}/);
@@ -1158,12 +1195,25 @@ test("app marketplace uses the managed Link App Publisher catalog", async () => 
   assert.match(app, /Owner squad/);
   assert.match(app, /Env schema/);
   const wikiViewSource = app.slice(app.indexOf("function WikiView"), app.indexOf("function LegacySettingsView"));
+  const settingsSectionsSource = app.slice(app.indexOf("const settingsSectionGroups"), app.indexOf("const modelCenterSectionGroups"));
   assert.doesNotMatch(wikiViewSource, /Install locally/);
   assert.doesNotMatch(app, /Publish an app for Telnyx employees/);
   assert.doesNotMatch(app, /bot-owned workflow/);
   assert.doesNotMatch(app, /Employee apps/);
   assert.doesNotMatch(wikiViewSource, /Installed locally/);
   assert.doesNotMatch(wikiViewSource, /Apps already available on this device/);
+  assert.match(app, /type ToolsWorkspaceTab = "personal" \| "company" \| "domains" \| "vpn"/);
+  assert.match(wikiViewSource, /apps:\s*\["Tools", Grid2X2Plus\]/);
+  assert.match(wikiViewSource, /role="tablist" aria-label="Tools sections"/);
+  assert.match(wikiViewSource, /\["personal", "Personal", Users\]/);
+  assert.match(wikiViewSource, /\["company", "Company", Building2\]/);
+  assert.match(wikiViewSource, /\["domains", "Domains", Globe\]/);
+  assert.match(wikiViewSource, /\["vpn", "VPN", ShieldCheck\]/);
+  assert.match(wikiViewSource, /renderEmbeddedSettingsTab\(toolsWorkspaceTab\)/);
+  assert.match(app, /function openToolsWorkspace\(nextTab: Extract<ToolsWorkspaceTab, "domains" \| "vpn">\)/);
+  assert.match(app, /if \(nextTab === "domains" \|\| nextTab === "vpn"\) \{\s*openToolsWorkspace\(nextTab\);/);
+  assert.doesNotMatch(settingsSectionsSource, /\["domains", "Domains", Globe\]/);
+  assert.doesNotMatch(settingsSectionsSource, /\["vpn", "VPN", ShieldCheck\]/);
   assert.doesNotMatch(styles, /\.marketplaceSummary/);
   assert.doesNotMatch(styles, /\.marketplacePublish/);
   assert.match(styles, /\.publisherPanel\s*{/);
@@ -1419,14 +1469,15 @@ test("settings ships the enterprise hybrid Model Center IA", async () => {
   const settings = await readFile("src/renderer/settings/SettingsView.tsx", "utf8");
 
   assert.match(app, /SettingsView as ModelCenterSettingsView/);
-  assert.match(app, /settingsTab, setSettingsTab\] = useState<SettingsTab>\("general"\)/);
+  assert.match(app, /settingsTab, setSettingsTab\] = useState<SettingsTab>\("auth"\)/);
   assert.match(app, /<ModelCenterSettingsView[\s\S]*?tab=\{settingsTab\}[\s\S]*?setTab=\{\(tab\) => setSettingsTab\(tab as SettingsTab\)\}/);
   assert.match(app, /type SettingsTab =[\s\S]*"general"[\s\S]*"shortcuts"[\s\S]*"storage-privacy"[\s\S]*"models"[\s\S]*"local-engines"[\s\S]*"cloud-providers"[\s\S]*"local-api-server"[\s\S]*"mcp-routing"[\s\S]*"diagnostics"/);
 
-  assert.match(settings, /const tabs:[\s\S]*"General"[\s\S]*"Shortcuts"[\s\S]*"Storage & Privacy"[\s\S]*"Models"[\s\S]*"Local Engines"[\s\S]*"Cloud Providers"[\s\S]*"Local API Server"[\s\S]*"MCP & Tool Routing"[\s\S]*"Diagnostics"/);
+  assert.match(settings, /const tabs:[\s\S]*"General"[\s\S]*"Shortcuts"[\s\S]*"Storage & Privacy"[\s\S]*"Local Engines"[\s\S]*"Cloud Providers"[\s\S]*"Local API Server"[\s\S]*"MCP & Tool Routing"[\s\S]*"Diagnostics"/);
   assert.match(settings, /legacyTabMap/);
+  assert.match(settings, /models:\s*"general"/);
   assert.match(settings, /shortcuts:\s*"shortcuts"/);
-  assert.match(settings, /const \[modelsTab, setModelsTab\] = useState<ModelsTab>\("overview"\)/);
+  assert.match(settings, /const \[generalModelsTab, setGeneralModelsTab\] = useState<GeneralModelsTab>\("general"\)/);
   assert.match(settings, /function renderShortcutsTab\(\)/);
   assert.match(settings, /"Application"/);
   assert.match(settings, /"Send Message"/);
@@ -1434,7 +1485,7 @@ test("settings ships the enterprise hybrid Model Center IA", async () => {
   assert.match(settings, /"Local Dictation"/);
   assert.match(settings, /modelCenterShortcutKeys/);
   assert.match(settings, /getSpeakSettings\(\)/);
-  assert.match(settings, /\["overview", "Overview"\][\s\S]*\["installed", "Installed"\][\s\S]*\["catalog", "Catalog"\][\s\S]*\["providers", "Providers"\]/);
+  assert.match(settings, /\{ id: "general", label: "General"[\s\S]*\{ id: "installed", label: "Installed"[\s\S]*\{ id: "catalog", label: "Catalog"[\s\S]*\{ id: "providers", label: "Providers"/);
   assert.match(settings, /Link Local API Server/);
   assert.match(settings, /Curated Catalog/);
   assert.match(settings, /Task routing/);
@@ -1501,7 +1552,7 @@ test("settings ships the enterprise hybrid Model Center IA", async () => {
 
   assert.match(styles, /\.modelCenterShell\s*\{/);
   assert.match(styles, /\.modelCenterRailNav button\.selected\s*\{/);
-  assert.match(styles, /\.modelCenterTabs\s*\{/);
+  assert.match(styles, /\.modelCenterDesignTabs\s*\{/);
   assert.match(styles, /\.modelCenterImportRow\s*\{/);
   assert.match(styles, /\.modelCenterLogPanel\s*\{/);
   assert.match(styles, /\.modelCenterBadge\.success\s*\{/);
@@ -2215,6 +2266,13 @@ test("chats page uses compact session table rows and a detail review page", asyn
   assert.doesNotMatch(app, /\["docs", "Docs", BookOpen\]/);
   assert.doesNotMatch(app, /\["outputs", "Outputs", FileText\]/);
   assert.doesNotMatch(app, /No docs yet/);
+  assert.match(app, /type WikiWorkspaceDocFormat = "markdown" \| "rich-text"/);
+  assert.match(app, /format: "rich-text"/);
+  assert.match(app, /aria-label="Document editor mode"/);
+  assert.match(app, /Rich text/);
+  assert.match(app, /Markdown/);
+  assert.match(app, /className="miniToggle wikiWorkspaceGrammarToggle"/);
+  assert.doesNotMatch(app, /title="Grammar check"/);
   assert.doesNotMatch(app, /No outputs yet/);
   assert.match(app, /chatReviewPane phoneContentTable/);
   assert.match(app, /className="phoneNumberTableHeader chatReviewPaneHeader"/);
@@ -2277,8 +2335,14 @@ test("chats page uses compact session table rows and a detail review page", asyn
   assert.match(styles, /\.chatSessionOpenButton\s*\{/);
   assert.match(styles, /\.chatSessionOpenButton:hover,[\s\S]*?\.chatSessionOpenButton:focus-visible,[\s\S]*?\.chatResultRow:not\(\.chatResultRowHead\):hover \.chatSessionOpenButton\s*\{[\s\S]*?color:\s*var\(--accent\)/);
   assert.match(styles, /\.chatResultRow:not\(\.chatResultRowHead\)\s*\{[\s\S]*?cursor:\s*pointer/);
-  assert.match(app, /view === "drive"/);
+  assert.match(app, /view === "storage"/);
   assert.match(app, /function DriveView/);
+  assert.match(app, /type StorageWorkspaceTab = "cloud-storage" \| "local-storage" \| "storage-paths"/);
+  assert.match(app, /\["cloud-storage", "Cloud Storage", Cloud\]/);
+  assert.match(app, /\["local-storage", "Local Storage", FolderOpen\]/);
+  assert.match(app, /\["storage-paths", "Storage Paths", FileText\]/);
+  assert.match(app, /const \[activeStorageTab, setActiveStorageTab\] = useState<StorageWorkspaceTab>\("cloud-storage"\)/);
+  assert.match(app, /<PageSectionSidebar[\s\S]*?heading="Storage"[\s\S]*?label="Storage sections"/);
   assert.match(app, /publishedApps=\{publishedApps\}/);
   assert.match(app, /publishedApps: LinkPublishedApp\[\]/);
   assert.match(app, /type DriveFolderRow = \{/);
@@ -2302,6 +2366,8 @@ test("chats page uses compact session table rows and a detail review page", asyn
   assert.match(app, /path: "~\/Link\/apps\/team\/"/);
   assert.match(app, /path: "~\/Link\/apps\/publish-intents\/"/);
   assert.match(app, /path: "~\/Link\/archive\/chats\/"/);
+  assert.match(app, /path: "~\/Link\/storage\/"/);
+  assert.match(app, /path: "~\/Link\/storage\/artifacts\/"/);
   assert.match(app, /const archivedSessionRows = useMemo<DriveArchivedSessionRow\[\]>/);
   assert.match(app, /const chatSessionRows = useMemo<DriveChatSessionRow\[\]>/);
   assert.match(app, /\.filter\(\(session\) => session\.archivedAt\)/);
@@ -2312,6 +2378,9 @@ test("chats page uses compact session table rows and a detail review page", asyn
   assert.match(app, /const \[driveQuery, setDriveQuery\] = useState\(""\)/);
   assert.match(app, /const \[currentDriveFolder, setCurrentDriveFolder\] = useState\("~\/Link\/"\)/);
   assert.match(app, /const \[driveFiltersOpen, setDriveFiltersOpen\] = useState\(false\)/);
+  assert.match(app, /const \[storageBackupStatus, setStorageBackupStatus\] = useState<StorageBackupStatus \| null>\(null\)/);
+  assert.match(app, /linkApi\.getStorageBackupStatus/);
+  assert.match(app, /linkApi\.backupStorageWorkspace/);
   assert.match(app, /Search files, agents, sessions, or archive/);
   assert.match(app, /<PageToolbar[\s\S]*?filterActive=\{driveFiltersOpen\}[\s\S]*?filterLabel=\{driveFiltersOpen \? "Hide file filters" : "Show file filters"\}/);
   assert.match(app, /role="group" aria-label="File filters"/);
@@ -2331,8 +2400,8 @@ test("chats page uses compact session table rows and a detail review page", asyn
   assert.doesNotMatch(driveViewSource, /role="columnheader">Updated<\/span>/);
   assert.doesNotMatch(driveViewSource, /driveRowOwner/);
   assert.doesNotMatch(driveViewSource, /driveRowUpdated/);
-  assert.match(app, /className="drivePathBar" aria-label="Current Drive folder"/);
-  assert.match(app, /className="driveBreadcrumbs" aria-label="Drive path"/);
+  assert.match(app, /className="drivePathBar" aria-label="Current Storage folder"/);
+  assert.match(app, /className="driveBreadcrumbs" aria-label="Storage path"/);
   assert.match(app, /const driveAtRoot = currentFolder === "~\/Link\/"/);
   assert.match(app, /\{!driveAtRoot && \(\s*<IconCircleButton[\s\S]*?className="drivePathBackButton"/);
   assert.match(app, /label="Go to parent folder"/);
@@ -2340,7 +2409,7 @@ test("chats page uses compact session table rows and a detail review page", asyn
   assert.doesNotMatch(styles, /\.driveFileRows:not\(\.bulkEditing\) \.driveFileHeaderCell\s*\{/);
   assert.doesNotMatch(styles, /\.driveFileRows\.bulkEditing \.driveFileHeaderCell\s*\{/);
   assert.match(app, /\.filter\(\(message\) => message\.role === "assistant"\)/);
-  assert.match(app, /No Drive items found/);
+  assert.match(app, /No Storage items found/);
   assert.doesNotMatch(app, /Files created by your agents will appear here/);
   assert.match(app, /icon=\{FolderOpen\}/);
   assert.match(app, /const \[driveBulkEdit, setDriveBulkEdit\] = useState\(false\)/);
@@ -2349,7 +2418,10 @@ test("chats page uses compact session table rows and a detail review page", asyn
   assert.match(app, /<BulkSelectCell[\s\S]*?active=\{driveBulkEdit\}[\s\S]*?checked=\{selectedDriveRowIds\.includes\(row\.id\)\}/);
   assert.match(app, /editLabel=\{driveBulkEdit \? "Exit bulk edit" : "Edit files"\}/);
   assert.match(app, /refreshLabel="Refresh files"[\s\S]*?onRefresh=\{refreshDriveRows\}/);
-  assert.match(app, /<div className="tableEmptyState" role="row">[\s\S]*?No Drive items found/);
+  assert.match(app, /Back up chats, artifacts, Scribe sessions, archive state, published apps, and workspace settings/);
+  assert.match(app, /Configure TELNYX_API_KEY plus TELNYX_STORAGE_BUCKET and TELNYX_STORAGE_REGION/);
+  assert.match(app, /Include encrypted credentials snapshot/);
+  assert.match(app, /<div className="tableEmptyState" role="row">[\s\S]*?No Storage items found/);
   assert.match(styles, /\.driveFileRows\s*\{[\s\S]*?flex:\s*0 0 auto/);
   assert.match(styles, /\.drivePathBar\s*\{/);
   assert.match(styles, /\.driveBreadcrumbs\s*\{/);
@@ -2405,8 +2477,8 @@ test("main process has v2 state, live-ready adapters, and Taskbox review flow", 
   const preload = await readFile("src/main/preload.cjs", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
 
-  assert.match(main, /const stateVersion = 14/);
-  assert.match(main, /saved\.version === stateVersion \|\| saved\.version === 13 \|\| saved\.version === 12 \|\| saved\.version === 11 \|\| saved\.version === 10 \|\| saved\.version === 9 \|\| saved\.version === 8 \|\| saved\.version === 7 \|\| saved\.version === 6 \|\| saved\.version === 5 \|\| saved\.version === 4/);
+  assert.match(main, /const stateVersion = 16/);
+  assert.match(main, /saved\.version === stateVersion \|\| saved\.version === 14 \|\| saved\.version === 13 \|\| saved\.version === 12 \|\| saved\.version === 11 \|\| saved\.version === 10 \|\| saved\.version === 9 \|\| saved\.version === 8 \|\| saved\.version === 7 \|\| saved\.version === 6 \|\| saved\.version === 5 \|\| saved\.version === 4/);
   assert.match(main, /const defaultAuthInternalUrl = ""/);
   assert.match(main, /const defaultHindsightUrl = ""/);
   assert.match(main, /const defaultAidaMcpUrl = ""/);
@@ -2479,15 +2551,15 @@ test("main process has v2 state, live-ready adapters, and Taskbox review flow", 
   assert.match(app, /All hosted/);
   const speakSettingsPanelSource = app.slice(app.indexOf("function SpeakSettingsPanel"), app.indexOf("function ScribesVoiceLibraryPanel"));
   const voiceLibraryPanelSource = app.slice(app.indexOf("function ScribesVoiceLibraryPanel"), app.indexOf("function CredentialGroupCards"));
-  const voiceLibraryTableSource = voiceLibraryPanelSource.slice(voiceLibraryPanelSource.indexOf("aria-label=\"Hosted TTS voices\""), voiceLibraryPanelSource.indexOf("{filteredVoices.length > 80"));
   assert.doesNotMatch(speakSettingsPanelSource, /<h3>Voices<\/h3>/);
   assert.match(voiceLibraryPanelSource, /aria-label="Voices"/);
-  assert.match(voiceLibraryPanelSource, /Load voices to browse and sample the hosted library/);
-  assert.match(voiceLibraryTableSource, /<span role="columnheader">Voice<\/span>[\s\S]*?<span role="columnheader">Language<\/span>[\s\S]*?<span role="columnheader">Gender<\/span>[\s\S]*?<span role="columnheader">Actions<\/span>/);
-  assert.doesNotMatch(voiceLibraryTableSource, /<span role="columnheader">Provider<\/span>/);
-  assert.doesNotMatch(voiceLibraryTableSource, /\{voice\.provider \|\| "telnyx"\}/);
-  assert.match(styles, /\.ttsVoiceTableHeader,[\s\S]*?\.ttsVoiceRow\s*\{[\s\S]*?grid-template-columns:\s*minmax\(260px,\s*1\.6fr\) 120px 100px minmax\(190px,\s*auto\)/);
-  assert.match(styles, /\.ttsVoiceRows \.ttsVoiceRow\s*\{[\s\S]*?padding-right:\s*calc\(12px \+ var\(--table-scrollbar-gutter-width\)\)/);
+  assert.doesNotMatch(voiceLibraryPanelSource, /Browse hosted voices, play a short sample, then save the voice for Scribe\./);
+  assert.match(voiceLibraryPanelSource, /<span>Voice<\/span>/);
+  assert.match(voiceLibraryPanelSource, /<span>Language Boost<\/span>/);
+  assert.match(voiceLibraryPanelSource, /<h4>Try It Out<\/h4>/);
+  assert.match(voiceLibraryPanelSource, /Save to Scribe/);
+  assert.match(styles, /\.ttsPlaygroundControls\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(styles, /\.ttsPlaygroundPreviewCard\s*\{[\s\S]*?border:\s*1px solid var\(--border\)/);
   assert.doesNotMatch(app, /TTS Library/);
   assert.doesNotMatch(app, /ttslibrary\.com\/voices/);
   assert.doesNotMatch(styles, /\.speakLogPreview/);
@@ -3015,6 +3087,8 @@ test("phone page links existing Telnyx numbers and keeps calling controls in the
   assert.match(softphone, /initialDialNumber/);
   assert.match(softphone, /initialDialNumberRequestId/);
   assert.match(softphone, /\}, \[initialDialNumber, initialDialNumberRequestId, isInCall\]\)/);
+  assert.match(softphone, /setStatusText\("Ready to call"\)/);
+  assert.doesNotMatch(softphone, /await connectWebRtc\(status\);/);
   assert.match(softphone, /linkSoftphoneSearchMenu/);
   assert.match(softphone, /Invite bot/);
   assert.match(softphone, /Include Bot/);
@@ -3097,6 +3171,8 @@ test("phone page links existing Telnyx numbers and keeps calling controls in the
   assert.match(phoneCallRowBlock, /min-height:\s*var\(--table-row-min-height\)/);
   assert.doesNotMatch(phoneCallRowBlock, /height:\s*100%/);
   assert.match(styles, /\.phoneCallRow\s*\{[\s\S]*?grid-template-columns:[\s\S]*?var\(--table-action-column-width\)/);
+  assert.match(styles, /\.phoneCallRow > \.bulkSelectCell\s*\{[\s\S]*?display:\s*none/);
+  assert.match(styles, /\.phoneCallsTable\.bulkEditing \.phoneCallRow > \.bulkSelectCell\s*\{[\s\S]*?display:\s*inline-flex/);
   assert.match(styles, /\.phoneCallDataTable\s*\{/);
   assert.match(styles, /\.phoneCallDataRow\s*\{/);
   assert.match(styles, /\.phoneCallHistoryTable \.phoneCallDataRow\s*\{/);

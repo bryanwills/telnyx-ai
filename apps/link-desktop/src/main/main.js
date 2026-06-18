@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, session, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, safeStorage, session, shell, Tray } from "electron";
 import { execFile, execFileSync, spawn } from "node:child_process";
 import crypto from "node:crypto";
 import { lookup as dnsLookup } from "node:dns/promises";
@@ -49,7 +49,9 @@ const sourceRepoRoot = path.resolve(__dirname, "../../../..");
 const auditLogger = new InMemoryAuditLogger();
 const runtime = new LinkRuntime({ auditLogger });
 const nativeFetch = globalThis.fetch.bind(globalThis);
-const stateVersion = 14;
+const stateVersion = 17;
+const defaultTelnyxStorageBackupPrefix = "link-desktop/backups";
+const defaultSurfaceCacheRefreshIntervalMs = 5 * 60 * 1000;
 const defaultDialerConfigId = "link-dialer";
 const legacyDialerTemplateIds = new Set(["standard", "sales", "support"]);
 const defaultAgentControlPlaneUrl = "";
@@ -124,8 +126,10 @@ const defaultPylonOAuthScope = "openid profile email offline_access";
 const defaultIntercomApiBaseUrl = "https://api.intercom.io";
 const defaultMintlifyApiBaseUrl = "https://api.mintlify.com";
 const defaultMintlifyDocsDomain = "developers.telnyx.com";
+const defaultTelnyxDocsMcpUrl = "https://developers.telnyx.com/mcp";
 const defaultAgentMailApiBaseUrl = "https://api.agentmail.to/v0";
 const defaultTelnyxApiBaseUrl = "https://api.telnyx.com";
+const defaultManagedLiteLlmBaseUrl = "http://litellm-aiswe.query.prod.telnyx.io:4000";
 const agentMailApiKeyField = "AGENTMAIL_API_KEY";
 const agentMailDomainField = "AGENTMAIL_DOMAIN";
 const telnyxVoiceConnectionIdField = "TELNYX_VOICE_CONNECTION_ID";
@@ -203,8 +207,19 @@ const defaultGooglePeopleApiBaseUrl = "https://people.googleapis.com/v1";
 const defaultGoogleOAuthTokenUrl = "https://oauth2.googleapis.com/token";
 const appDisplayName = "Link";
 const appIconPath = path.resolve(__dirname, "../../public/link-icon.png");
+const appTrayTemplateIconPath = path.resolve(__dirname, "../../public/scribeTrayTemplate.png");
 const aidaMcpUrlField = "AIDA_MCP_URL";
 const singleInstanceLock = app.requestSingleInstanceLock();
+const scribeLanguageOptions = [
+  { label: "English", value: "en-US" },
+  { label: "Auto detect", value: "auto" },
+  { label: "Spanish", value: "es-ES" },
+  { label: "French", value: "fr-FR" },
+  { label: "German", value: "de-DE" },
+  { label: "Italian", value: "it-IT" },
+  { label: "Portuguese", value: "pt-BR" },
+  { label: "Dutch", value: "nl-NL" },
+];
 
 if (!singleInstanceLock) {
   app.quit();
@@ -391,6 +406,7 @@ const customWikiSourceTypes = new Set(["github", "mcp", "okf"]);
 let connectorOverrides = {};
 let meetingBotIdentities = {};
 let meetingBotInvites = [];
+let appTray = null;
 let chatSessions = [];
 let storedCredentials = {};
 let memoryBanks = [];
@@ -410,7 +426,11 @@ let dialerState = emptyDialerState();
 let speakSettings = emptySpeakSettings();
 let vpnSettings = emptyVpnSettings();
 let scribesState = emptyScribesState();
+let storageBackupState = emptyStorageBackupState();
+let hostedAgentCacheState = emptyHostedAgentCacheState();
+let surfaceCacheState = emptySurfaceCacheState();
 let wikiSources = defaultWikiDocumentationSources();
+let surfaceCacheRefreshTimer = null;
 const harperAddonManager = createHarperAddonManager({
   app,
   fetchImpl: nativeFetch,
@@ -784,6 +804,7 @@ const credentialDefinitions = [
   { id: "aida", label: "AIDA", fields: [aidaMcpUrlField], help: "Optional AIDA MCP endpoint for self-hosted OpenClaw or Hermes runtime routes. Hosted agent routes can own this configuration server-side." },
   { id: "linear", label: "Linear", fields: ["LINEAR_API_KEY"], help: "Linear API key for issue and project lookup." },
   { id: "telnyx", label: "Telnyx", fields: ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"], help: "Telnyx API key for account, phone, messaging, and WebRTC token generation." },
+  { id: "telnyx-storage", label: "Telnyx Storage", fields: ["TELNYX_STORAGE_BUCKET", "TELNYX_STORAGE_REGION", "TELNYX_STORAGE_PREFIX"], help: "Link a Telnyx Cloud Storage bucket for desktop workspace backups. Link reuses TELNYX_API_KEY for S3-compatible upload auth." },
   { id: "telnyx-meet-bridge", label: "Telnyx Meet Bridge", fields: [telnyxVoiceConnectionIdField, telnyxMeetCallerIdField, telnyxMeetWebhookUrlField, telnyxMeetConversationRelayWsUrlField, linkMeetingAgentAdapterUrlField], help: "Runtime settings for Google Meet live joins. Telnyx Assistants can join by assistant id; generic agents require a public Conversation Relay wss:// URL and may use the Link hosted agent adapter URL." },
   { id: "agentmail", label: "AgentMail", fields: [agentMailApiKeyField, agentMailDomainField], help: "AgentMail creates one deterministic inbox per meeting bot. Link uses that email identity as the Calendar attendee." },
   { id: "github", label: "GitHub", fields: [githubUserAccessTokenField, githubAppClientIdField, "GH_TOKEN"], help: "Pair GitHub with a read-only Telnyx Link GitHub App so Link can access approved Telnyx repositories without asking users to create personal access tokens." },
@@ -903,6 +924,218 @@ function createWindow() {
   return win;
 }
 
+function trayIconImage() {
+  const icon = nativeImage.createFromPath(appTrayTemplateIconPath);
+  if (!icon.isEmpty()) {
+    icon.setTemplateImage(true);
+    return icon;
+  }
+  const fallback = nativeImage.createFromPath(appIconPath);
+  if (fallback.isEmpty()) return fallback;
+  fallback.setTemplateImage(true);
+  return fallback;
+}
+
+function trayIconSource() {
+  return fsSync.existsSync(appTrayTemplateIconPath) ? appTrayTemplateIconPath : trayIconImage();
+}
+
+function showTrayNotification(body, title = appDisplayName) {
+  if (!body || !Notification.isSupported()) return;
+  const icon = nativeImage.createFromPath(appIconPath);
+  new Notification({
+    title,
+    body,
+    silent: true,
+    ...(icon.isEmpty() ? {} : { icon }),
+  }).show();
+}
+
+function showTrayActionError(action, error) {
+  const message = `${action} failed: ${errorMessage(error)}`;
+  appendWhisperLog(message);
+  showTrayNotification(message);
+}
+
+function currentTrayShortcutKey(settings) {
+  return settings.sttMode === "telnyx-cloud" ? "cloudShortcutMode" : "localShortcutMode";
+}
+
+async function saveTraySpeakSettings(patch) {
+  await saveSpeakSettings(patch);
+  await refreshAppTrayMenu();
+}
+
+async function copyLatestTranscriptToClipboard() {
+  const recentDictation = getRecentDictationSummary();
+  const transcript = String(recentDictation.transcript || "").trim();
+  if (!transcript) {
+    showTrayNotification("No recent transcript found yet.");
+    return;
+  }
+  clipboard.writeText(transcript);
+  showTrayNotification("Last transcript copied to your clipboard.");
+}
+
+function canStartWhisperFromTray({ settings, whisperStatus }) {
+  if (!settings.whisperEnabled || !whisperStatus.available) return false;
+  if (whisperStatus.sttMode === "local") return Boolean(whisperStatus.localReady);
+  if (whisperStatus.sttMode === "telnyx-cloud") return Boolean(whisperStatus.apiKeyReady);
+  return false;
+}
+
+function trayWhisperAlertLabel({ settings, whisperStatus }) {
+  if (process.platform !== "darwin") return "Dictation is only available on macOS.";
+  if (!settings.whisperEnabled || whisperStatus.running) return "";
+  if (whisperStatus.sttMode === "local" && !whisperStatus.localReady) {
+    return whisperStatus.message || "Open Link to finish local dictation setup.";
+  }
+  if (whisperStatus.sttMode === "telnyx-cloud" && !whisperStatus.apiKeyReady) {
+    return "Add your Telnyx API key in Settings before starting Telnyx Cloud dictation.";
+  }
+  if (!whisperStatus.available) {
+    return whisperStatus.message || "Dictation is unavailable right now. Open Link to finish setup.";
+  }
+  return "";
+}
+
+function buildAppTrayMenu({ settings, whisperStatus, recentDictation }) {
+  const transcriptReady = Boolean(String(recentDictation.transcript || "").trim());
+  const shortcutKey = currentTrayShortcutKey(settings);
+  const canStartDictation = canStartWhisperFromTray({ settings, whisperStatus });
+  const alertLabel = trayWhisperAlertLabel({ settings, whisperStatus });
+  const menuItems = [
+    { label: "Open Link", click: () => createWindow() },
+    { type: "separator" },
+    {
+      label: "Dictation Enabled",
+      type: "checkbox",
+      checked: settings.whisperEnabled,
+      click: () => {
+        void saveTraySpeakSettings({ whisperEnabled: !settings.whisperEnabled }).catch((error) => {
+          showTrayActionError("Updating dictation setting", error);
+        });
+      },
+    },
+    {
+      label: whisperStatus.running ? "Stop Dictation" : "Start Dictation",
+      enabled: whisperStatus.running || canStartDictation,
+      click: () => {
+        const action = whisperStatus.running ? stopWhisperHelper : startWhisperHelper;
+        void action()
+          .then(() => refreshAppTrayMenu())
+          .catch((error) => showTrayActionError(whisperStatus.running ? "Stopping dictation" : "Starting dictation", error));
+      },
+    },
+    {
+      label: "Transcription Route",
+      submenu: [
+        {
+          label: "Local on this Mac",
+          type: "radio",
+          checked: settings.sttMode === "local",
+          click: () => {
+            void saveTraySpeakSettings({ sttMode: "local", sttProvider: "openai-whisper" }).catch((error) => {
+              showTrayActionError("Switching to local dictation", error);
+            });
+          },
+        },
+        {
+          label: "Telnyx Cloud",
+          type: "radio",
+          checked: settings.sttMode === "telnyx-cloud",
+          click: () => {
+            void saveTraySpeakSettings({ sttMode: "telnyx-cloud", sttProvider: "telnyx" }).catch((error) => {
+              showTrayActionError("Switching to cloud dictation", error);
+            });
+          },
+        },
+      ],
+    },
+    {
+      label: "Shortcuts",
+      submenu: [
+        {
+          label: "Hold fn",
+          type: "radio",
+          checked: settings[shortcutKey] === "hold-fn",
+          click: () => {
+            void saveTraySpeakSettings({ [shortcutKey]: "hold-fn" }).catch((error) => {
+              showTrayActionError("Updating dictation shortcut", error);
+            });
+          },
+        },
+        {
+          label: "Cmd+Shift+L",
+          type: "radio",
+          checked: settings[shortcutKey] === "cmd-shift-l",
+          click: () => {
+            void saveTraySpeakSettings({ [shortcutKey]: "cmd-shift-l" }).catch((error) => {
+              showTrayActionError("Updating dictation shortcut", error);
+            });
+          },
+        },
+      ],
+    },
+    {
+      label: "Languages",
+      submenu: scribeLanguageOptions.map((option) => ({
+        label: option.label,
+        type: "radio",
+        checked: settings.sttLanguage === option.value,
+        click: () => {
+          void saveTraySpeakSettings({ sttLanguage: option.value }).catch((error) => {
+            showTrayActionError("Updating dictation language", error);
+          });
+        },
+      })),
+    },
+  ];
+
+  if (transcriptReady) {
+    menuItems.splice(4, 0, {
+      label: "Copy Last Transcript",
+      click: () => {
+        void copyLatestTranscriptToClipboard().catch((error) => showTrayActionError("Copying transcript", error));
+      },
+    });
+  }
+
+  if (alertLabel) {
+    menuItems.push({ type: "separator" }, { label: alertLabel, enabled: false });
+  }
+
+  menuItems.push({ type: "separator" }, { role: "quit", label: "Quit Link" });
+  return Menu.buildFromTemplate(menuItems);
+}
+
+async function refreshAppTrayMenu() {
+  if (!appTray) return;
+  const settings = getSpeakSettings();
+  const whisperStatus = getWhisperStatus();
+  const recentDictation = getRecentDictationSummary();
+  const icon = trayIconSource();
+  appTray.setImage(icon);
+  if (process.platform === "darwin") appTray.setPressedImage(icon);
+  appTray.setTitle("");
+  appTray.setContextMenu(buildAppTrayMenu({ settings, whisperStatus, recentDictation }));
+  appTray.setToolTip(whisperStatus.running ? `${appDisplayName} · ${settings.shortcutLabel} active` : appDisplayName);
+}
+
+async function ensureAppTray() {
+  if (process.platform !== "darwin" || appTray) return;
+  appTray = new Tray(trayIconSource());
+  appTray.setTitle("");
+  appTray.setToolTip(appDisplayName);
+  appTray.on("double-click", () => {
+    createWindow();
+  });
+  appTray.on("click", () => {
+    if (process.platform === "darwin") appTray?.popUpContextMenu();
+  });
+  await refreshAppTrayMenu();
+}
+
 function restoreAndFocusWindow(win) {
   if (win.isMinimized()) win.restore();
   if (!win.isVisible()) win.show();
@@ -920,8 +1153,10 @@ if (singleInstanceLock) app.whenReady().then(async () => {
   app.setName(appDisplayName);
   app.setAboutPanelOptions({ applicationName: appDisplayName });
   const appIcon = nativeImage.createFromPath(appIconPath);
-  if (process.platform === "darwin" && !appIcon.isEmpty()) {
-    app.dock.setIcon(appIcon);
+  if (process.platform === "darwin") {
+    app.setActivationPolicy("regular");
+    app.dock.show();
+    if (!appIcon.isEmpty()) app.dock.setIcon(appIcon);
   }
 
   await loadStoredCredentials();
@@ -929,6 +1164,8 @@ if (singleInstanceLock) app.whenReady().then(async () => {
   schedulePersistedMeetingInvites();
   configureWebPermissions();
   registerIpc();
+  startSurfaceCacheRefreshLoop();
+  await ensureAppTray();
   createWindow();
 
   app.on("activate", () => {
@@ -941,6 +1178,14 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  if (surfaceCacheRefreshTimer) {
+    clearInterval(surfaceCacheRefreshTimer);
+    surfaceCacheRefreshTimer = null;
+  }
+  if (appTray) {
+    appTray.destroy();
+    appTray = null;
+  }
   stopWhisperHelper();
   if (scribesLocalServer) scribesLocalServer.close();
   if (localApiServer) localApiServer.close();
@@ -1099,6 +1344,15 @@ function registerIpc() {
   secureIpcHandle("link:list-connectors", () => listConnectors());
   secureIpcHandle("link:list-credentials", () => listCredentials());
   secureIpcHandle("link:save-credential", (_event, input) => saveCredential(input));
+  secureIpcHandle("link:storage-backup-status", () => getStorageBackupStatus());
+  secureIpcHandle("link:storage-bucket-list", () => listTelnyxStorageBuckets());
+  secureIpcHandle("link:storage-backup-run", (_event, input) => backupWorkspaceToTelnyxStorage(input));
+  secureIpcHandle("link:local-storage-list", (_event, input) => listLocalStorageWorkspaceEntries(input));
+  secureIpcHandle("link:local-storage-create-folder", (_event, input) => createLocalStorageWorkspaceFolder(input));
+  secureIpcHandle("link:local-storage-upload-files", (_event, input) => uploadLocalStorageWorkspaceFiles(input));
+  secureIpcHandle("link:local-storage-upload-folder", (_event, input) => uploadLocalStorageWorkspaceFolder(input));
+  secureIpcHandle("link:local-storage-open-entry", (_event, input) => openLocalStorageWorkspaceEntry(input));
+  secureIpcHandle("link:desktop-path-reveal", (_event, input) => revealDesktopPath(input));
   secureIpcHandle("link:litellm-runtime-status", () => getLiteLlmRuntimeStatus());
   secureIpcHandle("link:refresh-telnyx-model-catalog", () => refreshTelnyxModelCatalog());
   secureIpcHandle("link:model-center-state", () => getModelCenterSnapshot({ force: false }));
@@ -1117,6 +1371,7 @@ function registerIpc() {
   secureIpcHandle("link:guru-connect-oauth", () => connectGuruWithOAuth());
   secureIpcHandle("link:pylon-connect-oauth", () => connectPylonWithOAuth());
   secureIpcHandle("link:pylon-create-issue", (_event, input) => createPylonIssue(input));
+  secureIpcHandle("link:submit-wiki-workspace-doc", (_event, input) => submitWikiWorkspaceDoc(input));
   secureIpcHandle("link:google-calendar-events", () => listGoogleCalendarEvents());
   secureIpcHandle("link:calendar-workspace", (_event, input) => getCalendarWorkspaceView(input));
   secureIpcHandle("link:meeting-bots", () => listMeetingBots());
@@ -2557,16 +2812,17 @@ async function runA2aDiscoveryChat({ agentId, agentSource, prompt, sessionItem }
   }
 
   const targetAgentId = String(agentId || "").trim();
-  const baseUrl = a2aDiscoveryUrl();
-  if (!baseUrl) {
-    return { ok: false, error: unconfiguredA2aDiscoveryMessage() };
-  }
   const knownAgent = await getA2aDiscoveryAgent(targetAgentId);
   if (!knownAgent) {
     return { ok: false, error: "Selected agent was not found in A2A discovery." };
   }
   if (knownAgent.available === false) {
     return { ok: false, error: `${knownAgent.displayName} is not currently available in A2A discovery.` };
+  }
+  const litellmBackedAgent = knownAgent.origin === "litellm-a2a";
+  const baseUrl = litellmBackedAgent ? managedLiteLlmBaseUrl() : a2aDiscoveryUrl();
+  if (!baseUrl) {
+    return { ok: false, error: litellmBackedAgent ? "Configure the managed LiteLLM gateway before invoking internal agents." : unconfiguredA2aDiscoveryMessage() };
   }
 
   const previousContextId = sessionItem?.a2a?.targetAgentId === targetAgentId ? sessionItem.a2a.contextId : undefined;
@@ -2594,11 +2850,15 @@ async function runA2aDiscoveryChat({ agentId, agentSource, prompt, sessionItem }
       configuration: { blocking: true },
     },
   };
-  const response = await fetch(`${baseUrl}/a2a/${encodeURIComponent(targetAgentId)}/rpc`, {
+  const endpoint = litellmBackedAgent
+    ? `${baseUrl}/a2a/${encodeURIComponent(targetAgentId)}`
+    : `${baseUrl}/a2a/${encodeURIComponent(targetAgentId)}/rpc`;
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...(litellmBackedAgent ? liteLlmAgentGatewayHeaders() : {}),
       "A2A-Version": "1.0",
       "X-A2A-Timeout": "120000",
       "X-A2A-Idempotency-Key": payload.id,
@@ -4964,8 +5224,26 @@ function localLiteLlmPort() {
   return Number.isFinite(port) && port > 0 ? port : 4000;
 }
 
+function normalizeManagedLiteLlmBaseUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    url.search = "";
+    url.hash = "";
+    url.pathname = url.pathname.replace(/\/ui\/?$/, "").replace(/\/v1\/?$/, "").replace(/\/$/, "");
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return raw.replace(/\/ui\/?$/, "").replace(/\/v1\/?$/, "").replace(/\/$/, "");
+  }
+}
+
 function managedLiteLlmBaseUrl() {
-  return (providerConfigForId("managed-gateway").baseUrl || credentialValue("LITELLM_BASE_URL") || "").replace(/\/$/, "").replace(/\/v1$/, "");
+  return normalizeManagedLiteLlmBaseUrl(
+    providerConfigForId("managed-gateway").baseUrl
+    || credentialValue("LITELLM_BASE_URL")
+    || (credentialConfigured("LITELLM_API_KEY") ? defaultManagedLiteLlmBaseUrl : ""),
+  );
 }
 
 function telnyxInferenceBaseUrl() {
@@ -5055,11 +5333,20 @@ async function searchTelnyxDocs(term, workspaceId) {
     searchIntercomHelpCenter(trimmed, workspaceId),
     searchMintlifyDocs(trimmed, workspaceId),
   ]);
-  const fallbackResults = fallbackTelnyxDocsResults(trimmed, workspaceId);
-  return [
-    ...(supportResults.length ? supportResults : fallbackResults.filter((result) => result.source === "telnyx_support")),
-    ...(developerResults.length ? developerResults : fallbackResults.filter((result) => result.source === "telnyx_developers")),
-  ];
+  return dedupeExplorerResults([
+    ...supportResults,
+    ...developerResults,
+  ]);
+}
+
+function dedupeExplorerResults(results) {
+  const seen = new Set();
+  return results.filter((result) => {
+    const key = [result.source, result.url || result.title].join("::");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 async function askKnowledgeAgent(input = {}) {
@@ -5237,6 +5524,9 @@ function normalizeIntercomExplorerResult(record, index, workspaceId) {
 }
 
 async function searchMintlifyDocs(term, workspaceId) {
+  const publicResults = await searchTelnyxDocsMcp(term, workspaceId).catch(() => []);
+  if (publicResults.length) return publicResults;
+
   const token = credentialValue("MINTLIFY_API_KEY");
   if (!token) return [];
 
@@ -5286,6 +5576,74 @@ async function searchMintlifyDocs(term, workspaceId) {
   return [];
 }
 
+async function searchTelnyxDocsMcp(term, workspaceId) {
+  const response = await fetch(telnyxDocsMcpUrl(), {
+    method: "POST",
+    headers: {
+      Accept: "application/json, text/event-stream",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method: "tools/call",
+      params: {
+        name: "search_telnyx",
+        arguments: {
+          query: term,
+        },
+      },
+    }),
+  });
+  if (!response.ok) return [];
+
+  const text = await response.text();
+  const payload = parseMaybeJson(extractMcpResponseText(text));
+  const content = Array.isArray(payload?.result?.content)
+    ? payload.result.content
+    : Array.isArray(payload?.content)
+      ? payload.content
+      : [];
+  return content
+    .map((entry, index) => normalizeTelnyxDocsMcpExplorerResult(entry, index, workspaceId))
+    .filter(Boolean);
+}
+
+function normalizeTelnyxDocsMcpExplorerResult(entry, index, workspaceId) {
+  const rawText = typeof entry?.text === "string" ? entry.text : typeof entry === "string" ? entry : "";
+  if (!rawText) return null;
+
+  const rawTitle = rawText.match(/^Title:\s*(.+)$/m)?.[1]?.trim() || "";
+  const url = rawText.match(/^Link:\s*(.+)$/m)?.[1]?.trim() || "";
+  const page = rawText.match(/^Page:\s*(.+)$/m)?.[1]?.trim() || "";
+  const content = rawText.split(/\nContent:\s*/s)[1] || rawText;
+  const heading = content.match(/^#+\s*(.+)$/m)?.[1]?.trim() || "";
+  const title = rawTitle.length > 4 ? rawTitle : heading || docsPageTitle(page) || rawTitle || "Developer Docs page";
+  const excerpt = truncateText(cleanDocText(content).replace(/^#+\s+/gm, ""));
+
+  if (!title || !excerpt) return null;
+  return {
+    id: `explorer-telnyx-docs-mcp-${slugifyId(url || page || `result-${index}`)}`,
+    title,
+    source: "telnyx_developers",
+    type: "doc",
+    permission: "allowed",
+    freshness: page ? `Docs MCP - ${docsPageTitle(page)}` : "Docs MCP",
+    excerpt,
+    workspaceId: workspaceId || "workspace-link",
+    ...(url ? { url } : {}),
+  };
+}
+
+function docsPageTitle(page) {
+  return String(page || "")
+    .split("/")
+    .filter((segment) => Boolean(segment) && segment !== "index")
+    .slice(-2)
+    .map((segment) => segment.replace(/[-_]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()))
+    .join(" / ");
+}
+
 function normalizeMintlifyExplorerResult(record, index, workspaceId, domain) {
   const doc = record.page ?? record.document ?? record;
   const id = doc.id ?? doc.url ?? doc.path ?? doc.slug ?? `mintlify-${index}`;
@@ -5324,6 +5682,10 @@ function mintlifyResultUrl(pathValue, domain) {
   return new URL(pathValue.startsWith("/") ? pathValue : `/${pathValue}`, `https://${domain}`).toString();
 }
 
+function telnyxDocsMcpUrl() {
+  return String(process.env.TELNYX_DOCS_MCP_URL || defaultTelnyxDocsMcpUrl).trim();
+}
+
 function cleanDocText(value) {
   return stripHtml(String(value ?? "").replace(/```[\s\S]*?```/g, " "));
 }
@@ -5335,7 +5697,7 @@ function truncateText(value, maxLength = 420) {
 }
 
 async function searchGuru(term, workspaceId) {
-  if (!connectorReady("guru")) return fallbackGuruSkillResults(term, workspaceId);
+  if (!connectorReady("guru")) return [];
 
   const mcpResults = await searchGuruMcp(term, workspaceId).catch(() => []);
   if (mcpResults.length) return mcpResults;
@@ -5357,10 +5719,9 @@ async function searchGuru(term, workspaceId) {
 
     const payload = await response.json();
     const records = Array.isArray(payload) ? payload : payload.results ?? payload.cards ?? payload.items ?? [];
-    const results = records.map((record, index) => normalizeGuruExplorerResult(record, index, workspaceId)).filter(Boolean);
-    return results.length ? results : fallbackGuruSkillResults(term, workspaceId);
+    return records.map((record, index) => normalizeGuruExplorerResult(record, index, workspaceId)).filter(Boolean);
   } catch {
-    return fallbackGuruSkillResults(term, workspaceId);
+    return [];
   }
 }
 
@@ -5649,6 +6010,189 @@ async function createPylonIssue(input = {}) {
     issue,
     result: raw,
   };
+}
+
+async function submitWikiWorkspaceDoc(input = {}) {
+  const sourceId = normalizeRequiredString(input.sourceId ?? input.source_id, "source_id");
+  const source = listWikiSources().find((item) => item.id === sourceId);
+  if (!source || !source.enabled) throw new Error("Choose an enabled Docs source before submitting a draft.");
+
+  const title = normalizeRequiredString(input.title, "title");
+  const content = normalizeRequiredString(input.content, "content");
+  const note = normalizeOptionalString(input.note);
+
+  if (source.type === "github") {
+    return submitWikiWorkspaceDocToGitHub(source, { title, content, note });
+  }
+  if (source.type === "pylon") {
+    return submitWikiWorkspaceDocToPylon(source, { title, content, note });
+  }
+  throw new Error(`${source.label} does not accept draft submissions from Link yet.`);
+}
+
+async function submitWikiWorkspaceDocToPylon(source, input) {
+  const issueTitle = `Docs review: ${input.title}`;
+  const result = await createPylonIssue({
+    title: issueTitle,
+    body_html: wikiWorkspaceDocPylonIssueHtml(source, input),
+    tags: ["docs-review", "link-desktop"],
+  });
+  const issue = result.issue && typeof result.issue === "object" ? result.issue : {};
+  const issueId = normalizeOptionalString(issue.id ?? issue.number ?? issue.issue_id);
+  const url = pylonIssueLink(issue) || "";
+  return {
+    status: "created",
+    target: "pylon",
+    sourceId: source.id,
+    sourceLabel: source.label,
+    title: input.title,
+    message: `Review issue created in ${source.label}.`,
+    url: url || undefined,
+    issueId: issueId || undefined,
+  };
+}
+
+async function submitWikiWorkspaceDocToGitHub(source, input) {
+  const token = githubContentToken();
+  if (!token) {
+    throw new Error("GitHub is not connected. Pair GitHub in Settings before submitting a doc draft.");
+  }
+
+  const repo = parseGitHubRepoReference(source.target);
+  const repoInfo = await githubRequest(`https://api.github.com/repos/${repo}`, token);
+  const metadata = source.metadata && typeof source.metadata === "object" ? source.metadata : {};
+  const baseBranch = normalizeOptionalString(metadata.branch) || normalizeOptionalString(repoInfo.default_branch) || "main";
+  const baseRef = await githubRequest(`https://api.github.com/repos/${repo}/git/ref/heads/${encodeURIComponent(baseBranch)}`, token);
+  const branchName = `link-doc/${slugify(input.title)}-${Date.now().toString(36).slice(-6)}`;
+  const filePath = resolveWikiWorkspaceGitHubDocPath(metadata.path, input.title);
+  const fileUrl = githubRepoContentsUrl(repo, filePath, { ref: baseBranch });
+  const existingFile = await githubRequest(fileUrl, token, { allowNotFound: true });
+  const markdown = buildWikiWorkspaceGitHubDocMarkdown(source, input);
+
+  await githubRequest(`https://api.github.com/repos/${repo}/git/refs`, token, {
+    method: "POST",
+    body: {
+      ref: `refs/heads/${branchName}`,
+      sha: baseRef?.object?.sha,
+    },
+  });
+
+  await githubRequest(githubRepoContentsUrl(repo, filePath), token, {
+    method: "PUT",
+    body: {
+      message: `docs: submit ${slugify(input.title)} draft from Link`,
+      content: Buffer.from(markdown, "utf8").toString("base64"),
+      branch: branchName,
+      ...(existingFile?.sha ? { sha: existingFile.sha } : {}),
+    },
+  });
+
+  const pr = await githubRequest(`https://api.github.com/repos/${repo}/pulls`, token, {
+    method: "POST",
+    body: {
+      title: `Docs review: ${input.title}`,
+      head: branchName,
+      base: baseBranch,
+      body: buildWikiWorkspaceGitHubPrBody(source, input, filePath),
+      draft: true,
+    },
+  });
+
+  auditLogger.record({
+    actorId: "desktop_user",
+    surface: "desktop",
+    eventType: "github.pull_request_created",
+    action: "submit_wiki_workspace_doc",
+    target: String(pr.html_url || `${repo}#${pr.number || "draft"}`),
+    metadata: {
+      repository: repo,
+      branch: branchName,
+      filePath,
+      sourceId: source.id,
+    },
+  });
+
+  return {
+    status: "created",
+    target: "github",
+    sourceId: source.id,
+    sourceLabel: source.label,
+    title: input.title,
+    message: `Draft PR opened in ${source.label}.`,
+    url: normalizeOptionalString(pr.html_url) || undefined,
+    branch: branchName,
+    path: filePath,
+    pullRequestNumber: Number.isFinite(Number(pr.number)) ? Number(pr.number) : undefined,
+  };
+}
+
+function buildWikiWorkspaceGitHubDocMarkdown(source, input) {
+  const body = normalizeRequiredString(input.content, "content").replace(/\r\n?/g, "\n").trim();
+  const lines = [];
+  if (!/^#\s+/m.test(body)) lines.push(`# ${input.title}`);
+  lines.push("> Submitted from Telnyx Link for admin review.");
+  lines.push(`> Source: ${source.label}`);
+  if (input.note) lines.push(`> Review note: ${input.note.replace(/\r\n?/g, " ").trim()}`);
+  lines.push("");
+  lines.push(body);
+  return `${lines.join("\n").trim()}\n`;
+}
+
+function buildWikiWorkspaceGitHubPrBody(source, input, filePath) {
+  const sections = [
+    "## Summary",
+    "",
+    "Submitted from the Telnyx Link Docs workspace for admin review.",
+    "",
+    `- Source: ${source.label}`,
+    `- Draft path: \`${filePath}\``,
+  ];
+  if (input.note) {
+    sections.push(`- Review note: ${input.note.replace(/\r\n?/g, " ").trim()}`);
+  }
+  sections.push("", "## Reviewer guidance", "", "Please review the draft content in the file added by this PR.");
+  return sections.join("\n");
+}
+
+function wikiWorkspaceDocPylonIssueHtml(source, input) {
+  const blocks = [
+    "<p>Submitted from the Telnyx Link Docs workspace for admin review.</p>",
+    `<p><strong>Source:</strong> ${escapeHtml(source.label)}</p>`,
+  ];
+  if (input.note) {
+    blocks.push(`<p><strong>Review note:</strong> ${escapeHtml(input.note)}</p>`);
+  }
+  blocks.push(`<h2>${escapeHtml(input.title)}</h2>`);
+  blocks.push(`<pre>${escapeHtml(input.content)}</pre>`);
+  return blocks.join("");
+}
+
+function resolveWikiWorkspaceGitHubDocPath(value, title) {
+  const normalized = normalizeOptionalString(value).replace(/^\/+|\/+$/g, "");
+  if (/\.(md|mdx)$/i.test(normalized)) return normalized;
+  const folder = normalized || "docs";
+  return `${folder}/${slugify(title)}.md`;
+}
+
+function parseGitHubRepoReference(value) {
+  const target = normalizeRequiredString(value, "target");
+  const shorthand = target.match(/^([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/);
+  if (shorthand) return shorthand[1];
+  const httpsMatch = target.match(/^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?(?:\/.*)?$/i);
+  if (httpsMatch) return httpsMatch[1];
+  const sshMatch = target.match(/^git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/i);
+  if (sshMatch) return sshMatch[1];
+  throw new Error("GitHub Docs source target must be a GitHub repository URL or owner/repo.");
+}
+
+function githubRepoContentsUrl(repo, repoPath, params = {}) {
+  const pathSegments = normalizeRequiredString(repoPath, "path")
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  const url = new URL(`https://api.github.com/repos/${repo}/contents/${pathSegments}`);
+  if (params.ref) url.searchParams.set("ref", params.ref);
+  return url.toString();
 }
 
 async function connectPylonWithOAuth() {
@@ -6027,11 +6571,10 @@ function stripHtml(value) {
 async function listAgents() {
   const internalAgents = [aidaAgent()];
   const slackAgents = mergeAgents(await listSlackBotAgents().catch(() => []));
-  const [discoveredAgents, hostedAgents, selfHostedAgents] = await Promise.all([
+  const [discoveredAgents, liteLlmAgents, hostedAgents, selfHostedAgents] = await Promise.all([
     listA2aDiscoveryAgents().catch(() => []),
-    getAgentControlPlaneAuthStatus()
-      .then((status) => (status.ready ? listHostedAgents() : []))
-      .catch(() => []),
+    listLiteLlmAgents().catch(() => []),
+    listHostedAgentsWithFallback().catch(() => []),
     listSelfHostedAgents().catch(() => []),
   ]);
 
@@ -6039,6 +6582,7 @@ async function listAgents() {
     ...internalAgents,
     ...selfHostedAgents,
     ...discoveredAgents,
+    ...liteLlmAgents,
     ...hostedAgents.map((agent) => ({
       ...agent,
       visibility: agent.type === "slack" ? "slack" : "public",
@@ -6047,6 +6591,93 @@ async function listAgents() {
     })),
     ...slackAgents,
   ]);
+}
+
+function liteLlmAgentGatewayConfigured() {
+  return Boolean(managedLiteLlmBaseUrl() && credentialValue("LITELLM_API_KEY"));
+}
+
+function liteLlmAgentGatewayHeaders() {
+  const apiKey = credentialValue("LITELLM_API_KEY");
+  if (!apiKey) throw new Error("Add LITELLM_API_KEY to load managed gateway agents.");
+  return {
+    Accept: "application/json",
+    Authorization: `Bearer ${apiKey}`,
+  };
+}
+
+function normalizeLiteLlmAgent(record, baseUrl) {
+  if (!record || typeof record !== "object") return null;
+  const id = record.agent_id ?? record.id ?? record.agent_name ?? record.name;
+  if (!id) return null;
+  const card = record.agent_card ?? record.agentCard ?? {};
+  const skills = Array.isArray(card.skills) ? card.skills : [];
+  const capabilityNames = [
+    ...skills.map((skill) => skill.name ?? skill.id).filter(Boolean),
+    ...(Array.isArray(record.tags) ? record.tags : []),
+    card.preferredTransport,
+    "a2a",
+  ].filter(Boolean);
+  const description = card.description ?? record.description ?? "Managed LiteLLM A2A agent.";
+  if (isHiddenA2aAgent({ id, name: record.agent_name ?? record.name, displayName: record.display_name ?? record.agent_name ?? record.name ?? id, description })) return null;
+  const status = String(record.status ?? (record.enabled === false ? "disabled" : "available")).toLowerCase();
+  const squad = record.team_alias
+    ?? record.team_name
+    ?? record.owner
+    ?? record.created_by
+    ?? record.team_id
+    ?? "LiteLLM";
+  return {
+    id: String(id),
+    name: String(record.agent_name ?? record.name ?? card.name ?? id),
+    displayName: String(record.display_name ?? record.agent_name ?? record.name ?? card.name ?? id),
+    description,
+    status,
+    type: String(record.agent_type ?? record.type ?? "a2a"),
+    capabilities: [...new Set(capabilityNames)].slice(0, 8),
+    visibility: record.public === true ? "public" : "internal",
+    source: "a2a-discovery",
+    squad: String(squad),
+    audience: record.public === true ? "public" : "internal",
+    origin: "litellm-a2a",
+    url: `${baseUrl}/a2a/${encodeURIComponent(String(id))}`,
+    available: status !== "disabled",
+    requiresAuthentication: true,
+    updatedAt: record.updated_at ?? record.created_at ?? "",
+  };
+}
+
+async function listLiteLlmAgents() {
+  const baseUrl = managedLiteLlmBaseUrl();
+  if (!liteLlmAgentGatewayConfigured() || !baseUrl) return [];
+
+  const response = await fetch(`${baseUrl}/v1/agents`, {
+    headers: liteLlmAgentGatewayHeaders(),
+    timeoutMs: 5000,
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`LiteLLM agents returned ${response.status} ${response.statusText}. ${detail.slice(0, 500)}`.trim());
+  }
+
+  const payload = await response.json().catch(() => []);
+  const records = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.agents)
+    ? payload.agents
+    : Array.isArray(payload?.items)
+    ? payload.items
+    : Array.isArray(payload?.data)
+    ? payload.data
+    : [];
+
+  return records
+    .map((record) => normalizeLiteLlmAgent(record, baseUrl))
+    .filter(Boolean)
+    .sort((left, right) => {
+      const squad = (left.squad ?? "").localeCompare(right.squad ?? "");
+      return squad || left.displayName.localeCompare(right.displayName);
+    });
 }
 
 async function listSelfHostedAgents() {
@@ -7457,15 +8088,16 @@ async function listAccountPhoneNumbers() {
 }
 
 async function listPhoneCallHistory(input = {}) {
-  const apiKey = requireTelnyxApiKey();
   const maxResults = clampInteger(input.maxResults, 1, 100, 50);
-  const payload = await fetchPhoneCallHistoryRecords(apiKey, maxResults);
-  return (payload.data ?? [])
-    .filter(isVoiceDetailRecord)
-    .map(normalizePhoneCallHistoryRow)
-    .filter((row) => row.id && row.number)
-    .sort((left, right) => Date.parse(right.startedAt || "") - Date.parse(left.startedAt || ""))
-    .slice(0, maxResults);
+  const preferCache = input.preferCache !== false;
+  const cached = cachedPhoneCallHistoryRows(maxResults);
+  if (preferCache && cached.length > 0) return cached;
+  try {
+    return await refreshPhoneCallHistoryCache({ maxResults });
+  } catch (error) {
+    if (cached.length > 0) return cached;
+    throw error;
+  }
 }
 
 async function fetchPhoneCallHistoryRecords(apiKey, maxResults) {
@@ -7497,6 +8129,23 @@ async function fetchPhoneCallHistoryRecords(apiKey, maxResults) {
 
   console.warn(`Telnyx call detail records returned a generic 500; showing empty call history. ${lastErrorDetail.slice(0, 500)}`);
   return { data: [] };
+}
+
+function normalizePhoneCallHistoryRows(payload, maxResults = 50) {
+  return (payload.data ?? [])
+    .filter(isVoiceDetailRecord)
+    .map(normalizePhoneCallHistoryRow)
+    .filter((row) => row.id && row.number)
+    .sort((left, right) => Date.parse(right.startedAt || "") - Date.parse(left.startedAt || ""))
+    .slice(0, maxResults);
+}
+
+async function refreshPhoneCallHistoryCache({ maxResults = 50 } = {}) {
+  const apiKey = requireTelnyxApiKey();
+  const payload = await fetchPhoneCallHistoryRecords(apiKey, maxResults);
+  const rows = normalizePhoneCallHistoryRows(payload, maxResults);
+  await savePhoneCallHistoryCache(rows);
+  return rows;
 }
 
 function isTelnyxUnexpectedDetailRecordError(detail) {
@@ -7723,6 +8372,21 @@ function telnyxApiBaseUrl() {
 }
 
 async function listA2aDiscoveryAgents() {
+  const sources = await Promise.allSettled([
+    listConfiguredA2aDiscoveryAgents(),
+    listLiteLlmAgents(),
+  ]);
+  return mergeAgents(
+    sources
+      .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
+      .sort((left, right) => {
+        const squad = (left.squad ?? "").localeCompare(right.squad ?? "");
+        return squad || left.displayName.localeCompare(right.displayName);
+      }),
+  );
+}
+
+async function listConfiguredA2aDiscoveryAgents() {
   const baseUrl = a2aDiscoveryUrl();
   if (!baseUrl) return [];
   const response = await fetch(`${baseUrl}/v1/agents`);
@@ -8219,6 +8883,7 @@ async function listTools() {
 }
 
 async function getScribesStatus() {
+  await syncHelperDictationSessions();
   const settings = getSpeakSettings();
   const models = await listScribesModels();
   const harperStatus = await harperAddonManager.getStatus({ forceRefresh: false, allowAutoUpdate: true });
@@ -8310,7 +8975,7 @@ function getScribesProviderRoute(input = {}) {
       ready,
       diagnostics: {
         ready,
-        message: ready ? "TELNYX_API_KEY is configured for Scribes Cloud STT." : "Save TELNYX_API_KEY before using Scribes Cloud STT.",
+        message: ready ? "Your Telnyx API key is ready for Telnyx Cloud dictation." : "Add your Telnyx API key in Settings before using Telnyx Cloud dictation.",
       },
       endpoint: "https://api.telnyx.com/v2/speech-to-text",
       updatedAt: new Date().toISOString(),
@@ -8459,6 +9124,39 @@ function listScribesSessions() {
   return scribesState.sessions.map((session) => ({ ...session, artifacts: session.artifacts.map((artifact) => ({ ...artifact })), segments: session.segments.map((segment) => ({ ...segment })) }));
 }
 
+function createPreparedScribesSession(input = {}) {
+  const now = new Date().toISOString();
+  const settings = getSpeakSettings();
+  const normalized = normalizeScribesSession({
+    provider: settings.sttProvider,
+    model: settings.sttModel,
+    mode: settings.sttMode,
+    language: settings.sttLanguage,
+    retainedAudio: scribesState.settings.retainAudio,
+    cleanupProfileId: scribesState.settings.activeCleanupProfileId,
+    ...input,
+    createdAt: input.createdAt || now,
+    updatedAt: input.updatedAt || now,
+  });
+  if (!normalized) throw new Error("Scribes session input is invalid.");
+  if (normalized.segments.length === 0 && normalized.transcriptText) {
+    normalized.segments = [{
+      id: `segment-${crypto.randomUUID()}`,
+      speaker: normalized.sessionType === "meeting" ? "Speaker 1" : "Dictation",
+      text: normalized.transcriptText,
+      startMs: 0,
+      endMs: normalized.durationMs,
+      confidence: 1,
+      channel: normalized.sessionType === "meeting" ? "mixed" : "mic",
+    }];
+    normalized.meeting = normalizeScribesMeetingState(normalized.meeting, normalized.segments);
+  }
+  if (normalized.artifacts.length === 0) {
+    normalized.artifacts = [makeScribesArtifact(normalized, normalized.sessionType === "meeting" ? "meeting-notes" : "transcript")];
+  }
+  return normalized;
+}
+
 async function saveScribesSettings(input = {}) {
   const value = input && typeof input === "object" ? input : {};
   const workspacePatch = value.workspace && typeof value.workspace === "object" ? value.workspace : value;
@@ -8499,39 +9197,16 @@ async function saveScribesSettings(input = {}) {
     updatedAt: new Date().toISOString(),
   });
   await saveDesktopState();
-  return { ...getSpeakSettings(), workspace: scribesState.settings };
+  const result = { ...getSpeakSettings(), workspace: scribesState.settings };
+  void refreshAppTrayMenu();
+  return result;
 }
 
 async function createScribesSession(input = {}) {
-  const now = new Date().toISOString();
-  const settings = getSpeakSettings();
-  const normalized = normalizeScribesSession({
-    provider: settings.sttProvider,
-    model: settings.sttModel,
-    mode: settings.sttMode,
-    language: settings.sttLanguage,
-    retainedAudio: scribesState.settings.retainAudio,
-    cleanupProfileId: scribesState.settings.activeCleanupProfileId,
+  const normalized = createPreparedScribesSession({
     ...input,
-    createdAt: input.createdAt || now,
-    updatedAt: now,
+    updatedAt: new Date().toISOString(),
   });
-  if (!normalized) throw new Error("Scribes session input is invalid.");
-  if (normalized.segments.length === 0 && normalized.transcriptText) {
-    normalized.segments = [{
-      id: `segment-${crypto.randomUUID()}`,
-      speaker: normalized.sessionType === "meeting" ? "Speaker 1" : "Dictation",
-      text: normalized.transcriptText,
-      startMs: 0,
-      endMs: normalized.durationMs,
-      confidence: 1,
-      channel: normalized.sessionType === "meeting" ? "mixed" : "mic",
-    }];
-    normalized.meeting = normalizeScribesMeetingState(normalized.meeting, normalized.segments);
-  }
-  if (normalized.artifacts.length === 0) {
-    normalized.artifacts = [makeScribesArtifact(normalized, normalized.sessionType === "meeting" ? "meeting-notes" : "transcript")];
-  }
   scribesState = normalizeScribesState({
     ...scribesState,
     sessions: [normalized, ...scribesState.sessions],
@@ -8657,7 +9332,11 @@ async function transcribeScribesLocal(input = {}) {
 }
 
 async function startScribesLocalServer(input = {}) {
-  if (scribesLocalServer) return warmScribesLocalServer(Boolean(input?.warm));
+  if (scribesLocalServer) {
+    const status = await warmScribesLocalServer(Boolean(input?.warm));
+    void refreshAppTrayMenu();
+    return status;
+  }
 
   scribesLocalServerToken = crypto.randomBytes(24).toString("base64url");
   scribesLocalServerStatus = {
@@ -8705,16 +9384,21 @@ async function startScribesLocalServer(input = {}) {
       message: "Scribes local STT server is stopped.",
       lastError: "",
     };
+    void refreshAppTrayMenu();
   });
 
-  return warmScribesLocalServer(Boolean(input?.warm));
+  const status = await warmScribesLocalServer(Boolean(input?.warm));
+  void refreshAppTrayMenu();
+  return status;
 }
 
 async function stopScribesLocalServer() {
   if (!scribesLocalServer) return getScribesLocalServerStatus();
   const server = scribesLocalServer;
   await new Promise((resolve) => server.close(() => resolve()));
-  return getScribesLocalServerStatus();
+  const status = getScribesLocalServerStatus();
+  void refreshAppTrayMenu();
+  return status;
 }
 
 function getScribesLocalServerStatus() {
@@ -8725,7 +9409,11 @@ function getScribesLocalServerStatus() {
 }
 
 async function warmScribesLocalServer(warm = false) {
-  if (!warm) return getScribesLocalServerStatus();
+  if (!warm) {
+    const status = getScribesLocalServerStatus();
+    void refreshAppTrayMenu();
+    return status;
+  }
   scribesLocalServerStatus = {
     ...scribesLocalServerStatus,
     warming: true,
@@ -8741,7 +9429,9 @@ async function warmScribesLocalServer(warm = false) {
     message: route.mode === "local" ? route.diagnostics.message : "Select local STT to warm the Scribes local server.",
     lastError: route.ready ? "" : route.diagnostics.message,
   };
-  return getScribesLocalServerStatus();
+  const status = getScribesLocalServerStatus();
+  void refreshAppTrayMenu();
+  return status;
 }
 
 async function handleScribesLocalServerRequest(request, response) {
@@ -9414,6 +10104,7 @@ async function saveSpeakSettings(input = {}) {
       appendWhisperLog(`Failed to restart Scribes dictation after shortcut or language change: ${errorMessage(error)}`);
     }
   }
+  void refreshAppTrayMenu();
   return nextSettings;
 }
 
@@ -9876,10 +10567,9 @@ async function createVpnPeer(input = {}) {
 }
 
 function getWhisperStatus(extra = {}) {
-  const root = whisperRootPath();
-  const executablePath = whisperExecutablePath();
-  const sourceAvailable = fsSync.existsSync(path.join(root, "Package.swift"));
-  const built = fsSync.existsSync(executablePath);
+  const recentDictation = getRecentDictationSummary();
+  const installation = whisperInstallation();
+  const { root, appBundlePath, executablePath, sourceAvailable, bundleAvailable, built } = installation;
   const running = Boolean(whisperHelperProcess && !whisperHelperProcess.killed && whisperHelperProcess.exitCode === null);
   const apiKeyReady = credentialConfigured("TELNYX_API_KEY");
   const settings = getSpeakSettings();
@@ -9889,23 +10579,25 @@ function getWhisperStatus(extra = {}) {
   const localReady = localSelected && scribesRoute.ready;
   const providerLabel = cloudSelected ? "Telnyx Cloud" : settings.sttProvider === "nvidia-parakeet" ? "NVIDIA Parakeet" : "Local Whisper";
   const message = process.platform !== "darwin"
-    ? "Scribes dictation helper is only available on macOS."
-    : !sourceAvailable
-    ? "Scribes dictation source is not bundled with this Link build."
+    ? "Dictation is only available on macOS."
     : running
     ? `${settings.shortcutLabel} is active for ${providerLabel} dictation.`
     : localSelected && !localReady
     ? scribesRoute.diagnostics.message
-    : localReady
+    : cloudSelected && !apiKeyReady
+    ? "Add your Telnyx API key in Settings before starting Telnyx Cloud dictation."
+    : built && localReady
     ? `${providerLabel} dictation is ready. Link will manage the helper automatically.`
-    : !apiKeyReady
-    ? "Save TELNYX_API_KEY in Settings before starting Scribes cloud dictation."
     : built
     ? "Telnyx Cloud dictation is ready. Link will manage the helper automatically."
-    : "Scribe dictation will be prepared automatically when you start.";
+    : sourceAvailable
+    ? "Dictation helper will be prepared automatically when you start."
+    : bundleAvailable
+    ? "Dictation is unavailable right now. Open Link to finish setup."
+    : "Dictation is unavailable right now. Open Link to finish setup.";
 
   return {
-    available: process.platform === "darwin" && sourceAvailable,
+    available: process.platform === "darwin" && (sourceAvailable || built),
     sourceAvailable,
     built,
     running,
@@ -9918,9 +10610,12 @@ function getWhisperStatus(extra = {}) {
     providerRoute: scribesRoute,
     shortcutLabel: settings.shortcutLabel,
     helperPath: executablePath,
-    appBundlePath: whisperAppBundlePath(),
+    appBundlePath,
     lastExit: whisperLastExit,
     lastLogLines: whisperLastLogLines.slice(-8),
+    latestTranscript: recentDictation.transcript,
+    latestSessionId: recentDictation.sessionId,
+    latestSessionAt: recentDictation.timestamp,
     message,
     updatedAt: new Date().toISOString(),
     ...extra,
@@ -9928,10 +10623,12 @@ function getWhisperStatus(extra = {}) {
 }
 
 async function buildWhisperHelper() {
-  if (process.platform !== "darwin") throw new Error("Scribes dictation can only be built on macOS.");
-  const root = whisperRootPath();
-  if (!fsSync.existsSync(path.join(root, "Package.swift"))) {
-    throw new Error("Scribes dictation source is missing from apps/link-desktop/native/telnyx-whisper.");
+  if (process.platform !== "darwin") throw new Error("Dictation can only be built on macOS.");
+  const { root, sourceAvailable } = whisperInstallation();
+  if (!sourceAvailable) {
+    throw new Error(app.isPackaged
+      ? "This Link build does not include dictation source. Ship the prebuilt helper with `npm run bundle:whisper` before packaging."
+      : "Dictation source is missing from apps/link-desktop/native/telnyx-whisper.");
   }
 
   const scriptPath = path.join(root, "Scripts", "build-app.sh");
@@ -9946,11 +10643,13 @@ async function buildWhisperHelper() {
   });
   appendWhisperLog(stdout);
   appendWhisperLog(stderr);
-  return getWhisperStatus({ message: "Scribe dictation helper is ready." });
+  const status = getWhisperStatus({ message: "Dictation helper is ready." });
+  void refreshAppTrayMenu();
+  return status;
 }
 
 async function startWhisperHelper() {
-  if (process.platform !== "darwin") throw new Error("Scribes dictation can only run on macOS.");
+  if (process.platform !== "darwin") throw new Error("Dictation can only run on macOS.");
   if (whisperHelperProcess && !whisperHelperProcess.killed && whisperHelperProcess.exitCode === null) {
     return getWhisperStatus();
   }
@@ -9968,21 +10667,26 @@ async function startWhisperHelper() {
     }
   } else {
     apiKey = String(credentialValue("TELNYX_API_KEY") || "").trim();
-    if (!apiKey) throw new Error("Save TELNYX_API_KEY in Settings before starting Scribes cloud dictation.");
+    if (!apiKey) throw new Error("Add your Telnyx API key in Settings before starting Telnyx Cloud dictation.");
   }
 
-  const executablePath = whisperExecutablePath();
+  const installation = whisperInstallation();
+  const executablePath = installation.executablePath;
   if (!fsSync.existsSync(executablePath)) {
-    await buildWhisperHelper();
+    if (installation.sourceAvailable) {
+      await buildWhisperHelper();
+    } else {
+      throw new Error("Dictation is unavailable right now. Open Link to finish setup.");
+    }
   }
   if (!fsSync.existsSync(executablePath)) {
-    throw new Error("Scribes dictation built successfully but the app executable was not found.");
+    throw new Error("Dictation helper build completed, but the app executable was not found.");
   }
 
   whisperLastExit = null;
   whisperLastLogLines = [];
   const child = spawn(executablePath, [], {
-    cwd: whisperRootPath(),
+    cwd: installation.root,
     env: {
       ...process.env,
       ...(apiKey ? { TELNYX_API_KEY: apiKey } : {}),
@@ -10010,11 +10714,15 @@ async function startWhisperHelper() {
       at: new Date().toISOString(),
     };
     if (whisperHelperProcess === child) whisperHelperProcess = null;
+    void refreshAppTrayMenu();
   });
   child.once("error", (error) => {
     appendWhisperLog(error?.message || String(error));
+    void refreshAppTrayMenu();
   });
-  return getWhisperStatus();
+  const status = getWhisperStatus();
+  void refreshAppTrayMenu();
+  return status;
 }
 
 function stopWhisperHelper() {
@@ -10022,7 +10730,9 @@ function stopWhisperHelper() {
     whisperHelperProcess.kill("SIGTERM");
   }
   whisperHelperProcess = null;
-  return getWhisperStatus({ message: "Scribes dictation stopped." });
+  const status = getWhisperStatus({ message: "Dictation stopped." });
+  void refreshAppTrayMenu();
+  return status;
 }
 
 function appendWhisperLog(chunk) {
@@ -10032,23 +10742,197 @@ function appendWhisperLog(chunk) {
   whisperLastLogLines = [...whisperLastLogLines, ...lines].slice(-40);
 }
 
+function dictationAggregateLogPath() {
+  return path.join(app.getPath("library"), "Logs", "TelnyxDictation", "dictation-sessions.jsonl");
+}
+
+function parseDictationLogEntry(raw) {
+  if (!raw) return null;
+  try {
+    const entry = JSON.parse(raw);
+    if (!entry || typeof entry !== "object") return null;
+    const sessionId = normalizeOptionalString(entry.sessionID);
+    const timestamp = normalizeOptionalString(entry.timestamp);
+    const stage = normalizeOptionalString(entry.stage);
+    if (!sessionId || !timestamp || !stage) return null;
+    return {
+      sessionId,
+      timestamp,
+      stage,
+      message: normalizeOptionalString(entry.message),
+      transcript: normalizeOptionalString(entry.transcript),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function readDictationLogEntriesSync() {
+  try {
+    const raw = fsSync.readFileSync(dictationAggregateLogPath(), "utf8");
+    return raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map(parseDictationLogEntry)
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function readDictationLogEntries() {
+  try {
+    const raw = await fs.readFile(dictationAggregateLogPath(), "utf8");
+    return raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map(parseDictationLogEntry)
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function getRecentDictationSummary() {
+  const entries = readDictationLogEntriesSync();
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (!entry?.transcript) continue;
+    return {
+      transcript: entry.transcript,
+      sessionId: entry.sessionId,
+      timestamp: entry.timestamp,
+    };
+  }
+  return {
+    transcript: "",
+    sessionId: "",
+    timestamp: "",
+  };
+}
+
+async function syncHelperDictationSessions() {
+  const entries = await readDictationLogEntries();
+  if (!entries.length) return;
+
+  const grouped = new Map();
+  for (const entry of entries) {
+    const bucket = grouped.get(entry.sessionId) || [];
+    bucket.push(entry);
+    grouped.set(entry.sessionId, bucket);
+  }
+
+  const existingById = new Map(scribesState.sessions.map((session) => [session.id, session]));
+  const importedSessions = [];
+  let changed = false;
+
+  for (const [sessionId, sessionEntries] of grouped.entries()) {
+    const orderedEntries = [...sessionEntries].sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
+    const firstEntry = orderedEntries[0];
+    const lastEntry = orderedEntries[orderedEntries.length - 1];
+    const latestTranscriptEntry = [...orderedEntries].reverse().find((entry) => entry.transcript);
+    const transcript = normalizeOptionalString(latestTranscriptEntry?.transcript);
+    if (!transcript) continue;
+
+    const existing = existingById.get(sessionId);
+    const preserveExistingContent = Boolean(existing && existing.transcriptText === transcript);
+    const nextSession = createPreparedScribesSession({
+      ...existing,
+      id: sessionId,
+      title: existing?.title || titleFromScribesTranscript(transcript, "dictation"),
+      transcriptText: transcript,
+      provider: existing?.provider || speakSettings.sttProvider,
+      model: existing?.model || speakSettings.sttModel,
+      mode: existing?.mode || speakSettings.sttMode,
+      sessionType: existing?.sessionType || "dictation",
+      language: existing?.language || speakSettings.sttLanguage,
+      durationMs: existing?.durationMs || 0,
+      retainedAudio: existing?.retainedAudio || false,
+      segments: preserveExistingContent ? existing?.segments : [],
+      artifacts: preserveExistingContent ? existing?.artifacts : [],
+      createdAt: existing?.createdAt || firstEntry.timestamp,
+      updatedAt: lastEntry.timestamp,
+    });
+
+    if (!existing) {
+      importedSessions.push(nextSession);
+      changed = true;
+      continue;
+    }
+
+    if (
+      existing.transcriptText !== nextSession.transcriptText ||
+      existing.updatedAt !== nextSession.updatedAt ||
+      existing.title !== nextSession.title
+    ) {
+      existingById.set(sessionId, nextSession);
+      changed = true;
+    }
+  }
+
+  if (!changed) return;
+
+  const updatedSessions = scribesState.sessions.map((session) => existingById.get(session.id) || session);
+  const missingImports = importedSessions.filter((session) => !updatedSessions.some((existing) => existing.id === session.id));
+  scribesState = normalizeScribesState({
+    ...scribesState,
+    sessions: [...missingImports, ...updatedSessions],
+    updatedAt: new Date().toISOString(),
+  });
+  await saveDesktopState();
+}
+
 function whisperRootPath() {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, "native", "telnyx-whisper")
-    : path.resolve(__dirname, "../../native/telnyx-whisper");
+  return whisperInstallation().root;
 }
 
 function whisperAppBundlePath() {
-  const root = whisperRootPath();
-  const appBundlePath = path.join(root, "Telnyx Link.app");
-  if (fsSync.existsSync(appBundlePath)) {
-    return appBundlePath;
-  }
-  return path.join(root, "TelnyxDictation.app");
+  return whisperInstallation().appBundlePath;
 }
 
 function whisperExecutablePath() {
-  return path.join(whisperAppBundlePath(), "Contents", "MacOS", "TelnyxDictation");
+  return whisperInstallation().executablePath;
+}
+
+function whisperInstallation() {
+  const roots = whisperRootCandidates();
+  const resolved = roots
+    .map(describeWhisperRoot)
+    .find((candidate) => candidate.built || candidate.sourceAvailable);
+  return resolved || describeWhisperRoot(roots[0] || whisperDevRootPath());
+}
+
+function whisperRootCandidates() {
+  const candidates = [];
+  if (app.isPackaged) {
+    candidates.push(path.join(process.resourcesPath, "native", "telnyx-whisper"));
+  }
+  const devRoot = whisperDevRootPath();
+  if (!app.isPackaged || process.env.LINK_DESKTOP_RENDERER || fsSync.existsSync(path.join(devRoot, "Package.swift"))) {
+    candidates.push(devRoot);
+  }
+  return [...new Set(candidates)];
+}
+
+function describeWhisperRoot(root) {
+  const preferredBundlePath = path.join(root, "Telnyx Link.app");
+  const fallbackBundlePath = path.join(root, "TelnyxDictation.app");
+  const appBundlePath = fsSync.existsSync(preferredBundlePath) ? preferredBundlePath : fallbackBundlePath;
+  const executablePath = path.join(appBundlePath, "Contents", "MacOS", "TelnyxDictation");
+  return {
+    root,
+    sourceAvailable: fsSync.existsSync(path.join(root, "Package.swift")),
+    bundleAvailable: fsSync.existsSync(appBundlePath),
+    appBundlePath,
+    executablePath,
+    built: fsSync.existsSync(executablePath),
+  };
+}
+
+function whisperDevRootPath() {
+  return path.resolve(__dirname, "../../native/telnyx-whisper");
 }
 
 function normalizeTerminalId(input = {}) {
@@ -10213,12 +11097,18 @@ async function generateTelnyxTtsSample(input = {}) {
   if (!text) throw new Error("Enter sample text before sampling a voice.");
   const language = String(input?.language || "").trim();
   const provider = String(input?.provider || "").trim().toLowerCase();
+  const voiceSpeed = Number(input?.voiceSpeed);
+  const languageBoost = String(input?.languageBoost || "").trim();
+  const voiceSettings = {};
+  if (Number.isFinite(voiceSpeed) && voiceSpeed > 0) voiceSettings.voice_speed = voiceSpeed;
+  if (languageBoost) voiceSettings.language_boost = languageBoost;
   const body = {
     voice: voiceId,
     text,
     output_type: "base64_output",
     ...(language ? { language } : {}),
     ...(provider && provider !== "all" ? { provider } : {}),
+    ...(Object.keys(voiceSettings).length > 0 ? { voice_settings: voiceSettings } : {}),
   };
   const response = await fetch("https://api.telnyx.com/v2/text-to-speech", {
     method: "POST",
@@ -10529,14 +11419,24 @@ function normalizeSpeakSettings(input = {}) {
   const source = input && typeof input === "object" ? input : {};
   const silenceThreshold = Number(source.silenceThreshold);
   const providerFromLegacyEngine = legacySttProvider(source.sttEngine);
-  let sttProvider = ["openai-whisper", "nvidia-parakeet", "telnyx"].includes(source.sttProvider)
+  const explicitSttProvider = ["openai-whisper", "nvidia-parakeet", "telnyx"].includes(source.sttProvider);
+  const explicitSttMode = source.sttMode === "telnyx-cloud" || source.sttMode === "local";
+  const telnyxCloudConfigured = credentialConfigured("TELNYX_API_KEY");
+  let sttProvider = explicitSttProvider
     ? source.sttProvider
     : providerFromLegacyEngine;
-  let sttMode = source.sttMode === "telnyx-cloud" || source.sttMode === "local"
+  let sttMode = explicitSttMode
     ? source.sttMode
+    : explicitSttProvider
+    ? sttProvider === "telnyx"
+      ? "telnyx-cloud"
+      : "local"
+    : telnyxCloudConfigured
+    ? "telnyx-cloud"
     : sttProvider === "telnyx"
     ? "telnyx-cloud"
     : "local";
+  if (!explicitSttProvider && sttMode === "telnyx-cloud") sttProvider = "telnyx";
   if (sttMode === "telnyx-cloud") sttProvider = "telnyx";
   if (sttMode === "local" && sttProvider === "telnyx") sttProvider = "openai-whisper";
   const localShortcutMode = source.localShortcutMode === "cmd-shift-l" || source.shortcutMode === "cmd-shift-l" ? "cmd-shift-l" : "hold-fn";
@@ -13393,7 +14293,7 @@ async function listHostedAgents() {
   }
 
   const payload = await response.json();
-  return (payload.items ?? []).map((agent) => ({
+  const agents = (payload.items ?? []).map((agent) => ({
     id: agent.id,
     name: agent.name,
     displayName: agent.display_name ?? agent.name,
@@ -13402,6 +14302,25 @@ async function listHostedAgents() {
     type: agent.agent_type,
     capabilities: agent.capabilities ?? [],
   }));
+  await saveHostedAgentCache(agents);
+  return agents;
+}
+
+async function listHostedAgentsWithFallback() {
+  try {
+    return await listHostedAgents();
+  } catch (error) {
+    const cachedAgents = cachedHostedAgents();
+    if (cachedAgents.length > 0) {
+      hostedAgentCacheState = normalizeHostedAgentCacheState({
+        ...hostedAgentCacheState,
+        error: errorMessage(error),
+      });
+      void saveDesktopState().catch(() => undefined);
+      return cachedAgents;
+    }
+    throw error;
+  }
 }
 
 function agentControlPlaneConnectionErrorMessage(baseUrl, error) {
@@ -13593,7 +14512,527 @@ async function saveCredential(input = {}) {
     stopLiteLlmProxy();
     invalidateAiModelRouteHealthCache();
   }
-  return listCredentials();
+  const credentials = await listCredentials();
+  void refreshAppTrayMenu();
+  return credentials;
+}
+
+function normalizeStorageBackupState(input = {}) {
+  const objectKeys = Array.isArray(input.objectKeys)
+    ? input.objectKeys.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim())
+    : [];
+  const parsedObjectCount = Number.parseInt(String(input.lastBackupObjectCount ?? objectKeys.length), 10);
+  return {
+    lastBackupId: normalizeOptionalString(input.lastBackupId),
+    lastBackupAt: normalizeOptionalString(input.lastBackupAt),
+    lastBackupBucket: normalizeOptionalString(input.lastBackupBucket),
+    lastBackupRegion: normalizeOptionalString(input.lastBackupRegion),
+    lastBackupPrefix: normalizeOptionalString(input.lastBackupPrefix),
+    lastBackupObjectCount: Number.isFinite(parsedObjectCount) && parsedObjectCount >= 0 ? parsedObjectCount : objectKeys.length,
+    lastAttemptedAt: normalizeOptionalString(input.lastAttemptedAt),
+    lastError: normalizeOptionalString(input.lastError),
+    objectKeys,
+  };
+}
+
+function emptyStorageBackupState() {
+  return normalizeStorageBackupState({});
+}
+
+function normalizeTelnyxStorageBackupPrefix(value) {
+  const trimmed = String(value || "").trim().replace(/^\/+|\/+$/g, "");
+  return trimmed || defaultTelnyxStorageBackupPrefix;
+}
+
+function telnyxStorageConfiguration() {
+  const apiKey = String(credentialValue("TELNYX_API_KEY") || "").trim();
+  const bucket = String(credentialValue("TELNYX_STORAGE_BUCKET") || "").trim();
+  const region = String(credentialValue("TELNYX_STORAGE_REGION") || "").trim();
+  const prefix = normalizeTelnyxStorageBackupPrefix(credentialValue("TELNYX_STORAGE_PREFIX"));
+  const missing = [];
+  if (!apiKey) missing.push("TELNYX_API_KEY");
+  if (!bucket) missing.push("TELNYX_STORAGE_BUCKET");
+  if (!region) missing.push("TELNYX_STORAGE_REGION");
+  return {
+    apiKey,
+    bucket,
+    region,
+    prefix,
+    configured: Boolean(bucket || region),
+    ready: missing.length === 0,
+    missing,
+  };
+}
+
+function getStorageBackupStatus() {
+  const config = telnyxStorageConfiguration();
+  return {
+    ready: config.ready,
+    configured: config.configured,
+    bucket: config.bucket,
+    region: config.region,
+    prefix: config.prefix,
+    missing: [...config.missing],
+    lastBackupId: storageBackupState.lastBackupId || "",
+    lastBackupAt: storageBackupState.lastBackupAt || "",
+    lastBackupBucket: storageBackupState.lastBackupBucket || "",
+    lastBackupRegion: storageBackupState.lastBackupRegion || "",
+    lastBackupPrefix: storageBackupState.lastBackupPrefix || "",
+    lastBackupObjectCount: storageBackupState.lastBackupObjectCount || 0,
+    lastAttemptedAt: storageBackupState.lastAttemptedAt || "",
+    lastError: storageBackupState.lastError || "",
+    objectKeys: [...(storageBackupState.objectKeys || [])],
+  };
+}
+
+function decodeStorageXmlText(value = "") {
+  return String(value)
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+function parseStorageXmlTag(xml = "", tagName = "") {
+  const match = String(xml).match(new RegExp(`<${tagName}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tagName}>`, "i"));
+  return match ? decodeStorageXmlText(match[1].trim()) : "";
+}
+
+function parseStorageBucketListXml(xml = "") {
+  return [...String(xml).matchAll(/<Bucket>([\s\S]*?)<\/Bucket>/gi)].map((match) => ({
+    name: parseStorageXmlTag(match[1], "Name"),
+    createdAt: parseStorageXmlTag(match[1], "CreationDate"),
+  })).filter((bucket) => bucket.name);
+}
+
+function parseStorageBucketLocationXml(xml = "", fallbackRegion = "") {
+  const location = parseStorageXmlTag(xml, "LocationConstraint");
+  return location || fallbackRegion;
+}
+
+function localStorageWorkspaceRoot() {
+  return path.join(app.getPath("userData"), "local-storage-workspace");
+}
+
+function normalizeLocalStorageDisplayPath(value = "~/Link/") {
+  const trimmed = String(value || "").trim() || "~/Link/";
+  const withRoot = trimmed.startsWith("~/Link") ? trimmed : `~/Link/${trimmed.replace(/^\/+/, "")}`;
+  return withRoot.endsWith("/") || /\.[a-z0-9]+$/i.test(withRoot) ? withRoot : `${withRoot}/`;
+}
+
+function localStorageFsPathForDisplayPath(displayPath = "~/Link/") {
+  const normalized = normalizeLocalStorageDisplayPath(displayPath);
+  const root = path.resolve(localStorageWorkspaceRoot());
+  const relativePath = normalized.replace(/^~\/Link\/?/, "").replace(/\/$/, "");
+  const targetPath = relativePath ? path.resolve(root, relativePath) : root;
+  if (targetPath !== root && !targetPath.startsWith(`${root}${path.sep}`)) {
+    throw new Error("Storage path is outside the local workspace.");
+  }
+  return targetPath;
+}
+
+function localStorageDisplayPathForFsPath(fsPath, { directory = false } = {}) {
+  const root = path.resolve(localStorageWorkspaceRoot());
+  const resolved = path.resolve(fsPath);
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+    throw new Error("Storage path is outside the local workspace.");
+  }
+  const relativePath = path.relative(root, resolved).split(path.sep).filter(Boolean).join("/");
+  if (!relativePath) return "~/Link/";
+  return directory ? `~/Link/${relativePath}/` : `~/Link/${relativePath}`;
+}
+
+function sanitizeLocalStorageEntryName(value) {
+  const normalized = path.basename(String(value || "").trim());
+  if (!normalized || normalized === "." || normalized === "..") {
+    throw new Error("Enter a valid name.");
+  }
+  return normalized;
+}
+
+async function uniqueLocalStorageTargetPath(parentFsPath, baseName) {
+  const parsed = path.parse(baseName);
+  let attempt = 0;
+  while (true) {
+    const candidateName = attempt === 0 ? baseName : `${parsed.name} ${attempt}${parsed.ext}`;
+    const candidatePath = path.join(parentFsPath, candidateName);
+    const exists = await fs.stat(candidatePath).then(() => true).catch(() => false);
+    if (!exists) return candidatePath;
+    attempt += 1;
+  }
+}
+
+async function localStorageWorkspaceEntryForPath(targetPath) {
+  const stat = await fs.stat(targetPath);
+  const directory = stat.isDirectory();
+  const entry = {
+    id: `${directory ? "folder" : "file"}:${localStorageDisplayPathForFsPath(targetPath, { directory })}`,
+    kind: directory ? "folder" : "file",
+    path: localStorageDisplayPathForFsPath(targetPath, { directory }),
+    name: path.basename(targetPath),
+    updatedAt: stat.mtime.toISOString(),
+  };
+  if (directory) {
+    const itemCount = await fs.readdir(targetPath).then((entries) => entries.length).catch(() => 0);
+    return { ...entry, itemCount };
+  }
+  return { ...entry, bytes: stat.size };
+}
+
+async function listLocalStorageWorkspaceEntries(input = {}) {
+  const workspaceRoot = localStorageWorkspaceRoot();
+  await fs.mkdir(workspaceRoot, { recursive: true });
+  const targetPath = localStorageFsPathForDisplayPath(input.path ?? "~/Link/");
+  const targetStat = await fs.stat(targetPath).catch(() => null);
+  if (!targetStat?.isDirectory()) return [];
+  const entries = await fs.readdir(targetPath, { withFileTypes: true });
+  const mapped = await Promise.all(
+    entries
+      .filter((entry) => !entry.name.startsWith("."))
+      .map((entry) => localStorageWorkspaceEntryForPath(path.join(targetPath, entry.name))),
+  );
+  return mapped.sort((left, right) => {
+    if (left.kind !== right.kind) return left.kind === "folder" ? -1 : 1;
+    return left.name.localeCompare(right.name);
+  });
+}
+
+async function createLocalStorageWorkspaceFolder(input = {}) {
+  const workspaceRoot = localStorageWorkspaceRoot();
+  await fs.mkdir(workspaceRoot, { recursive: true });
+  const parentPath = localStorageFsPathForDisplayPath(input.parentPath ?? "~/Link/");
+  await fs.mkdir(parentPath, { recursive: true });
+  const name = sanitizeLocalStorageEntryName(input.name);
+  const targetPath = path.join(parentPath, name);
+  const exists = await fs.stat(targetPath).then(() => true).catch(() => false);
+  if (exists) throw new Error("A folder with that name already exists.");
+  await fs.mkdir(targetPath, { recursive: true });
+  return localStorageWorkspaceEntryForPath(targetPath);
+}
+
+async function uploadLocalStorageWorkspaceFiles(input = {}) {
+  const workspaceRoot = localStorageWorkspaceRoot();
+  await fs.mkdir(workspaceRoot, { recursive: true });
+  const parentPath = localStorageFsPathForDisplayPath(input.parentPath ?? "~/Link/");
+  await fs.mkdir(parentPath, { recursive: true });
+  const selection = await dialog.showOpenDialog({
+    title: "Upload files to Local Storage",
+    properties: ["openFile", "multiSelections"],
+  });
+  if (selection.canceled || selection.filePaths.length === 0) return [];
+  const uploaded = [];
+  for (const sourcePath of selection.filePaths) {
+    const targetPath = await uniqueLocalStorageTargetPath(parentPath, path.basename(sourcePath));
+    await fs.copyFile(sourcePath, targetPath);
+    uploaded.push(await localStorageWorkspaceEntryForPath(targetPath));
+  }
+  return uploaded;
+}
+
+async function uploadLocalStorageWorkspaceFolder(input = {}) {
+  const workspaceRoot = localStorageWorkspaceRoot();
+  await fs.mkdir(workspaceRoot, { recursive: true });
+  const parentPath = localStorageFsPathForDisplayPath(input.parentPath ?? "~/Link/");
+  await fs.mkdir(parentPath, { recursive: true });
+  const selection = await dialog.showOpenDialog({
+    title: "Upload folder to Local Storage",
+    properties: ["openDirectory"],
+  });
+  if (selection.canceled || !selection.filePaths[0]) return null;
+  const sourcePath = selection.filePaths[0];
+  const targetPath = await uniqueLocalStorageTargetPath(parentPath, path.basename(sourcePath));
+  await fs.cp(sourcePath, targetPath, { recursive: true });
+  return localStorageWorkspaceEntryForPath(targetPath);
+}
+
+async function openLocalStorageWorkspaceEntry(input = {}) {
+  const targetPath = localStorageFsPathForDisplayPath(input.path ?? "~/Link/");
+  const detail = await shell.openPath(targetPath);
+  if (detail) throw new Error(detail);
+  return { ok: true };
+}
+
+async function revealDesktopPath(input = {}) {
+  const rawPath = String(input.path || "").trim();
+  if (!rawPath) throw new Error("Path is required.");
+  const targetPath = path.resolve(rawPath);
+  await fs.stat(targetPath);
+  shell.showItemInFolder(targetPath);
+  return { ok: true };
+}
+
+function telnyxStorageAmzDate(value = new Date()) {
+  return value.toISOString().replace(/[:-]|\.\d{3}/g, "");
+}
+
+function telnyxStorageAuthorizationHeader(apiKey, region, amzDate) {
+  const dateStamp = amzDate.slice(0, 8);
+  const credentialScope = `${dateStamp}/${region}/s3/aws4_request`;
+  return `AWS4-HMAC-SHA256 Credential=${apiKey}/${credentialScope}, SignedHeaders=host;x-amz-date, Signature=${"0".repeat(64)}`;
+}
+
+function telnyxStorageObjectUrl(bucket, region, objectKey = "") {
+  const segments = [bucket, ...String(objectKey || "").split("/").filter(Boolean)]
+    .map((segment) => encodeURIComponent(segment));
+  return `https://${region}.telnyxcloudstorage.com/${segments.join("/")}`;
+}
+
+function telnyxStorageServiceUrl(region, requestPath = "/") {
+  const normalizedPath = String(requestPath || "/").startsWith("/") ? String(requestPath || "/") : `/${requestPath}`;
+  return `https://${region}.telnyxcloudstorage.com${normalizedPath}`;
+}
+
+async function telnyxStorageServiceRequest({ apiKey, region, requestPath = "/", method = "GET", body, contentType, accept } = {}) {
+  const amzDate = telnyxStorageAmzDate();
+  const headers = {
+    Authorization: telnyxStorageAuthorizationHeader(apiKey, region, amzDate),
+    "x-amz-date": amzDate,
+  };
+  if (accept) headers.Accept = accept;
+  if (contentType) headers["Content-Type"] = contentType;
+  const response = await nativeFetch(telnyxStorageServiceUrl(region, requestPath), {
+    method,
+    headers,
+    ...(body === undefined ? {} : { body }),
+  });
+  if (response.ok) return response;
+
+  const detail = (await response.text().catch(() => "")).replace(/\s+/g, " ").trim();
+  throw new Error(`Telnyx Storage ${method} failed for ${region}${requestPath} (${response.status}). ${detail.slice(0, 240) || response.statusText || "Request failed."}`);
+}
+
+async function telnyxStorageRequest({ apiKey, bucket, region, objectKey = "", method = "GET", body, contentType } = {}) {
+  const amzDate = telnyxStorageAmzDate();
+  const headers = {
+    Authorization: telnyxStorageAuthorizationHeader(apiKey, region, amzDate),
+    "x-amz-date": amzDate,
+  };
+  if (contentType) headers["Content-Type"] = contentType;
+  const response = await nativeFetch(telnyxStorageObjectUrl(bucket, region, objectKey), {
+    method,
+    headers,
+    ...(body === undefined ? {} : { body }),
+  });
+  if (response.ok) return response;
+
+  const detail = (await response.text().catch(() => "")).replace(/\s+/g, " ").trim();
+  throw new Error(`Telnyx Storage ${method} failed for ${bucket}${objectKey ? `/${objectKey}` : ""} (${response.status}). ${detail.slice(0, 240) || response.statusText || "Request failed."}`);
+}
+
+async function listTelnyxStorageBuckets() {
+  const apiKey = String(credentialValue("TELNYX_API_KEY") || "").trim();
+  if (!apiKey) throw new Error("Add your Telnyx API key to load cloud storage buckets.");
+
+  const config = telnyxStorageConfiguration();
+  const discoveryRegions = ["us-central-1", "eu-central-1"];
+  const discovered = [];
+  const errors = [];
+
+  for (const region of discoveryRegions) {
+    try {
+      const response = await telnyxStorageServiceRequest({
+        apiKey,
+        region,
+        requestPath: "/",
+        method: "GET",
+        accept: "text/xml",
+      });
+      const xml = await response.text();
+      const buckets = parseStorageBucketListXml(xml);
+      for (const bucket of buckets) discovered.push({ ...bucket, discoveryRegion: region });
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : `Unable to load buckets from ${region}.`);
+    }
+  }
+
+  if (discovered.length === 0 && errors.length > 0) throw new Error(errors[0]);
+
+  const uniqueBuckets = [...new Map(discovered.map((bucket) => [bucket.name, bucket])).values()];
+  const resolved = await Promise.all(uniqueBuckets.map(async (bucket) => {
+    let region = bucket.discoveryRegion;
+    try {
+      const response = await telnyxStorageServiceRequest({
+        apiKey,
+        region: bucket.discoveryRegion,
+        requestPath: `/${encodeURIComponent(bucket.name)}?location=null`,
+        method: "GET",
+        accept: "text/xml",
+      });
+      const xml = await response.text();
+      region = parseStorageBucketLocationXml(xml, bucket.discoveryRegion);
+    } catch {
+      region = bucket.discoveryRegion;
+    }
+    const linked = bucket.name === config.bucket && region === config.region;
+    const lastBackedUp = bucket.name === storageBackupState.lastBackupBucket && region === storageBackupState.lastBackupRegion;
+    return {
+      name: bucket.name,
+      region,
+      createdAt: bucket.createdAt,
+      linked,
+      prefix: linked ? config.prefix : normalizeTelnyxStorageBackupPrefix(""),
+      lastBackupAt: lastBackedUp ? storageBackupState.lastBackupAt : "",
+      lastBackupObjectCount: lastBackedUp ? storageBackupState.lastBackupObjectCount : 0,
+    };
+  }));
+
+  if (config.bucket && config.region && !resolved.some((bucket) => bucket.name === config.bucket && bucket.region === config.region)) {
+    resolved.unshift({
+      name: config.bucket,
+      region: config.region,
+      createdAt: "",
+      linked: true,
+      prefix: config.prefix,
+      lastBackupAt: storageBackupState.lastBackupAt || "",
+      lastBackupObjectCount: storageBackupState.lastBackupObjectCount || 0,
+    });
+  }
+
+  return resolved.sort((left, right) => {
+    const linkedCompare = Number(right.linked) - Number(left.linked);
+    if (linkedCompare) return linkedCompare;
+    return left.name.localeCompare(right.name);
+  });
+}
+
+function telnyxStorageBackupObjectKey(prefix, backupId, fileName) {
+  return [prefix, backupId, fileName].filter(Boolean).join("/");
+}
+
+function storageBackupSummary() {
+  return {
+    chatSessions: chatSessions.length,
+    memoryBanks: memoryBanks.length,
+    workboardCards: workboardCards.length,
+    publishedApps: publishedApps.length,
+    artifactDeployments: artifactDeployments.length,
+    scribesSessions: scribesState.sessions.length,
+    wikiSources: wikiSources.length,
+  };
+}
+
+async function backupWorkspaceToTelnyxStorage(input = {}) {
+  const includeEncryptedCredentials = Boolean(input.includeEncryptedCredentials);
+  const config = telnyxStorageConfiguration();
+  if (!config.ready) {
+    throw new Error(`Configure ${config.missing.join(", ")} before running a storage backup.`);
+  }
+
+  const startedAt = new Date().toISOString();
+  const backupId = startedAt.replace(/[:.]/g, "-");
+  try {
+    await saveDesktopState();
+    const stateBuffer = await fs.readFile(statePath());
+    const files = [
+      {
+        fileName: "link-desktop-state.json",
+        objectKey: telnyxStorageBackupObjectKey(config.prefix, backupId, "link-desktop-state.json"),
+        body: stateBuffer,
+        contentType: "application/json",
+      },
+    ];
+
+    let encryptedCredentialsBuffer = null;
+    if (includeEncryptedCredentials) {
+      encryptedCredentialsBuffer = await fs.readFile(credentialsPath()).catch(() => null);
+      if (encryptedCredentialsBuffer) {
+        files.push({
+          fileName: "link-desktop-credentials.v1.json",
+          objectKey: telnyxStorageBackupObjectKey(config.prefix, backupId, "link-desktop-credentials.v1.json"),
+          body: encryptedCredentialsBuffer,
+          contentType: "application/json",
+        });
+      }
+    }
+
+    const manifestObjectKey = telnyxStorageBackupObjectKey(config.prefix, backupId, "manifest.json");
+    const manifest = {
+      backupId,
+      createdAt: startedAt,
+      product: app.getName(),
+      version: app.getVersion(),
+      bucket: config.bucket,
+      region: config.region,
+      prefix: config.prefix,
+      includeEncryptedCredentials: Boolean(encryptedCredentialsBuffer),
+      files: files.map((file) => ({
+        fileName: file.fileName,
+        objectKey: file.objectKey,
+        contentType: file.contentType,
+        size: file.body.byteLength,
+        sha256: crypto.createHash("sha256").update(file.body).digest("hex"),
+      })),
+      summary: storageBackupSummary(),
+      notes: includeEncryptedCredentials && !encryptedCredentialsBuffer
+        ? ["An encrypted credentials snapshot was requested, but Link did not find any saved desktop credentials to upload."]
+        : includeEncryptedCredentials
+        ? ["The credentials file contains encrypted values from this desktop profile. Restore behavior depends on the destination Mac's secure storage context."]
+        : ["The credentials snapshot was excluded. Link backed up workspace state only."],
+    };
+    const manifestBuffer = Buffer.from(JSON.stringify(manifest, null, 2), "utf8");
+
+    await telnyxStorageRequest({
+      apiKey: config.apiKey,
+      bucket: config.bucket,
+      region: config.region,
+      method: "HEAD",
+    });
+    for (const file of files) {
+      await telnyxStorageRequest({
+        apiKey: config.apiKey,
+        bucket: config.bucket,
+        region: config.region,
+        objectKey: file.objectKey,
+        method: "PUT",
+        body: file.body,
+        contentType: file.contentType,
+      });
+    }
+    await telnyxStorageRequest({
+      apiKey: config.apiKey,
+      bucket: config.bucket,
+      region: config.region,
+      objectKey: manifestObjectKey,
+      method: "PUT",
+      body: manifestBuffer,
+      contentType: "application/json",
+    });
+
+    const objectKeys = [...files.map((file) => file.objectKey), manifestObjectKey];
+    storageBackupState = normalizeStorageBackupState({
+      lastBackupId: backupId,
+      lastBackupAt: startedAt,
+      lastBackupBucket: config.bucket,
+      lastBackupRegion: config.region,
+      lastBackupPrefix: config.prefix,
+      lastBackupObjectCount: objectKeys.length,
+      lastAttemptedAt: startedAt,
+      lastError: "",
+      objectKeys,
+    });
+    await saveDesktopState();
+    return {
+      backupId,
+      uploadedAt: startedAt,
+      bucket: config.bucket,
+      region: config.region,
+      prefix: config.prefix,
+      includeEncryptedCredentials: Boolean(encryptedCredentialsBuffer),
+      objectKeys,
+      stateBytes: stateBuffer.byteLength,
+      credentialsBytes: encryptedCredentialsBuffer?.byteLength || 0,
+      status: getStorageBackupStatus(),
+    };
+  } catch (error) {
+    storageBackupState = normalizeStorageBackupState({
+      ...storageBackupState,
+      lastAttemptedAt: startedAt,
+      lastError: errorMessage(error),
+    });
+    await saveDesktopState().catch(() => undefined);
+    throw error;
+  }
 }
 
 async function getSurfaceManifestMap() {
@@ -13621,7 +15060,7 @@ async function getSurfaceManifestMap() {
 async function getPhoneWorkspaceView(input = {}) {
   const manifests = await getSurfaceManifestMap();
   const calls = manifests.call?.ready
-    ? await listPhoneCallHistory({ maxResults: Number(input.maxResults || 50) || 50 }).catch(() => [])
+    ? await listPhoneCallHistory({ maxResults: Number(input.maxResults || 50) || 50, preferCache: true }).catch(() => [])
     : [];
   return buildPhoneWorkspace({
     ...input,
@@ -13637,7 +15076,7 @@ async function getGoogleInboxWorkspaceView(input = {}) {
   const manifests = await getSurfaceManifestMap();
   const maxResults = Number(input.maxResults || 20) || 20;
   const threads = manifests.gmail?.ready
-    ? await listGoogleInboxThreads({ query: input.query, maxResults }).catch(() => [])
+    ? await listGoogleInboxThreads({ query: input.query, maxResults, preferCache: true }).catch(() => [])
     : [];
   const selectedThread = manifests.gmail?.ready && input.selectedThreadId && !input.creatingNewDraft
     ? await getGoogleInboxThread({ threadId: input.selectedThreadId }).catch(() => null)
@@ -14363,12 +15802,27 @@ async function runGoogleInboxAuth(account, gog) {
 }
 
 async function verifyGoogleInboxAccess() {
-  await listGoogleInboxThreads({ query: "in:inbox is:unread", maxResults: 1 });
+  await listGoogleInboxThreads({ query: "in:inbox is:unread", maxResults: 1, preferCache: false });
 }
 
 async function listGoogleInboxThreads(input = {}) {
   const query = normalizeGoogleInboxQuery(input.query);
   const maxResults = normalizeGoogleInboxMaxResults(input.maxResults ?? input.max ?? 20);
+  const preferCache = input.preferCache !== false;
+  const useUnreadInboxCache = isDefaultUnreadInboxQuery(query);
+  const cached = useUnreadInboxCache ? cachedGoogleInboxThreads(maxResults) : [];
+  if (preferCache && cached.length > 0) return cached;
+  try {
+    const threads = await fetchGoogleInboxThreadSummaries(query, maxResults);
+    if (useUnreadInboxCache) await saveGoogleInboxThreadCache(threads);
+    return threads;
+  } catch (error) {
+    if (cached.length > 0) return cached;
+    throw error;
+  }
+}
+
+async function fetchGoogleInboxThreadSummaries(query, maxResults) {
   const payload = await runSafeGoogleInboxGogJson(
     ["gmail", "search", query, "--max", String(maxResults)],
     "Google Inbox",
@@ -14499,6 +15953,10 @@ function normalizeGoogleInboxMaxResults(value) {
   return Math.max(1, Math.min(50, Math.trunc(count)));
 }
 
+function isDefaultUnreadInboxQuery(query) {
+  return normalizeGoogleInboxQuery(query) === "in:inbox is:unread";
+}
+
 function normalizeGoogleInboxDraftInput(input = {}) {
   const subject = normalizeRequiredGoogleInboxString(input.subject, "Draft subject is required.");
   const body = normalizeRequiredGoogleInboxString(input.body, "Draft body is required.");
@@ -14541,7 +15999,8 @@ function normalizeGoogleInboxThreadSummary(record, index = 0) {
   const threadId = normalizeOptionalString(record?.threadId ?? record?.thread_id ?? record?.thread?.id ?? record?.id);
   if (!threadId) return null;
   const messageId = normalizeOptionalString(record?.messageId ?? record?.message_id ?? record?.latestMessageId ?? record?.messages?.[0]?.id ?? record?.id);
-  const primaryMessage = firstGoogleInboxMessageRecord(record);
+  const latestMessage = latestGoogleInboxMessageRecord(record);
+  const primaryMessage = latestMessage || firstGoogleInboxMessageRecord(record);
   const subjectMetadata = parseGoogleInboxSubjectMetadata(record?.subject ?? record?.title)
     || parseGoogleInboxSubjectMetadata(googleInboxHeader(record, "subject"))
     || parseGoogleInboxSubjectMetadata(primaryMessage?.subject)
@@ -14603,7 +16062,7 @@ function normalizeGoogleInboxThread(payload, requestedThreadId) {
   const threadId = normalizeOptionalString(payload?.threadId ?? payload?.thread_id ?? payload?.id ?? requestedThreadId);
   const messageSubject = messages.find((message) => !isGoogleInboxPlaceholderSubject(message.subject))?.subject || "";
   const messageSource = messages.find((message) => message.source)?.source || "";
-  const messageFrom = messages.find((message) => !isGoogleInboxPlaceholderSender(message.from))?.from || "";
+  const messageFrom = [...messages].reverse().find((message) => !isGoogleInboxPlaceholderSender(message.from))?.from || "";
   const summarySubject = isGoogleInboxPlaceholderSubject(summary?.subject) ? "" : summary?.subject || "";
   const summaryFrom = isGoogleInboxPlaceholderSender(summary?.from) ? "" : summary?.from || "";
   const subject = summarySubject || messageSubject || "(No subject)";
@@ -14835,6 +16294,26 @@ function cleanGoogleInboxHtml(value) {
 function firstGoogleInboxMessageRecord(record) {
   if (Array.isArray(record?.messages) && record.messages[0] && typeof record.messages[0] === "object") return record.messages[0];
   if (Array.isArray(record?.thread?.messages) && record.thread.messages[0] && typeof record.thread.messages[0] === "object") return record.thread.messages[0];
+  return null;
+}
+
+function latestGoogleInboxMessageRecord(record) {
+  if (record?.latestMessage && typeof record.latestMessage === "object") return record.latestMessage;
+  if (record?.latest_message && typeof record.latest_message === "object") return record.latest_message;
+  if (record?.lastMessage && typeof record.lastMessage === "object") return record.lastMessage;
+  if (record?.last_message && typeof record.last_message === "object") return record.last_message;
+  if (Array.isArray(record?.messages)) {
+    for (let index = record.messages.length - 1; index >= 0; index -= 1) {
+      const message = record.messages[index];
+      if (message && typeof message === "object") return message;
+    }
+  }
+  if (Array.isArray(record?.thread?.messages)) {
+    for (let index = record.thread.messages.length - 1; index >= 0; index -= 1) {
+      const message = record.thread.messages[index];
+      if (message && typeof message === "object") return message;
+    }
+  }
   return null;
 }
 
@@ -15185,16 +16664,19 @@ async function readGitHubRepoTextWithToken(repoPath, token, repo = googleWorkspa
   return Buffer.from(encoded, "base64").toString("utf8");
 }
 
-async function githubRequest(url, token) {
+async function githubRequest(url, token, options = {}) {
+  const method = normalizeOptionalString(options.method).toUpperCase() || "GET";
   const response = await fetch(url, {
-    method: "GET",
+    method,
     headers: {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
       "X-GitHub-Api-Version": "2022-11-28",
     },
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
   const payload = await response.json().catch(() => ({}));
+  if (response.status === 404 && options.allowNotFound) return null;
   if (!response.ok) {
     throw new Error(`GitHub API returned ${response.status}: ${JSON.stringify(payload).slice(0, 300)}`);
   }
@@ -16450,7 +17932,7 @@ function credentialConfigured(name) {
 async function loadDesktopState() {
   try {
     const saved = JSON.parse(await fs.readFile(statePath(), "utf8"));
-    const useSavedState = saved.version === stateVersion || saved.version === 13 || saved.version === 12 || saved.version === 11 || saved.version === 10 || saved.version === 9 || saved.version === 8 || saved.version === 7 || saved.version === 6 || saved.version === 5 || saved.version === 4;
+    const useSavedState = saved.version === stateVersion || saved.version === 14 || saved.version === 13 || saved.version === 12 || saved.version === 11 || saved.version === 10 || saved.version === 9 || saved.version === 8 || saved.version === 7 || saved.version === 6 || saved.version === 5 || saved.version === 4;
     connectorOverrides = saved.connectorOverrides && typeof saved.connectorOverrides === "object" ? saved.connectorOverrides : {};
     meetingBotIdentities = useSavedState && saved.meetingBotIdentities && typeof saved.meetingBotIdentities === "object" ? saved.meetingBotIdentities : {};
     meetingBotInvites = useSavedState && Array.isArray(saved.meetingBotInvites) ? saved.meetingBotInvites.map(normalizeMeetingInvite).filter(Boolean) : [];
@@ -16470,6 +17952,9 @@ async function loadDesktopState() {
     speakSettings = useSavedState && saved.speakSettings && typeof saved.speakSettings === "object" ? normalizeSpeakSettings(saved.speakSettings) : emptySpeakSettings();
     vpnSettings = useSavedState && saved.vpnSettings && typeof saved.vpnSettings === "object" ? normalizeVpnSettings(saved.vpnSettings) : emptyVpnSettings();
     scribesState = useSavedState && saved.scribesState && typeof saved.scribesState === "object" ? normalizeScribesState(saved.scribesState) : emptyScribesState();
+    storageBackupState = useSavedState && saved.storageBackupState && typeof saved.storageBackupState === "object" ? normalizeStorageBackupState(saved.storageBackupState) : emptyStorageBackupState();
+    hostedAgentCacheState = useSavedState && saved.hostedAgentCacheState && typeof saved.hostedAgentCacheState === "object" ? normalizeHostedAgentCacheState(saved.hostedAgentCacheState) : emptyHostedAgentCacheState();
+    surfaceCacheState = useSavedState && saved.surfaceCacheState && typeof saved.surfaceCacheState === "object" ? normalizeSurfaceCacheState(saved.surfaceCacheState) : emptySurfaceCacheState();
     wikiSources = mergeWikiDocumentationSources(saved.wikiSources);
     modelCenterPreferences = useSavedState && saved.modelCenterPreferences && typeof saved.modelCenterPreferences === "object"
       ? normalizeModelCenterPreferences(saved.modelCenterPreferences)
@@ -16511,6 +17996,9 @@ async function loadDesktopState() {
     speakSettings = emptySpeakSettings();
     vpnSettings = emptyVpnSettings();
     scribesState = emptyScribesState();
+    storageBackupState = emptyStorageBackupState();
+    hostedAgentCacheState = emptyHostedAgentCacheState();
+    surfaceCacheState = emptySurfaceCacheState();
     wikiSources = defaultWikiDocumentationSources();
     modelCenterPreferences = normalizeModelCenterPreferences({});
     localApiServerStatus = {
@@ -16554,6 +18042,9 @@ async function saveDesktopState() {
     speakSettings,
     vpnSettings,
     scribesState,
+    storageBackupState,
+    hostedAgentCacheState,
+    surfaceCacheState,
     wikiSources,
     modelCenterPreferences,
     telnyxInferenceCatalog,
@@ -16575,12 +18066,147 @@ function normalizeStoredTelnyxInferenceCatalog(value) {
   };
 }
 
+function emptyHostedAgentCacheState() {
+  return {
+    agents: [],
+    updatedAt: "",
+    error: "",
+  };
+}
+
+function normalizeHostedAgentSummary(value) {
+  if (!value || typeof value !== "object") return null;
+  const id = String(value.id || "").trim();
+  const name = String(value.name || "").trim();
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    displayName: String(value.displayName || value.display_name || name).trim() || name,
+    description: String(value.description || "").trim(),
+    status: String(value.status || "available").trim() || "available",
+    type: String(value.type || value.agent_type || "hosted").trim() || "hosted",
+    capabilities: Array.isArray(value.capabilities) ? value.capabilities.map((item) => String(item || "").trim()).filter(Boolean) : [],
+  };
+}
+
+function normalizeHostedAgentCacheState(value) {
+  const agents = Array.isArray(value?.agents)
+    ? value.agents.map(normalizeHostedAgentSummary).filter(Boolean)
+    : [];
+  return {
+    agents,
+    updatedAt: String(value?.updatedAt || ""),
+    error: String(value?.error || ""),
+  };
+}
+
+function cachedHostedAgents() {
+  return hostedAgentCacheState.agents || [];
+}
+
+async function saveHostedAgentCache(agents, error = "") {
+  hostedAgentCacheState = normalizeHostedAgentCacheState({
+    agents,
+    updatedAt: new Date().toISOString(),
+    error,
+  });
+  await saveDesktopState();
+}
+
 function statePath() {
   return path.join(app.getPath("userData"), "link-desktop-state.json");
 }
 
 function credentialsPath() {
   return path.join(app.getPath("userData"), "link-desktop-credentials.v1.json");
+}
+
+function normalizeSurfaceCacheState(input = {}) {
+  const phoneCallHistory = input.phoneCallHistory && typeof input.phoneCallHistory === "object"
+    ? {
+        updatedAt: normalizeOptionalString(input.phoneCallHistory.updatedAt),
+        lastError: normalizeOptionalString(input.phoneCallHistory.lastError),
+        rows: Array.isArray(input.phoneCallHistory.rows)
+          ? input.phoneCallHistory.rows.map(normalizePhoneCallHistoryRow).filter((row) => row.id && row.number)
+          : [],
+      }
+    : { updatedAt: "", lastError: "", rows: [] };
+  const googleInboxUnread = input.googleInboxUnread && typeof input.googleInboxUnread === "object"
+    ? {
+        updatedAt: normalizeOptionalString(input.googleInboxUnread.updatedAt),
+        lastError: normalizeOptionalString(input.googleInboxUnread.lastError),
+        threads: Array.isArray(input.googleInboxUnread.threads)
+          ? input.googleInboxUnread.threads.map((thread, index) => normalizeGoogleInboxThreadSummary(thread, index)).filter(Boolean)
+          : [],
+      }
+    : { updatedAt: "", lastError: "", threads: [] };
+  return { phoneCallHistory, googleInboxUnread };
+}
+
+function emptySurfaceCacheState() {
+  return normalizeSurfaceCacheState({});
+}
+
+function cachedPhoneCallHistoryRows(maxResults = 50) {
+  return (surfaceCacheState.phoneCallHistory.rows || []).slice(0, maxResults);
+}
+
+function cachedGoogleInboxThreads(maxResults = 20) {
+  return (surfaceCacheState.googleInboxUnread.threads || []).slice(0, maxResults);
+}
+
+async function savePhoneCallHistoryCache(rows, lastError = "") {
+  surfaceCacheState = normalizeSurfaceCacheState({
+    ...surfaceCacheState,
+    phoneCallHistory: {
+      updatedAt: new Date().toISOString(),
+      lastError,
+      rows,
+    },
+  });
+  await saveDesktopState();
+}
+
+async function saveGoogleInboxThreadCache(threads, lastError = "") {
+  surfaceCacheState = normalizeSurfaceCacheState({
+    ...surfaceCacheState,
+    googleInboxUnread: {
+      updatedAt: new Date().toISOString(),
+      lastError,
+      threads,
+    },
+  });
+  await saveDesktopState();
+}
+
+async function refreshSurfaceCachesInBackground() {
+  const tasks = [];
+  if (credentialConfigured("TELNYX_API_KEY")) {
+    tasks.push(
+      refreshPhoneCallHistoryCache({ maxResults: 50 }).catch(async (error) => {
+        await savePhoneCallHistoryCache(surfaceCacheState.phoneCallHistory.rows, errorMessage(error)).catch(() => undefined);
+      }),
+    );
+  }
+  if (googleInboxReady()) {
+    tasks.push(
+      fetchGoogleInboxThreadSummaries("in:inbox is:unread", 20)
+        .then((threads) => saveGoogleInboxThreadCache(threads))
+        .catch(async (error) => {
+          await saveGoogleInboxThreadCache(surfaceCacheState.googleInboxUnread.threads, errorMessage(error)).catch(() => undefined);
+        }),
+    );
+  }
+  await Promise.all(tasks);
+}
+
+function startSurfaceCacheRefreshLoop() {
+  if (surfaceCacheRefreshTimer) clearInterval(surfaceCacheRefreshTimer);
+  void refreshSurfaceCachesInBackground().catch(() => undefined);
+  surfaceCacheRefreshTimer = setInterval(() => {
+    void refreshSurfaceCachesInBackground().catch(() => undefined);
+  }, defaultSurfaceCacheRefreshIntervalMs);
 }
 
 function emptyOnboardingState() {

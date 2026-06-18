@@ -244,6 +244,12 @@ export function scribesMeetingMatchesCalendarEvent(session, event) {
   return Boolean(eventTitle && sessionTitle === eventTitle && normalizeText(session.meeting?.calendarEventStart) === normalizeText(event.start));
 }
 
+function calendarScribesUnlinkedSummary(event) {
+  return event?.status === "past"
+    ? "Open Scribe Meetings and run Deep sync to link this past calendar event with notes or a transcript."
+    : "Open Scribe Meetings and run Deep sync before the meeting to link this calendar event with notes.";
+}
+
 function normalizeCalendarEventList(events) {
   return Array.isArray(events) ? events.map(normalizeCalendarEvent).filter(Boolean) : [];
 }
@@ -540,7 +546,7 @@ function buildCalendarDetail({ ready, selectedEvent, meetingBots, meetingInvites
         linked: false,
         sessionId: "",
         title: "",
-        summary: "Open Scribe Meetings and run Deep sync to link this calendar event with notes.",
+        summary: calendarScribesUnlinkedSummary(selectedEvent),
         updatedAt: "",
         action: buildAction({
           id: "open-scribes",

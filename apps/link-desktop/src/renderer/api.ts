@@ -10,11 +10,12 @@ export type ViewId =
   | "agents"
   | "workboard"
   | "scribes"
-  | "drive"
+  | "storage"
   | "phone"
   | "calendar"
   | "memory"
   | "wiki"
+  | "models"
   | "settings";
 
 export type ConnectionStatus = "connected" | "needs_access" | "requested" | "signed_in";
@@ -318,6 +319,28 @@ export interface PylonCreateIssueResult {
   result?: unknown;
 }
 
+export interface WikiWorkspaceDocSubmissionInput {
+  sourceId: string;
+  title: string;
+  content: string;
+  format?: "markdown" | "rich-text";
+  note?: string;
+}
+
+export interface WikiWorkspaceDocSubmissionResult {
+  status: "created";
+  target: "github" | "pylon";
+  sourceId: string;
+  sourceLabel: string;
+  title: string;
+  message: string;
+  url?: string;
+  branch?: string;
+  path?: string;
+  issueId?: string;
+  pullRequestNumber?: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
@@ -432,6 +455,57 @@ export interface CredentialGroupStatus {
   label: string;
   help: string;
   fields: CredentialFieldStatus[];
+}
+
+export interface StorageBackupStatus {
+  ready: boolean;
+  configured: boolean;
+  bucket: string;
+  region: string;
+  prefix: string;
+  missing: string[];
+  lastBackupId: string;
+  lastBackupAt: string;
+  lastBackupBucket: string;
+  lastBackupRegion: string;
+  lastBackupPrefix: string;
+  lastBackupObjectCount: number;
+  lastAttemptedAt: string;
+  lastError: string;
+  objectKeys: string[];
+}
+
+export interface StorageBucketSummary {
+  name: string;
+  region: string;
+  createdAt: string;
+  linked: boolean;
+  prefix: string;
+  lastBackupAt: string;
+  lastBackupObjectCount: number;
+}
+
+export interface StorageBackupResult {
+  backupId: string;
+  uploadedAt: string;
+  bucket: string;
+  region: string;
+  prefix: string;
+  includeEncryptedCredentials: boolean;
+  objectKeys: string[];
+  stateBytes: number;
+  credentialsBytes: number;
+  status: StorageBackupStatus;
+}
+
+export interface LocalStorageWorkspaceEntry {
+  id: string;
+  kind: "file" | "folder";
+  path: string;
+  name: string;
+  bytes?: number;
+  itemCount?: number;
+  updatedAt: string;
 }
 
 export type AiDataBoundary = "local" | "telnyx-cloud" | "frontier-byo" | "self-hosted";
@@ -1612,6 +1686,9 @@ export interface WhisperStatus {
   appBundlePath: string;
   lastExit?: { code?: number | null; signal?: string | null; at: string } | null;
   lastLogLines: string[];
+  latestTranscript?: string;
+  latestSessionId?: string;
+  latestSessionAt?: string;
   message: string;
   updatedAt: string;
   buildOutput?: string;
@@ -2290,6 +2367,15 @@ export interface LinkDesktopApi {
   listConnectors(): Promise<ConnectorStatus[]>;
   listCredentials(): Promise<CredentialGroupStatus[]>;
   saveCredential(input: { name: string; value: string }): Promise<CredentialGroupStatus[]>;
+  getStorageBackupStatus(): Promise<StorageBackupStatus>;
+  listStorageBuckets(): Promise<StorageBucketSummary[]>;
+  backupStorageWorkspace(input?: { includeEncryptedCredentials?: boolean }): Promise<StorageBackupResult>;
+  listLocalStorageWorkspace(input?: { path?: string }): Promise<LocalStorageWorkspaceEntry[]>;
+  createLocalStorageFolder(input: { parentPath?: string; name?: string }): Promise<LocalStorageWorkspaceEntry | null>;
+  uploadLocalStorageFiles(input?: { parentPath?: string }): Promise<LocalStorageWorkspaceEntry[]>;
+  uploadLocalStorageFolder(input?: { parentPath?: string }): Promise<LocalStorageWorkspaceEntry | null>;
+  openLocalStorageWorkspaceEntry(input: { path: string }): Promise<{ ok: boolean }>;
+  revealDesktopPath(input: { path: string }): Promise<{ ok: boolean }>;
   getLiteLlmRuntimeStatus(): Promise<LiteLlmRuntimeStatus>;
   refreshTelnyxModelCatalog(): Promise<LiteLlmRuntimeStatus>;
   getModelCenterState(): Promise<ModelCenterState>;
@@ -2322,6 +2408,7 @@ export interface LinkDesktopApi {
   connectGuruWithOAuth(): Promise<GuruOAuthConnectionResult>;
   connectPylonWithOAuth(): Promise<PylonOAuthConnectionResult>;
   createPylonIssue(input: PylonCreateIssueInput): Promise<PylonCreateIssueResult>;
+  submitWikiWorkspaceDoc(input: WikiWorkspaceDocSubmissionInput): Promise<WikiWorkspaceDocSubmissionResult>;
   listGoogleCalendarEvents(): Promise<GoogleCalendarEvent[]>;
   getCalendarWorkspace(input?: { query?: string; selectedEventId?: string }): Promise<CalendarWorkspaceView>;
   listMeetingBots(): Promise<MeetingBotOption[]>;
@@ -2392,7 +2479,7 @@ export interface LinkDesktopApi {
   startWhisper(): Promise<WhisperStatus>;
   stopWhisper(): Promise<WhisperStatus>;
   listTtsVoices(input?: { provider?: string }): Promise<TelnyxTtsVoice[]>;
-  generateTtsSample(input: { voiceId: string; text: string; language?: string; provider?: string }): Promise<TelnyxTtsSample>;
+  generateTtsSample(input: { voiceId: string; text: string; language?: string; provider?: string; voiceSpeed?: number; languageBoost?: string }): Promise<TelnyxTtsSample>;
   getTerminalStatus(input?: { terminalId?: string }): Promise<TerminalStatus>;
   startTerminal(input?: { terminalId?: string; title?: string }): Promise<TerminalStatus>;
   writeTerminal(input: { terminalId?: string; text: string }): Promise<TerminalStatus>;
@@ -3577,6 +3664,7 @@ let previewCredentials: CredentialGroupStatus[] = [
   credentials("hindsight", "Hindsight", "Configured Hindsight API URL, per-user API key, and optional memory bank id used when saving archive entries.", ["HINDSIGHT_API_URL", "HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"]),
   credentials("linear", "Linear", "Linear API key for issue and project lookup.", ["LINEAR_API_KEY"]),
   credentials("telnyx", "Telnyx", "Telnyx API key for account, phone, messaging, and WebRTC token generation.", ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"]),
+  credentials("telnyx-storage", "Telnyx Storage", "Link a Telnyx Cloud Storage bucket for desktop workspace backups. Link reuses TELNYX_API_KEY for S3-compatible upload auth.", ["TELNYX_STORAGE_BUCKET", "TELNYX_STORAGE_REGION", "TELNYX_STORAGE_PREFIX"]),
   credentials("telnyx-meet-bridge", "Telnyx Meet Bridge", "Runtime settings for Google Meet live joins through Telnyx SIP/phone dial and Conversation Relay.", ["TELNYX_VOICE_CONNECTION_ID", "TELNYX_MEET_CALLER_ID", "TELNYX_MEET_WEBHOOK_URL", "TELNYX_MEET_CONVERSATION_RELAY_WS_URL", "LINK_MEETING_AGENT_ADAPTER_URL"]),
   credentials("agentmail", "AgentMail", "AgentMail API key plus optional domain for deterministic bot inbox identities.", ["AGENTMAIL_API_KEY", "AGENTMAIL_DOMAIN"]),
   credentials("github", "GitHub", "Pair GitHub with a read-only Telnyx Link GitHub App so Link can access approved Telnyx repositories without asking users to create personal access tokens.", ["GITHUB_USER_ACCESS_TOKEN", "GITHUB_APP_CLIENT_ID", "GH_TOKEN"]),
@@ -3587,6 +3675,54 @@ let previewCredentials: CredentialGroupStatus[] = [
   credentials("google-inbox", "Google Inbox", "Connect Gmail through gog so Link can read inbox threads and save Gmail drafts without exposing send.", ["GOOGLE_INBOX_AGENT_CONNECTION_ID", "GOOGLE_INBOX_VERIFIED_AT", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
   credentials("google-tasks", "Google Tasks", "Connect Google Tasks through gog so Taskbox can sync, create, update, and complete Google tasks without delete or clear commands.", ["GOOGLE_TASKS_AGENT_CONNECTION_ID", "GOOGLE_TASKS_VERIFIED_AT", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
 ];
+let previewCredentialValues: Record<string, string> = {};
+let previewStorageBackupStatus: StorageBackupStatus = {
+  ready: false,
+  configured: false,
+  bucket: "",
+  region: "",
+  prefix: "link-desktop/backups",
+  missing: ["TELNYX_API_KEY", "TELNYX_STORAGE_BUCKET", "TELNYX_STORAGE_REGION"],
+  lastBackupId: "",
+  lastBackupAt: "",
+  lastBackupBucket: "",
+  lastBackupRegion: "",
+  lastBackupPrefix: "",
+  lastBackupObjectCount: 0,
+  lastAttemptedAt: "",
+  lastError: "",
+  objectKeys: [],
+};
+let previewStorageBuckets: StorageBucketSummary[] = [
+  {
+    name: "workspace-archive",
+    region: "us-central-1",
+    createdAt: "2026-05-18T09:14:00.000Z",
+    linked: false,
+    prefix: "link-desktop/backups",
+    lastBackupAt: "",
+    lastBackupObjectCount: 0,
+  },
+  {
+    name: "meetings-and-notes",
+    region: "us-west-1",
+    createdAt: "2026-05-26T16:20:00.000Z",
+    linked: false,
+    prefix: "link-desktop/backups",
+    lastBackupAt: "",
+    lastBackupObjectCount: 0,
+  },
+  {
+    name: "eu-team-backups",
+    region: "eu-central-1",
+    createdAt: "2026-06-02T11:05:00.000Z",
+    linked: false,
+    prefix: "link-desktop/backups",
+    lastBackupAt: "",
+    lastBackupObjectCount: 0,
+  },
+];
+let previewLocalStorageEntries: LocalStorageWorkspaceEntry[] = [];
 
 let previewDialerConfigs: DialerConfig[] = [createDefaultDialerConfig()];
 let previewActiveDialerConfig = createDefaultDialerConfig();
@@ -3602,7 +3738,7 @@ let previewChatSessions: ChatSession[] = [];
 const emptyWikiState: WikiState = {
   profile: {
     id: "wiki-profile-link",
-    name: "Wiki",
+    name: "Docs",
     rank: "Ready",
     masteredSkills: 0,
     nextRankAt: 0,
@@ -3925,7 +4061,8 @@ const previewLinkApi: LinkDesktopApi = {
     }
     return previewCredentials;
   },
-  async saveCredential({ name }) {
+  async saveCredential({ name, value }) {
+    previewCredentialValues[name] = String(value || "");
     previewCredentials = previewCredentials.map((group) => ({
       ...group,
       fields: group.fields.map((field) =>
@@ -3933,6 +4070,150 @@ const previewLinkApi: LinkDesktopApi = {
       ),
     }));
     return previewCredentials;
+  },
+  async getStorageBackupStatus() {
+    const telnyxConfigured = previewPhoneE2EEnabled()
+      || previewCredentials.some((group) => group.id === "telnyx" && group.fields.some((field) => field.name === "TELNYX_API_KEY" && field.configured));
+    const bucket = previewCredentialValues.TELNYX_STORAGE_BUCKET || "";
+    const region = previewCredentialValues.TELNYX_STORAGE_REGION || "";
+    const prefix = (previewCredentialValues.TELNYX_STORAGE_PREFIX || "").trim() || "link-desktop/backups";
+    const missing = [
+      ...(telnyxConfigured ? [] : ["TELNYX_API_KEY"]),
+      ...(bucket ? [] : ["TELNYX_STORAGE_BUCKET"]),
+      ...(region ? [] : ["TELNYX_STORAGE_REGION"]),
+    ];
+    previewStorageBackupStatus = {
+      ...previewStorageBackupStatus,
+      ready: missing.length === 0,
+      configured: Boolean(bucket || region),
+      bucket,
+      region,
+      prefix,
+      missing,
+    };
+    return previewStorageBackupStatus;
+  },
+  async listStorageBuckets() {
+    const status = await previewLinkApi.getStorageBackupStatus();
+    const linked = previewStorageBuckets.map((bucket) => ({
+      ...bucket,
+      linked: bucket.name === status.bucket && bucket.region === status.region,
+      prefix: bucket.name === status.bucket && bucket.region === status.region ? status.prefix : bucket.prefix,
+      lastBackupAt: bucket.name === status.lastBackupBucket && bucket.region === status.lastBackupRegion ? status.lastBackupAt : "",
+      lastBackupObjectCount: bucket.name === status.lastBackupBucket && bucket.region === status.lastBackupRegion ? status.lastBackupObjectCount : 0,
+    }));
+    if (status.bucket && status.region && !linked.some((bucket) => bucket.name === status.bucket && bucket.region === status.region)) {
+      linked.unshift({
+        name: status.bucket,
+        region: status.region,
+        createdAt: "",
+        linked: true,
+        prefix: status.prefix,
+        lastBackupAt: status.lastBackupAt,
+        lastBackupObjectCount: status.lastBackupObjectCount,
+      });
+    }
+    return linked;
+  },
+  async backupStorageWorkspace({ includeEncryptedCredentials = false } = {}) {
+    const status = await previewLinkApi.getStorageBackupStatus();
+    if (!status.ready) throw new Error(`Configure ${status.missing.join(", ")} before running a storage backup.`);
+    const uploadedAt = new Date().toISOString();
+    const backupId = uploadedAt.replace(/[:.]/g, "-");
+    const objectKeys = [
+      `${status.prefix}/${backupId}/link-desktop-state.json`,
+      ...(includeEncryptedCredentials ? [`${status.prefix}/${backupId}/link-desktop-credentials.v1.json`] : []),
+      `${status.prefix}/${backupId}/manifest.json`,
+    ];
+    previewStorageBackupStatus = {
+      ...status,
+      lastBackupId: backupId,
+      lastBackupAt: uploadedAt,
+      lastBackupBucket: status.bucket,
+      lastBackupRegion: status.region,
+      lastBackupPrefix: status.prefix,
+      lastBackupObjectCount: objectKeys.length,
+      lastAttemptedAt: uploadedAt,
+      lastError: "",
+      objectKeys,
+    };
+    return {
+      backupId,
+      uploadedAt,
+      bucket: status.bucket,
+      region: status.region,
+      prefix: status.prefix,
+      includeEncryptedCredentials,
+      objectKeys,
+      stateBytes: 8192,
+      credentialsBytes: includeEncryptedCredentials ? 1024 : 0,
+      status: previewStorageBackupStatus,
+    };
+  },
+  async listLocalStorageWorkspace({ path = "~/Link/" } = {}) {
+    const normalizedPath = String(path || "~/Link/").trim() || "~/Link/";
+    const parentPath = normalizedPath.endsWith("/") ? normalizedPath : `${normalizedPath}/`;
+    const children = previewLocalStorageEntries.filter((entry) => {
+      if (!entry.path.startsWith(parentPath) || entry.path === parentPath) return false;
+      const remainder = entry.path.slice(parentPath.length);
+      return Boolean(remainder) && !remainder.replace(/\/$/, "").includes("/");
+    });
+    return children.sort((left, right) => {
+      if (left.kind !== right.kind) return left.kind === "folder" ? -1 : 1;
+      return left.name.localeCompare(right.name);
+    });
+  },
+  async createLocalStorageFolder({ parentPath = "~/Link/", name = "" } = {}) {
+    const trimmedName = String(name || "").trim();
+    if (!trimmedName) throw new Error("Enter a folder name.");
+    const normalizedParent = String(parentPath || "~/Link/").trim().replace(/\/?$/, "/");
+    const path = `${normalizedParent}${trimmedName}/`;
+    const entry: LocalStorageWorkspaceEntry = {
+      id: `preview-folder:${path}`,
+      kind: "folder",
+      path,
+      name: trimmedName,
+      itemCount: 0,
+      updatedAt: new Date().toISOString(),
+    };
+    previewLocalStorageEntries = [
+      ...previewLocalStorageEntries.filter((item) => item.path !== path),
+      entry,
+    ];
+    return entry;
+  },
+  async uploadLocalStorageFiles({ parentPath = "~/Link/" } = {}) {
+    const normalizedParent = String(parentPath || "~/Link/").trim().replace(/\/?$/, "/");
+    const uploadedAt = new Date().toISOString();
+    const entry: LocalStorageWorkspaceEntry = {
+      id: `preview-file:${normalizedParent}upload-${Date.now()}.txt`,
+      kind: "file",
+      path: `${normalizedParent}upload-${Date.now()}.txt`,
+      name: "upload.txt",
+      bytes: 1024,
+      updatedAt: uploadedAt,
+    };
+    previewLocalStorageEntries = [...previewLocalStorageEntries, entry];
+    return [entry];
+  },
+  async uploadLocalStorageFolder({ parentPath = "~/Link/" } = {}) {
+    const normalizedParent = String(parentPath || "~/Link/").trim().replace(/\/?$/, "/");
+    const entry: LocalStorageWorkspaceEntry = {
+      id: `preview-folder:${normalizedParent}Imported Folder/`,
+      kind: "folder",
+      path: `${normalizedParent}Imported Folder/`,
+      name: "Imported Folder",
+      itemCount: 0,
+      updatedAt: new Date().toISOString(),
+    };
+    previewLocalStorageEntries = [...previewLocalStorageEntries, entry];
+    return entry;
+  },
+  async openLocalStorageWorkspaceEntry() {
+    return { ok: true };
+  },
+  async revealDesktopPath() {
+    return { ok: true };
   },
   async getLiteLlmRuntimeStatus() {
     return previewLiteLlmRuntimeStatus();
@@ -4116,6 +4397,38 @@ const previewLinkApi: LinkDesktopApi = {
         link: "https://app.usepylon.com/issues/views/all-issues?conversationID=preview",
       },
       result: { mode: "preview" },
+    };
+  },
+  async submitWikiWorkspaceDoc(input) {
+    const title = String(input.title || "Untitled doc").trim() || "Untitled doc";
+    const sourceId = String(input.sourceId || "telnyx-pylon").trim() || "telnyx-pylon";
+    const source = previewWikiSources.find((item) => item.id === sourceId) ?? previewWikiSources.find((item) => item.type === "pylon") ?? previewWikiSources[0]!;
+    if (source.type === "github") {
+      const path = typeof source.metadata?.path === "string" && source.metadata.path.trim()
+        ? source.metadata.path.trim().replace(/\/+$/g, "")
+        : "docs";
+      return {
+        status: "created",
+        target: "github",
+        sourceId: source.id,
+        sourceLabel: source.label,
+        title,
+        message: `Draft PR opened in ${source.label}.`,
+        url: `https://github.com/team-telnyx/link/pull/preview-${Date.now()}`,
+        branch: `link-doc/${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "untitled"}-preview`,
+        path: `${path}/${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "untitled"}.md`,
+        pullRequestNumber: 999,
+      };
+    }
+    return {
+      status: "created",
+      target: "pylon",
+      sourceId: source.id,
+      sourceLabel: source.label,
+      title,
+      message: `Review issue created in ${source.label}.`,
+      url: "https://app.usepylon.com/issues/views/all-issues?conversationID=preview",
+      issueId: `preview-pylon-${Date.now()}`,
     };
   },
   async listGoogleCalendarEvents() {
@@ -4882,6 +5195,9 @@ const previewLinkApi: LinkDesktopApi = {
       appBundlePath: "",
       lastExit: null,
       lastLogLines: [],
+      latestTranscript: "",
+      latestSessionId: "",
+      latestSessionAt: "",
       cloudReady: false,
       localReady: route.mode === "local" && route.ready,
       sttMode: previewSpeakSettings.sttMode,
@@ -4910,6 +5226,9 @@ const previewLinkApi: LinkDesktopApi = {
       appBundlePath: "",
       lastExit: null,
       lastLogLines: [],
+      latestTranscript: "",
+      latestSessionId: "",
+      latestSessionAt: "",
       cloudReady: false,
       localReady: route.mode === "local" && route.ready,
       sttMode: previewSpeakSettings.sttMode,
@@ -4919,13 +5238,27 @@ const previewLinkApi: LinkDesktopApi = {
       updatedAt: new Date().toISOString(),
     };
   },
-  async listTtsVoices() {
-    return [
+  async listTtsVoices(input) {
+    const voices = [
+      {
+        voiceId: "Telnyx.Ultra.katie",
+        name: "Katie",
+        provider: "telnyx",
+        language: "en-US",
+        gender: "female",
+      },
       {
         voiceId: "Telnyx.NaturalHD.astra",
         name: "Astra",
         provider: "telnyx",
         language: "en-US",
+        gender: "female",
+      },
+      {
+        voiceId: "Telnyx.Ultra.callie",
+        name: "Callie",
+        provider: "telnyx",
+        language: "en",
         gender: "female",
       },
       {
@@ -4935,7 +5268,24 @@ const previewLinkApi: LinkDesktopApi = {
         language: "en-US",
         gender: "female",
       },
+      {
+        voiceId: "azure.en-US-AvaMultilingualNeural",
+        name: "Ava Multilingual",
+        provider: "azure",
+        language: "en-US",
+        gender: "female",
+      },
+      {
+        voiceId: "xAI.eve",
+        name: "Eve",
+        provider: "xai",
+        language: "auto",
+        gender: "female",
+      },
     ];
+    const provider = String(input?.provider || "").trim().toLowerCase();
+    if (!provider || provider === "all") return voices;
+    return voices.filter((voice) => voice.provider === provider);
   },
   async generateTtsSample(input) {
     return {
@@ -6247,7 +6597,7 @@ function normalizePreviewWikiSourceInput(input: WikiDocumentationSourceInput, ex
   if (!existing && !["github", "mcp", "okf"].includes(type)) throw new Error("Only GitHub, MCP, and OKF sources can be added in this beta.");
   const label = input.label.trim();
   const target = normalizePreviewWikiSourceTarget(type, input.target);
-  if (!label) throw new Error("Name the Wiki source before saving.");
+  if (!label) throw new Error("Name the Docs source before saving.");
   if (!target) throw new Error("Add a repo, MCP endpoint, or OKF bundle target before saving.");
   const enabled = input.enabled ?? existing?.enabled ?? true;
   const updatedAt = new Date().toISOString();
@@ -6307,7 +6657,7 @@ function customWikiSourceResults(term: string): ExplorerResult[] {
       type: source.type === "okf" ? "file" : "doc",
       permission: "allowed",
       freshness: source.status === "disabled" ? "Disabled" : `Configured ${wikiSourceTypeLabel(source.type)}`,
-      excerpt: `${source.description || "Custom Wiki source"} Target: ${source.target}. Search term: ${term}.`,
+      excerpt: `${source.description || "Custom Docs source"} Target: ${source.target}. Search term: ${term}.`,
       workspaceId: "workspace-link",
       url: source.target.startsWith("http") ? source.target : undefined,
     }));

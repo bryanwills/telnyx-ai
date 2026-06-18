@@ -4,11 +4,14 @@ import {
   ArrowRight,
   ArrowUp,
   Archive as ArchiveIcon,
+  Bold,
   BookOpen,
   Bot,
+  Building2,
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronUp,
   Clock,
   Cloud,
   Component,
@@ -23,14 +26,18 @@ import {
   Grid2X2,
   Grid2X2Plus,
   Grid3X3,
+  Heading1,
   Home,
+  ImagePlus,
   Inbox,
   Info,
+  Italic,
   Keyboard,
   LayoutDashboard,
   Link2,
   ListFilter,
   List,
+  ListOrdered,
   LogOut,
   Mail,
   MessageSquare,
@@ -63,15 +70,18 @@ import {
   Tags,
   Target,
   Trash2,
+  Underline,
   Upload,
   Users,
   Volume2,
   X,
   Zap,
+  Quote,
 } from "lucide-react";
-import type { ComponentType, CSSProperties, DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
-import { Children, Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import type { ComponentType, CSSProperties, DragEvent, ErrorInfo, FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import { Children, Component as ReactComponent, Fragment, isValidElement, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { SettingsView as ModelCenterSettingsView } from "./settings/SettingsView.js";
+import { displayInboxThreadSender, emailAddressOnly, mergeInboxLatestSenderRecord, preferredInboxSender } from "./inbox-senders.js";
 import type {
   AgentControlPlaneAuthStatus,
   AgentSummary,
@@ -97,6 +107,7 @@ import type {
   KnowledgeAgentAskResponse,
   AiModelRoute,
   LiteLlmRuntimeStatus,
+  LocalStorageWorkspaceEntry,
   EdgeSlugAvailability,
   ArtifactDeploymentRecord,
   ArtifactDeploymentTarget,
@@ -121,6 +132,7 @@ import type {
   MeetingInvite,
   MemoryBank,
   MemoryRecallResult,
+  ModelCenterState,
   OkfBundlePreview,
   OkfConceptPreview,
   OnboardingState,
@@ -134,6 +146,9 @@ import type {
   VpnWorkspace,
   SkillMarkdownResult,
   SkillMetadata,
+  StorageBackupResult,
+  StorageBackupStatus,
+  StorageBucketSummary,
   ScribesArtifactKind,
   ScribesCleanupProfile,
   ScribesModel,
@@ -154,6 +169,7 @@ import type {
   WikiDocumentationSource,
   WikiDocumentationSourceInput,
   WikiDocumentationSourceType,
+  WikiWorkspaceDocSubmissionResult,
   WorkboardCard,
   WorkboardProvider,
   WorkboardSnapshot,
@@ -234,6 +250,36 @@ function ScribesArchiveIcon({ size = 24, className }: { size?: number; className
     </svg>
   );
 }
+
+function ModelsIcon({ size = 24, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      focusable="false"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M4.25 9h-2.5" />
+      <path d="M22.25 9h-2.5" />
+      <path d="M4.25 15h-2.5" />
+      <path d="M22.25 15h-2.5" />
+      <path d="M9 4.25v-2.5" />
+      <path d="M9 22.25v-2.5" />
+      <path d="M15 4.25v-2.5" />
+      <path d="M15 22.25v-2.5" />
+      <rect x="4.25" y="4.25" width="15.5" height="15.5" rx="2.5" />
+      <path d="M8.25 12c1.97-.35 3.53-1.84 3.95-3.78l.03-.15.04.18c.45 1.93 2.01 3.4 3.96 3.74 0 0 0 0 0 0-1.95.34-3.51 1.81-3.96 3.74l-.04.18-.03-.15c-.42-1.94-1.98-3.43-3.95-3.76Z" />
+    </svg>
+  );
+}
 type SkillMarkdownLoadState =
   | { status: "loading" }
   | { status: "ready"; result: SkillMarkdownResult }
@@ -260,6 +306,15 @@ type SettingsTab =
   | "design"
   | "vpn"
   | "wiki";
+type ModelCenterTab =
+  | "general"
+  | "storage-privacy"
+  | "models"
+  | "local-engines"
+  | "cloud-providers"
+  | "local-api-server"
+  | "mcp-routing"
+  | "diagnostics";
 type WikiSourceDraft = {
   id: string;
   type: WikiDocumentationSourceType;
@@ -279,12 +334,12 @@ type PageSectionTabGroup<T extends string> = {
 
 const settingsSectionGroups: readonly PageSectionTabGroup<SettingsTab>[] = [
   {
-    title: "Services",
+    title: "Workspace",
     tabs: [
       ["auth", "Services", ShieldCheck],
       ["plugins", "Plugins", Link2],
       ["agentmail", "Aliases", Mail],
-      ["wiki", "Wikis", BookOpen],
+      ["wiki", "Knowledge", BookOpen],
     ],
   },
   {
@@ -299,18 +354,18 @@ const settingsSectionGroups: readonly PageSectionTabGroup<SettingsTab>[] = [
   {
     title: "Tools",
     tabs: [
-      ["domains", "Domains", Globe],
+      ["shortcuts", "Shortcuts", Keyboard],
       ["design", "Designs", Palette],
-      ["vpn", "VPN", ShieldCheck],
     ],
   },
+] as const;
+
+const modelCenterSectionGroups: readonly PageSectionTabGroup<ModelCenterTab>[] = [
   {
     title: "Workspace",
     tabs: [
       ["general", "General", SlidersHorizontal],
-      ["shortcuts", "Shortcuts", Keyboard],
       ["storage-privacy", "Storage & Privacy", ShieldCheck],
-      ["models", "Models", SquareTerminal],
       ["local-engines", "Local Engines", SquareTerminal],
       ["cloud-providers", "Cloud Providers", Cloud],
       ["local-api-server", "Local API Server", SquareTerminal],
@@ -321,6 +376,7 @@ const settingsSectionGroups: readonly PageSectionTabGroup<SettingsTab>[] = [
 ] as const;
 
 const settingsSectionTabs: readonly PageSectionTab<SettingsTab>[] = settingsSectionGroups.flatMap((group) => group.tabs);
+const modelCenterSectionTabs: readonly PageSectionTab<ModelCenterTab>[] = modelCenterSectionGroups.flatMap((group) => group.tabs);
 const pageSectionSidebarDefaultWidth = 175;
 const pageSectionSidebarMinWidth = 120;
 const pageSectionSidebarMaxWidth = 220;
@@ -338,6 +394,7 @@ function PageSectionSidebar<T extends string>({
   activeTab,
   onSelect,
   label,
+  resizable = true,
 }: {
   tabs?: readonly PageSectionTab<T>[];
   groups?: readonly PageSectionTabGroup<T>[];
@@ -346,6 +403,7 @@ function PageSectionSidebar<T extends string>({
   activeTab: T;
   onSelect: (tab: T) => void;
   label: string;
+  resizable?: boolean;
 }) {
   const sidebarRef = useRef<HTMLElement | null>(null);
   const sidebarDragRef = useRef<{
@@ -439,32 +497,291 @@ function PageSectionSidebar<T extends string>({
           ))
           : tabs?.map(renderTabButton)}
       </div>
-      <div
-        className="pageSectionSidebarResizeHandle"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize submenu"
-        title="Drag to resize. Double-click to reset."
-        tabIndex={0}
-        onDoubleClick={resetSidebarWidth}
-        onPointerDown={startSidebarResize}
-        onPointerMove={resizeSidebar}
-        onPointerUp={stopSidebarResize}
-        onPointerCancel={stopSidebarResize}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowLeft") {
-            event.preventDefault();
-            adjustSidebarWidth(-10);
-          } else if (event.key === "ArrowRight") {
-            event.preventDefault();
-            adjustSidebarWidth(10);
-          } else if (event.key === "Home" || event.key === "Enter") {
-            event.preventDefault();
-            resetSidebarWidth();
-          }
-        }}
-      />
+      {resizable && (
+        <div
+          className="pageSectionSidebarResizeHandle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize submenu"
+          title="Drag to resize. Double-click to reset."
+          tabIndex={0}
+          onDoubleClick={resetSidebarWidth}
+          onPointerDown={startSidebarResize}
+          onPointerMove={resizeSidebar}
+          onPointerUp={stopSidebarResize}
+          onPointerCancel={stopSidebarResize}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowLeft") {
+              event.preventDefault();
+              adjustSidebarWidth(-10);
+            } else if (event.key === "ArrowRight") {
+              event.preventDefault();
+              adjustSidebarWidth(10);
+            } else if (event.key === "Home" || event.key === "Enter") {
+              event.preventDefault();
+              resetSidebarWidth();
+            }
+          }}
+        />
+      )}
     </aside>
+  );
+}
+
+function GetStartedFlowPanels({
+  configurationSteps,
+  learningSteps,
+}: {
+  configurationSteps: Array<{
+    id: string;
+    title: string;
+    description: string;
+    bullets: string[];
+    ctaLabel: string;
+    onCtaClick: () => void;
+    icon: AppIcon;
+    complete: boolean;
+    onToggleComplete: (checked: boolean) => void;
+  }>;
+  learningSteps: Array<{
+    id: string;
+    title: string;
+    description: string;
+    bullets: string[];
+    ctaLabel: string;
+    onCtaClick: () => void;
+    icon: AppIcon;
+    complete: boolean;
+    onToggleComplete: (checked: boolean) => void;
+  }>;
+}) {
+  const [singleCardPages, setSingleCardPages] = useState(false);
+  const configurationPages = useMemo(() => {
+    const pages = [] as typeof configurationSteps[];
+    const stepsPerPage = singleCardPages ? 1 : 2;
+    for (let index = 0; index < configurationSteps.length; index += stepsPerPage) {
+      pages.push(configurationSteps.slice(index, index + stepsPerPage));
+    }
+    return pages.length > 0 ? pages : [[]];
+  }, [configurationSteps, singleCardPages]);
+  const learningPages = useMemo(() => {
+    const pages = [] as typeof learningSteps[];
+    const stepsPerPage = singleCardPages ? 1 : 2;
+    for (let index = 0; index < learningSteps.length; index += stepsPerPage) {
+      pages.push(learningSteps.slice(index, index + stepsPerPage));
+    }
+    return pages.length > 0 ? pages : [[]];
+  }, [learningSteps, singleCardPages]);
+  const configurationPageCount = Math.max(1, configurationPages.length);
+  const learningPageCount = Math.max(1, learningPages.length);
+  const [configurationPage, setConfigurationPage] = useState(0);
+  const [learningPage, setLearningPage] = useState(0);
+  const configurationScrollerRef = useRef<HTMLDivElement | null>(null);
+  const learningScrollerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function syncPagerLayout() {
+      setSingleCardPages(window.innerWidth <= 1380);
+    }
+
+    syncPagerLayout();
+    window.addEventListener("resize", syncPagerLayout);
+    return () => window.removeEventListener("resize", syncPagerLayout);
+  }, []);
+
+  useEffect(() => {
+    setConfigurationPage((current) => Math.min(current, configurationPageCount - 1));
+  }, [configurationPageCount]);
+
+  useEffect(() => {
+    setLearningPage((current) => Math.min(current, learningPageCount - 1));
+  }, [learningPageCount]);
+
+  useEffect(() => {
+    if (!configurationScrollerRef.current) return;
+    configurationScrollerRef.current.scrollTo({ left: configurationScrollerRef.current.clientWidth * configurationPage, behavior: "auto" });
+  }, [configurationPage, configurationPageCount, singleCardPages]);
+
+  useEffect(() => {
+    if (!learningScrollerRef.current) return;
+    learningScrollerRef.current.scrollTo({ left: learningScrollerRef.current.clientWidth * learningPage, behavior: "auto" });
+  }, [learningPage, learningPageCount, singleCardPages]);
+
+  function scrollToPage(scroller: HTMLDivElement | null, nextPage: number) {
+    if (!scroller) return;
+    scroller.scrollTo({ left: scroller.clientWidth * nextPage, behavior: "smooth" });
+  }
+
+  function syncPageFromScroll(scroller: HTMLDivElement | null, setPage: (page: number) => void) {
+    if (!scroller || scroller.clientWidth <= 0) return;
+    const nextPage = Math.round(scroller.scrollLeft / scroller.clientWidth);
+    setPage(nextPage);
+  }
+
+  function renderStepHeader(
+    title: string,
+    page: number,
+    pageCount: number,
+    setPage: (nextPage: number) => void,
+    scrollerRef: { current: HTMLDivElement | null },
+  ) {
+    return (
+      <div className="onboardingFlowPanelHeader">
+        <strong>{title}</strong>
+        <div className="onboardingFlowPanelHeaderControls">
+          <div className="onboardingFlowProgressBars" role="tablist" aria-label={`${title} progress`}>
+            {Array.from({ length: pageCount }, (_, index) => (
+              <button
+                key={`${title}-${index}`}
+                type="button"
+                role="tab"
+                aria-selected={page === index}
+                className={`onboardingFlowProgressBar ${page === index ? "selected" : ""}`}
+                onClick={() => {
+                  setPage(index);
+                  scrollToPage(scrollerRef.current, index);
+                }}
+                aria-label={`${title} page ${index + 1} of ${pageCount}`}
+                title={`${title} page ${index + 1}`}
+              />
+            ))}
+          </div>
+          <div className="onboardingFlowProgressNav">
+            <button
+              type="button"
+              className="onboardingFlowProgressArrow"
+              onClick={() => {
+                const nextPage = Math.max(0, page - 1);
+                setPage(nextPage);
+                scrollToPage(scrollerRef.current, nextPage);
+              }}
+              aria-label={`Previous ${title.toLowerCase()} step`}
+              title={`Previous ${title.toLowerCase()} step`}
+              disabled={page === 0}
+            >
+              <ArrowLeft size={14} />
+            </button>
+            <button
+              type="button"
+              className="onboardingFlowProgressArrow"
+              onClick={() => {
+                const nextPage = Math.min(pageCount - 1, page + 1);
+                setPage(nextPage);
+                scrollToPage(scrollerRef.current, nextPage);
+              }}
+              aria-label={`Next ${title.toLowerCase()} step`}
+              title={`Next ${title.toLowerCase()} step`}
+              disabled={page === pageCount - 1}
+            >
+              <ArrowRight size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="onboardingFlowGrid">
+      <section className="onboardingFlowPanel" aria-label="Configure Link steps">
+        <div className="onboardingFlowPanelBody">
+          <div
+            className="onboardingHeroScroller"
+            ref={configurationScrollerRef}
+            onScroll={() => syncPageFromScroll(configurationScrollerRef.current, setConfigurationPage)}
+          >
+            {configurationPages.map((steps, pageIndex) => (
+              <div className="onboardingHeroStepPage" key={`configuration-page-${pageIndex}`}>
+                <div className="onboardingHeroStepList">
+                  {steps.map((step) => {
+                    const Icon = step.icon;
+                    return (
+                      <article className="onboardingHeroStepCard" key={step.id}>
+                        <div className="onboardingHeroStepCardHeader">
+                          <span className="onboardingHeroStepIcon" aria-hidden="true">
+                            <Icon size={22} />
+                          </span>
+                          <h3 title={step.title}>{step.title}</h3>
+                        </div>
+                        <p>{step.description}</p>
+                        <ul className="onboardingHeroStepBullets">
+                          {step.bullets.map((bullet) => (
+                            <li key={bullet}>{bullet}</li>
+                          ))}
+                        </ul>
+                        <div className="onboardingHeroStepActions">
+                          <button className="button primary" type="button" onClick={step.onCtaClick}>
+                            {step.ctaLabel}
+                          </button>
+                          <label className={`onboardingHeroStepComplete ${step.complete ? "checked" : ""}`}>
+                            <input
+                              type="checkbox"
+                              checked={step.complete}
+                              onChange={(event) => step.onToggleComplete(event.target.checked)}
+                            />
+                            <span>{step.complete ? "Done" : "Complete"}</span>
+                          </label>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {renderStepHeader("Setup", configurationPage, configurationPageCount, setConfigurationPage, configurationScrollerRef)}
+      </section>
+      <section className="onboardingFlowPanel" aria-label="Learn Link steps">
+        <div className="onboardingFlowPanelBody">
+          <div
+            className="onboardingHeroScroller"
+            ref={learningScrollerRef}
+            onScroll={() => syncPageFromScroll(learningScrollerRef.current, setLearningPage)}
+          >
+            {learningPages.map((steps, pageIndex) => (
+              <div className="onboardingHeroStepPage" key={`learning-page-${pageIndex}`}>
+                <div className="onboardingHeroStepList">
+                  {steps.map((step) => {
+                    const Icon = step.icon;
+                    return (
+                      <article className="onboardingHeroStepCard" key={step.id}>
+                        <div className="onboardingHeroStepCardHeader">
+                          <span className="onboardingHeroStepIcon" aria-hidden="true">
+                            <Icon size={22} />
+                          </span>
+                          <h3 title={step.title}>{step.title}</h3>
+                        </div>
+                        <p>{step.description}</p>
+                        <ul className="onboardingHeroStepBullets">
+                          {step.bullets.map((bullet) => (
+                            <li key={bullet}>{bullet}</li>
+                          ))}
+                        </ul>
+                        <div className="onboardingHeroStepActions">
+                          <button className="button primary" type="button" onClick={step.onCtaClick}>
+                            {step.ctaLabel}
+                          </button>
+                          <label className={`onboardingHeroStepComplete ${step.complete ? "checked" : ""}`}>
+                            <input
+                              type="checkbox"
+                              checked={step.complete}
+                              onChange={(event) => step.onToggleComplete(event.target.checked)}
+                            />
+                            <span>{step.complete ? "Done" : "Complete"}</span>
+                          </label>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        {renderStepHeader("Learn Link", learningPage, learningPageCount, setLearningPage, learningScrollerRef)}
+      </section>
+    </div>
   );
 }
 
@@ -749,6 +1066,7 @@ function PageToolbar({
   onRefresh,
   refreshBusy = false,
   refreshDisabled = false,
+  endActions,
 }: {
   filterActive?: boolean;
   filterLabel: string;
@@ -763,6 +1081,7 @@ function PageToolbar({
   onRefresh: () => void | Promise<void>;
   refreshBusy?: boolean;
   refreshDisabled?: boolean;
+  endActions?: ReactNode;
 }) {
   return (
     <div className="chatSearchRow pageToolbar">
@@ -778,17 +1097,20 @@ function PageToolbar({
         <Search size={16} />
         <input value={searchValue} onChange={(event) => onSearchChange(event.target.value)} placeholder={searchPlaceholder} />
       </div>
-      {editLabel && onEdit && (
-        <IconCircleButton
-          className="iconButton agentFilterButton"
-          label={editLabel}
-          selected={editActive}
-          onClick={onEdit}
-        >
-          <Pencil size={16} />
-        </IconCircleButton>
-      )}
-      <TableRefreshButton onClick={onRefresh} busy={refreshBusy} disabled={refreshDisabled} label={refreshLabel} />
+      <div className="pageToolbarActions">
+        {editLabel && onEdit && (
+          <IconCircleButton
+            className="iconButton agentFilterButton"
+            label={editLabel}
+            selected={editActive}
+            onClick={onEdit}
+          >
+            <Pencil size={16} />
+          </IconCircleButton>
+        )}
+        <TableRefreshButton onClick={onRefresh} busy={refreshBusy} disabled={refreshDisabled} label={refreshLabel} />
+        {endActions}
+      </div>
     </div>
   );
 }
@@ -850,8 +1172,11 @@ function SortableColumnHeader<T extends string>({
       aria-sort={active ? direction === "asc" ? "ascending" : "descending" : "none"}
       onClick={() => onSort(column)}
     >
-      <span>{label}</span>
-      <ChevronDown className={direction === "asc" ? "ascending" : ""} size={14} />
+      <span className="sortableColumnHeaderLabel">{label}</span>
+      <span className="sortableColumnHeaderGlyph" aria-hidden="true">
+        <ChevronUp className={active && direction === "asc" ? "active" : ""} size={12} />
+        <ChevronDown className={active && direction === "desc" ? "active" : ""} size={12} />
+      </span>
     </button>
   );
 }
@@ -1013,11 +1338,12 @@ const viewMeta: Record<ViewId, { label: string; icon: AppIcon }> = {
   agents: { label: "Agents", icon: Bot },
   workboard: { label: "Taskbox", icon: SquareCheck },
   scribes: { label: "Scribe", icon: ScribesWaveformIcon },
-  drive: { label: "Drive", icon: FolderOpen },
+  storage: { label: "Storage", icon: FolderOpen },
   phone: { label: "Calls", icon: Phone },
   calendar: { label: "Calendar", icon: CalendarDays },
   memory: { label: "Archive", icon: ArchiveIcon },
-  wiki: { label: "Wiki", icon: BookOpen },
+  wiki: { label: "Docs", icon: BookOpen },
+  models: { label: "Models", icon: ModelsIcon },
   settings: { label: "Settings", icon: Settings },
 };
 
@@ -1136,6 +1462,8 @@ export function App() {
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [, setPhoneTab] = useState<PhoneViewTab>("calls");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("auth");
+  const [modelCenterTab, setModelCenterTab] = useState<ModelCenterTab>("general");
+  const [toolsWorkspaceTab, setToolsWorkspaceTab] = useState<ToolsWorkspaceTab>("personal");
   const [linkedPhoneNumber, setLinkedPhoneNumber] = useState("");
   const [phoneDialTarget, setPhoneDialTarget] = useState("");
   const [phoneDialTargetRequestId, setPhoneDialTargetRequestId] = useState(0);
@@ -1687,6 +2015,40 @@ export function App() {
     }
   }
 
+  function openSettingsHome() {
+    setSettingsTab("auth");
+    setView("settings");
+  }
+
+  function openModelsHome() {
+    setModelCenterTab("general");
+    setView("models");
+  }
+
+  function openToolsHome() {
+    setToolsWorkspaceTab("personal");
+    setView("apps");
+  }
+
+  function openToolsWorkspace(nextTab: Extract<ToolsWorkspaceTab, "domains" | "vpn">) {
+    setToolsWorkspaceTab(nextTab);
+    setView("apps");
+  }
+
+  function openSettingsTab(nextTab: SettingsTab) {
+    if (isModelCenterTab(nextTab)) {
+      setModelCenterTab(normalizeModelCenterTab(nextTab));
+      setView("models");
+      return;
+    }
+    if (nextTab === "domains" || nextTab === "vpn") {
+      openToolsWorkspace(nextTab);
+      return;
+    }
+    setSettingsTab(nextTab);
+    setView("settings");
+  }
+
   return (
     <div className={`desktop ${terminalOpen ? "terminalOpen" : ""}`} data-theme={colorMode} style={primaryColorStyle}>
       <TitleBar
@@ -1709,6 +2071,9 @@ export function App() {
         <Rail
           view={view}
           setView={setView}
+          openToolsHome={openToolsHome}
+          openSettingsHome={openSettingsHome}
+          openModelsHome={openModelsHome}
           expanded={railExpanded}
           onboarding={onboarding}
           setOnboarding={setOnboarding}
@@ -1757,10 +2122,11 @@ export function App() {
                   chatFallbackModelMode={chatFallbackModelMode}
                   activeDialerConfig={activeDialerConfig}
                   setView={setView}
-                  openSettingsTab={(nextTab) => {
-                    setSettingsTab(nextTab);
-                    setView("settings");
+                  openAssistantTab={(mode) => {
+                    setAssistantMode(mode);
+                    setAssistantCollapsed(false);
                   }}
+                  openSettingsTab={openSettingsTab}
                   refresh={refresh}
                   startPromptChat={startOnboardingPromptChat}
                 />
@@ -1821,7 +2187,7 @@ export function App() {
                 />
               )}
               {!selectedArtifact && view === "scribes" && <ScribesView setView={setView} />}
-              {!selectedArtifact && view === "drive" && (
+              {!selectedArtifact && view === "storage" && (
                 <DriveView
                   sessions={chatSessions}
                   publishedApps={publishedApps}
@@ -1829,6 +2195,7 @@ export function App() {
                   openArtifact={setSelectedArtifact}
                   openSession={openChatSession}
                   openScribes={() => setView("scribes")}
+                  openSettings={() => openSettingsTab("auth")}
                   refreshTables={refreshSessionTablesThenAll}
                 />
               )}
@@ -1866,10 +2233,7 @@ export function App() {
                   setTab={setPhoneTab}
                   refresh={refresh}
                   startManagedSkillSetupChat={startManagedSkillSetupChat}
-                  openSettingsTab={(nextTab) => {
-                    setSettingsTab(nextTab);
-                    setView("settings");
-                  }}
+                  openSettingsTab={openSettingsTab}
                   startEmailDraftChat={startEmailDraftChat}
                   emailDraftAgentReady={liteLlmCredentialReady || Boolean(accountStatus?.ready)}
                   openNewCall={(phoneNumber) => {
@@ -1886,6 +2250,9 @@ export function App() {
               {!selectedArtifact && (view === "apps" || view === "skills" || view === "wiki") && (
                 <WikiView
                   initialTab={view === "apps" || view === "skills" ? view : undefined}
+                  toolsWorkspaceTab={toolsWorkspaceTab}
+                  setToolsWorkspaceTab={setToolsWorkspaceTab}
+                  connectors={connectors}
                   wikiState={wikiState}
                   skills={skills}
                   activeAgent={activeAgent}
@@ -1901,6 +2268,31 @@ export function App() {
 	                  skillSearchRequest=""
 	                  shareExplorerResultToAgent={shareExplorerResultToAgent}
 	                  setView={setView}
+                  renderEmbeddedSettingsTab={(tab) => (
+                    <LegacySettingsView
+                      connectors={connectors}
+                      agents={agents}
+                      tools={tools}
+                      refresh={refresh}
+                      activeDialerConfig={activeDialerConfig}
+                      setActiveDialerConfig={setActiveDialerConfig}
+                      tab={tab}
+                      setTab={setSettingsTab}
+                      liteLlmRuntime={liteLlmRuntime}
+                      chatModelMode={chatModelMode}
+                      setChatModelMode={setChatModelMode}
+                      chatFallbackModelMode={chatFallbackModelMode}
+                      setChatFallbackModelMode={setChatFallbackModelMode}
+                      linkedPhoneNumber={linkedPhoneNumber}
+                      setLinkedPhoneNumber={setLinkedPhoneNumber}
+                      setView={setView}
+                      openTerminal={() => setTerminalOpen(true)}
+                      startManagedSkillSetupChat={startManagedSkillSetupChat}
+                      embedded
+                      hideSectionSidebar
+                      hideHeader
+                    />
+                  )}
 	                  openNewAppChatSession={openNewAppChatSession}
 	                  onEdgePreviewReady={(preview) => {
 	                    setEdgePreviewSurface(preview);
@@ -1930,6 +2322,12 @@ export function App() {
                   startManagedSkillSetupChat={startManagedSkillSetupChat}
                 />
               )}
+              {!selectedArtifact && view === "models" && (
+                <ModelsWorkspaceView
+                  tab={modelCenterTab}
+                  setTab={setModelCenterTab}
+                />
+              )}
             </div>
             <AssistantPanel
               mode={assistantMode}
@@ -1957,8 +2355,7 @@ export function App() {
               refresh={refresh}
               setView={setView}
               openModelSettings={() => {
-                setSettingsTab("models");
-                setView("settings");
+                openModelsHome();
               }}
               openPhoneContacts={() => {
                 setView("phone");
@@ -2020,7 +2417,7 @@ function AuthGate({
           </p>
         </div>
         <button className="button primary" onClick={onSignIn} disabled={busy}>
-          {busy ? "Signing in" : "Sign in with Okta"}
+          {busy ? "Signing in" : "Sign in with SSO"}
         </button>
         {visibleError && <div className="errorBanner">{visibleError}</div>}
       </section>
@@ -2620,15 +3017,22 @@ function sanitizeTerminalText(value: string) {
 const internalTestingChecklistStorageKey = "telnyx-link-internal-testing-checklist";
 
 const internalTestingChecklistItems = [
-  { id: "chat", label: "Send one chat request", view: "chats" },
+  { id: "chat", label: "Send one chat request", assistantTab: "chat", actionLabel: "Chat" },
   { id: "taskbox", label: "Review one Taskbox card", view: "workboard" },
   { id: "inbox", label: "Read one inbox thread", view: "inbox" },
   { id: "calendar", label: "Open one calendar event", view: "calendar" },
-  { id: "call-own-number", label: "Call your own number", view: "phone" },
-  { id: "call-agent", label: "Call one of your agents", view: "phone" },
-  { id: "invite-agent-call", label: "Invite an agent to a call", view: "phone" },
-  { id: "scribe", label: "Record one Scribe note", view: "scribes" },
-] satisfies { id: string; label: string; view: ViewId }[];
+  { id: "call-own-number", label: "Call your own number", assistantTab: "phone", actionLabel: "Call" },
+  { id: "call-agent", label: "Call one of your agents", assistantTab: "phone", actionLabel: "Call" },
+  { id: "invite-agent-call", label: "Invite an agent to a call", assistantTab: "phone", actionLabel: "Call" },
+  { id: "scribe", label: "Record one Scribe note", assistantTab: "scribe", actionLabel: "Scribe" },
+  { id: "transcript-search", label: "Search one transcript", view: "scribes" },
+  { id: "agent-review", label: "Review one agent profile", view: "agents" },
+  { id: "app-draft", label: "Open one app draft", view: "apps" },
+  { id: "wiki-source", label: "Open one wiki source", view: "wiki" },
+  { id: "archive-memory", label: "Review one archive memory", view: "memory" },
+  { id: "plugin-settings", label: "Open plugin settings", view: "settings", actionLabel: "Plugins" },
+  { id: "contact-preview", label: "Review one call contact", view: "phone", actionLabel: "Calls" },
+] satisfies { id: string; label: string; view?: ViewId; assistantTab?: AssistantMode; actionLabel?: string }[];
 
 function readInternalTestingChecklist() {
   if (typeof window === "undefined") return [];
@@ -2656,6 +3060,7 @@ function OnboardingView({
   chatFallbackModelMode,
   activeDialerConfig,
   setView,
+  openAssistantTab,
   openSettingsTab,
   refresh,
   startPromptChat,
@@ -2675,6 +3080,7 @@ function OnboardingView({
   chatFallbackModelMode: string;
   activeDialerConfig: DialerConfig;
   setView: (view: ViewId) => void;
+  openAssistantTab: (mode: AssistantMode) => void;
   openSettingsTab: (tab: SettingsTab) => void;
   refresh: () => Promise<void>;
   startPromptChat: (prompt: string, title: string) => Promise<void>;
@@ -2685,6 +3091,7 @@ function OnboardingView({
   const [testingChecklist, setTestingChecklist] = useState<string[]>(() => readInternalTestingChecklist());
   const [busy, setBusy] = useState("");
   const [introSlideIndex, setIntroSlideIndex] = useState(0);
+  const onboardingViewRef = useRef<HTMLElement | null>(null);
   const completed = new Set(onboarding.completedStepIds);
   const connectedConnectors = connectors.filter((connector) => connector.status === "connected" || connector.status === "signed_in");
   const connector = (id: string) => connectors.find((item) => item.id === id);
@@ -2698,7 +3105,6 @@ function OnboardingView({
   const hindsightComplete = connector("hindsight")?.status === "connected" && memoryBanks.length > 0;
   const rescueComplete = agents.some((agent) => agent.id === "slack-bot-troubleshooting");
   const squadBank = memoryBanks.find((bank) => bank.scope === "squad" || /squad|team|wiki/i.test(`${bank.name} ${bank.mission}`));
-  const checklistCompleteCount = testingChecklist.length;
   const onboardingModelRoutes = liteLlmRuntime?.routes?.length ? liteLlmRuntime.routes : fallbackAiModelRoutes();
   const onboardingPrimaryRoute = onboardingModelRoutes.find((route) => route.id === chatModelMode)
     ?? onboardingModelRoutes.find((route) => route.default)
@@ -2739,7 +3145,7 @@ function OnboardingView({
       facts: [
         { label: "Primary route", value: onboardingPrimaryRoute?.label ?? "Choose a local route in Workspace > Models" },
         { label: "Fallback route", value: onboardingFallbackRouteLabel },
-        { label: "Core idea", value: "Local-first chat, speech, agents, and drafts with optional cloud fallback." },
+        { label: "Core idea", value: "Run AI locally when you want privacy first, or connect cloud models and services through Telnyx when you need reach." },
       ],
       primaryActionLabel: "Review local runtime",
       onPrimaryAction: () => openSettingsTab("models"),
@@ -2760,7 +3166,7 @@ function OnboardingView({
       facts: [
         { label: "Runs in", value: "The main Chat page and the sidebar composer." },
         { label: "Primary", value: onboardingPrimaryRoute?.label ?? "Not assigned yet" },
-        { label: "Fallback", value: onboardingFallbackRouteLabel },
+        { label: "Fallback", value: `Keep chat local, or hand off to ${onboardingFallbackRouteLabel.toLowerCase()} through Telnyx.` },
       ],
       primaryActionLabel: "Open Chat",
       onPrimaryAction: () => setView("chats"),
@@ -2772,16 +3178,16 @@ function OnboardingView({
       tabLabel: "Scribe",
       title: "Scribe keeps dictation, transcripts, and cleanup close to the source.",
       body: whisperStatus?.providerRoute
-        ? `${sttProviderLabel(whisperStatus.providerRoute.provider)} can keep capture and transcript cleanup on this Mac when you want a private-first path.`
-        : "Use Scribe when you want local speech recognition, transcription models, and voice settings in one place.",
+        ? `${sttProviderLabel(whisperStatus.providerRoute.provider)} can keep capture and transcript cleanup on this Mac, or you can route speech services through Telnyx when cloud coverage is the better fit.`
+        : "Use Scribe when you want local speech recognition first, with Telnyx-connected transcription and voice services available when you need them.",
       icon: Mic,
       statusTone: whisperStatus?.available && whisperStatus.built ? "success" : "warning",
       statusLabel: whisperStatus?.available && whisperStatus.built ? "Scribe voice ready" : "Review speech setup",
       surfaceLabel: "Speech",
       facts: [
-        { label: "Speech-to-Text", value: "Configure capture mode, shortcuts, and the active STT provider." },
-        { label: "Transcription Models", value: "Download and switch local STT models from their own page." },
-        { label: "Text-to-Speech", value: "Browse voices separately when you need playback or spoken output." },
+        { label: "Speech-to-Text", value: "Choose local transcription on-device or connect cloud speech services through Telnyx." },
+        { label: "Transcription Models", value: "Manage local STT models on their own page and switch providers when a cloud route makes more sense." },
+        { label: "Text-to-Speech", value: "Use local playback where available, or browse Telnyx-connected voices for spoken output." },
       ],
       primaryActionLabel: "Open Scribe",
       onPrimaryAction: () => setView("scribes"),
@@ -2791,10 +3197,10 @@ function OnboardingView({
     {
       id: "agents",
       tabLabel: "Agents",
-      title: "Self-hosted agents stay on this Mac and still use Link's tools.",
+      title: "Agents can stay local or reach cloud inference through Link.",
       body: selfHostedAgentCount > 0
-        ? `${selfHostedAgentCount} self-hosted agent${selfHostedAgentCount === 1 ? "" : "s"} already appear in Link, alongside hosted agents and squad tools.`
-        : "Install Hermes or OpenClaw locally to expose agents that stay on this Mac while still using Link routing and tools.",
+        ? `${selfHostedAgentCount} self-hosted agent${selfHostedAgentCount === 1 ? "" : "s"} already appear in Link, alongside hosted agents and Telnyx-connected model routes.`
+        : "Install Hermes or OpenClaw for local agents, then use Link routing when those agents need cloud inference or shared services through Telnyx.",
       icon: Bot,
       statusTone: selfHostedAgentCount > 0 ? "success" : "warning",
       statusLabel: selfHostedAgentCount > 0 ? "Self-hosted agents available" : "Install a local runtime",
@@ -2802,7 +3208,7 @@ function OnboardingView({
       facts: [
         { label: "Where they appear", value: "Agents page and the chat agent picker." },
         { label: "Current count", value: selfHostedAgentCount > 0 ? `${selfHostedAgentCount} self-hosted agent${selfHostedAgentCount === 1 ? "" : "s"} detected` : "No self-hosted agents detected yet" },
-        { label: "Related setup", value: "Workspace > Models and MCP & Tool Routing." },
+        { label: "Related setup", value: "Workspace > Models for inference routes and MCP & Tool Routing for service access." },
       ],
       primaryActionLabel: "Open Agents",
       onPrimaryAction: () => setView("agents"),
@@ -2811,21 +3217,21 @@ function OnboardingView({
     },
     {
       id: "outputs",
-      tabLabel: "Outputs",
-      title: "Apps, wiki context, and draft artifacts can stay local while you iterate.",
-      body: "Use Link to draft apps, inspect wiki context, and generate early outputs locally, then publish or share only when you're ready.",
+      tabLabel: "Build",
+      title: "Start by building a local app for yourself, or make a simple game to learn Link.",
+      body: "Use Apps to prototype a personal workflow, a tiny utility, or a simple game locally first, then decide when it should stay on-device versus move through Telnyx-connected publishing or cloud services.",
       icon: ArchiveIcon,
       statusTone: "default",
       statusLabel: "Local draft workflow",
       surfaceLabel: "Drafts",
       facts: [
-        { label: "Apps", value: "Build and review local drafts before anything is published." },
-        { label: "Wiki", value: "Bring squad docs and archive context into Link when you need it." },
-        { label: "Share boundary", value: "You decide when work leaves this device for Telnyx Cloud." },
+        { label: "Start small", value: "Build a personal app, an internal helper, or a lightweight game to learn the workflow end to end." },
+        { label: "Docs", value: "Pull in squad docs and archive context when you want shared knowledge behind the app." },
+        { label: "Publish path", value: "Choose whether the app stays local, is shared privately, or gets published through Telnyx Cloud." },
       ],
       primaryActionLabel: "Open Apps",
       onPrimaryAction: () => setView("apps"),
-      secondaryActionLabel: "Open Wiki",
+      secondaryActionLabel: "Open Docs",
       onSecondaryAction: () => setView("wiki"),
     },
   ];
@@ -2840,7 +3246,7 @@ function OnboardingView({
     `Phone: ${webRtcStatus?.ready ? "ready" : webRtcStatus?.message ?? "unknown"}`,
     `Whisper: ${whisperStatus?.available && whisperStatus.built ? "built" : whisperStatus?.message ?? "unknown"}`,
     `Publisher: ${publisherReadiness?.message ?? "unknown"}`,
-    `Completed tester checks: ${checklistCompleteCount}/${internalTestingChecklistItems.length}`,
+    `Completed tester checks: ${testingChecklist.length}/${internalTestingChecklistItems.length}`,
   ].join("\n");
 
   useEffect(() => {
@@ -2921,8 +3327,7 @@ function OnboardingView({
   }
 
   function renderOnboardingArrowActions(actions: ReactNode) {
-    if (!actions) return null;
-    const nodes = Children.toArray(actions);
+    const nodes = extractOnboardingActionNodes(actions);
     if (nodes.length === 0) return null;
     return (
       <div className="onboardingArrowActions">
@@ -2934,6 +3339,246 @@ function OnboardingView({
         ))}
       </div>
     );
+  }
+
+  function extractOnboardingActionNodes(actions: ReactNode) {
+    if (!actions) return [];
+    return Children.toArray(actions).flatMap((node) => {
+      if (isValidElement<{ children?: ReactNode }>(node) && node.props.children) {
+        return Children.toArray(node.props.children).filter(Boolean);
+      }
+      return [node];
+    });
+  }
+
+  function renderOnboardingStepButtons(actions: ReactNode) {
+    const nodes = extractOnboardingActionNodes(actions);
+    if (nodes.length === 0) return null;
+    return (
+      <div className="onboardingStepButtons">
+        {nodes.map((node, index) => (
+          <span className="onboardingStepButtonSlot" key={index}>{node}</span>
+        ))}
+      </div>
+    );
+  }
+
+  function renderOnboardingMockup(kind: string) {
+    switch (kind) {
+      case "auth":
+        return (
+          <div className="onboardingMockup onboardingMockupAuth" aria-hidden="true">
+            <div className="onboardingMockupToolbar">
+              <span className="onboardingMockupDot" />
+              <span className="onboardingMockupDot" />
+              <span className="onboardingMockupDot" />
+            </div>
+            <div className="onboardingMockupAuthCard">
+              <div className="onboardingMockupAvatar">TL</div>
+              <div>
+                <strong>Sign in with SSO</strong>
+                <small>Secure workspace access</small>
+              </div>
+              <span className="onboardingMockupBadge">Secure</span>
+            </div>
+          </div>
+        );
+      case "plugins":
+        return (
+          <div className="onboardingMockup onboardingMockupPlugins" aria-hidden="true">
+            {["GitHub", "Google", "Telnyx"].map((label) => (
+              <div className="onboardingMockupRow" key={label}>
+                <span>{label}</span>
+                <span className="onboardingMockupBadge">Connected</span>
+              </div>
+            ))}
+          </div>
+        );
+      case "routing":
+        return (
+          <div className="onboardingMockup onboardingMockupRoutes" aria-hidden="true">
+            <div className="onboardingMockupRouteCard">
+              <small>Primary</small>
+              <strong>Local route</strong>
+            </div>
+            <div className="onboardingMockupRouteArrow" />
+            <div className="onboardingMockupRouteCard secondary">
+              <small>Fallback</small>
+              <strong>Telnyx Cloud</strong>
+            </div>
+          </div>
+        );
+      case "workspace":
+        return (
+          <div className="onboardingMockup onboardingMockupWorkspace" aria-hidden="true">
+            <div className="onboardingMockupSplit">
+              <div className="onboardingMockupCalendarCard">
+                <small>Calendar</small>
+                <strong>3 meetings today</strong>
+              </div>
+              <div className="onboardingMockupInboxCard">
+                <small>Inbox</small>
+                <strong>2 unread threads</strong>
+              </div>
+            </div>
+            <div className="onboardingMockupContactBar" />
+          </div>
+        );
+      case "api":
+        return (
+          <div className="onboardingMockup onboardingMockupApi" aria-hidden="true">
+            <div className="onboardingMockupField">
+              <small>API key</small>
+              <div className="onboardingMockupMasked">••••••••••••••••</div>
+            </div>
+            <div className="onboardingMockupPillRow">
+              <span className="onboardingMockupBadge">Numbers</span>
+              <span className="onboardingMockupBadge">Voice</span>
+              <span className="onboardingMockupBadge">Apps</span>
+            </div>
+          </div>
+        );
+      case "phone":
+        return (
+          <div className="onboardingMockup onboardingMockupPhone" aria-hidden="true">
+            <div className="onboardingMockupPhoneDisplay">+1 (415) 555-0123</div>
+            <div className="onboardingMockupKeypad">
+              {["1", "2", "3", "4", "5", "6"].map((digit) => <span key={digit}>{digit}</span>)}
+            </div>
+          </div>
+        );
+      case "scribe":
+        return (
+          <div className="onboardingMockup onboardingMockupScribe" aria-hidden="true">
+            <div className="onboardingMockupWave">
+              <span /><span /><span /><span /><span />
+            </div>
+            <div className="onboardingMockupTranscript">
+              <div />
+              <div />
+              <div className="short" />
+            </div>
+          </div>
+        );
+      case "apps":
+        return (
+          <div className="onboardingMockup onboardingMockupApps" aria-hidden="true">
+            <div className="onboardingMockupAppTile">
+              <strong>Draft app</strong>
+              <small>Ready to publish</small>
+            </div>
+            <div className="onboardingMockupAppFooter">
+              <span className="onboardingMockupBadge">Preview</span>
+              <span className="onboardingMockupBadge">Publish</span>
+            </div>
+          </div>
+        );
+      case "archive":
+        return (
+          <div className="onboardingMockup onboardingMockupArchive" aria-hidden="true">
+            <div className="onboardingMockupSearchBar" />
+            <div className="onboardingMockupArchiveRows">
+              <div /><div /><div className="short" />
+            </div>
+          </div>
+        );
+      case "chat":
+        return (
+          <div className="onboardingMockup onboardingMockupChat" aria-hidden="true">
+            <div className="onboardingMockupBubble outgoing" />
+            <div className="onboardingMockupBubble incoming" />
+            <div className="onboardingMockupComposerBar" />
+          </div>
+        );
+      case "taskbox":
+        return (
+          <div className="onboardingMockup onboardingMockupTaskbox" aria-hidden="true">
+            <div className="onboardingMockupTaskCol">
+              <small>Now</small>
+              <div />
+              <div />
+            </div>
+            <div className="onboardingMockupTaskCol">
+              <small>Next</small>
+              <div />
+            </div>
+          </div>
+        );
+      case "inbox":
+        return (
+          <div className="onboardingMockup onboardingMockupInbox" aria-hidden="true">
+            <div className="onboardingMockupSearchBar" />
+            <div className="onboardingMockupListRows">
+              <div /><div /><div />
+            </div>
+          </div>
+        );
+      case "calendar":
+        return (
+          <div className="onboardingMockup onboardingMockupCalendar" aria-hidden="true">
+            <div className="onboardingMockupEventBlock" />
+            <div className="onboardingMockupEventBlock short" />
+          </div>
+        );
+      case "agents":
+        return (
+          <div className="onboardingMockup onboardingMockupAgents" aria-hidden="true">
+            <div className="onboardingMockupAgentCard">
+              <div className="onboardingMockupAvatar">A</div>
+              <div>
+                <strong>Account Agent</strong>
+                <small>Local + cloud</small>
+              </div>
+            </div>
+          </div>
+        );
+      case "wiki":
+        return (
+          <div className="onboardingMockup onboardingMockupWiki" aria-hidden="true">
+            <div className="onboardingMockupSearchBar" />
+            <div className="onboardingMockupDocCard" />
+            <div className="onboardingMockupDocCard short" />
+          </div>
+        );
+      case "settings":
+        return (
+          <div className="onboardingMockup onboardingMockupSettings" aria-hidden="true">
+            <div className="onboardingMockupRow">
+              <span>Plugins</span>
+              <span className="onboardingMockupBadge">On</span>
+            </div>
+            <div className="onboardingMockupRow">
+              <span>Cloud providers</span>
+              <span className="onboardingMockupBadge">Ready</span>
+            </div>
+          </div>
+        );
+      case "contact":
+        return (
+          <div className="onboardingMockup onboardingMockupContact" aria-hidden="true">
+            <div className="onboardingMockupAgentCard">
+              <div className="onboardingMockupAvatar">C</div>
+              <div>
+                <strong>Contact preview</strong>
+                <small>Matched number</small>
+              </div>
+            </div>
+            <div className="onboardingMockupPillRow">
+              <span className="onboardingMockupBadge">CRM</span>
+              <span className="onboardingMockupBadge">Dialpad</span>
+            </div>
+          </div>
+        );
+      default:
+        return (
+          <div className="onboardingMockup onboardingMockupSettings" aria-hidden="true">
+            <div className="onboardingMockupRow">
+              <span>Link</span>
+              <span className="onboardingMockupBadge">Ready</span>
+            </div>
+          </div>
+        );
+    }
   }
 
   const firstUseActions = [
@@ -2954,7 +3599,7 @@ function OnboardingView({
     {
       id: "squad-skill",
       title: "Find a squad skill",
-      body: "Jump into Wiki to inspect or install squad-standard skills.",
+      body: "Jump into Docs to inspect or install squad-standard skills.",
       icon: Tags,
       action: () => {
         setView("wiki");
@@ -2976,7 +3621,7 @@ function OnboardingView({
   const steps = [
     {
       id: "okta",
-      title: "Register with Telnyx Okta",
+      title: "Sign in with SSO",
       body: "Use the native Okta flow so Link can pick up employee identity, internal auth cookies, and future squad context without storing passwords.",
       complete: oktaComplete || completed.has("okta"),
       icon: ShieldCheck,
@@ -2993,8 +3638,8 @@ function OnboardingView({
       meta: connectedConnectors.length > 0 ? `${connectedConnectors.length} plugins connected.` : "No plugins connected.",
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => setView("settings")}>Open Settings</button>
-          <button className="button ghost" onClick={() => openSettingsTab("plugins")}>Review Plugins</button>
+          <button className="button secondary" onClick={() => openSettingsTab("auth")}>Settings</button>
+          <button className="button ghost" onClick={() => openSettingsTab("plugins")}>Plugins</button>
           {!accountComplete && <button className="button ghost" onClick={() => void markStep("accounts")}>Use current set</button>}
         </div>
       ),
@@ -3009,8 +3654,8 @@ function OnboardingView({
       meta: `${skills.length} skills, ${agents.length} agents.`,
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => setView("wiki")}>Open Wiki</button>
-          <button className="button ghost" onClick={() => setView("agents")}>Open Agents</button>
+          <button className="button secondary" onClick={() => setView("wiki")}>Docs</button>
+          <button className="button ghost" onClick={() => setView("agents")}>Agents</button>
           {!squadToolsComplete && <button className="button ghost" onClick={() => void markStep("squad-tools")}>Mark reviewed</button>}
         </div>
       ),
@@ -3025,8 +3670,8 @@ function OnboardingView({
       meta: liteLlmReady || connectorReady("litellm") ? "Local and cloud routing reviewed." : "AI runtime guidance still needs setup.",
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => openSettingsTab("models")}>Open Models</button>
-          <button className="button ghost" onClick={() => openSettingsTab("plugins")}>Open Plugins</button>
+          <button className="button secondary" onClick={() => openSettingsTab("models")}>Models</button>
+          <button className="button ghost" onClick={() => openSettingsTab("plugins")}>Plugins</button>
           {!(liteLlmReady || connectorReady("litellm") || completed.has("model-gateway")) && <button className="button ghost" onClick={() => void markStep("model-gateway")}>Use current route</button>}
         </div>
       ),
@@ -3041,7 +3686,7 @@ function OnboardingView({
       meta: connectorReady("google-drive") || connectorReady("google-calendar") ? "Workspace connected." : "Connect Google.",
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => openSettingsTab("plugins")}>Open Plugins</button>
+          <button className="button secondary" onClick={() => openSettingsTab("plugins")}>Plugins</button>
           {!(connectorReady("google-drive") || connectorReady("google-calendar") || connectorReady("gmail") || completed.has("google-workspace")) && <button className="button ghost" onClick={() => void markStep("google-workspace")}>Skip for now</button>}
         </div>
       ),
@@ -3056,7 +3701,7 @@ function OnboardingView({
       meta: telnyxCredentialReady || connectorReady("telnyx") ? "Credentials ready." : "Credentials missing.",
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => openSettingsTab("numbers")}>Open Numbers</button>
+          <button className="button secondary" onClick={() => openSettingsTab("numbers")}>Numbers</button>
           {!(telnyxCredentialReady || connectorReady("telnyx") || completed.has("telnyx-api")) && <button className="button ghost" onClick={() => void markStep("telnyx-api")}>Use current setup</button>}
         </div>
       ),
@@ -3071,8 +3716,8 @@ function OnboardingView({
       meta: webRtcStatus?.ready ? "Calling ready." : activeDialerConfig.active ? "Dialpad enabled." : "Check calling.",
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => setView("phone")}>Open Calls</button>
-          <button className="button ghost" onClick={() => openSettingsTab("dialer")}>Dialpad settings</button>
+          <button className="button secondary" onClick={() => setView("phone")}>Calls</button>
+          <button className="button ghost" onClick={() => openSettingsTab("dialer")}>Dialpad</button>
           {!(webRtcStatus?.ready || activeDialerConfig.active || completed.has("phone-calling")) && <button className="button ghost" onClick={() => void markStep("phone-calling")}>Mark ready</button>}
         </div>
       ),
@@ -3087,7 +3732,7 @@ function OnboardingView({
       meta: whisperStatus?.available && whisperStatus.built ? "Scribe ready." : "Configure voice.",
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => setView("scribes")}>Open Scribe</button>
+          <button className="button secondary" onClick={() => setView("scribes")}>Scribe</button>
           {!((whisperStatus?.available && whisperStatus.built) || completed.has("scribe-voice")) && <button className="button ghost" onClick={() => void markStep("scribe-voice")}>Mark ready</button>}
         </div>
       ),
@@ -3095,14 +3740,15 @@ function OnboardingView({
     },
     {
       id: "app-publisher",
-      title: "Verify app publishing",
-      body: "Confirm the managed app publisher is reachable so Link can package, review, and publish apps.",
+      title: "Choose your app publishing path",
+      body: "Decide how you want Link apps to ship: keep them local on this Mac, share them privately, or publish them through the managed Telnyx app flow after reviewing the publisher setup.",
       complete: Boolean(publisherReadiness?.ready || completed.has("app-publisher")),
       icon: Store,
-      meta: publisherReadiness?.ready ? "Publisher ready." : "Publisher not ready.",
+      meta: publisherReadiness?.ready ? "Publisher ready for cloud releases." : "Publishing path still needs review.",
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => setView("apps")}>Open Apps</button>
+          <button className="button secondary" onClick={() => setView("apps")}>Apps</button>
+          <button className="button ghost" onClick={() => openSettingsTab("domains")}>Publishing</button>
           {!(publisherReadiness?.ready || completed.has("app-publisher")) && <button className="button ghost" onClick={() => void markStep("app-publisher")}>Mark ready</button>}
         </div>
       ),
@@ -3117,142 +3763,281 @@ function OnboardingView({
       meta: squadBank ? `Archive: ${squadBank.name}` : hindsightComplete ? `${memoryBanks.length} archives connected.` : "Optional archive.",
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => setView("memory")}>Open Archive</button>
+          <button className="button secondary" onClick={() => setView("memory")}>Archive</button>
           {!(hindsightComplete || completed.has("hindsight-wiki")) && <button className="button ghost" onClick={() => void markStep("hindsight-wiki")}>No squad wiki yet</button>}
         </div>
       ),
       required: false,
     },
   ];
-  const configurationStepCompleteCount = steps.filter((step) => step.complete).length;
+  useEffect(() => {
+    const node = onboardingViewRef.current;
+    if (!node) return;
+    const resetScroll = () => {
+      node.scrollTop = 0;
+      node.scrollLeft = 0;
+    };
+    resetScroll();
+    const frameOne = window.requestAnimationFrame(() => {
+      resetScroll();
+      window.requestAnimationFrame(resetScroll);
+    });
+    const timeoutId = window.setTimeout(resetScroll, 120);
+    return () => {
+      window.cancelAnimationFrame(frameOne);
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
+
+  const visibleSteps = steps;
+  const configurationStepBullets: Record<string, string[]> = {
+    okta: [
+      "Use the native employee sign-in flow.",
+      "Unlock internal auth and squad context.",
+      "Avoid storing passwords in Link.",
+    ],
+    accounts: [
+      "Connect GitHub, Google, Telnyx, Slack, and Linear.",
+      "Enable the plugins Link can route through.",
+      "Start from the tools your team already uses.",
+    ],
+    "model-gateway": [
+      "Choose when work stays local.",
+      "Keep Telnyx Cloud fallback available.",
+      "Review chat, agent, and Scribe routing.",
+    ],
+    "google-workspace": [
+      "Bring Calendar, Gmail, Drive, and Contacts into Link.",
+      "Power meeting, inbox, and caller context.",
+      "Keep shared workspace workflows in one place.",
+    ],
+    "telnyx-api": [
+      "Verify numbers, voice, and app access.",
+      "Support publishing and telephony workflows.",
+      "Use the active account credentials already linked to Link.",
+    ],
+    "phone-calling": [
+      "Check WebRTC readiness.",
+      "Confirm your linked number.",
+      "Tune local calling defaults in Dialpad.",
+    ],
+    "scribe-voice": [
+      "Verify local or cloud transcription readiness.",
+      "Check model and server state before recording.",
+      "Prepare dictation and transcript cleanup.",
+    ],
+    "app-publisher": [
+      "Open the app workspace.",
+      "Confirm draft and publish routes.",
+      "Make sure the publisher is reachable.",
+    ],
+    "hindsight-wiki": [
+      "Attach a squad archive when one exists.",
+      "Bring long-term context into Link.",
+      "Keep wiki memory close to daily work.",
+    ],
+  };
+  const configurationStepCtas: Record<string, { label: string; run: () => void }> = {
+    okta: { label: oktaComplete ? "Review SSO" : "Sign in with SSO", run: () => void signInOkta() },
+    accounts: { label: "Open Plugins", run: () => openSettingsTab("plugins") },
+    "model-gateway": { label: "Open Models", run: () => openSettingsTab("models") },
+    "google-workspace": { label: "Open Plugins", run: () => openSettingsTab("plugins") },
+    "telnyx-api": { label: "Open Numbers", run: () => openSettingsTab("numbers") },
+    "phone-calling": { label: "Open Dialpad", run: () => openSettingsTab("dialer") },
+    "scribe-voice": { label: "Open Scribe", run: () => setView("scribes") },
+    "app-publisher": { label: "Open Apps", run: () => setView("apps") },
+    "hindsight-wiki": { label: "Open Archive", run: () => setView("memory") },
+  };
+  const learningStepIcons: Record<string, AppIcon> = {
+    chat: MessageSquare,
+    taskbox: Grid2X2Plus,
+    inbox: Inbox,
+    calendar: CalendarDays,
+    "call-own-number": Phone,
+    "call-agent": PhoneCall,
+    "invite-agent-call": Bot,
+    scribe: Mic,
+    "transcript-search": Search,
+    "agent-review": Bot,
+    "app-draft": Store,
+    "wiki-source": BookOpen,
+    "archive-memory": ArchiveIcon,
+    "plugin-settings": Plug,
+    "contact-preview": Users,
+  };
+  const learningStepCopy: Record<string, { description: string; bullets: string[] }> = {
+    chat: {
+      description: "Start in Chat when you want a fast answer, a draft, or a routed request handled by Link.",
+      bullets: [
+        "Send one prompt through the main chat surface.",
+        "Watch Link use the route already configured for you.",
+        "Use the assistant sidebar when you want quick follow-up.",
+      ],
+    },
+    taskbox: {
+      description: "Use Taskbox to move from chat ideas into concrete work items and next actions.",
+      bullets: [
+        "Review one active task card.",
+        "See what is happening now and what comes next.",
+        "Use it as the handoff layer for ongoing work.",
+      ],
+    },
+    inbox: {
+      description: "Open Inbox to review messages and draft replies without leaving Link.",
+      bullets: [
+        "Read one active thread.",
+        "Check sender context and recent history.",
+        "Use draft tools when you need a faster reply.",
+      ],
+    },
+    calendar: {
+      description: "Use Calendar to review meetings, timing, and join details from the same workspace.",
+      bullets: [
+        "Open one event from the main calendar view.",
+        "Confirm the schedule and meeting context.",
+        "Jump into related contacts or notes as needed.",
+      ],
+    },
+    "call-own-number": {
+      description: "Use Call when you want to test your own number, verify routing, or confirm phone readiness.",
+      bullets: [
+        "Open the Call assistant tab.",
+        "Start from the dialer already configured in Link.",
+        "Use it to validate the phone setup end to end.",
+      ],
+    },
+    "call-agent": {
+      description: "Use Call to loop one of your agents into a live voice workflow when needed.",
+      bullets: [
+        "Open the Call assistant tab.",
+        "Pick a number or agent-aware workflow.",
+        "Review how Link combines calling with agent context.",
+      ],
+    },
+    "invite-agent-call": {
+      description: "Invite an agent into a live phone workflow when you need help, routing, or automation.",
+      bullets: [
+        "Start from the Call assistant tab.",
+        "Use the phone surface as the control point.",
+        "Confirm the agent join flow works as expected.",
+      ],
+    },
+    scribe: {
+      description: "Use Scribe when you want to dictate, transcribe, or capture notes in one place.",
+      bullets: [
+        "Open the Scribe assistant tab.",
+        "Record one note or transcript.",
+        "Review how local and cloud transcription routes behave.",
+      ],
+    },
+    "transcript-search": {
+      description: "Search transcripts when you want to find prior notes, recordings, or meeting context quickly.",
+      bullets: [
+        "Open the main Scribe page.",
+        "Search one transcript or recording.",
+        "Reuse past meeting context without leaving Link.",
+      ],
+    },
+    "agent-review": {
+      description: "Review an agent profile to understand what it can do before using it in a workflow.",
+      bullets: [
+        "Open one agent from the Agents view.",
+        "Check the role, tools, and available actions.",
+        "Use this before delegating work or inviting an agent to a call.",
+      ],
+    },
+    "app-draft": {
+      description: "Open Apps when you want to build a personal app, prototype a simple game, or review local drafts and publishing progress.",
+      bullets: [
+        "Open one app draft.",
+        "Try a small personal use case or a lightweight game first.",
+        "Review what is still local versus ready to publish.",
+      ],
+    },
+    "wiki-source": {
+      description: "Use Docs to browse internal docs, squad context, and connected sources from one place.",
+      bullets: [
+        "Open one wiki source.",
+        "Review how Link surfaces team knowledge.",
+        "Use it when a task needs shared context before action.",
+      ],
+    },
+    "archive-memory": {
+      description: "Use Archive when you want to review older memory, long-term context, or saved workspace knowledge.",
+      bullets: [
+        "Open one archive memory.",
+        "Check what persistent context is available.",
+        "Use it when today’s work depends on older decisions.",
+      ],
+    },
+    "plugin-settings": {
+      description: "Open plugin settings to review what services Link can currently access and route through.",
+      bullets: [
+        "Review the connected services.",
+        "Confirm the routes Link can use right now.",
+        "Use this when a workflow depends on an external tool.",
+      ],
+    },
+    "contact-preview": {
+      description: "Use the phone contact preview flow to check whether Link can match a number to the right person.",
+      bullets: [
+        "Open the Calls surface.",
+        "Review one contact preview result.",
+        "Confirm the dialer can pull useful caller context.",
+      ],
+    },
+  };
+
+  function openLearningStep(item: typeof internalTestingChecklistItems[number]) {
+    if (!testingChecklist.includes(item.id)) toggleTestingChecklistItem(item.id);
+    if (item.assistantTab) {
+      openAssistantTab(item.assistantTab);
+      return;
+    }
+    if (item.view === "settings") {
+      openSettingsTab("plugins");
+      return;
+    }
+    if (item.view) setView(item.view);
+  }
+
+  const configurationSteps = visibleSteps.map((step) => ({
+    id: step.id,
+    title: step.title,
+    description: step.body,
+    bullets: configurationStepBullets[step.id] ?? ["Review this setup in Link."],
+    ctaLabel: configurationStepCtas[step.id]?.label ?? "Open",
+    onCtaClick: configurationStepCtas[step.id]?.run ?? (() => undefined),
+    icon: step.icon,
+    complete: step.complete,
+    onToggleComplete: (checked: boolean) => {
+      void toggleConfigurationStep(step.id, checked);
+    },
+  }));
+  const learningSteps = internalTestingChecklistItems.map((item) => ({
+      id: item.id,
+      title: item.label,
+      description: learningStepCopy[item.id]?.description ?? "Use this area to learn the core Link workflow.",
+      bullets: learningStepCopy[item.id]?.bullets ?? ["Open this area in Link."],
+      ctaLabel: item.actionLabel ?? (item.view ? viewMeta[item.view].label : "Open"),
+      onCtaClick: () => openLearningStep(item),
+      icon: learningStepIcons[item.id] ?? MessageSquare,
+      complete: testingChecklist.includes(item.id),
+      onToggleComplete: (checked: boolean) => {
+        const isComplete = testingChecklist.includes(item.id);
+        if (checked !== isComplete) {
+          toggleTestingChecklistItem(item.id);
+        }
+      },
+    }));
 
   return (
-    <section className="content onboardingView">
-      <header className="pageHeader">
-        <div>
-          <h1>Get Started</h1>
-        </div>
-      </header>
-      <section className="onboardingHero onboardingIntroWizard" aria-label="Local AI overview">
-        <div className="onboardingIntroFrame">
-          <div className="onboardingIntroBody">
-            <div className="onboardingIntroCopy">
-              <div className="onboardingIntroMeta">
-                <span className="onboardingIntroEyebrow">Intro {introSlideIndex + 1} of {introSlides.length}</span>
-                <Badge tone={activeIntroSlide.statusTone}>{activeIntroSlide.statusLabel}</Badge>
-              </div>
-              <div className="onboardingIntroHeading">
-                <span className="onboardingIntroIcon">
-                  <ActiveIntroIcon size={22} />
-                </span>
-                <div>
-                  <h2>{activeIntroSlide.title}</h2>
-                  <p>{activeIntroSlide.body}</p>
-                </div>
-              </div>
-              <div className="onboardingIntroActions">
-                <button className="button primary" type="button" onClick={() => void activeIntroSlide.onPrimaryAction()}>
-                  {activeIntroSlide.primaryActionLabel}
-                </button>
-                {activeIntroSlide.secondaryActionLabel && activeIntroSlide.onSecondaryAction && (
-                  <button className="button secondary" type="button" onClick={() => void activeIntroSlide.onSecondaryAction?.()}>
-                    {activeIntroSlide.secondaryActionLabel}
-                  </button>
-                )}
-              </div>
-            </div>
-            <aside className="onboardingIntroVisual" aria-label={`${activeIntroSlide.tabLabel} details`}>
-              <div className="onboardingIntroVisualHeader">
-                <strong>{activeIntroSlide.tabLabel}</strong>
-                {activeIntroSlide.surfaceLabel && <span className="onboardingIntroSurfaceChip">{activeIntroSlide.surfaceLabel}</span>}
-              </div>
-              <div className="onboardingIntroFacts">
-                {activeIntroSlide.facts.map((fact) => (
-                  <div className="onboardingIntroFact" key={`${activeIntroSlide.id}:${fact.label}`}>
-                    <span>{fact.label}</span>
-                    <strong>{fact.value}</strong>
-                  </div>
-                ))}
-              </div>
-              <p className="onboardingIntroHint">Use the arrows or the progress tabs below to tour the main concepts before moving into setup.</p>
-            </aside>
-          </div>
-          <div className="onboardingIntroFooter">
-            <button className="onboardingIntroArrow" type="button" aria-label="Previous intro slide" onClick={() => stepIntroSlide(-1)}>
-              <ArrowLeft size={16} />
-            </button>
-            <div className="onboardingIntroProgress" role="tablist" aria-label="Get Started intro slides">
-              {introSlides.map((slide, index) => (
-                <button
-                  key={slide.id}
-                  className={`onboardingIntroProgressButton ${index === introSlideIndex ? "selected" : ""}`}
-                  type="button"
-                  role="tab"
-                  aria-selected={index === introSlideIndex}
-                  onClick={() => selectIntroSlide(index)}
-                >
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <strong>{slide.tabLabel}</strong>
-                </button>
-              ))}
-            </div>
-            <button className="onboardingIntroArrow" type="button" aria-label="Next intro slide" onClick={() => stepIntroSlide(1)}>
-              <ArrowRight size={16} />
-            </button>
-          </div>
-        </div>
-      </section>
-      <div className="onboardingChecklistGrid">
-      <section className="startReadinessPanel" aria-label="Configuration steps">
-        <div className="startSectionHeader">
-          <span>
-            <strong>Configure Link</strong>
-          </span>
-          <strong>{configurationStepCompleteCount}/{steps.length} ready</strong>
-        </div>
-        <div className="startReadinessChecklist">
-          {steps.map((step) => {
-            return (
-              <article className={`startReadinessItem ${step.complete ? "checked" : ""}`} key={step.id}>
-                <input
-                  type="checkbox"
-                  checked={step.complete}
-                  aria-label={`Mark ${step.title} complete`}
-                  onChange={(event) => void toggleConfigurationStep(step.id, event.target.checked)}
-                />
-                <span className="startReadinessText">
-                  <strong>{step.title}</strong>
-                  <small>{step.meta}</small>
-                </span>
-                <div className="startReadinessAction">{renderOnboardingArrowActions(step.action)}</div>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-      <section className="startTestingPanel" aria-label="Learn Link checklist">
-        <div className="startSectionHeader">
-          <span>
-            <strong>Learn Link</strong>
-          </span>
-          <strong>{checklistCompleteCount}/{internalTestingChecklistItems.length} done</strong>
-        </div>
-        <div className="testerChecklist">
-          {internalTestingChecklistItems.map((item) => {
-            const checked = testingChecklist.includes(item.id);
-            return (
-              <label className={`testerChecklistItem ${checked ? "checked" : ""}`} key={item.id}>
-                <input type="checkbox" checked={checked} onChange={() => toggleTestingChecklistItem(item.id)} />
-                <span>{item.label}</span>
-                <button type="button" className="testerChecklistArrow" title={`Open ${viewMeta[item.view].label}`} aria-label={`Open ${viewMeta[item.view].label}`} onClick={() => setView(item.view)}>
-                  <ArrowRight size={16} />
-                </button>
-              </label>
-            );
-          })}
-        </div>
-      </section>
-      </div>
+    <section className="content onboardingView" ref={onboardingViewRef}>
+      <PageSectionHeader parent="Link" title="Get Started" />
+      <GetStartedFlowPanels
+        configurationSteps={configurationSteps}
+        learningSteps={learningSteps}
+      />
     </section>
   );
 }
@@ -3260,6 +4045,9 @@ function OnboardingView({
 function Rail({
   view,
   setView,
+  openToolsHome,
+  openSettingsHome,
+  openModelsHome,
   expanded,
   onboarding,
   setOnboarding,
@@ -3272,6 +4060,9 @@ function Rail({
 }: {
   view: ViewId;
   setView: (view: ViewId) => void;
+  openToolsHome: () => void;
+  openSettingsHome: () => void;
+  openModelsHome: () => void;
   expanded: boolean;
   onboarding: OnboardingState;
   setOnboarding?: (onboarding: OnboardingState) => void;
@@ -3392,7 +4183,21 @@ function Rail({
         key={item.id}
         className={`railButton ${view === item.id ? "selected" : ""}`}
         title={item.label}
-        onClick={() => setView(item.id)}
+        onClick={() => {
+          if (item.id === "apps") {
+            openToolsHome();
+            return;
+          }
+          if (item.id === "settings") {
+            openSettingsHome();
+            return;
+          }
+          if (item.id === "models") {
+            openModelsHome();
+            return;
+          }
+          setView(item.id);
+        }}
       >
         <span className="railIconSlot"><Icon size={17} /></span>
         <span className="railLabel">{item.label}</span>
@@ -3422,46 +4227,48 @@ function Rail({
         )}
       </div>
       {navItems.map(renderRailButton)}
-      <div className="railSpacer" />
       {renderRailButton({ id: "scribes", label: "Scribe", icon: ScribesWaveformIcon })}
-      {renderRailButton({ id: "wiki", label: "Wiki", icon: BookOpen })}
-      {renderRailButton({ id: "drive", label: "Drive", icon: FolderOpen })}
-      {renderRailButton({ id: "settings", label: "Settings", icon: Settings })}
-      <div className="accountMenuWrap" ref={accountMenuRef}>
-        <button
-          className={`avatar ${accountMenuOpen ? "selected" : ""}`}
-          title={signedIn ? accountLabel : "User menu"}
-          aria-label={signedIn ? `User menu for ${accountLabel}` : "User menu"}
-          aria-expanded={accountMenuOpen}
-          onClick={() => setAccountMenuOpen((open) => !open)}
-        >
-          {accountAvatar}
-        </button>
-        {accountMenuOpen && (
-          <div className="accountMenu" role="menu">
-            <div className="accountMenuHeader">
-              <div>
-                <strong>{signedIn ? "Signed in as" : "Signed out"}</strong>
-                <small>{accountLabel}</small>
+      {renderRailButton({ id: "wiki", label: "Docs", icon: BookOpen })}
+      <div className="railSecondaryGroup">
+        {renderRailButton({ id: "storage", label: "Storage", icon: FolderOpen })}
+        {renderRailButton({ id: "models", label: "Models", icon: ModelsIcon })}
+        {renderRailButton({ id: "settings", label: "Settings", icon: Settings })}
+        <div className="accountMenuWrap" ref={accountMenuRef}>
+          <button
+            className={`avatar ${accountMenuOpen ? "selected" : ""}`}
+            title={signedIn ? accountLabel : "User menu"}
+            aria-label={signedIn ? `User menu for ${accountLabel}` : "User menu"}
+            aria-expanded={accountMenuOpen}
+            onClick={() => setAccountMenuOpen((open) => !open)}
+          >
+            {accountAvatar}
+          </button>
+          {accountMenuOpen && (
+            <div className="accountMenu" role="menu">
+              <div className="accountMenuHeader">
+                <div>
+                  <strong>{signedIn ? "Signed in as" : "Signed out"}</strong>
+                  <small>{accountLabel}</small>
+                </div>
+                <button
+                  className="accountThemeButton"
+                  type="button"
+                  onClick={() => setColorMode(colorMode === "dark" ? "light" : "dark")}
+                  aria-label={colorMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                  title={colorMode === "dark" ? "Light mode" : "Dark mode"}
+                >
+                  {colorMode === "dark" ? <Sun size={15} strokeWidth={2.3} /> : <Moon size={15} strokeWidth={2.3} />}
+                </button>
+                <button
+                  className={`accountAuthButton ${signedIn ? "signedIn" : ""}`}
+                  onClick={() => void (signedIn ? logoutAccount() : signInAccount())}
+                >
+                  {signedIn ? "Sign out" : "Sign in"}
+                </button>
               </div>
-              <button
-                className="accountThemeButton"
-                type="button"
-                onClick={() => setColorMode(colorMode === "dark" ? "light" : "dark")}
-                aria-label={colorMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                title={colorMode === "dark" ? "Light mode" : "Dark mode"}
-              >
-                {colorMode === "dark" ? <Sun size={15} strokeWidth={2.3} /> : <Moon size={15} strokeWidth={2.3} />}
-              </button>
-              <button
-                className={`accountAuthButton ${signedIn ? "signedIn" : ""}`}
-                onClick={() => void (signedIn ? logoutAccount() : signInAccount())}
-              >
-                {signedIn ? "Sign out" : "Sign in"}
-              </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       {expanded && (
         <div
@@ -3541,14 +4348,21 @@ function Sidebar({
           </button>
         ))}
       </SidebarSection>
-      <SidebarSection title="Taskbox" count={0} icon={<SquareCheck size={13} />} compact active={view === "workboard"} />
+      <SidebarSection
+        title="Taskbox"
+        count={0}
+        icon={<SquareCheck size={13} />}
+        compact
+        active={view === "workboard"}
+        onClick={() => setView("workboard")}
+      />
       <SidebarSection title="Scribe" count={0} icon={<ScribesWaveformIcon size={13} />} compact active={view === "scribes"} />
-      <SidebarSection title="Drive" count={chatSessions.reduce((count, session) => count + session.messages.reduce((messageCount, message) => messageCount + (message.role === "assistant" ? (message.artifacts?.length ?? 0) : 0), 0), 0)} icon={<FolderOpen size={13} />} compact active={view === "drive"} />
+      <SidebarSection title="Storage" count={chatSessions.reduce((count, session) => count + session.messages.reduce((messageCount, message) => messageCount + (message.role === "assistant" ? (message.artifacts?.length ?? 0) : 0), 0), 0)} icon={<FolderOpen size={13} />} compact active={view === "storage"} />
       <SidebarSection title="Phone" count={1} icon={<Phone size={13} />} compact active={view === "phone"} />
       <SidebarSection title="Calendar" count={3} icon={<CalendarDays size={13} />} compact active={view === "calendar"} />
       <SidebarSection title="Agents" count={agents.length} icon={<Bot size={13} />} compact active={view === "agents"} />
       <SidebarSection title="Archive" count={memoryBanks.length} icon={<ArchiveIcon size={13} />} compact active={view === "memory"} />
-      <SidebarSection title="Wiki" count={wikiState?.profile.masteredSkills ?? 0} icon={<BookOpen size={13} />} compact active={view === "wiki"} />
+      <SidebarSection title="Docs" count={wikiState?.profile.masteredSkills ?? 0} icon={<BookOpen size={13} />} compact active={view === "wiki"} />
     </aside>
   );
 }
@@ -3560,6 +4374,7 @@ function SidebarSection({
   children,
   compact,
   active,
+  onClick,
 }: {
   title: string;
   count: number;
@@ -3567,15 +4382,66 @@ function SidebarSection({
   children?: ReactNode;
   compact?: boolean;
   active?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <section className={`sideSection ${compact ? "compact" : ""} ${active ? "active" : ""}`}>
-      <div className="sideSectionTitle">
-        {icon}
-        <span>{title}</span>
-        <em>{count}</em>
-      </div>
+      {onClick ? (
+        <button type="button" className="sideSectionTitle sideSectionTitleButton" onClick={onClick}>
+          {icon}
+          <span>{title}</span>
+          <em>{count}</em>
+        </button>
+      ) : (
+        <div className="sideSectionTitle">
+          {icon}
+          <span>{title}</span>
+          <em>{count}</em>
+        </div>
+      )}
       {children}
+    </section>
+  );
+}
+
+function isModelCenterTab(tab: string): tab is ModelCenterTab {
+  return modelCenterSectionTabs.some(([id]) => id === tab);
+}
+
+function normalizeModelCenterTab(tab: ModelCenterTab): Exclude<ModelCenterTab, "models"> {
+  return tab === "models" ? "general" : tab;
+}
+
+function ModelsWorkspaceView({
+  tab,
+  setTab,
+}: {
+  tab: ModelCenterTab;
+  setTab: (tab: ModelCenterTab) => void;
+}) {
+  const activeTab = normalizeModelCenterTab(tab);
+  return (
+    <section className="content settingsView">
+      <div className="pageSectionShell">
+        <PageSectionSidebar
+          heading="Models"
+          headingIcon={viewMeta.models.icon}
+          groups={modelCenterSectionGroups}
+          activeTab={activeTab}
+          onSelect={setTab}
+          label="Models sections"
+          resizable={false}
+        />
+        <div className="pageSectionMain">
+          <ModelCenterSettingsView
+            tab={activeTab}
+            setTab={(nextTab) => {
+              if (isModelCenterTab(nextTab)) setTab(nextTab);
+            }}
+            embedded
+          />
+        </div>
+      </div>
     </section>
   );
 }
@@ -3583,8 +4449,24 @@ function SidebarSection({
 
 type ExplorerSourceTab = "support" | "developers" | "wiki" | "pylon" | "custom" | "local";
 type WikiSourceTab = string;
-type WikiTab = "apps" | "skills" | WikiSourceTab;
+type WikiWorkspaceTab = "workspace-docs" | "workspace-transcripts" | "workspace-meetings";
+type WikiTab = "apps" | "skills" | WikiWorkspaceTab | WikiSourceTab;
 type WikiPage = "apps" | "skills" | "wiki";
+type ToolsWorkspaceTab = "personal" | "company" | "domains" | "vpn";
+type WikiWorkspaceDocSource = "manual" | "transcript" | "meeting" | "agent";
+type WikiWorkspaceDocFormat = "markdown" | "rich-text";
+
+type WikiWorkspaceDoc = {
+  id: string;
+  title: string;
+  content: string;
+  format: WikiWorkspaceDocFormat;
+  source: WikiWorkspaceDocSource;
+  createdAt: string;
+  updatedAt: string;
+  linkedSessionId?: string;
+  linkedEventId?: string;
+};
 
 type ExplorerSourceConfig = {
   id: ExplorerSourceTab;
@@ -3593,10 +4475,300 @@ type ExplorerSourceConfig = {
   title: string;
   body: string;
   setup: string;
+  statusNote?: string;
+  emptyActionLabel?: string;
+  emptyActionUrl?: string;
   sources: ExplorerResult["source"][];
 };
 
 type WikiSourceConfig = Omit<ExplorerSourceConfig, "id"> & { id: WikiSourceTab; externalSource: ExplorerSourceTab };
+type WikiWorkspaceSubmissionSource = WikiDocumentationSource & {
+  submissionTarget: "github" | "pylon";
+  helperText: string;
+};
+
+const wikiWorkspaceDocStorageKey = "telnyx-link-wiki-workspace-docs";
+const wikiWorkspaceSectionTabs: readonly PageSectionTab<WikiWorkspaceTab>[] = [
+  ["workspace-docs", "Docs", FileText],
+  ["workspace-transcripts", "Transcripts", Mic],
+  ["workspace-meetings", "Meetings", CalendarDays],
+];
+
+function isWikiWorkspaceTab(tab: string): tab is WikiWorkspaceTab {
+  return wikiWorkspaceSectionTabs.some(([id]) => id === tab);
+}
+
+function wikiWorkspaceTabMeta(tab: WikiWorkspaceTab) {
+  if (tab === "workspace-transcripts") return { label: "Transcripts", title: "Transcripts", icon: Mic };
+  if (tab === "workspace-meetings") return { label: "Meetings", title: "Meetings", icon: CalendarDays };
+  return { label: "Docs", title: "Docs", icon: FileText };
+}
+
+function createWikiWorkspaceDocId() {
+  return `wiki-doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function wikiNormalizeWorkspaceDocSource(value: unknown): WikiWorkspaceDocSource {
+  if (value === "transcript" || value === "meeting" || value === "agent") return value;
+  return "manual";
+}
+
+function wikiNormalizeWorkspaceDocFormat(value: unknown): WikiWorkspaceDocFormat {
+  return value === "markdown" ? "markdown" : "rich-text";
+}
+
+function wikiEscapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function wikiTextToRichTextHtml(value: string) {
+  const normalized = value.replace(/\r\n?/g, "\n").trim();
+  if (!normalized) return "";
+  return normalized
+    .split(/\n{2,}/)
+    .map((paragraph) => `<p>${wikiEscapeHtml(paragraph).replace(/\n/g, "<br />")}</p>`)
+    .join("");
+}
+
+function wikiMarkdownInlineToHtml(value: string) {
+  return wikiEscapeHtml(value)
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2" />')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, "$1<em>$2</em>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+
+function wikiMarkdownToRichTextHtml(value: string) {
+  const normalized = value.replace(/\r\n?/g, "\n").trim();
+  if (!normalized) return "";
+  const blocks = normalized.split(/\n{2,}/);
+  return blocks.map((block) => {
+    const trimmed = block.trim();
+    if (!trimmed) return "";
+    const lines = trimmed.split("\n");
+    if (lines.every((line) => /^[-*]\s+/.test(line))) {
+      return `<ul>${lines.map((line) => `<li>${wikiMarkdownInlineToHtml(line.replace(/^[-*]\s+/, ""))}</li>`).join("")}</ul>`;
+    }
+    if (lines.every((line) => /^\d+\.\s+/.test(line))) {
+      return `<ol>${lines.map((line) => `<li>${wikiMarkdownInlineToHtml(line.replace(/^\d+\.\s+/, ""))}</li>`).join("")}</ol>`;
+    }
+    if (lines.every((line) => /^>\s?/.test(line))) {
+      return `<blockquote><p>${lines.map((line) => wikiMarkdownInlineToHtml(line.replace(/^>\s?/, ""))).join("<br />")}</p></blockquote>`;
+    }
+    if (/^###\s+/.test(trimmed)) return `<h3>${wikiMarkdownInlineToHtml(trimmed.replace(/^###\s+/, ""))}</h3>`;
+    if (/^##\s+/.test(trimmed)) return `<h2>${wikiMarkdownInlineToHtml(trimmed.replace(/^##\s+/, ""))}</h2>`;
+    if (/^#\s+/.test(trimmed)) return `<h1>${wikiMarkdownInlineToHtml(trimmed.replace(/^#\s+/, ""))}</h1>`;
+    return `<p>${lines.map((line) => wikiMarkdownInlineToHtml(line)).join("<br />")}</p>`;
+  }).join("");
+}
+
+function wikiRichTextHtmlToPlainText(value: string) {
+  if (!value.trim()) return "";
+  if (typeof window === "undefined" || typeof window.document === "undefined") {
+    return value
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li|h1|h2|h3|h4|h5|h6)>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .trim();
+  }
+  const container = window.document.createElement("div");
+  container.innerHTML = value;
+  return (container.innerText || container.textContent || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function wikiRichTextHtmlToMarkdown(value: string) {
+  if (!value.trim()) return "";
+  if (typeof window === "undefined" || typeof window.document === "undefined") {
+    return wikiRichTextHtmlToPlainText(value);
+  }
+  const container = window.document.createElement("div");
+  container.innerHTML = value;
+
+  const renderChildren = (parent: ParentNode): string => Array.from(parent.childNodes).map(renderNode).join("");
+
+  const renderList = (element: HTMLElement, ordered: boolean) => Array.from(element.children)
+    .map((child, index) => {
+      if (!(child instanceof HTMLElement) || child.tagName.toLowerCase() !== "li") return "";
+      const prefix = ordered ? `${index + 1}. ` : "- ";
+      const body = renderChildren(child).trim().replace(/\n/g, "\n  ");
+      return `${prefix}${body}`;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  const renderNode = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return (node.textContent || "").replace(/\u00a0/g, " ");
+    }
+    if (!(node instanceof HTMLElement)) return "";
+    const tag = node.tagName.toLowerCase();
+    if (tag === "br") return "\n";
+    if (tag === "strong" || tag === "b") return `**${renderChildren(node).trim()}**`;
+    if (tag === "em" || tag === "i") return `*${renderChildren(node).trim()}*`;
+    if (tag === "code") return `\`${renderChildren(node).trim()}\``;
+    if (tag === "a") return `[${renderChildren(node).trim() || node.getAttribute("href") || "link"}](${node.getAttribute("href") || "#"})`;
+    if (tag === "img") return `![${node.getAttribute("alt") || "image"}](${node.getAttribute("src") || ""})`;
+    if (tag === "ul") return `${renderList(node, false)}\n\n`;
+    if (tag === "ol") return `${renderList(node, true)}\n\n`;
+    if (tag === "blockquote") {
+      const quoted = renderChildren(node).trim().split("\n").map((line) => line ? `> ${line}` : ">").join("\n");
+      return `${quoted}\n\n`;
+    }
+    if (tag === "h1") return `# ${renderChildren(node).trim()}\n\n`;
+    if (tag === "h2") return `## ${renderChildren(node).trim()}\n\n`;
+    if (tag === "h3") return `### ${renderChildren(node).trim()}\n\n`;
+    if (tag === "pre") return `\`\`\`\n${renderChildren(node).trim()}\n\`\`\`\n\n`;
+    if (tag === "p" || tag === "div" || tag === "section") {
+      const text = renderChildren(node).trim();
+      return text ? `${text}\n\n` : "";
+    }
+    return renderChildren(node);
+  };
+
+  return renderChildren(container)
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function wikiWorkspaceDocPlainText(doc: Pick<WikiWorkspaceDoc, "content" | "format">) {
+  return doc.format === "rich-text" ? wikiRichTextHtmlToPlainText(doc.content) : doc.content;
+}
+
+function wikiWorkspaceDocHtml(doc: Pick<WikiWorkspaceDoc, "content" | "format">) {
+  if (doc.format !== "rich-text") return wikiMarkdownToRichTextHtml(doc.content);
+  return /<\/?[a-z][\s\S]*>/i.test(doc.content) ? doc.content : wikiTextToRichTextHtml(doc.content);
+}
+
+function wikiWorkspaceDocContentForFormat(format: WikiWorkspaceDocFormat, text: string) {
+  return format === "rich-text" ? wikiTextToRichTextHtml(text) : text;
+}
+
+function wikiWorkspaceDocSubmissionTitle(doc: Pick<WikiWorkspaceDoc, "title">) {
+  return doc.title.trim() || "Untitled doc";
+}
+
+function wikiWorkspaceDocMarkdownForSubmission(doc: Pick<WikiWorkspaceDoc, "title" | "content" | "format">) {
+  const title = wikiWorkspaceDocSubmissionTitle(doc);
+  const body = (doc.format === "markdown" ? doc.content : wikiRichTextHtmlToMarkdown(doc.content))
+    .replace(/\r\n?/g, "\n")
+    .trim();
+  if (!body) return "";
+  return (/^#\s+/m.test(body) ? body : `# ${title}\n\n${body}`).trim();
+}
+
+function hydrateWikiWorkspaceDoc(value: unknown): WikiWorkspaceDoc | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<WikiWorkspaceDoc> & Record<string, unknown>;
+  if (typeof raw.id !== "string") return null;
+  const createdAt = typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString();
+  const updatedAt = typeof raw.updatedAt === "string" ? raw.updatedAt : createdAt;
+  return {
+    id: raw.id,
+    title: typeof raw.title === "string" ? raw.title : "Untitled doc",
+    content: typeof raw.content === "string" ? raw.content : "",
+    format: wikiNormalizeWorkspaceDocFormat(raw.format),
+    source: wikiNormalizeWorkspaceDocSource(raw.source),
+    createdAt,
+    updatedAt,
+    linkedSessionId: typeof raw.linkedSessionId === "string" ? raw.linkedSessionId : undefined,
+    linkedEventId: typeof raw.linkedEventId === "string" ? raw.linkedEventId : undefined,
+  };
+}
+
+function createBlankWikiWorkspaceDoc(title = "Untitled doc"): WikiWorkspaceDoc {
+  const now = new Date().toISOString();
+  return {
+    id: createWikiWorkspaceDocId(),
+    title,
+    content: "",
+    format: "rich-text",
+    source: "manual",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function wikiWorkspaceDocWordCount(doc: Pick<WikiWorkspaceDoc, "content" | "format">) {
+  const content = wikiWorkspaceDocPlainText(doc);
+  return content.trim() ? content.trim().split(/\s+/).length : 0;
+}
+
+function wikiWorkspaceDocSourceLabel(source: WikiWorkspaceDocSource) {
+  if (source === "agent") return "Bot draft";
+  if (source === "meeting") return "Meeting";
+  if (source === "transcript") return "Transcript";
+  return "Manual";
+}
+
+function wikiWorkspaceDocFromTranscriptSession(session: ScribesSession): WikiWorkspaceDoc {
+  const now = new Date().toISOString();
+  const summaryArtifact = session.artifacts.find((artifact) => artifact.kind === "summary" || artifact.kind === "meeting-notes");
+  const seedText = summaryArtifact?.content?.trim() || session.transcriptText.trim();
+  return {
+    id: createWikiWorkspaceDocId(),
+    title: session.title || "Transcript draft",
+    content: wikiTextToRichTextHtml(seedText || "Add transcript notes here."),
+    format: "rich-text",
+    source: "transcript",
+    createdAt: now,
+    updatedAt: now,
+    linkedSessionId: session.id,
+  };
+}
+
+function wikiWorkspaceDocFromMeetingSession(session: ScribesSession): WikiWorkspaceDoc {
+  const now = new Date().toISOString();
+  const meetingNotes = session.artifacts.find((artifact) => artifact.kind === "meeting-notes" || artifact.kind === "summary");
+  const transcriptBody = session.transcriptText.trim();
+  const when = session.meeting.calendarEventStart ? new Date(session.meeting.calendarEventStart).toLocaleString() : "";
+  const sections = [
+    when ? `When: ${when}` : "",
+    transcriptBody ? `Transcript\n\n${transcriptBody}` : "",
+    meetingNotes?.content?.trim() ? `Notes\n\n${meetingNotes.content.trim()}` : "",
+  ].filter(Boolean);
+  return {
+    id: createWikiWorkspaceDocId(),
+    title: session.title || "Meeting notes",
+    content: wikiTextToRichTextHtml(sections.join("\n\n")),
+    format: "rich-text",
+    source: "meeting",
+    createdAt: now,
+    updatedAt: now,
+    linkedSessionId: session.id,
+    linkedEventId: session.meeting.calendarEventId,
+  };
+}
+
+function wikiWorkspaceDocFromCalendarEvent(event: GoogleCalendarEvent): WikiWorkspaceDoc {
+  const now = new Date().toISOString();
+  const sections = [
+    `When: ${calendarEventDateLabel(event)} · ${calendarEventTimeLabel(event)}`,
+    event.attendees ? `Attendees: ${event.attendees}` : "",
+    event.notes?.trim() ? `Agenda\n\n${event.notes.trim()}` : "",
+    event.transcript?.trim() ? `Transcript\n\n${event.transcript.trim()}` : "",
+  ].filter(Boolean);
+  return {
+    id: createWikiWorkspaceDocId(),
+    title: event.title || "Meeting notes",
+    content: wikiTextToRichTextHtml(sections.join("\n\n")),
+    format: "rich-text",
+    source: "meeting",
+    createdAt: now,
+    updatedAt: now,
+    linkedEventId: event.id,
+  };
+}
 
 const wikiIconOptions = [
   { id: "book", label: "Book", icon: BookOpen },
@@ -3666,7 +4838,10 @@ const explorerSourceTabs: ExplorerSourceConfig[] = [
     icon: BookOpen,
     title: "Help Center",
     body: "Customer-facing support articles from support.telnyx.com.",
-    setup: "No matching Help Center articles found. Try a more specific support question or product name.",
+    setup: "No matching Help Center articles found. Try a product name, feature, or support topic.",
+    statusNote: "Intercom-backed search when connected.",
+    emptyActionLabel: "Open Help Center",
+    emptyActionUrl: "https://support.telnyx.com/en/",
     sources: ["telnyx_support"],
   },
   {
@@ -3674,8 +4849,10 @@ const explorerSourceTabs: ExplorerSourceConfig[] = [
     label: "Dev Docs",
     icon: FileText,
     title: "Dev Docs",
-    body: "Mintlify-powered API guides, SDK references, and implementation docs.",
-    setup: "No matching Dev Docs found. Try an API name, product area, SDK, or endpoint path.",
+    body: "Public Telnyx API guides, SDK references, and implementation docs.",
+    setup: "No matching Dev Docs found. Try an API name, endpoint, SDK, error code, or product area.",
+    emptyActionLabel: "Open Dev Docs",
+    emptyActionUrl: "https://developers.telnyx.com/docs/overview",
     sources: ["telnyx_developers"],
   },
   {
@@ -3683,8 +4860,8 @@ const explorerSourceTabs: ExplorerSourceConfig[] = [
     label: "Guru",
     icon: BookOpen,
     title: "Company Guru",
-    body: "Internal Guru-backed knowledge available through Link skills and central connectors.",
-    setup: "No matching Guru cards found. Try a process name, team, policy, launch, or internal tool.",
+    body: "Internal Guru cards after a user connects Guru OAuth.",
+    setup: "No matching Guru cards found. Connect Guru in Settings, then try a team, policy, launch, or internal tool.",
     sources: ["guru"],
   },
   {
@@ -3692,8 +4869,8 @@ const explorerSourceTabs: ExplorerSourceConfig[] = [
     label: "Pylon",
     icon: FileText,
     title: "Pylon tickets",
-    body: "Support issues and account context available through the approved Pylon MCP connector.",
-    setup: "No matching Pylon tickets found. Try a Pylon issue link, issue number, customer name, or ticket title.",
+    body: "Support issues and account context through the approved Pylon MCP connector.",
+    setup: "No matching Pylon tickets found. Connect Pylon in Settings, then try an issue number, customer name, or ticket title.",
     sources: ["pylon"],
   },
   {
@@ -3701,8 +4878,8 @@ const explorerSourceTabs: ExplorerSourceConfig[] = [
     label: "Sources",
     icon: Plug,
     title: "Configured sources",
-    body: "GitHub, MCP, and OKF sources configured for the internal Wiki.",
-    setup: "No configured Wiki sources match this search.",
+    body: "GitHub, MCP, and OKF sources configured for internal Docs.",
+    setup: "No connected knowledge bases match this search.",
     sources: ["github", "mcp", "okf"],
   },
   {
@@ -3756,9 +4933,11 @@ function ExplorerView({
   const sourceFilteredResults = activeExternalTab
     ? results.filter((result) => activeExternalTab.sources.includes(result.source))
     : results.filter((result) => activeSourceTab.sources.includes(result.source));
-  const visibleResults = [...sourceFilteredResults].sort((left, right) => (
-    externalSort === "za" ? right.title.localeCompare(left.title) : left.title.localeCompare(right.title)
-  ));
+  const visibleResults = trimmedQuery && externalSort === "az"
+    ? sourceFilteredResults
+    : [...sourceFilteredResults].sort((left, right) => (
+      externalSort === "za" ? right.title.localeCompare(left.title) : left.title.localeCompare(right.title)
+    ));
 
   async function search() {
     setBusy(true);
@@ -3817,33 +4996,39 @@ function ExplorerView({
         </div>
       )}
       <section className="explorerSourceHeader" aria-label={displayedSourceTab.title}>
-        {shareStatus && <span>{shareStatus}</span>}
+        <span>{shareStatus || displayedSourceTab.statusNote || displayedSourceTab.body}</span>
       </section>
       <div className="explorerResults">
         {visibleResults.map((result) => (
           <article className="explorerResult" key={result.id}>
-            <div className="connectorIcon">{sourceInitials(result.source)}</div>
-            <div>
-              <div className="connectorTitle">
+            <div className="connectorIcon explorerResultIcon">{sourceInitials(result.source)}</div>
+            <div className="explorerResultBody">
+              <div className="explorerResultTopline">
                 <strong>{result.title}</strong>
-                <Badge tone={result.permission === "allowed" ? "success" : result.permission === "needs_access" ? "warning" : "default"}>{result.permission.replace("_", " ")}</Badge>
+                {result.permission !== "allowed" && (
+                  <Badge tone={result.permission === "needs_access" ? "warning" : "default"}>
+                    {result.permission.replace("_", " ")}
+                  </Badge>
+                )}
               </div>
+              <small className="explorerResultMeta">{explorerResultSourceLabel(result.source)} · {result.freshness}</small>
               <p>{result.excerpt}</p>
-              <small>{result.source.replace("_", " ")} - {result.type} - {result.freshness}</small>
             </div>
-            <div className="explorerResultActions">
-              {onShareResult && (
-                <button className="button primary" onClick={() => void shareResult(result)}>
-                  <Send size={14} />
-                  Share to agent
-                </button>
-              )}
-              {result.url ? (
-                <a className="button secondary" href={result.url} target="_blank" rel="noreferrer">Open</a>
-              ) : (
-                <button className="button secondary">Open</button>
-              )}
-            </div>
+            {(onShareResult || result.url) && (
+              <div className="explorerResultActions">
+                {onShareResult && (
+                  <button className="button secondary" onClick={() => void shareResult(result)}>
+                    <Send size={13} />
+                    Share
+                  </button>
+                )}
+                {result.url ? (
+                  <a className="iconButton explorerResultLinkButton" href={result.url} target="_blank" rel="noreferrer" aria-label={`Open ${result.title}`} title="Open source">
+                    <ExternalLink size={15} />
+                  </a>
+                ) : null}
+              </div>
+            )}
           </article>
         ))}
         {visibleResults.length === 0 && (docSourcesOnly || activeExternalTab) ? (
@@ -3854,6 +5039,14 @@ function ExplorerView({
               <p>{trimmedQuery ? displayedSourceTab.setup : displayedSourceTab.body}</p>
               {trimmedQuery && <small>Try another phrase or use a more specific product, API, team, or card title.</small>}
             </div>
+            {displayedSourceTab.emptyActionUrl ? (
+              <div className="docsSetupActions">
+                <a className="button secondary" href={displayedSourceTab.emptyActionUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink size={13} />
+                  {displayedSourceTab.emptyActionLabel ?? "Open source"}
+                </a>
+              </div>
+            ) : null}
           </section>
         ) : (
           visibleResults.length === 0 && <EmptyState title="No results found" body="Try another source tab or search term." />
@@ -4940,6 +6133,15 @@ type DriveFolderRow = {
   updated: string;
 };
 
+type DriveWorkspaceFileRow = {
+  id: string;
+  kind: "workspace-file";
+  path: string;
+  name: string;
+  bytes: number;
+  updatedAt: string;
+};
+
 type DriveScribesSessionRow = {
   id: string;
   kind: "scribes-session";
@@ -4954,7 +6156,25 @@ type DriveScribesArtifactRow = {
   artifact: ScribesSession["artifacts"][number];
 };
 
-type DriveRow = DriveFileRow | DriveArchivedSessionRow | DriveChatSessionRow | DriveFolderRow | DriveScribesSessionRow | DriveScribesArtifactRow;
+type DriveRow = DriveFileRow | DriveArchivedSessionRow | DriveChatSessionRow | DriveFolderRow | DriveWorkspaceFileRow | DriveScribesSessionRow | DriveScribesArtifactRow;
+type StorageWorkspaceTab = "cloud-storage" | "local-storage";
+
+const storageWorkspaceTabGroups: readonly PageSectionTabGroup<StorageWorkspaceTab>[] = [
+  {
+    title: "Workspace",
+    tabs: [
+      ["cloud-storage", "Cloud Storage", Cloud],
+      ["local-storage", "Local Storage", FolderOpen],
+    ],
+  },
+] as const;
+const storageWorkspaceTabs: readonly PageSectionTab<StorageWorkspaceTab>[] = storageWorkspaceTabGroups.flatMap((group) => group.tabs);
+const telnyxPortalNewBucketUrl = "https://portal.telnyx.com/#/storage/buckets";
+const telnyxPortalNewNumberUrl = "https://portal.telnyx.com/#/voice/my-numbers/buy";
+
+function openExternalPortalUrl(url: string) {
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 
 function driveSafeSlug(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "untitled";
@@ -4998,6 +6218,7 @@ function DriveView({
   openArtifact,
   openSession,
   openScribes,
+  openSettings,
   refreshTables,
 }: {
   sessions: ChatSession[];
@@ -5006,28 +6227,87 @@ function DriveView({
   openArtifact: (artifact: ChatArtifact) => void;
   openSession: (sessionId: string) => void;
   openScribes: () => void;
+  openSettings: () => void;
   refreshTables: () => Promise<void>;
 }) {
+  const [activeStorageTab, setActiveStorageTab] = useState<StorageWorkspaceTab>("cloud-storage");
   const [hiddenDriveRowIds, setHiddenDriveRowIds] = useState<string[]>(() => readStoredIdList("telnyx-link-hidden-drive-row-ids"));
   const [driveBulkEdit, setDriveBulkEdit] = useState(false);
   const [selectedDriveRowIds, setSelectedDriveRowIds] = useState<string[]>([]);
   const [driveQuery, setDriveQuery] = useState("");
   const [currentDriveFolder, setCurrentDriveFolder] = useState("~/Link/");
   const [driveFiltersOpen, setDriveFiltersOpen] = useState(false);
+  const [driveWorkspaceEntries, setDriveWorkspaceEntries] = useState<LocalStorageWorkspaceEntry[]>([]);
+  const [driveActionMessage, setDriveActionMessage] = useState("");
+  const [driveCreateMenuOpen, setDriveCreateMenuOpen] = useState(false);
+  const driveCreateMenuRef = useRef<HTMLDivElement | null>(null);
   const [scribesSessions, setScribesSessions] = useState<ScribesSession[]>([]);
+  const [modelCenterState, setModelCenterState] = useState<ModelCenterState | null>(null);
+  const [storageBackupStatus, setStorageBackupStatus] = useState<StorageBackupStatus | null>(null);
+  const [storageBuckets, setStorageBuckets] = useState<StorageBucketSummary[]>([]);
+  const [storageBucketQuery, setStorageBucketQuery] = useState("");
+  const [storageBucketFiltersOpen, setStorageBucketFiltersOpen] = useState(false);
+  const [storageBucketRegionFilter, setStorageBucketRegionFilter] = useState("all");
+  const [storageBucketsBusy, setStorageBucketsBusy] = useState(false);
+  const [storageBucketLinkBusy, setStorageBucketLinkBusy] = useState("");
+  const [storageBackupBusy, setStorageBackupBusy] = useState(false);
+  const [storageBackupMessage, setStorageBackupMessage] = useState("");
+  const [includeEncryptedCredentials, setIncludeEncryptedCredentials] = useState(false);
+  const [storageLocationsOpen, setStorageLocationsOpen] = useState(false);
+  const [storagePathCopyStatus, setStoragePathCopyStatus] = useState("");
 
   async function refreshScribesDriveRows() {
     const nextSessions = await linkApi.listScribesSessions();
     setScribesSessions(nextSessions);
   }
 
+  async function refreshStorageBackupStatus() {
+    const nextStatus = await linkApi.getStorageBackupStatus();
+    setStorageBackupStatus(nextStatus);
+  }
+
+  async function refreshStorageBuckets() {
+    setStorageBucketsBusy(true);
+    try {
+      const nextBuckets = await linkApi.listStorageBuckets();
+      setStorageBuckets(nextBuckets);
+    } finally {
+      setStorageBucketsBusy(false);
+    }
+  }
+
+  async function refreshStoragePaths() {
+    const nextState = await linkApi.getModelCenterState();
+    setModelCenterState(nextState);
+  }
+
+  async function refreshDriveWorkspaceEntries(pathValue = normalizeDrivePath(currentDriveFolder)) {
+    const nextEntries = await linkApi.listLocalStorageWorkspace({ path: pathValue });
+    setDriveWorkspaceEntries(nextEntries);
+  }
+
   async function refreshDriveRows() {
-    await Promise.all([refreshTables(), refreshScribesDriveRows()]);
+    await Promise.all([refreshTables(), refreshScribesDriveRows(), refreshStorageBackupStatus(), refreshStorageBuckets(), refreshStoragePaths(), refreshDriveWorkspaceEntries()]);
   }
 
   useEffect(() => {
-    void refreshScribesDriveRows().catch(() => undefined);
+    void Promise.all([refreshScribesDriveRows(), refreshStorageBackupStatus(), refreshStorageBuckets(), refreshStoragePaths(), refreshDriveWorkspaceEntries()]).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    void refreshDriveWorkspaceEntries(normalizeDrivePath(currentDriveFolder)).catch((error) => {
+      setDriveActionMessage(error instanceof Error ? error.message : "Local storage could not load.");
+    });
+  }, [currentDriveFolder]);
+
+  useEffect(() => {
+    if (!driveCreateMenuOpen) return;
+    function closeDriveCreateMenu(event: MouseEvent) {
+      if (!driveCreateMenuRef.current?.contains(event.target as Node)) setDriveCreateMenuOpen(false);
+    }
+    document.addEventListener("mousedown", closeDriveCreateMenu);
+    return () => document.removeEventListener("mousedown", closeDriveCreateMenu);
+  }, [driveCreateMenuOpen]);
 
   const folderRows = useMemo<DriveFolderRow[]>(() => {
     return [
@@ -5038,8 +6318,8 @@ function DriveView({
       { id: "folder:apps-publish-intents", kind: "folder", path: "~/Link/apps/publish-intents/", owner: "Link App Publisher", contents: "Review, version, rollback, and deployment records", updated: "Managed" },
       { id: "folder:agents", kind: "folder", path: "~/Link/agents/", owner: "Agent Control Plane", contents: "Active agents, saved agents, and setup context", updated: "Synced" },
       { id: "folder:chats", kind: "folder", path: "~/Link/chats/", owner: "Link", contents: "Chat sessions and generated outputs", updated: "Local" },
-      { id: "folder:drive", kind: "folder", path: "~/Link/drive/", owner: "Link", contents: "Generated files and local workspace artifacts", updated: "Local" },
-      { id: "folder:artifacts", kind: "folder", path: "~/Link/drive/artifacts/", owner: "Agents", contents: "Files generated from assistant sessions", updated: "Local" },
+      { id: "folder:storage", kind: "folder", path: "~/Link/storage/", owner: "Link", contents: "Generated files and local workspace artifacts", updated: "Local" },
+      { id: "folder:artifacts", kind: "folder", path: "~/Link/storage/artifacts/", owner: "Agents", contents: "Files generated from assistant sessions", updated: "Local" },
       { id: "folder:scribes", kind: "folder", path: "~/Link/scribes/", owner: "Scribe", contents: "Transcripts, models, and generated notes", updated: "Local" },
       { id: "folder:scribes-transcripts", kind: "folder", path: "~/Link/scribes/transcripts/", owner: "Scribe", contents: "Dictation and meeting transcripts", updated: "Local" },
       { id: "folder:scribes-summaries", kind: "folder", path: "~/Link/scribes/summaries/", owner: "Scribe", contents: "Generated summaries and meeting notes", updated: "Local" },
@@ -5115,8 +6395,30 @@ function DriveView({
       return String(rightUpdated).localeCompare(String(leftUpdated));
     });
   }, [scribesSessions]);
-  const rows: DriveRow[] = [...folderRows, ...chatSessionRows, ...archivedSessionRows, ...artifactRows, ...scribesRows];
   const currentFolder = normalizeDrivePath(currentDriveFolder);
+  const workspaceFolderRows = useMemo<DriveFolderRow[]>(() => driveWorkspaceEntries
+    .filter((entry) => entry.kind === "folder")
+    .map((entry) => ({
+      id: `workspace-folder:${entry.path}`,
+      kind: "folder" as const,
+      path: entry.path,
+      owner: "You",
+      contents: typeof entry.itemCount === "number" ? `${entry.itemCount} ${entry.itemCount === 1 ? "item" : "items"}` : "Folder",
+      updated: relativeDate(entry.updatedAt),
+    }))
+    .sort((left, right) => left.path.localeCompare(right.path)), [driveWorkspaceEntries]);
+  const workspaceFileRows = useMemo<DriveWorkspaceFileRow[]>(() => driveWorkspaceEntries
+    .filter((entry) => entry.kind === "file")
+    .map((entry) => ({
+      id: `workspace-file:${entry.path}`,
+      kind: "workspace-file" as const,
+      path: entry.path,
+      name: entry.name,
+      bytes: entry.bytes || 0,
+      updatedAt: entry.updatedAt,
+    }))
+    .sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt))), [driveWorkspaceEntries]);
+  const rows: DriveRow[] = [...folderRows, ...workspaceFolderRows, ...workspaceFileRows, ...chatSessionRows, ...archivedSessionRows, ...artifactRows, ...scribesRows];
   const driveAtRoot = currentFolder === "~/Link/";
   const driveCrumbs = driveBreadcrumbs(currentFolder);
   const filteredRows = rows.filter((row) => {
@@ -5124,6 +6426,7 @@ function DriveView({
     const rowPath = driveRowPath(row);
     if (!term) return rowPath !== currentFolder && driveParentPath(rowPath) === currentFolder;
     if (row.kind === "folder") return `${row.path} ${row.owner} ${row.contents} ${row.updated}`.toLowerCase().includes(term);
+    if (row.kind === "workspace-file") return `${row.path} ${row.name} ${formatAttachmentSize(row.bytes)} ${relativeDate(row.updatedAt)}`.toLowerCase().includes(term);
     if (row.kind === "archived-session") return `${row.path} ${row.sessionTitle} ${row.agentName} archived chat session ${row.messageCount} messages`.toLowerCase().includes(term);
     if (row.kind === "chat-session") return `${row.path} ${row.sessionTitle} ${row.agentName} chat session ${row.messageCount} messages`.toLowerCase().includes(term);
     if (row.kind === "scribes-session") return `${row.path} ${row.session.title} ${row.session.transcriptText} ${row.session.provider} Scribe transcript`.toLowerCase().includes(term);
@@ -5135,6 +6438,10 @@ function DriveView({
     if (row.kind === "folder") {
       setCurrentDriveFolder(row.path);
       setDriveQuery("");
+    } else if (row.kind === "workspace-file") {
+      void linkApi.openLocalStorageWorkspaceEntry({ path: row.path }).catch((error) => {
+        setDriveActionMessage(error instanceof Error ? error.message : "File could not be opened.");
+      });
     } else if (row.kind === "archived-session" || row.kind === "chat-session") openSession(row.sessionId);
     else if (row.kind === "scribes-session" || row.kind === "scribes-artifact") openScribes();
     else openArtifact(row.artifact);
@@ -5147,14 +6454,16 @@ function DriveView({
 
   function driveRowPath(row: DriveRow) {
     if (row.kind === "folder") return row.path;
+    if (row.kind === "workspace-file") return row.path;
     if (row.kind === "archived-session" || row.kind === "chat-session") return row.path;
     if (row.kind === "scribes-session") return row.path;
     if (row.kind === "scribes-artifact") return row.artifact.path;
-    return `~/Link/drive/artifacts/${row.artifact.filename}`;
+    return `~/Link/storage/artifacts/${row.artifact.filename}`;
   }
 
   function driveRowName(row: DriveRow) {
     if (row.kind === "folder") return drivePathName(row.path);
+    if (row.kind === "workspace-file") return row.name;
     if (row.kind === "archived-session" || row.kind === "chat-session") return row.sessionTitle;
     if (row.kind === "scribes-session") return drivePathName(row.path);
     if (row.kind === "scribes-artifact") return drivePathName(row.artifact.path);
@@ -5163,11 +6472,59 @@ function DriveView({
 
   function driveRowContents(row: DriveRow) {
     if (row.kind === "folder") return row.contents;
+    if (row.kind === "workspace-file") return `${formatAttachmentSize(row.bytes)} · ${relativeDate(row.updatedAt)}`;
     if (row.kind === "chat-session") return `${row.messageCount} ${row.messageCount === 1 ? "message" : "messages"} in chat`;
     if (row.kind === "archived-session") return `${row.messageCount} ${row.messageCount === 1 ? "message" : "messages"} in archived chat`;
     if (row.kind === "scribes-session") return `${row.session.sessionType} transcript · ${sttProviderLabel(row.session.provider)}`;
     if (row.kind === "scribes-artifact") return `${formatScribesArtifactKind(row.artifact.kind)} · ${row.session.title}`;
     return row.sessionTitle;
+  }
+
+  async function createDriveFolder() {
+    const name = window.prompt("New folder name");
+    if (!name) {
+      setDriveCreateMenuOpen(false);
+      return;
+    }
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setDriveActionMessage("Folder name is required.");
+      setDriveCreateMenuOpen(false);
+      return;
+    }
+    try {
+      await linkApi.createLocalStorageFolder({ parentPath: currentFolder, name: trimmed });
+      await refreshDriveWorkspaceEntries(currentFolder);
+      setDriveActionMessage(`Created folder "${trimmed}".`);
+    } catch (error) {
+      setDriveActionMessage(error instanceof Error ? error.message : "Folder could not be created.");
+    } finally {
+      setDriveCreateMenuOpen(false);
+    }
+  }
+
+  async function uploadDriveFiles() {
+    try {
+      const entries = await linkApi.uploadLocalStorageFiles({ parentPath: currentFolder });
+      await refreshDriveWorkspaceEntries(currentFolder);
+      if (entries.length > 0) setDriveActionMessage(`Added ${entries.length} ${entries.length === 1 ? "file" : "files"}.`);
+    } catch (error) {
+      setDriveActionMessage(error instanceof Error ? error.message : "Files could not be uploaded.");
+    } finally {
+      setDriveCreateMenuOpen(false);
+    }
+  }
+
+  async function uploadDriveFolder() {
+    try {
+      const entry = await linkApi.uploadLocalStorageFolder({ parentPath: currentFolder });
+      await refreshDriveWorkspaceEntries(currentFolder);
+      if (entry) setDriveActionMessage(`Added folder "${entry.name}".`);
+    } catch (error) {
+      setDriveActionMessage(error instanceof Error ? error.message : "Folder could not be uploaded.");
+    } finally {
+      setDriveCreateMenuOpen(false);
+    }
   }
 
   function hideDriveRow(row: DriveFileRow) {
@@ -5194,83 +6551,331 @@ function DriveView({
     setDriveBulkEdit(false);
   }
 
-  return (
-    <section className="content driveView canonicalChat">
-      <header className="pageHeader">
-        <div>
-          <h1>Drive</h1>
-        </div>
-      </header>
-      <PageToolbar
-        filterActive={driveFiltersOpen}
-        filterLabel={driveFiltersOpen ? "Hide file filters" : "Show file filters"}
-        onFilter={() => setDriveFiltersOpen((open) => !open)}
-        searchValue={driveQuery}
-        onSearchChange={setDriveQuery}
-        searchPlaceholder="Search files, agents, sessions, or archive"
-        editActive={driveBulkEdit}
-        editLabel={driveBulkEdit ? "Exit bulk edit" : "Edit files"}
-        onEdit={toggleDriveBulkEdit}
-        refreshLabel="Refresh files"
-        onRefresh={refreshDriveRows}
-      />
-      {driveBulkEdit && (
-        <BulkEditControls
-          active={driveBulkEdit}
-          selectedCount={selectedDriveRowIds.length}
-          onToggle={toggleDriveBulkEdit}
-          onArchive={hideSelectedDriveRows}
-          onDelete={hideSelectedDriveRows}
-        />
-      )}
-      {driveFiltersOpen && (
-        <div className="chatFilterBar" role="group" aria-label="File filters">
-          <span className="chatFilterCount">{filteredRows.length} items in {driveQuery.trim() ? "search" : currentFolder}</span>
-        </div>
-      )}
-      <div className="drivePathBar" aria-label="Current Drive folder">
-        {!driveAtRoot && (
-          <IconCircleButton
-            className="drivePathBackButton"
-            label="Go to parent folder"
-            onClick={() => {
-              const parent = driveParentPath(currentFolder) || "~/Link/";
-              openDriveFolder(parent);
-            }}
-          >
-            <ArrowLeft size={16} />
-          </IconCircleButton>
+  async function runStorageBackup() {
+    setStorageBackupBusy(true);
+    setStorageBackupMessage("");
+    try {
+      const result: StorageBackupResult = await linkApi.backupStorageWorkspace({ includeEncryptedCredentials });
+      setStorageBackupStatus(result.status);
+      setStorageBackupMessage(`Uploaded ${result.objectKeys.length} objects to ${result.bucket} in ${result.region}.`);
+    } catch (error) {
+      setStorageBackupMessage(error instanceof Error ? error.message : "Storage backup failed.");
+      await refreshStorageBackupStatus().catch(() => undefined);
+    } finally {
+      setStorageBackupBusy(false);
+    }
+  }
+
+  const storageScopeLabel = storageBackupStatus
+    ? [storageBackupStatus.bucket, storageBackupStatus.region, storageBackupStatus.prefix].filter(Boolean).join(" · ")
+    : "";
+  const storageWorkspaceSummary = `${sessions.length} chats · ${scribesSessions.length} Scribe sessions · ${publishedApps.length} app records`;
+  const storageMissingFields = storageBackupStatus?.missing ?? [];
+  const storageReady = Boolean(storageBackupStatus?.ready);
+  const storageApiKeyReady = !storageMissingFields.includes("TELNYX_API_KEY");
+  const activeStorageLabel = storageWorkspaceTabs.find(([id]) => id === activeStorageTab)?.[1] || "Storage";
+  const storagePathRows = modelCenterState ? [
+    { label: "Workspace folder", value: modelCenterState.storage.appDataPath, description: "Main place Link keeps local files and workspace data." },
+    { label: "App settings", value: modelCenterState.storage.statePath, description: "Saved app settings and local preferences." },
+    { label: "Local model gateway", value: modelCenterState.storage.liteLlmConfigPath, description: "Advanced config used for local model routing." },
+    { label: "Imported models", value: modelCenterState.storage.importsPath, description: "Files added for local model use." },
+    { label: "Logs", value: modelCenterState.storage.logsPath, description: "Useful when troubleshooting with support." },
+  ] : [];
+
+  async function copyStoragePath(value: string, label: string) {
+    setStoragePathCopyStatus("");
+    try {
+      await navigator.clipboard.writeText(value);
+      setStoragePathCopyStatus(`${label} copied.`);
+    } catch (error) {
+      setStoragePathCopyStatus(error instanceof Error ? error.message : "Path could not be copied.");
+    }
+  }
+
+  async function revealStoragePath(value: string, label: string) {
+    setStoragePathCopyStatus("");
+    try {
+      await linkApi.revealDesktopPath({ path: value });
+      setStoragePathCopyStatus(`${label} revealed in Finder.`);
+    } catch (error) {
+      setStoragePathCopyStatus(error instanceof Error ? error.message : "Path could not be opened in Finder.");
+    }
+  }
+
+  async function linkStorageBucket(bucket: StorageBucketSummary) {
+    setStorageBucketLinkBusy(bucket.name);
+    setStorageBackupMessage("");
+    try {
+      await linkApi.saveCredential({ name: "TELNYX_STORAGE_BUCKET", value: bucket.name });
+      await linkApi.saveCredential({ name: "TELNYX_STORAGE_REGION", value: bucket.region });
+      if (!(storageBackupStatus?.prefix || "").trim()) {
+        await linkApi.saveCredential({ name: "TELNYX_STORAGE_PREFIX", value: "link-desktop/backups" });
+      }
+      const nextStatus = await linkApi.getStorageBackupStatus();
+      setStorageBackupStatus(nextStatus);
+      await refreshStorageBuckets();
+      setStorageBackupMessage(`Linked ${bucket.name} for Link backups.`);
+    } catch (error) {
+      setStorageBackupMessage(error instanceof Error ? error.message : "Bucket could not be linked.");
+    } finally {
+      setStorageBucketLinkBusy("");
+    }
+  }
+
+  function renderCloudStoragePanel() {
+    const storageBucketRegionOptions = ["all", ...Array.from(new Set(storageBuckets.map((bucket) => bucket.region).filter(Boolean))).sort((left, right) => left.localeCompare(right))];
+    const filteredStorageBuckets = storageBuckets
+      .filter((bucket) => {
+        const search = storageBucketQuery.trim().toLowerCase();
+        const matchesSearch = !search || [bucket.name, bucket.region, bucket.prefix].some((value) => value.toLowerCase().includes(search));
+        const matchesRegion = storageBucketRegionFilter === "all" || bucket.region === storageBucketRegionFilter;
+        return matchesSearch && matchesRegion;
+      })
+      .sort((left, right) => {
+        if (left.linked !== right.linked) return left.linked ? -1 : 1;
+        return left.name.localeCompare(right.name);
+      });
+    const linkedBucket = storageBuckets.find((bucket) => bucket.linked) || null;
+
+    return (
+      <div className="storageWorkspaceStack">
+        {!storageApiKeyReady && (
+          <div className="phoneSetupAlert" aria-live="polite">
+            <div>
+              <strong>Connect a Telnyx API key to load cloud buckets</strong>
+              <p>Link can only list and attach Telnyx Cloud Storage buckets after your account key is connected.</p>
+            </div>
+            <button className="runtimeSettingsButton" type="button" onClick={openSettings}>
+              <Settings size={14} />
+              Open Settings
+            </button>
+          </div>
         )}
-        <nav className="driveBreadcrumbs" aria-label="Drive path">
-          {driveCrumbs.map((crumb, index) => (
-            <Fragment key={crumb.path}>
-              {index > 0 && <span aria-hidden="true">/</span>}
-              <button
-                className={index === 0 ? "driveHomeCrumb" : undefined}
-                type="button"
-                onClick={() => openDriveFolder(crumb.path)}
-                aria-current={crumb.path === currentFolder ? "page" : undefined}
-                aria-label={index === 0 ? "Go to Drive home" : undefined}
-                title={index === 0 ? "Drive home" : undefined}
-              >
-                {index === 0 ? <Home size={16} /> : crumb.label}
+
+        <div className="chatSearchRow phoneNumberSearchRow">
+          <button
+            className={`iconButton agentFilterButton ${storageBucketFiltersOpen || storageBucketRegionFilter !== "all" ? "selected" : ""}`}
+            type="button"
+            aria-label={storageBucketFiltersOpen ? "Hide bucket filters" : "Show bucket filters"}
+            title={storageBucketFiltersOpen ? "Hide bucket filters" : "Show bucket filters"}
+            onClick={() => setStorageBucketFiltersOpen((open) => !open)}
+          >
+            <ListFilter size={16} />
+          </button>
+          <div className="explorerSearch compactSearch">
+            <Search size={16} />
+            <input
+              value={storageBucketQuery}
+              onChange={(event) => setStorageBucketQuery(event.target.value)}
+              placeholder="Search buckets, regions, or backup paths"
+            />
+          </div>
+          <TableRefreshButton onClick={refreshStorageBuckets} busy={storageBucketsBusy} disabled={!storageApiKeyReady} label="Refresh buckets" />
+        </div>
+
+        {storageBucketFiltersOpen && (
+          <div className="chatFilterBar phoneNumberFilterBar" role="group" aria-label="Bucket filters">
+            <span className="chatFilterCount">{filteredStorageBuckets.length} buckets</span>
+            <label className="agentFilter">
+              <span>Region</span>
+              <select value={storageBucketRegionFilter} onChange={(event) => setStorageBucketRegionFilter(event.target.value)}>
+                {storageBucketRegionOptions.map((region) => (
+                  <option key={region} value={region}>{region === "all" ? "All regions" : region}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+
+        {(storageBackupMessage || storageBackupStatus?.lastError) && (
+          <div className="assistantNotice chatRefreshNotice" aria-live="polite">
+            <p>{storageBackupMessage || storageBackupStatus?.lastError}</p>
+          </div>
+        )}
+
+        <section className="storageBucketTable phoneContentTable" aria-label="Telnyx cloud storage buckets">
+          <div className="storageBucketRows" role="table" aria-label="Available Telnyx buckets">
+            <div className="storageBucketRow storageBucketRowHead" role="row">
+              <span role="columnheader">Bucket</span>
+              <span role="columnheader">Region</span>
+              <span role="columnheader">Created</span>
+              <span role="columnheader">Backup Path</span>
+              <span role="columnheader">Status</span>
+              <span role="columnheader" aria-label="Link bucket" />
+            </div>
+            {filteredStorageBuckets.map((bucket) => {
+              const createdLabel = bucket.createdAt
+                ? `${relativeDate(bucket.createdAt)} · ${new Date(bucket.createdAt).toLocaleDateString()}`
+                : "Existing bucket";
+              const statusLabel = bucket.linked ? "Linked" : bucket.lastBackupAt ? "Used before" : "Available";
+              return (
+                <div className={`storageBucketRow ${bucket.linked ? "selected" : ""}`} key={`${bucket.name}:${bucket.region}`} role="row">
+                  <strong role="cell">{bucket.name}</strong>
+                  <span role="cell">{bucket.region}</span>
+                  <span role="cell">{createdLabel}</span>
+                  <span role="cell">{bucket.prefix || "link-desktop/backups"}</span>
+                  <span role="cell"><em>{statusLabel}</em></span>
+                  <button
+                    className={`button secondary compactButton storageBucketLinkButton ${bucket.linked ? "connected" : ""}`.trim()}
+                    type="button"
+                    onClick={() => void linkStorageBucket(bucket)}
+                    disabled={bucket.linked || Boolean(storageBucketLinkBusy)}
+                  >
+                    {storageBucketLinkBusy === bucket.name ? "Linking" : bucket.linked ? "Current" : "Link"}
+                  </button>
+                </div>
+              );
+            })}
+            {filteredStorageBuckets.length === 0 && (
+              <div className="tableEmptyState" role="row">
+                <EmptyState
+                  title={!storageApiKeyReady ? "Connect a Telnyx API key" : storageBucketsBusy ? "Loading buckets..." : storageBucketQuery.trim() || storageBucketRegionFilter !== "all" ? "No buckets found" : "No buckets available"}
+                  body={!storageApiKeyReady ? "Add your Telnyx API key in Settings to browse cloud storage buckets." : storageBucketsBusy ? "Loading available Telnyx Cloud Storage buckets for this account." : storageBucketQuery.trim() || storageBucketRegionFilter !== "all" ? "Try another search term or filter." : "Create a bucket in the Telnyx portal, then refresh to link it here."}
+                  icon={Cloud}
+                />
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="accessCard storageLinkedBucketCard">
+          <div className="accessCardHeader">
+            <div className="accessCardTitle">
+              <span className="accessIcon"><Cloud size={18} /></span>
+              <div>
+                <h3>{linkedBucket ? "Linked bucket" : "No bucket linked yet"}</h3>
+                <p>{linkedBucket ? "This is the bucket Link will use for workspace backups." : "Pick a bucket above to connect cloud backup for this workspace."}</p>
+              </div>
+            </div>
+          </div>
+          <div className="assistantNoticeMetaGrid">
+            <div>
+              <strong>Workspace</strong>
+              <span>{storageWorkspaceSummary}</span>
+            </div>
+            <div>
+              <strong>Bucket</strong>
+              <span>{storageBackupStatus?.bucket || linkedBucket?.name || "Not linked"}</span>
+            </div>
+            <div>
+              <strong>Last backup</strong>
+              <span>{storageBackupStatus?.lastBackupAt ? `${relativeDate(storageBackupStatus.lastBackupAt)} · ${new Date(storageBackupStatus.lastBackupAt).toLocaleString()}` : "Never"}</span>
+            </div>
+          </div>
+          {storageReady ? (
+            <>
+              <div className="memorySettingsToggleRow">
+                <div>
+                  <strong>Include encrypted credentials</strong>
+                  <small>Optional. Include the encrypted desktop credentials snapshot in this backup.</small>
+                </div>
+                <label className="miniToggle">
+                  <input
+                    type="checkbox"
+                    checked={includeEncryptedCredentials}
+                    onChange={(event) => setIncludeEncryptedCredentials(event.target.checked)}
+                  />
+                  <span>{includeEncryptedCredentials ? "Included" : "Excluded"}</span>
+                </label>
+              </div>
+              <div className="headerActions storageBucketActions">
+                <button className="button primary" type="button" onClick={() => void runStorageBackup()} disabled={storageBackupBusy}>
+                  <Upload size={15} />
+                  {storageBackupBusy ? "Backing up" : "Back Up Now"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="headerActions storageBucketActions">
+              <button className="button secondary" type="button" onClick={openSettings}>
+                <Settings size={14} />
+                Open Settings
               </button>
-            </Fragment>
-          ))}
-        </nav>
+            </div>
+          )}
+        </section>
       </div>
-      <DirectoryTable
-        className="driveFileRows"
-        rowClassName="driveResultRow"
-        bulkEditing={driveBulkEdit}
-        ariaLabel="Link workspace files and folders"
-        columns={[
-          <span className="bulkSelectCell" role="columnheader" aria-label="Select files" />,
-          <span className="driveFileHeaderCell" role="columnheader">Name</span>,
-          <span className="driveSessionHeaderCell" role="columnheader">Contents</span>,
-          <span className="driveOpenHeaderCell" role="columnheader" aria-label="Open file" />,
-        ]}
-      >
+    );
+  }
+
+  function renderLocalStoragePanel() {
+    return (
+      <div className="storageWorkspaceStack">
+        <PageToolbar
+          filterActive={driveFiltersOpen}
+          filterLabel={driveFiltersOpen ? "Hide file filters" : "Show file filters"}
+          onFilter={() => setDriveFiltersOpen((open) => !open)}
+          searchValue={driveQuery}
+          onSearchChange={setDriveQuery}
+          searchPlaceholder="Search files, agents, sessions, or archive"
+          editActive={driveBulkEdit}
+          editLabel={driveBulkEdit ? "Exit bulk edit" : "Edit files"}
+          onEdit={toggleDriveBulkEdit}
+          refreshLabel="Refresh files"
+          onRefresh={refreshDriveRows}
+        />
+        {driveActionMessage && (
+          <div className="assistantNotice chatRefreshNotice" aria-live="polite">
+            <p>{driveActionMessage}</p>
+          </div>
+        )}
+        {driveBulkEdit && (
+          <BulkEditControls
+            active={driveBulkEdit}
+            selectedCount={selectedDriveRowIds.length}
+            onToggle={toggleDriveBulkEdit}
+            onArchive={hideSelectedDriveRows}
+            onDelete={hideSelectedDriveRows}
+          />
+        )}
+        {driveFiltersOpen && (
+          <div className="chatFilterBar" role="group" aria-label="File filters">
+            <span className="chatFilterCount">{filteredRows.length} items in {driveQuery.trim() ? "search" : currentFolder}</span>
+          </div>
+        )}
+        <div className="drivePathBar" aria-label="Current Storage folder">
+          {!driveAtRoot && (
+            <IconCircleButton
+              className="drivePathBackButton"
+              label="Go to parent folder"
+              onClick={() => {
+                const parent = driveParentPath(currentFolder) || "~/Link/";
+                openDriveFolder(parent);
+              }}
+            >
+              <ArrowLeft size={16} />
+            </IconCircleButton>
+          )}
+          <nav className="driveBreadcrumbs" aria-label="Storage path">
+            {driveCrumbs.map((crumb, index) => (
+              <Fragment key={crumb.path}>
+                {index > 0 && <span aria-hidden="true">/</span>}
+                <button
+                  className={index === 0 ? "driveHomeCrumb" : undefined}
+                  type="button"
+                  onClick={() => openDriveFolder(crumb.path)}
+                  aria-current={crumb.path === currentFolder ? "page" : undefined}
+                  aria-label={index === 0 ? "Go to Storage home" : undefined}
+                  title={index === 0 ? "Storage home" : undefined}
+                >
+                  {index === 0 ? <Home size={16} /> : crumb.label}
+                </button>
+              </Fragment>
+            ))}
+          </nav>
+        </div>
+        <DirectoryTable
+          className="driveFileRows"
+          rowClassName="driveResultRow"
+          bulkEditing={driveBulkEdit}
+          ariaLabel="Link workspace files and folders"
+          columns={[
+            <span className="bulkSelectCell" role="columnheader" aria-label="Select files" />,
+            <span className="driveFileHeaderCell" role="columnheader">Name</span>,
+            <span className="driveSessionHeaderCell" role="columnheader">Contents</span>,
+            <span className="driveOpenHeaderCell" role="columnheader" aria-label="Open file" />,
+          ]}
+        >
           {filteredRows.map((row) => (
             <div
               className={`chatResultRow driveResultRow ${row.kind === "folder" ? "driveFolderRow" : ""}`}
@@ -5337,16 +6942,123 @@ function DriveView({
               </IconCircleButton>
             </div>
           ))}
-        {filteredRows.length === 0 && (
-          <div className="tableEmptyState" role="row">
-            <EmptyState
-              title="No Drive items found"
-              body={driveQuery.trim() ? "Try another search term or filter." : "This folder is empty."}
-              icon={FolderOpen}
-            />
+          {filteredRows.length === 0 && (
+            <div className="tableEmptyState" role="row">
+              <EmptyState
+                title="No Storage items found"
+                body={driveQuery.trim() ? "Try another search term or filter." : "This folder is empty."}
+                icon={FolderOpen}
+              />
+            </div>
+          )}
+        </DirectoryTable>
+        <section className="accessCard storagePathCard">
+          <div className="accessCardHeader">
+            <button className="button secondary" type="button" onClick={() => setStorageLocationsOpen((open) => !open)} aria-expanded={storageLocationsOpen}>
+              {storageLocationsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {storageLocationsOpen ? "Hide" : "Show locations"}
+            </button>
+          </div>
+          {storageLocationsOpen && (
+            <>
+              <div className="storagePathRows">
+                {storagePathRows.map((row) => (
+                  <div className="storagePathRow" key={row.label}>
+                    <div>
+                      <strong>{row.label}</strong>
+                      <small>{row.description}</small>
+                      <code className="storagePathValue">{row.value}</code>
+                    </div>
+                    <div className="storagePathActions">
+                      <button className="button ghost" type="button" onClick={() => void revealStoragePath(row.value, row.label)}>
+                        <ExternalLink size={14} />
+                        Reveal
+                      </button>
+                      <button className="button ghost" type="button" onClick={() => void copyStoragePath(row.value, row.label)}>
+                        <Copy size={14} />
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {storagePathCopyStatus && <p className="wikiSourceStatus">{storagePathCopyStatus}</p>}
+              {!modelCenterState && <p className="wikiSourceStatus">Loading local locations…</p>}
+            </>
+          )}
+        </section>
+      </div>
+    );
+  }
+
+  const storageHeaderAction = activeStorageTab === "cloud-storage" ? (
+    <div className="headerActions">
+      <TableRefreshButton onClick={refreshStorageBuckets} busy={storageBucketsBusy} disabled={!storageApiKeyReady} label="Refresh buckets" />
+      <button className="button primary" type="button" onClick={() => openExternalPortalUrl(telnyxPortalNewBucketUrl)}>
+        <Plus size={15} />
+        New Bucket
+      </button>
+    </div>
+  ) : activeStorageTab === "local-storage" ? (
+    <div className="headerActions">
+      <div className="publishMenuWrap storageCreateMenuWrap" ref={driveCreateMenuRef}>
+        <button
+          className="button primary"
+          type="button"
+          onClick={() => setDriveCreateMenuOpen((open) => !open)}
+          aria-expanded={driveCreateMenuOpen}
+          aria-haspopup="menu"
+        >
+          <Plus size={15} />
+          New
+        </button>
+        {driveCreateMenuOpen && (
+          <div className="publishMenu storageCreateMenu" role="menu" aria-label="Create or upload local storage items">
+            <button type="button" role="menuitem" onClick={() => void createDriveFolder()}>
+              <Plus size={16} />
+              <span>
+                <strong>New folder</strong>
+                <small>Create a folder inside this storage location.</small>
+              </span>
+            </button>
+            <button type="button" role="menuitem" onClick={() => void uploadDriveFiles()}>
+              <Upload size={16} />
+              <span>
+                <strong>File upload</strong>
+                <small>Add one or more files from this Mac.</small>
+              </span>
+            </button>
+            <button type="button" role="menuitem" onClick={() => void uploadDriveFolder()}>
+              <FolderOpen size={16} />
+              <span>
+                <strong>Folder upload</strong>
+                <small>Import an existing folder and its contents.</small>
+              </span>
+            </button>
           </div>
         )}
-      </DirectoryTable>
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <section className="content driveView canonicalChat">
+      <div className="pageSectionShell">
+        <PageSectionSidebar
+          heading="Storage"
+          headingIcon={FolderOpen}
+          groups={storageWorkspaceTabGroups}
+          activeTab={activeStorageTab}
+          onSelect={setActiveStorageTab}
+          label="Storage sections"
+          resizable={false}
+        />
+        <div className="pageSectionMain">
+          <PageSectionHeader parent="Link" title={activeStorageLabel} action={storageHeaderAction} />
+          {activeStorageTab === "cloud-storage" && renderCloudStoragePanel()}
+          {activeStorageTab === "local-storage" && renderLocalStoragePanel()}
+        </div>
+      </div>
     </section>
   );
 }
@@ -5576,7 +7288,6 @@ function ScribeAssistantPanel() {
   const [settings, setSettings] = useState<SpeakSettings | null>(null);
   const [whisperStatus, setWhisperStatus] = useState<WhisperStatus | null>(null);
   const [scribeStatus, setScribeStatus] = useState<ScribesStatus | null>(null);
-  const [providerMode, setProviderMode] = useState<SpeakSettings["sttMode"]>("telnyx-cloud");
   const [visibleSessionCount, setVisibleSessionCount] = useState(12);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
@@ -5590,12 +7301,13 @@ function ScribeAssistantPanel() {
   const [libraryFilter, setLibraryFilter] = useState<"all" | "transcriptions" | "recordings" | "meetings">("all");
   const [libraryMenuOpen, setLibraryMenuOpen] = useState(false);
   const [showLibrarySearch, setShowLibrarySearch] = useState(true);
+  const [scribeTranscriptionAttempted, setScribeTranscriptionAttempted] = useState(false);
+  const [activeDictationStartedAt, setActiveDictationStartedAt] = useState("");
   const [grammarBusyAction, setGrammarBusyAction] = useState("");
   const [grammarReview, setGrammarReview] = useState<HarperReviewResult | null>(null);
   const addMenuRef = useRef<HTMLDivElement | null>(null);
   const settingsMenuRef = useRef<HTMLDivElement | null>(null);
   const libraryMenuRef = useRef<HTMLDivElement | null>(null);
-  const scribeRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const scribeFrameRef = useRef<HTMLDivElement | null>(null);
   const scribeLiveTextBoxRef = useRef<HTMLDivElement | null>(null);
 
@@ -5608,18 +7320,28 @@ function ScribeAssistantPanel() {
     setSettings(nextSettings);
     setWhisperStatus(nextWhisperStatus);
     setScribeStatus(nextScribesStatus);
-    setProviderMode(nextSettings.sttMode);
   }
+
+  const helperRunning = Boolean(whisperStatus?.running);
+  const localServerRunning = Boolean(scribeStatus?.server.running);
+  const localServerReady = Boolean(scribeStatus?.server.ready);
+  const localSttSelected = settings?.sttMode === "local";
+  const cloudSttSelected = settings?.sttMode === "telnyx-cloud" || settings?.sttProvider === "telnyx";
+  const cloudSttReady = Boolean(scribeStatus?.telnyxCloudReady);
 
   useEffect(() => {
     void refreshScribeAssistant().catch((err) => {
       setMessage(err instanceof Error ? err.message : "Scribe could not load.");
     });
-    return () => {
-      scribeRecognitionRef.current?.abort();
-      scribeRecognitionRef.current = null;
-    };
   }, []);
+
+  useEffect(() => {
+    if (!helperRunning) return;
+    const intervalId = window.setInterval(() => {
+      void refreshScribeAssistant().catch(() => undefined);
+    }, 1200);
+    return () => window.clearInterval(intervalId);
+  }, [helperRunning]);
 
   useEffect(() => {
     if (!addMenuOpen && !settingsMenuOpen && !libraryMenuOpen) return;
@@ -5662,7 +7384,6 @@ function ScribeAssistantPanel() {
   }
 
   async function chooseProviderMode(nextMode: SpeakSettings["sttMode"]) {
-    setProviderMode(nextMode);
     setMessage("Saving provider");
     try {
       const patch: Partial<SpeakSettings> = nextMode === "telnyx-cloud"
@@ -5713,7 +7434,15 @@ function ScribeAssistantPanel() {
         ? await linkApi.startWhisper()
         : await linkApi.stopWhisper();
       setWhisperStatus(nextStatus);
-      setMessage(nextStatus.message);
+      if (action === "start") {
+        setActiveDictationStartedAt(new Date().toISOString());
+        setLiveListening(true);
+        setMessage("Listening.");
+      } else {
+        setLiveListening(false);
+        setMessage(nextStatus.message);
+      }
+      await refreshScribeAssistant().catch(() => undefined);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Scribe dictation action failed.");
       await refreshScribeAssistant().catch(() => undefined);
@@ -5722,69 +7451,24 @@ function ScribeAssistantPanel() {
     }
   }
 
-  function startLiveScribeRecognition() {
-    const Recognition = speechRecognitionConstructor();
-    if (!Recognition) {
-      setMessage("Live transcript preview is not available on this device.");
-      return;
-    }
-
-    let finalTranscript = "";
-    const recognition = new Recognition();
-    scribeRecognitionRef.current = recognition;
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = settings?.sttLanguage && settings.sttLanguage !== "auto" ? settings.sttLanguage : navigator.language || "en-US";
-    recognition.onresult = (event) => {
-      let interimTranscript = "";
-      for (let index = 0; index < event.results.length; index += 1) {
-        const result = event.results[index];
-        const transcript = result?.[0]?.transcript?.trim();
-        if (!transcript) continue;
-        if (result?.isFinal) {
-          finalTranscript = `${finalTranscript} ${transcript}`.trim();
-        } else {
-          interimTranscript = `${interimTranscript} ${transcript}`.trim();
-        }
-      }
-      setLiveTranscript(finalTranscript);
-      setLiveInterimTranscript(interimTranscript);
-    };
-    recognition.onerror = (event) => {
-      setLiveListening(false);
-      setMessage(event.error === "not-allowed" ? "Microphone access was denied." : "Live transcript preview stopped.");
-    };
-    recognition.onend = () => {
-      setLiveListening(false);
-      setLiveInterimTranscript("");
-      scribeRecognitionRef.current = null;
-    };
-
-    try {
-      setLiveTranscript("");
-      setLiveInterimTranscript("");
-      recognition.start();
-      setLiveListening(true);
-      setMessage("Listening.");
-    } catch {
-      setLiveListening(false);
-      setMessage("Live transcript preview could not start.");
-    }
-  }
-
   async function toggleScribeMicrophone() {
     if (liveListening || helperRunning) {
-      scribeRecognitionRef.current?.stop();
       setLiveListening(false);
       if (helperRunning) await runDictationHelper("stop");
       return;
     }
+    setScribeTranscriptionAttempted(true);
     if (!settings?.whisperEnabled) {
       setMessage("Enable Scribe dictation in settings first.");
       return;
     }
+    if (localSttSelected && !localServerRunning) {
+      setMessage("Local transcription is off. Open the menu to start the local server or switch to cloud.");
+      return;
+    }
+    setLiveTranscript("");
+    setLiveInterimTranscript("");
     await runDictationHelper("start");
-    startLiveScribeRecognition();
   }
 
   const recentSessions = useMemo(
@@ -5840,9 +7524,18 @@ function ScribeAssistantPanel() {
     setVisibleSessionCount(12);
   }, [libraryFilter, librarySearchQuery]);
 
-  const helperRunning = Boolean(whisperStatus?.running);
-  const localServerRunning = Boolean(scribeStatus?.server.running);
-  const localServerReady = Boolean(scribeStatus?.server.ready);
+  useEffect(() => {
+    if (!whisperStatus) return;
+    if (!whisperStatus.running) {
+      setLiveListening(false);
+      setLiveInterimTranscript("");
+    }
+    const latestTranscriptAt = whisperStatus.latestSessionAt ? Date.parse(whisperStatus.latestSessionAt) : 0;
+    const dictationStartedAt = activeDictationStartedAt ? Date.parse(activeDictationStartedAt) : 0;
+    if (whisperStatus.latestTranscript && (!dictationStartedAt || (latestTranscriptAt && latestTranscriptAt >= dictationStartedAt))) {
+      setLiveTranscript(whisperStatus.latestTranscript);
+    }
+  }, [activeDictationStartedAt, whisperStatus]);
   const liveTranscriptText = [liveTranscript, liveInterimTranscript].filter(Boolean).join(" ").trim();
   const hasMoreRecentSessions = visibleSessionCount < filteredRecentSessions.length;
   const librarySearchActive = Boolean(librarySearchQuery.trim()) || libraryFilter !== "all";
@@ -6189,6 +7882,69 @@ function ScribeAssistantPanel() {
               </button>
               {libraryMenuOpen && (
                 <div className="assistantSessionMenu" role="menu" aria-label="Scribe library options">
+                  <div className="assistantSessionMenuLabel">Transcription route</div>
+                  <button
+                    role="menuitemradio"
+                    aria-checked={cloudSttSelected}
+                    type="button"
+                    className={cloudSttSelected ? "selected" : ""}
+                    onClick={() => {
+                      void chooseProviderMode("telnyx-cloud");
+                      setLibraryMenuOpen(false);
+                    }}
+                    disabled={!settings || busyAction !== ""}
+                  >
+                    <Cloud size={15} />
+                    <span>{cloudSttSelected ? "Telnyx Cloud selected" : "Use Telnyx Cloud"}</span>
+                  </button>
+                  <button
+                    role="menuitemradio"
+                    aria-checked={localSttSelected}
+                    type="button"
+                    className={localSttSelected ? "selected" : ""}
+                    onClick={() => {
+                      void chooseProviderMode("local");
+                      setLibraryMenuOpen(false);
+                    }}
+                    disabled={!settings || busyAction !== ""}
+                  >
+                    <MonitorPlay size={15} />
+                    <span>{localSttSelected ? "Local selected" : "Use Local"}</span>
+                  </button>
+                  {localSttSelected && scribeTranscriptionAttempted && !localServerRunning && (
+                    <button
+                      role="menuitem"
+                      type="button"
+                      onClick={() => {
+                        void runLocalServerAction("start");
+                        setLibraryMenuOpen(false);
+                      }}
+                      disabled={busyAction !== ""}
+                    >
+                      <Play size={15} />
+                      <span>{busyAction === "start-server" ? "Starting local server" : "Start local server"}</span>
+                    </button>
+                  )}
+                  {localServerRunning && (
+                    <button
+                      role="menuitem"
+                      type="button"
+                      onClick={() => {
+                        void runLocalServerAction("stop");
+                        setLibraryMenuOpen(false);
+                      }}
+                      disabled={busyAction !== ""}
+                    >
+                      <Square size={15} />
+                      <span>{busyAction === "stop-server" ? "Stopping local server" : "Stop local server"}</span>
+                    </button>
+                  )}
+                  <div className="assistantSessionMenuHint">
+                    {cloudSttSelected
+                      ? (cloudSttReady ? "Cloud transcription is ready." : "Add TELNYX_API_KEY to use cloud transcription.")
+                      : (localServerReady ? "Local transcription is ready on this Mac." : "Local transcription uses the on-device Scribe server.")}
+                  </div>
+                  <div className="assistantSessionMenuDivider" />
                   {libraryFilterOptions.map((option) => {
                     const selected = libraryFilter === option.id;
                     return (
@@ -6284,7 +8040,7 @@ function ScribeAssistantPanel() {
       </div>
 
       <div className="scribeAssistantDock assistantChatDock">
-        <section className="scribeLiveComposer" aria-label="Live Scribe transcript">
+        <section className="scribeLiveComposer assistantComposer" aria-label="Live Scribe transcript">
         <div className="scribeLiveTextBox" ref={scribeLiveTextBoxRef} role="textbox" aria-readonly="true" aria-label="Live transcript text">
           {liveTranscriptText ? (
             <span>
@@ -6296,8 +8052,8 @@ function ScribeAssistantPanel() {
           )}
         </div>
         {message && <div className="voiceInputStatus scribeLiveStatus" aria-live="polite">{message}</div>}
-        <div className="scribeComposerActions">
-          <div className="scribeComposerTools">
+        <div className="scribeComposerActions assistantComposerActions">
+          <div className="scribeComposerTools assistantComposerTools">
             <div className="scribeComposerMenuRoot" ref={addMenuRef}>
               <button
                 className="iconButton"
@@ -6318,14 +8074,6 @@ function ScribeAssistantPanel() {
                     <RefreshCw size={15} />
                     <span>Refresh records</span>
                   </button>
-                  <button role="menuitem" type="button" onClick={() => void runLocalServerAction("start")} disabled={busyAction !== "" || localServerRunning}>
-                    <Play size={15} />
-                    <span>{busyAction === "start-server" ? "Starting local server" : "Warm start local server"}</span>
-                  </button>
-                  <button role="menuitem" type="button" onClick={() => void runLocalServerAction("stop")} disabled={busyAction !== "" || !localServerRunning}>
-                    <Square size={15} />
-                    <span>{busyAction === "stop-server" ? "Stopping local server" : "Stop local server"}</span>
-                  </button>
                 </div>
               )}
             </div>
@@ -6345,13 +8093,6 @@ function ScribeAssistantPanel() {
               </button>
               {settingsMenuOpen && (
                 <div className="scribeComposerMenu scribeSettingsMenu" role="menu" aria-label="Scribe settings">
-                  <label className="scribeAssistantField">
-                    <span>Provider</span>
-                    <select value={providerMode} onChange={(event) => void chooseProviderMode(event.target.value as SpeakSettings["sttMode"])} disabled={!settings || busyAction !== ""}>
-                      <option value="telnyx-cloud">Telnyx Cloud</option>
-                      <option value="local">Local</option>
-                    </select>
-                  </label>
                   <label className="scribeAssistantToggleLine">
                     <span>Scribe dictation</span>
                     <button
@@ -6379,6 +8120,7 @@ function ScribeAssistantPanel() {
               )}
             </div>
           </div>
+          <div className="assistantComposerSubmit">
             <button
               className={`iconButton voiceInputButton ${liveListening || helperRunning ? "active" : ""}`}
               title={liveListening || helperRunning ? "Stop Scribe dictation" : "Start Scribe dictation"}
@@ -6390,10 +8132,42 @@ function ScribeAssistantPanel() {
               <Mic size={18} />
             </button>
           </div>
+        </div>
         </section>
       </div>
     </div>
   );
+}
+
+class AssistantPaneBoundary extends ReactComponent<{
+  children: ReactNode;
+  label: string;
+  onRecover: () => void;
+}, {
+  hasError: boolean;
+}> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error(`Assistant ${this.props.label} pane crashed.`, error, errorInfo);
+  }
+
+  override render() {
+    if (!this.state.hasError) return this.props.children;
+    return (
+      <div className="assistantPaneFallback" role="alert">
+        <strong>{this.props.label} is unavailable right now.</strong>
+        <p>Link kept the rest of the app running. Return to chat and try again after refreshing the underlying service.</p>
+        <button className="button secondary" type="button" onClick={this.props.onRecover}>
+          Back to chat
+        </button>
+      </div>
+    );
+  }
 }
 
 function AssistantPanel({
@@ -8068,18 +9842,18 @@ function AssistantPanel({
                     </button>
                   </div>
                 </label>
-                <div className={`assistantSessionSearchResults ${assistantChatSearchResults.length === 0 ? "empty" : ""}`}>
-                  {assistantChatSearchResults.length > 0 ? assistantChatSearchResults.map((session) => (
+                {assistantChatSearchResults.length > 0 && (
+                  <div className="assistantSessionSearchResults">
+                    {assistantChatSearchResults.map((session) => (
                     <button key={session.id} type="button" onClick={() => selectAssistantChatSearchResult(session.id)}>
                       <span>
                         <strong>{session.title}</strong>
                         <small>{session.pinnedAt ? "Pinned chat" : session.task ? "Task chat" : "Recent chat"}</small>
                       </span>
                     </button>
-                  )) : (
-                    <div className="assistantSessionSearchEmpty">No chats found</div>
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             {assistantRuntimeMenuOpen && !newSessionDraftOpen && (
@@ -8169,7 +9943,7 @@ function AssistantPanel({
                   {selectedSession.task && <small>Agent has not started this task yet.</small>}
                 </div>
               )}
-              {!selectedSession && !newSessionDraftOpen && <div className="assistantEmpty">Start with a prompt. Link can keep chat, speech, self-hosted agents, and draft artifacts on this device when your local route is ready.</div>}
+              {!selectedSession && !newSessionDraftOpen && null}
               <div ref={assistantLogEndRef} />
             </div>
             {docsSuggestionStatus && <div className="voiceInputStatus" aria-live="polite">{docsSuggestionStatus}</div>}
@@ -8581,21 +10355,25 @@ function AssistantPanel({
           </div>
         </div>
       ) : mode === "phone" ? (
-        <Suspense fallback={<div className="softphoneLazyFallback" aria-busy="true">Loading phone</div>}>
-          <LinkSoftphone
-            config={activeDialerConfig}
-            linkedPhoneNumber={linkedPhoneNumber}
-            setLinkedPhoneNumber={setLinkedPhoneNumber}
-            telnyxApiReady={telnyxApiReady}
-            setView={setView}
-            openPhoneContacts={openPhoneContacts}
-            initialDialNumber={phoneDialTarget}
-            initialDialNumberRequestId={phoneDialTargetRequestId}
-            connectors={connectors}
-          />
-        </Suspense>
+        <AssistantPaneBoundary key="phone" label="Call assistant" onRecover={() => setMode("chat")}>
+          <Suspense fallback={<div className="softphoneLazyFallback" aria-busy="true">Loading phone</div>}>
+            <LinkSoftphone
+              config={activeDialerConfig}
+              linkedPhoneNumber={linkedPhoneNumber}
+              setLinkedPhoneNumber={setLinkedPhoneNumber}
+              telnyxApiReady={telnyxApiReady}
+              setView={setView}
+              openPhoneContacts={openPhoneContacts}
+              initialDialNumber={phoneDialTarget}
+              initialDialNumberRequestId={phoneDialTargetRequestId}
+              connectors={connectors}
+            />
+          </Suspense>
+        </AssistantPaneBoundary>
       ) : (
-        <ScribeAssistantPanel />
+        <AssistantPaneBoundary key="scribe" label="Scribe assistant" onRecover={() => setMode("chat")}>
+          <ScribeAssistantPanel />
+        </AssistantPaneBoundary>
       )}
     </aside>
   );
@@ -9042,7 +10820,7 @@ function AgentsView({
         skill,
         agentName: agent?.displayName ?? activeAgent?.displayName ?? "Agent",
         team: skill?.team ?? "Unassigned",
-        description: skill?.description ?? "Installed from Wiki.",
+        description: skill?.description ?? "Installed from Docs.",
       };
     });
     return rows
@@ -11385,6 +13163,12 @@ function calendarEventJoinUrl(event: GoogleCalendarEvent) {
   return event.meetUrl || "";
 }
 
+function calendarScribesUnlinkedSummary(event: GoogleCalendarEvent) {
+  return event.status === "past"
+    ? "Open Scribe Meetings and run Deep sync to link this past calendar event with notes or a transcript."
+    : "Open Scribe Meetings and run Deep sync before the meeting to link this calendar event with notes.";
+}
+
 function calendarEventDayKey(event: GoogleCalendarEvent) {
   const startMs = calendarEventStartMs(event);
   if (startMs === null) return "";
@@ -11892,7 +13676,7 @@ function CalendarView({
                 </button>
               </div>
             ) : (
-              <p>Open Scribe Meetings and run Deep sync to link this calendar event with notes.</p>
+              <p>{calendarScribesUnlinkedSummary(selectedEvent)}</p>
             )}
           </div>
           <div className="phoneButtonRow">
@@ -12316,6 +14100,7 @@ function PhoneView({
   const [inboxGrammarVocabulary, setInboxGrammarVocabulary] = useState<string[]>([]);
   const [inboxGrammarReview, setInboxGrammarReview] = useState<HarperReviewResult | null>(null);
   const [inboxGrammarBusyAction, setInboxGrammarBusyAction] = useState("");
+  const [inboxLatestSenderByThreadId, setInboxLatestSenderByThreadId] = useState<Record<string, string>>({});
   const [dismissedContactSkillIds, setDismissedContactSkillIds] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -12460,6 +14245,7 @@ function PhoneView({
     { direct: 0, group: 0 },
   ), [hiddenInboxThreadIds, inboxThreads]);
   const visibleInboxThreads = inboxWorkspace?.visibleThreads ?? localVisibleInboxThreads;
+  const localInboxThreadById = useMemo(() => new Map(inboxThreads.map((thread) => [thread.threadId, thread] as const)), [inboxThreads]);
   const inboxRecipientCounts = inboxWorkspace?.recipientCounts ?? localInboxRecipientCounts;
   const telnyxBotContacts = [
     {
@@ -12727,6 +14513,74 @@ function PhoneView({
   useEffect(() => {
     setInboxGrammarReview(null);
   }, [inboxDraftBody, selectedInboxThreadId, creatingNewInboxDraft]);
+
+  useEffect(() => {
+    const threadSources = [
+      ...inboxThreads,
+      ...(inboxWorkspace?.threads ?? []),
+      ...(inboxWorkspace?.visibleThreads ?? []),
+    ];
+    if (threadSources.length === 0) return;
+    setInboxLatestSenderByThreadId((current) => {
+      let next = current;
+      for (const thread of threadSources) {
+        if (!thread?.threadId) continue;
+        next = mergeInboxLatestSenderRecord(next, thread.threadId, thread.from);
+      }
+      return next;
+    });
+  }, [inboxThreads, inboxWorkspace?.threads, inboxWorkspace?.visibleThreads]);
+
+  useEffect(() => {
+    if (selectedInboxThread) {
+      const latestSender = displayInboxThreadSender(selectedInboxThread);
+      setInboxLatestSenderByThreadId((current) => mergeInboxLatestSenderRecord(
+        current,
+        selectedInboxThread.threadId,
+        latestSender,
+        selectedInboxThread.from,
+      ));
+    }
+  }, [selectedInboxThread]);
+
+  useEffect(() => {
+    if (tab !== "inbox" || !inboxReady || visibleInboxThreads.length === 0) return;
+    let cancelled = false;
+    const missingThreadIds = visibleInboxThreads
+      .map((thread) => thread.threadId)
+      .filter((threadId) => !inboxLatestSenderByThreadId[threadId]);
+    if (missingThreadIds.length === 0) return;
+
+    async function loadLatestSenders() {
+      const results = await Promise.allSettled(
+        missingThreadIds.map(async (threadId) => {
+          const thread = await linkApi.getGoogleInboxThread({ threadId });
+          return [threadId, displayInboxThreadSender(thread)] as const;
+        }),
+      );
+      if (cancelled) return;
+      setInboxLatestSenderByThreadId((current) => {
+        let next = current;
+        for (const result of results) {
+          if (result.status === "fulfilled") {
+            const [threadId, sender] = result.value;
+            next = mergeInboxLatestSenderRecord(
+              next,
+              threadId,
+              sender,
+              visibleInboxThreads.find((thread) => thread.threadId === threadId)?.from,
+            );
+          }
+        }
+        return next;
+      });
+    }
+
+    void loadLatestSenders();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, inboxReady, visibleInboxThreads, inboxLatestSenderByThreadId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -13228,6 +15082,11 @@ function PhoneView({
         setSelectedInboxThreadId(thread.threadId);
       };
       const displaySubject = cleanInboxSubject(thread.subject);
+      const displaySender = emailAddressOnly(preferredInboxSender(
+        inboxLatestSenderByThreadId[thread.threadId],
+        thread.from,
+        localInboxThreadById.get(thread.threadId)?.from,
+      ));
 	    return (
 	      <div
 	        key={thread.threadId}
@@ -13248,7 +15107,7 @@ function PhoneView({
           {thread.snippet && <small>{thread.snippet}</small>}
         </span>
         <span className="phoneInboxFromCell" role="cell">
-          <strong>{emailAddressOnly(thread.from || "")}</strong>
+          <strong>{displaySender}</strong>
         </span>
         <span className="phoneInboxDateCell" role="cell">{thread.date || "No date"}</span>
         <button
@@ -13333,8 +15192,9 @@ function PhoneView({
       New Email
     </button>
   ) : tab === "numbers" ? (
-    <button className="button primary" type="button" onClick={() => window.open("https://portal.telnyx.com/#/app/numbers/my-numbers", "_blank")}>
-      Open Telnyx Portal
+    <button className="button primary" type="button" onClick={() => openExternalPortalUrl(telnyxPortalNewNumberUrl)}>
+      <Plus size={15} />
+      New Number
     </button>
   ) : tab === "contacts" ? (
     <div className="headerActions contactHeaderActions">
@@ -14221,30 +16081,6 @@ function PhoneView({
                   </select>
                 </label>
               </div>
-            )}
-            {((phoneWorkspace?.previousCalls?.length ?? 0) > 0 || phoneWorkspace?.previousCallsEmptyState) && (
-              <section className="chatResultDetails directoryDetailPanel phoneCallPreviousCallsPanel" aria-label="Previous calls">
-                <div className="phoneCallPreviousCallsHeader">
-                  <strong>Previous calls</strong>
-                  {phoneWorkspace?.previousCalls?.length ? <span>{phoneWorkspace.previousCalls.length} found</span> : null}
-                </div>
-                {phoneWorkspace?.previousCalls?.length ? (
-                  <div className="phoneCallPreviousCallsList">
-                    {phoneWorkspace.previousCalls.map((call) => (
-                      <div className="phoneCallPreviousCallRow" key={call.id}>
-                        <strong>{call.label}</strong>
-                        <span>{call.detail}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : phoneWorkspace?.previousCallsEmptyState ? (
-                  <EmptyState
-                    title={phoneWorkspace.previousCallsEmptyState.title}
-                    body={phoneWorkspace.previousCallsEmptyState.body}
-                    icon={Phone}
-                  />
-                ) : null}
-              </section>
             )}
             <section className={`phoneCallsTable phoneContentTable ${callBulkEdit ? "bulkEditing" : ""}`} aria-label="Recent calls">
               <div className={`phoneCallRows ${filteredCallRollups.length === 0 ? "empty" : ""}`} role="table" aria-label="Recent calls">
@@ -15269,6 +17105,9 @@ function formatSkillUpdatedAt(value?: string): string {
 
 function WikiView({
   initialTab,
+  toolsWorkspaceTab,
+  setToolsWorkspaceTab,
+  connectors,
   wikiState,
   skills,
   activeAgent,
@@ -15280,10 +17119,14 @@ function WikiView({
   skillSearchRequest,
   shareExplorerResultToAgent,
   setView,
+  renderEmbeddedSettingsTab,
   openNewAppChatSession,
   onEdgePreviewReady,
 }: {
   initialTab?: WikiTab | undefined;
+  toolsWorkspaceTab: ToolsWorkspaceTab;
+  setToolsWorkspaceTab: (tab: ToolsWorkspaceTab) => void;
+  connectors: ConnectorStatus[];
   wikiState: WikiState | null;
   skills: SkillMetadata[];
   activeAgent: ActiveAgentSelection | null;
@@ -15295,12 +17138,25 @@ function WikiView({
   skillSearchRequest: string;
   shareExplorerResultToAgent: (result: ExplorerResult) => Promise<void>;
   setView: (view: ViewId) => void;
+  renderEmbeddedSettingsTab: (tab: Extract<ToolsWorkspaceTab, "domains" | "vpn">) => ReactNode;
   openNewAppChatSession: () => void;
   onEdgePreviewReady: (preview: EdgePreviewSurface) => void;
 }) {
-  const [tab, setTab] = useState<WikiTab>(initialTab ?? "support");
+  const [tab, setTab] = useState<WikiTab>(initialTab ?? "workspace-docs");
   const activePage: WikiPage = tab === "apps" ? "apps" : tab === "skills" ? "skills" : "wiki";
-  const activeWikiSource = tab === "apps" || tab === "skills" ? "support" : tab;
+  const activeWikiWorkspaceTab = activePage === "wiki" && isWikiWorkspaceTab(tab) ? tab : null;
+  const activeWikiSource = tab === "apps" || tab === "skills" || activeWikiWorkspaceTab ? "support" : tab;
+  const toolsSectionGroups = [
+    {
+      title: "WORKSPACE",
+      tabs: [
+        ["personal", "Personal", Users],
+        ["company", "Company", Building2],
+        ["domains", "Domains", Globe],
+        ["vpn", "VPN", ShieldCheck],
+      ],
+    },
+  ] as const satisfies readonly PageSectionTabGroup<ToolsWorkspaceTab>[];
   const [query, setQuery] = useState(skillSearchRequest);
   const keepQueryForTabReset = useRef(Boolean(skillSearchRequest.trim()));
   const [filter, setFilter] = useState("all");
@@ -15311,7 +17167,6 @@ function WikiView({
   const [selectedSkillDetailName, setSelectedSkillDetailName] = useState("");
   const [selectedSkillDetailTab, setSelectedSkillDetailTab] = useState<"overview" | "source" | "usage">("overview");
   const [selectedAppDetailId, setSelectedAppDetailId] = useState("");
-  const [selectedAppDetailTab, setSelectedAppDetailTab] = useState<"overview" | "source" | "actions">("overview");
   const [expandedSkillNames, setExpandedSkillNames] = useState<string[]>([]);
   const [skillMarkdownByName, setSkillMarkdownByName] = useState<Record<string, SkillMarkdownLoadState>>({});
   const [result, setResult] = useState("");
@@ -15323,6 +17178,33 @@ function WikiView({
   const [wikiRefreshing, setWikiRefreshing] = useState(false);
   const [wikiRefreshKey, setWikiRefreshKey] = useState(0);
   const [wikiDocumentationSources, setWikiDocumentationSources] = useState<WikiDocumentationSource[]>([]);
+  const [wikiWorkspaceDocs, setWikiWorkspaceDocs] = useState<WikiWorkspaceDoc[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(wikiWorkspaceDocStorageKey) ?? "[]");
+      return Array.isArray(stored) ? stored.map(hydrateWikiWorkspaceDoc).filter((item): item is WikiWorkspaceDoc => Boolean(item)) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [selectedWikiWorkspaceDocId, setSelectedWikiWorkspaceDocId] = useState("");
+  const [wikiWorkspaceSessions, setWikiWorkspaceSessions] = useState<ScribesSession[]>([]);
+  const [wikiWorkspaceEvents, setWikiWorkspaceEvents] = useState<GoogleCalendarEvent[]>([]);
+  const [wikiWorkspaceLoading, setWikiWorkspaceLoading] = useState(false);
+  const [wikiWorkspaceHarperSettings, setWikiWorkspaceHarperSettings] = useState<HarperAddonSettings | null>(null);
+  const [wikiWorkspaceReview, setWikiWorkspaceReview] = useState<HarperReviewResult | null>(null);
+  const [wikiWorkspaceGrammarBusy, setWikiWorkspaceGrammarBusy] = useState(false);
+  const [wikiWorkspaceSubmitOpen, setWikiWorkspaceSubmitOpen] = useState(false);
+  const [wikiWorkspaceSubmitSourceId, setWikiWorkspaceSubmitSourceId] = useState("");
+  const [wikiWorkspaceSubmitNote, setWikiWorkspaceSubmitNote] = useState("");
+  const [wikiWorkspaceSubmitBusy, setWikiWorkspaceSubmitBusy] = useState(false);
+  const [wikiWorkspaceSubmitStatus, setWikiWorkspaceSubmitStatus] = useState("");
+  const [wikiWorkspaceSubmitError, setWikiWorkspaceSubmitError] = useState(false);
+  const [wikiWorkspaceSubmitResult, setWikiWorkspaceSubmitResult] = useState<WikiWorkspaceDocSubmissionResult | null>(null);
+  const wikiWorkspaceRichEditorRef = useRef<HTMLDivElement | null>(null);
+  const wikiWorkspaceMarkdownEditorRef = useRef<HTMLTextAreaElement | null>(null);
+  const wikiWorkspaceEditorMenuRef = useRef<HTMLDivElement | null>(null);
+  const [wikiWorkspaceEditorMenuOpen, setWikiWorkspaceEditorMenuOpen] = useState(false);
   const [publishDraft, setPublishDraft] = useState<PublishAppDraft>({
     name: "",
     slug: "",
@@ -15387,11 +17269,14 @@ function WikiView({
 	      .sort((left, right) => left.name.localeCompare(right.name));
 	  }, [filter, localDraftApps, query]);
   const publisherReachable = publisherReadiness?.reachable !== false;
+  const activeWikiWorkspaceMeta = activeWikiWorkspaceTab ? wikiWorkspaceTabMeta(activeWikiWorkspaceTab) : null;
   const tabFilterOptions = useMemo(() => {
-    if (activePage === "apps") return ["all", "submitted", "preview", "approved", "deployed", "rejected", "web", "mcp_app", "vpn", "low", "medium", "high"];
+    if (activePage === "apps" && toolsWorkspaceTab === "company") return ["all", "submitted", "preview", "approved", "deployed", "rejected", "web", "mcp_app", "vpn", "low", "medium", "high"];
+    if (activePage === "apps" && toolsWorkspaceTab === "personal") return ["all", "preview", "web"];
     if (activePage === "skills") return ["all", ...new Set(skills.map((skill) => skill.team).filter(Boolean))];
+    if (activeWikiWorkspaceTab === "workspace-docs") return ["all", "manual", "transcript", "meeting", "agent"];
     return ["all"];
-  }, [activePage, skills]);
+  }, [activePage, activeWikiWorkspaceTab, skills, toolsWorkspaceTab]);
   const activeDirectoryAgent = activeAgent ? agents.find((agent) => agent.id === activeAgent.id) : undefined;
   const openClawActiveAgent = String(activeDirectoryAgent?.type ?? "").toLowerCase().includes("openclaw");
   const wikiNavigationTabs = useMemo(() => {
@@ -15401,7 +17286,13 @@ function WikiView({
     return configuredTabs.length ? configuredTabs : wikiSourceTabs;
   }, [wikiDocumentationSources]);
   const activeWikiSourceTab = wikiNavigationTabs.find((source) => source.id === activeWikiSource) ?? wikiNavigationTabs[0]!;
-  const wikiSearchPlaceholder = activeWikiSourceTab.externalSource === "support"
+  const wikiSearchPlaceholder = activeWikiWorkspaceTab === "workspace-docs"
+    ? "Search docs..."
+    : activeWikiWorkspaceTab === "workspace-transcripts"
+      ? "Search transcripts..."
+      : activeWikiWorkspaceTab === "workspace-meetings"
+        ? "Search meetings..."
+        : activeWikiSourceTab.externalSource === "support"
     ? `Search ${activeWikiSourceTab.label}...`
     : activeWikiSourceTab.externalSource === "developers"
       ? `Search ${activeWikiSourceTab.label}...`
@@ -15411,7 +17302,13 @@ function WikiView({
           ? `Search ${activeWikiSourceTab.label}...`
           : `Search ${activeWikiSourceTab.label}...`;
   const searchPlaceholder = activePage === "apps"
-        ? "Search apps..."
+        ? toolsWorkspaceTab === "company"
+          ? "Search company tools..."
+          : toolsWorkspaceTab === "personal"
+            ? "Search personal tools..."
+            : toolsWorkspaceTab === "domains"
+              ? "Search domains..."
+              : "Search VPN..."
         : activePage === "skills"
           ? "Search skills..."
         : wikiSearchPlaceholder;
@@ -15421,8 +17318,16 @@ function WikiView({
   }, [installedSkillKeys]);
 
   useEffect(() => {
-    setTab(initialTab ?? "support");
+    window.localStorage.setItem(wikiWorkspaceDocStorageKey, JSON.stringify(wikiWorkspaceDocs));
+  }, [wikiWorkspaceDocs]);
+
+  useEffect(() => {
+    setTab(initialTab ?? "workspace-docs");
   }, [initialTab]);
+
+  useEffect(() => {
+    setSelectedAppDetailId("");
+  }, [toolsWorkspaceTab]);
 
   async function refreshWikiDocumentationSources() {
     try {
@@ -15439,11 +17344,55 @@ function WikiView({
     void refreshWikiDocumentationSources();
   }, []);
 
+  async function refreshWikiWorkspaceData() {
+    setWikiWorkspaceLoading(true);
+    try {
+      const [sessions, events, harperSettings] = await Promise.all([
+        linkApi.listScribesSessions().catch(() => []),
+        linkApi.listGoogleCalendarEvents().catch(() => []),
+        getHarperAddonStatus({ forceRefresh: false, allowAutoUpdate: true }).catch(() => null),
+      ]);
+      setWikiWorkspaceSessions(sessions);
+      setWikiWorkspaceEvents(events);
+      setWikiWorkspaceHarperSettings(harperSettings);
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : "Unable to load Docs workspace data.");
+    } finally {
+      setWikiWorkspaceLoading(false);
+    }
+  }
+
   useEffect(() => {
-    if (activePage !== "wiki") return;
+    void refreshWikiWorkspaceData();
+  }, []);
+
+  useEffect(() => {
+    if (activePage !== "wiki" || activeWikiWorkspaceTab) return;
     if (wikiNavigationTabs.some((source) => source.id === activeWikiSource)) return;
-    setTab(wikiNavigationTabs[0]?.id ?? "support");
-  }, [activePage, activeWikiSource, wikiNavigationTabs]);
+    setTab(wikiNavigationTabs[0]?.id ?? "workspace-docs");
+  }, [activePage, activeWikiSource, activeWikiWorkspaceTab, wikiNavigationTabs]);
+
+  useEffect(() => {
+    if (activeWikiWorkspaceTab !== "workspace-docs") return;
+    if (wikiWorkspaceDocs.length === 0) {
+      const blankDoc = createBlankWikiWorkspaceDoc();
+      setWikiWorkspaceDocs([blankDoc]);
+      setSelectedWikiWorkspaceDocId(blankDoc.id);
+      return;
+    }
+    if (!selectedWikiWorkspaceDocId || !wikiWorkspaceDocs.some((doc) => doc.id === selectedWikiWorkspaceDocId)) {
+      setSelectedWikiWorkspaceDocId(wikiWorkspaceDocs[0]?.id ?? "");
+    }
+  }, [activeWikiWorkspaceTab, wikiWorkspaceDocs, selectedWikiWorkspaceDocId]);
+
+  useEffect(() => {
+    setWikiWorkspaceReview(null);
+  }, [selectedWikiWorkspaceDocId]);
+
+  useEffect(() => {
+    if (tabFilterOptions.length > 1) return;
+    setFilterOpen(false);
+  }, [tabFilterOptions]);
 
   useEffect(() => {
     if (!skillSearchRequest.trim()) return;
@@ -15464,8 +17413,125 @@ function WikiView({
     setSelectedSkillDetailName("");
     setSelectedSkillDetailTab("overview");
     setSelectedAppDetailId("");
-    setSelectedAppDetailTab("overview");
   }, [tab]);
+
+  const selectedWikiWorkspaceDoc = wikiWorkspaceDocs.find((doc) => doc.id === selectedWikiWorkspaceDocId) ?? wikiWorkspaceDocs[0] ?? null;
+  const wikiWorkspaceSubmissionSources = useMemo<WikiWorkspaceSubmissionSource[]>(() => {
+    const connectedConnectorIds = new Set(connectors.filter((connector) => connector.status === "connected").map((connector) => connector.id));
+    const sources: WikiWorkspaceSubmissionSource[] = [];
+    for (const source of wikiDocumentationSources) {
+      if (!source.enabled) continue;
+      if (source.type === "github" && connectedConnectorIds.has("github")) {
+        sources.push({
+          ...source,
+          submissionTarget: "github",
+          helperText: "Opens a draft PR in the configured repository, branch, and docs path.",
+        });
+      }
+      if (source.type === "pylon" && connectedConnectorIds.has("pylon")) {
+        sources.push({
+          ...source,
+          submissionTarget: "pylon",
+          helperText: "Creates a review issue in Pylon for admin follow-up.",
+        });
+      }
+    }
+    return sources.sort((left, right) => left.label.localeCompare(right.label));
+  }, [connectors, wikiDocumentationSources]);
+  const selectedWikiWorkspaceSubmissionSource = useMemo(
+    () => wikiWorkspaceSubmissionSources.find((source) => source.id === wikiWorkspaceSubmitSourceId) ?? wikiWorkspaceSubmissionSources[0] ?? null,
+    [wikiWorkspaceSubmissionSources, wikiWorkspaceSubmitSourceId],
+  );
+  const transcriptWorkspaceSessions = useMemo(() => wikiWorkspaceSessions
+    .filter((session) => session.sessionType !== "meeting" && session.sessionType !== "tts")
+    .filter((session) => session.transcriptText.trim() || session.artifacts.some((artifact) => artifact.content.trim()))
+    .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()), [wikiWorkspaceSessions]);
+  const meetingWorkspaceSessions = useMemo(() => wikiWorkspaceSessions
+    .filter((session) => session.sessionType === "meeting")
+    .sort((left, right) => {
+      const leftTime = left.meeting.calendarEventStart ? new Date(left.meeting.calendarEventStart).getTime() : new Date(left.updatedAt).getTime();
+      const rightTime = right.meeting.calendarEventStart ? new Date(right.meeting.calendarEventStart).getTime() : new Date(right.updatedAt).getTime();
+      return rightTime - leftTime;
+    }), [wikiWorkspaceSessions]);
+  const visibleWikiWorkspaceDocs = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return wikiWorkspaceDocs
+      .filter((doc) => filter === "all" || doc.source === filter)
+      .filter((doc) => !term || `${doc.title} ${wikiWorkspaceDocPlainText(doc)}`.toLowerCase().includes(term))
+      .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+  }, [filter, query, wikiWorkspaceDocs]);
+  const visibleTranscriptWorkspaceSessions = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return transcriptWorkspaceSessions.filter((session) => !term || `${session.title} ${session.transcriptText} ${session.model} ${session.provider}`.toLowerCase().includes(term));
+  }, [query, transcriptWorkspaceSessions]);
+  const visibleMeetingWorkspaceRows = useMemo(() => {
+    const linkedRows = wikiWorkspaceEvents.map((event) => {
+      const linkedSession = meetingWorkspaceSessions.find((session) => scribesMeetingMatchesCalendarEvent(session, event)) ?? null;
+      return {
+        id: `event:${event.id}`,
+        event,
+        linkedSession,
+        title: event.title,
+        whenLabel: `${calendarEventDateLabel(event)} · ${calendarEventTimeLabel(event)}`,
+        excerpt: linkedSession?.transcriptText || event.notes || "Create shared notes for this meeting.",
+      };
+    });
+    const orphanRows = meetingWorkspaceSessions
+      .filter((session) => !linkedRows.some((row) => row.linkedSession?.id === session.id))
+      .map((session) => ({
+        id: `session:${session.id}`,
+        event: null,
+        linkedSession: session,
+        title: session.title,
+        whenLabel: session.meeting.calendarEventStart ? new Date(session.meeting.calendarEventStart).toLocaleString() : compactRelativeTime(session.updatedAt),
+        excerpt: session.transcriptText || "Meeting note shell is ready for edits.",
+      }));
+    const term = query.trim().toLowerCase();
+    return [...linkedRows, ...orphanRows]
+      .filter((row) => !term || `${row.title} ${row.whenLabel} ${row.excerpt}`.toLowerCase().includes(term))
+      .sort((left, right) => {
+        const leftTime = left.event?.start ? new Date(left.event.start).getTime() : left.linkedSession?.meeting.calendarEventStart ? new Date(left.linkedSession.meeting.calendarEventStart).getTime() : 0;
+        const rightTime = right.event?.start ? new Date(right.event.start).getTime() : right.linkedSession?.meeting.calendarEventStart ? new Date(right.linkedSession.meeting.calendarEventStart).getTime() : 0;
+        return rightTime - leftTime;
+      });
+  }, [meetingWorkspaceSessions, query, wikiWorkspaceEvents]);
+
+  useEffect(() => {
+    if (!selectedWikiWorkspaceDoc || selectedWikiWorkspaceDoc.format !== "rich-text" || !wikiWorkspaceRichEditorRef.current) return;
+    const nextHtml = wikiWorkspaceDocHtml(selectedWikiWorkspaceDoc);
+    if (wikiWorkspaceRichEditorRef.current.innerHTML !== nextHtml) {
+      wikiWorkspaceRichEditorRef.current.innerHTML = nextHtml;
+    }
+  }, [selectedWikiWorkspaceDoc]);
+
+  useEffect(() => {
+    if (wikiWorkspaceSubmissionSources.length === 0) {
+      setWikiWorkspaceSubmitOpen(false);
+      setWikiWorkspaceSubmitSourceId("");
+      return;
+    }
+    if (!wikiWorkspaceSubmissionSources.some((source) => source.id === wikiWorkspaceSubmitSourceId)) {
+      setWikiWorkspaceSubmitSourceId(wikiWorkspaceSubmissionSources[0]?.id ?? "");
+    }
+  }, [wikiWorkspaceSubmissionSources, wikiWorkspaceSubmitSourceId]);
+
+  useEffect(() => {
+    setWikiWorkspaceSubmitOpen(false);
+    setWikiWorkspaceSubmitNote("");
+    setWikiWorkspaceSubmitStatus("");
+    setWikiWorkspaceSubmitError(false);
+    setWikiWorkspaceSubmitResult(null);
+    setWikiWorkspaceEditorMenuOpen(false);
+  }, [selectedWikiWorkspaceDocId]);
+
+  useEffect(() => {
+    if (!wikiWorkspaceEditorMenuOpen) return;
+    function closeWikiWorkspaceEditorMenu(event: MouseEvent) {
+      if (!wikiWorkspaceEditorMenuRef.current?.contains(event.target as Node)) setWikiWorkspaceEditorMenuOpen(false);
+    }
+    document.addEventListener("mousedown", closeWikiWorkspaceEditorMenu);
+    return () => document.removeEventListener("mousedown", closeWikiWorkspaceEditorMenu);
+  }, [wikiWorkspaceEditorMenuOpen]);
 
 	  async function refreshLocalDraftApps() {
 	    setLocalDraftBusy(true);
@@ -15521,8 +17587,8 @@ function WikiView({
     setWikiRefreshing(true);
     setResult("");
     try {
-      await refreshWikiDocumentationSources();
       if (activePage === "apps") {
+        await refreshWikiDocumentationSources();
         await Promise.all([
           refreshLocalDraftApps(),
           refreshPublishedApps(),
@@ -15539,14 +17605,376 @@ function WikiView({
         ];
         await Promise.all(cachedSkillNames.map((skillName) => loadSkillMarkdown(skillName, true)));
         setResult(cachedSkillNames.length ? "Skills and cached skill details refreshed." : "Skills refreshed.");
+      } else if (activeWikiWorkspaceTab) {
+        await refreshWikiWorkspaceData();
+        setResult(`${activeWikiWorkspaceMeta?.label ?? "Docs"} refreshed.`);
       } else {
+        await refreshWikiDocumentationSources();
         setWikiRefreshKey((key) => key + 1);
         setResult(`${activeWikiSourceTab.label} refreshed.`);
       }
     } catch (error) {
-      setResult(error instanceof Error ? error.message : "Unable to refresh Wiki.");
+      setResult(error instanceof Error ? error.message : "Unable to refresh Docs.");
     } finally {
       setWikiRefreshing(false);
+    }
+  }
+
+  function updateWikiWorkspaceDoc(docId: string, patch: Partial<Pick<WikiWorkspaceDoc, "title" | "content" | "format" | "source" | "linkedSessionId" | "linkedEventId">>) {
+    setWikiWorkspaceDocs((current) => current.map((doc) => doc.id === docId ? { ...doc, ...patch, updatedAt: new Date().toISOString() } : doc));
+    setWikiWorkspaceSubmitStatus("");
+    setWikiWorkspaceSubmitError(false);
+    setWikiWorkspaceSubmitResult(null);
+  }
+
+  function setWikiWorkspaceDocFormat(doc: WikiWorkspaceDoc, format: WikiWorkspaceDocFormat) {
+    if (doc.format === format) return;
+    updateWikiWorkspaceDoc(doc.id, {
+      format,
+      content: format === "markdown"
+        ? (doc.format === "rich-text" ? wikiRichTextHtmlToMarkdown(doc.content) : doc.content)
+        : wikiMarkdownToRichTextHtml(doc.content),
+    });
+    setWikiWorkspaceReview(null);
+  }
+
+  function syncWikiWorkspaceRichEditor() {
+    if (!selectedWikiWorkspaceDoc || selectedWikiWorkspaceDoc.format !== "rich-text" || !wikiWorkspaceRichEditorRef.current) return;
+    const nextHtml = wikiWorkspaceRichEditorRef.current.innerHTML === "<br>" ? "" : wikiWorkspaceRichEditorRef.current.innerHTML.trim();
+    updateWikiWorkspaceDoc(selectedWikiWorkspaceDoc.id, { content: nextHtml });
+    setWikiWorkspaceReview(null);
+  }
+
+  function runWikiWorkspaceRichTextCommand(command: string, value?: string) {
+    if (!selectedWikiWorkspaceDoc || selectedWikiWorkspaceDoc.format !== "rich-text" || !wikiWorkspaceRichEditorRef.current) return;
+    wikiWorkspaceRichEditorRef.current.focus();
+    document.execCommand(command, false, value);
+    syncWikiWorkspaceRichEditor();
+  }
+
+  function promptWikiWorkspaceLink() {
+    if (!selectedWikiWorkspaceDoc || selectedWikiWorkspaceDoc.format !== "rich-text") return;
+    const href = window.prompt("Enter a link URL");
+    if (!href) return;
+    runWikiWorkspaceRichTextCommand("createLink", href.trim());
+  }
+
+  function promptWikiWorkspaceImage() {
+    if (!selectedWikiWorkspaceDoc) return;
+    const src = window.prompt("Paste an image URL");
+    if (!src) return;
+    if (selectedWikiWorkspaceDoc.format === "markdown") {
+      insertMarkdownAtSelection(`![Image](${src.trim()})`);
+      return;
+    }
+    runWikiWorkspaceRichTextCommand("insertImage", src.trim());
+  }
+
+  function promptWikiWorkspaceColor() {
+    if (!selectedWikiWorkspaceDoc || selectedWikiWorkspaceDoc.format !== "rich-text") return;
+    const color = window.prompt("Enter a text color", "#0d9488");
+    if (!color) return;
+    runWikiWorkspaceRichTextCommand("foreColor", color.trim());
+  }
+
+  function replaceSelectedWikiWorkspaceMarkdown(nextContent: string, nextSelectionStart: number, nextSelectionEnd = nextSelectionStart) {
+    if (!selectedWikiWorkspaceDoc || selectedWikiWorkspaceDoc.format !== "markdown") return;
+    updateWikiWorkspaceDoc(selectedWikiWorkspaceDoc.id, { content: nextContent });
+    setWikiWorkspaceReview(null);
+    requestAnimationFrame(() => {
+      const textarea = wikiWorkspaceMarkdownEditorRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(nextSelectionStart, nextSelectionEnd);
+    });
+  }
+
+  function insertMarkdownAtSelection(snippet: string) {
+    const textarea = wikiWorkspaceMarkdownEditorRef.current;
+    if (!selectedWikiWorkspaceDoc || selectedWikiWorkspaceDoc.format !== "markdown" || !textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const nextContent = `${selectedWikiWorkspaceDoc.content.slice(0, start)}${snippet}${selectedWikiWorkspaceDoc.content.slice(end)}`;
+    replaceSelectedWikiWorkspaceMarkdown(nextContent, start + snippet.length);
+  }
+
+  function wrapMarkdownSelection(before: string, after = before, fallback = "text") {
+    const textarea = wikiWorkspaceMarkdownEditorRef.current;
+    if (!selectedWikiWorkspaceDoc || selectedWikiWorkspaceDoc.format !== "markdown" || !textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = selectedWikiWorkspaceDoc.content.slice(start, end) || fallback;
+    const replacement = `${before}${selectedText}${after}`;
+    const nextContent = `${selectedWikiWorkspaceDoc.content.slice(0, start)}${replacement}${selectedWikiWorkspaceDoc.content.slice(end)}`;
+    const selectionStart = start + before.length;
+    replaceSelectedWikiWorkspaceMarkdown(nextContent, selectionStart, selectionStart + selectedText.length);
+  }
+
+  function prefixMarkdownSelection(prefix: string) {
+    const textarea = wikiWorkspaceMarkdownEditorRef.current;
+    if (!selectedWikiWorkspaceDoc || selectedWikiWorkspaceDoc.format !== "markdown" || !textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const before = selectedWikiWorkspaceDoc.content.slice(0, start);
+    const selection = selectedWikiWorkspaceDoc.content.slice(start, end) || "Item";
+    const after = selectedWikiWorkspaceDoc.content.slice(end);
+    const replacement = selection.split("\n").map((line) => `${prefix}${line}`).join("\n");
+    replaceSelectedWikiWorkspaceMarkdown(`${before}${replacement}${after}`, start, start + replacement.length);
+  }
+
+  function promptWikiWorkspaceMarkdownLink() {
+    const href = window.prompt("Enter a link URL");
+    if (!href) return;
+    wrapMarkdownSelection("[", `](${href.trim()})`, "link text");
+  }
+
+  function convertSelectedWikiWorkspaceDocToMarkdown() {
+    if (!selectedWikiWorkspaceDoc) return;
+    updateWikiWorkspaceDoc(selectedWikiWorkspaceDoc.id, {
+      format: "markdown",
+      content: selectedWikiWorkspaceDoc.format === "rich-text" ? wikiRichTextHtmlToMarkdown(selectedWikiWorkspaceDoc.content) : selectedWikiWorkspaceDoc.content,
+    });
+    setWikiWorkspaceReview(null);
+    setWikiWorkspaceEditorMenuOpen(false);
+  }
+
+  function convertSelectedWikiWorkspaceDocToRichText() {
+    if (!selectedWikiWorkspaceDoc) return;
+    updateWikiWorkspaceDoc(selectedWikiWorkspaceDoc.id, {
+      format: "rich-text",
+      content: selectedWikiWorkspaceDoc.format === "markdown" ? wikiMarkdownToRichTextHtml(selectedWikiWorkspaceDoc.content) : wikiWorkspaceDocHtml(selectedWikiWorkspaceDoc),
+    });
+    setWikiWorkspaceReview(null);
+    setWikiWorkspaceEditorMenuOpen(false);
+  }
+
+  function createWikiWorkspaceDoc(source: WikiWorkspaceDocSource = "manual", seed?: Partial<WikiWorkspaceDoc>) {
+    const doc = {
+      ...createBlankWikiWorkspaceDoc(seed?.title || (source === "agent" ? "Bot draft" : "Untitled doc")),
+      ...seed,
+      source,
+      updatedAt: new Date().toISOString(),
+    } satisfies WikiWorkspaceDoc;
+    setWikiWorkspaceDocs((current) => [doc, ...current]);
+    setSelectedWikiWorkspaceDocId(doc.id);
+    setWikiWorkspaceReview(null);
+    setQuery("");
+    if (activeWikiWorkspaceTab !== "workspace-docs") setTab("workspace-docs");
+    return doc;
+  }
+
+  function deleteWikiWorkspaceDoc(docId: string) {
+    const remainingDocs = wikiWorkspaceDocs.filter((doc) => doc.id !== docId);
+    setWikiWorkspaceDocs(remainingDocs);
+    setWikiWorkspaceReview(null);
+    if (remainingDocs.length === 0) {
+      const blankDoc = createBlankWikiWorkspaceDoc();
+      setWikiWorkspaceDocs([blankDoc]);
+      setSelectedWikiWorkspaceDocId(blankDoc.id);
+      return;
+    }
+    if (selectedWikiWorkspaceDocId === docId) setSelectedWikiWorkspaceDocId(remainingDocs[0]?.id ?? "");
+  }
+
+  function openTranscriptWorkspaceDoc(session: ScribesSession) {
+    const existing = wikiWorkspaceDocs.find((doc) => doc.linkedSessionId === session.id);
+    if (existing) {
+      setSelectedWikiWorkspaceDocId(existing.id);
+      setWikiWorkspaceReview(null);
+      setTab("workspace-docs");
+      return;
+    }
+    const doc = wikiWorkspaceDocFromTranscriptSession(session);
+    setWikiWorkspaceDocs((current) => [doc, ...current]);
+    setSelectedWikiWorkspaceDocId(doc.id);
+    setWikiWorkspaceReview(null);
+    setTab("workspace-docs");
+  }
+
+  function openMeetingWorkspaceDoc(input: { session?: ScribesSession | null; event?: GoogleCalendarEvent | null }) {
+    const linkedSessionId = input.session?.id;
+    const linkedEventId = input.event?.id ?? input.session?.meeting.calendarEventId;
+    const existing = wikiWorkspaceDocs.find((doc) => (linkedSessionId && doc.linkedSessionId === linkedSessionId) || (linkedEventId && doc.linkedEventId === linkedEventId));
+    if (existing) {
+      setSelectedWikiWorkspaceDocId(existing.id);
+      setWikiWorkspaceReview(null);
+      setTab("workspace-docs");
+      return;
+    }
+    const doc = input.session
+      ? wikiWorkspaceDocFromMeetingSession(input.session)
+      : wikiWorkspaceDocFromCalendarEvent(input.event!);
+    setWikiWorkspaceDocs((current) => [doc, ...current]);
+    setSelectedWikiWorkspaceDocId(doc.id);
+    setWikiWorkspaceReview(null);
+    setTab("workspace-docs");
+  }
+
+  async function submitSelectedWikiWorkspaceDoc() {
+    if (!selectedWikiWorkspaceDoc) return;
+    const source = selectedWikiWorkspaceSubmissionSource;
+    const markdown = wikiWorkspaceDocMarkdownForSubmission(selectedWikiWorkspaceDoc);
+    if (!markdown) {
+      setWikiWorkspaceSubmitError(true);
+      setWikiWorkspaceSubmitStatus("Add draft text before submitting this doc for review.");
+      return;
+    }
+    if (!source) {
+      setWikiWorkspaceSubmitError(true);
+      setWikiWorkspaceSubmitStatus("Connect a review source before submitting this doc.");
+      return;
+    }
+    setWikiWorkspaceSubmitBusy(true);
+    setWikiWorkspaceSubmitError(false);
+    setWikiWorkspaceSubmitResult(null);
+    setWikiWorkspaceSubmitStatus(`Submitting to ${source.label}...`);
+    try {
+      const submission = await linkApi.submitWikiWorkspaceDoc({
+        sourceId: source.id,
+        title: wikiWorkspaceDocSubmissionTitle(selectedWikiWorkspaceDoc),
+        content: markdown,
+        format: "markdown",
+        note: wikiWorkspaceSubmitNote.trim(),
+      });
+      setWikiWorkspaceSubmitResult(submission);
+      setWikiWorkspaceSubmitStatus(submission.message);
+      setWikiWorkspaceSubmitOpen(false);
+      setWikiWorkspaceSubmitNote("");
+    } catch (error) {
+      setWikiWorkspaceSubmitError(true);
+      setWikiWorkspaceSubmitStatus(error instanceof Error ? error.message : "This doc could not be submitted for review.");
+    } finally {
+      setWikiWorkspaceSubmitBusy(false);
+    }
+  }
+
+  async function ensureWikiWorkspaceHarperReady() {
+    const latest = (await getHarperAddonStatus({ forceRefresh: false, allowAutoUpdate: true }).catch(() => null)) || wikiWorkspaceHarperSettings;
+    if (!latest) return null;
+    if (!latest.installed) {
+      const installed = await installHarperAddon({ enable: true });
+      setWikiWorkspaceHarperSettings(installed);
+      return installed;
+    }
+    if (!latest.enabled) {
+      await linkApi.saveScribesSettings({
+        addons: {
+          harper: {
+            ...latest,
+            enabled: true,
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      });
+      const refreshed = (await getHarperAddonStatus({ forceRefresh: false, allowAutoUpdate: true }).catch(() => null)) || { ...latest, enabled: true };
+      setWikiWorkspaceHarperSettings(refreshed);
+      return refreshed;
+    }
+    setWikiWorkspaceHarperSettings(latest);
+    return latest;
+  }
+
+  async function setWikiWorkspaceGrammarEnabled(enabled: boolean) {
+    setWikiWorkspaceGrammarBusy(true);
+    try {
+      if (enabled) {
+        const settings = await ensureWikiWorkspaceHarperReady();
+        if (!settings) {
+          setResult("Grammar status is unavailable right now.");
+          return;
+        }
+        setWikiWorkspaceHarperSettings(settings);
+        setResult("Grammar check enabled.");
+        return;
+      }
+      if (!wikiWorkspaceHarperSettings) return;
+      await linkApi.saveScribesSettings({
+        addons: {
+          harper: {
+            ...wikiWorkspaceHarperSettings,
+            enabled: false,
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      });
+      setWikiWorkspaceHarperSettings({ ...wikiWorkspaceHarperSettings, enabled: false });
+      setWikiWorkspaceReview(null);
+      setResult("Grammar check disabled.");
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : "Grammar settings could not be updated.");
+    } finally {
+      setWikiWorkspaceGrammarBusy(false);
+    }
+  }
+
+  async function reviewSelectedWikiWorkspaceDoc() {
+    if (!selectedWikiWorkspaceDoc) return;
+    setWikiWorkspaceGrammarBusy(true);
+    try {
+      const docText = wikiWorkspaceDocPlainText(selectedWikiWorkspaceDoc);
+      const settings = await ensureWikiWorkspaceHarperReady();
+      if (!settings) {
+        setResult("Grammar status is unavailable right now.");
+        return;
+      }
+      if (settings.defaultAction === "polish") {
+        const polished = await polishTextWithHarper({ text: docText, settings });
+        updateWikiWorkspaceDoc(selectedWikiWorkspaceDoc.id, {
+          content: wikiWorkspaceDocContentForFormat(selectedWikiWorkspaceDoc.format, polished.text),
+        });
+        setWikiWorkspaceReview(polished);
+        setResult(polished.appliedFindings.length > 0 ? "Grammar fixes applied to this doc." : "No safe grammar changes were needed.");
+        return;
+      }
+      const review = await reviewTextWithHarper({ text: docText, settings });
+      setWikiWorkspaceReview(review);
+      setResult(review.findings.length > 0 ? "Grammar suggestions ready." : "No grammar issues found.");
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : "Grammar review failed.");
+    } finally {
+      setWikiWorkspaceGrammarBusy(false);
+    }
+  }
+
+  async function polishSelectedWikiWorkspaceDoc() {
+    if (!selectedWikiWorkspaceDoc) return;
+    setWikiWorkspaceGrammarBusy(true);
+    try {
+      const docText = wikiWorkspaceDocPlainText(selectedWikiWorkspaceDoc);
+      const settings = await ensureWikiWorkspaceHarperReady();
+      if (!settings) {
+        setResult("Grammar status is unavailable right now.");
+        return;
+      }
+      const polished = await polishTextWithHarper({ text: docText, settings });
+      updateWikiWorkspaceDoc(selectedWikiWorkspaceDoc.id, {
+        content: wikiWorkspaceDocContentForFormat(selectedWikiWorkspaceDoc.format, polished.text),
+      });
+      setWikiWorkspaceReview(polished);
+      setResult(polished.appliedFindings.length > 0 ? "Grammar fixes applied to this doc." : "No safe grammar changes were needed.");
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : "Grammar polish failed.");
+    } finally {
+      setWikiWorkspaceGrammarBusy(false);
+    }
+  }
+
+  async function applyWikiWorkspaceFinding(finding: HarperFinding) {
+    if (!selectedWikiWorkspaceDoc || !wikiWorkspaceHarperSettings) return;
+    setWikiWorkspaceGrammarBusy(true);
+    try {
+      const currentText = wikiWorkspaceDocPlainText(selectedWikiWorkspaceDoc);
+      const nextText = applyHarperFinding(currentText, finding);
+      if (nextText === currentText) return;
+      updateWikiWorkspaceDoc(selectedWikiWorkspaceDoc.id, {
+        content: wikiWorkspaceDocContentForFormat(selectedWikiWorkspaceDoc.format, nextText),
+      });
+      const review = await reviewTextWithHarper({ text: nextText, settings: wikiWorkspaceHarperSettings });
+      setWikiWorkspaceReview(review);
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : "Unable to apply this grammar fix.");
+    } finally {
+      setWikiWorkspaceGrammarBusy(false);
     }
   }
 
@@ -16182,7 +18610,6 @@ function WikiView({
 
   function openAppDetail(id: string) {
     setSelectedAppDetailId(id);
-    setSelectedAppDetailTab("overview");
   }
 
   function renderLocalDraftAppRow(app: LinkLocalEdgeDraftApp) {
@@ -16261,7 +18688,87 @@ function WikiView({
     );
   }
 
-	  function renderAppsTab() {
+  function renderPersonalAppsTab() {
+    const personalAppDirectoryClass = [
+      "appDirectorySection",
+      filteredLocalDraftApps.length === 0 ? "empty" : "",
+      filteredLocalDraftApps.length >= 4 ? "scrollable" : "",
+    ].filter(Boolean).join(" ");
+
+    return (
+      <div className={`marketplaceView embeddedMarketplace appDirectoryList ${filteredLocalDraftApps.length >= 4 ? "scrolling" : ""}`}>
+        {renderPublishAppPanel()}
+        <section className={personalAppDirectoryClass} aria-label="Personal tools">
+          <div className="appDirectorySectionHeader">
+            <h2>Personal</h2>
+            <span className="appDirectorySectionCount">{filteredLocalDraftApps.length} {filteredLocalDraftApps.length === 1 ? "APP" : "APPS"}</span>
+          </div>
+          <div className="chatSessionRows directoryTable appDirectoryTable" role="table" aria-label="Personal tools">
+            <div className="chatResultRow directoryResultRow appDirectoryResultRow personalAppDirectoryResultRow chatResultRowHead" role="row">
+              <span role="columnheader">App</span>
+              <span role="columnheader">Status</span>
+              <span role="columnheader" aria-label="Open app" />
+            </div>
+            <div className="chatResultRows" role="rowgroup">
+              {filteredLocalDraftApps.map(renderLocalDraftAppRow)}
+              {filteredLocalDraftApps.length === 0 && (
+                <div className="tableEmptyState" role="row">
+                  <EmptyState title={localDraftBusy ? "Loading personal tools" : "No personal tools yet"} body="Import a local app to see it here." icon={Grid2X2Plus} />
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+        {result && <pre className="resultPreview">{result}</pre>}
+      </div>
+    );
+  }
+
+  function renderCompanyAppsTab() {
+    const companyAppDirectoryClass = [
+      "appDirectorySection",
+      filteredApps.length === 0 ? "empty" : "",
+      filteredApps.length >= 4 ? "scrollable" : "",
+    ].filter(Boolean).join(" ");
+
+    return (
+      <div className={`marketplaceView embeddedMarketplace appDirectoryList ${filteredApps.length >= 4 ? "scrolling" : ""}`}>
+        <section className={companyAppDirectoryClass} aria-label="Company tools">
+          <div className="appDirectorySectionHeader">
+            <h2>Company</h2>
+            <span className="appDirectorySectionCount">{filteredApps.length} {filteredApps.length === 1 ? "APP" : "APPS"}</span>
+          </div>
+          <div className="chatSessionRows directoryTable appDirectoryTable" role="table" aria-label="Company tools">
+            <div className="chatResultRow directoryResultRow appDirectoryResultRow teamAppDirectoryResultRow chatResultRowHead" role="row">
+              <span role="columnheader">App</span>
+              <span role="columnheader">Owner</span>
+              <span role="columnheader">Status</span>
+              <span role="columnheader">Type</span>
+              <span role="columnheader" aria-label="Open app" />
+            </div>
+            <div className="chatResultRows" role="rowgroup">
+              {filteredApps.map(renderPublishedAppRow)}
+              {filteredApps.length === 0 && (
+                <div className="tableEmptyState" role="row">
+                  <EmptyState title="No company tools found" body="Published apps will appear here." icon={Grid2X2Plus} />
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+        {result && <pre className="resultPreview">{result}</pre>}
+      </div>
+    );
+  }
+
+  function renderAppsWorkspaceTab() {
+    if (toolsWorkspaceTab === "domains" || toolsWorkspaceTab === "vpn") {
+      return renderEmbeddedSettingsTab(toolsWorkspaceTab);
+    }
+    return toolsWorkspaceTab === "company" ? renderCompanyAppsTab() : renderPersonalAppsTab();
+  }
+
+  function renderAppsTab() {
     const selectedLocalApp = selectedAppDetailId.startsWith("local:")
       ? localDraftApps.find((app) => `local:${app.id}` === selectedAppDetailId)
       : undefined;
@@ -16283,37 +18790,81 @@ function WikiView({
         : undefined;
       return (
         <div className="marketplaceView embeddedMarketplace directoryDetailView embeddedDirectoryDetailView">
-          <header className="directoryEmbeddedDetailHeader">
-            <button className="iconButton chatDetailBackButton" type="button" onClick={() => setSelectedAppDetailId("")} aria-label="Back to apps">
+          <header className="directoryEmbeddedDetailHeader withActions">
+            <button className="iconButton chatDetailBackButton" type="button" onClick={() => setSelectedAppDetailId("")} aria-label="Back to tools">
               <ArrowLeft size={17} />
             </button>
-            <div>
-              <span>Apps / {isLocal ? "Personal" : "Team"}</span>
+            <div className="directoryEmbeddedDetailMeta">
+              <span>Tools / {isLocal ? "Personal" : "Company"}</span>
               <h2>{selectedTitle}</h2>
               <p>{selectedDescription || "No description saved."}</p>
             </div>
+            <div className="headerActions directoryEmbeddedHeaderActions" aria-label="App actions">
+              {selectedLocalApp ? (
+                <>
+                  <button className="button primary" onClick={() => void previewLocalDraftApp(selectedLocalApp)} disabled={appActionBusyId === selectedLocalApp.id}>
+                    <MonitorPlay size={14} />
+                    Preview
+                  </button>
+                  <button className="button secondary" onClick={() => void deployLocalDraftApp(selectedLocalApp, "local-only")} disabled={appActionBusyId === selectedLocalApp.id || deploymentBusyId === `app:${selectedLocalApp.id}:local-only`}>
+                    <Save size={14} />
+                    Keep Local
+                  </button>
+                  <button className="button secondary" onClick={() => void deployLocalDraftApp(selectedLocalApp, "telnyx-byo-cloud")} disabled={appActionBusyId === selectedLocalApp.id || deploymentBusyId === `app:${selectedLocalApp.id}:telnyx-byo-cloud`}>
+                    <Upload size={14} />
+                    Deploy Cloud
+                  </button>
+                  <button className="button ghost" onClick={() => void deleteLocalDraftApp(selectedLocalApp)} disabled={appActionBusyId === selectedLocalApp.id}>
+                    <Trash2 size={14} />
+                    Remove
+                  </button>
+                </>
+              ) : selectedPublishedApp ? (
+                <>
+                  <button className="button secondary" onClick={() => void openPublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id || !publisherReachable || !isPublishedAppOpenable(selectedPublishedApp)}>
+                    <ExternalLink size={14} />
+                    {publisherReachable ? "Open App" : "Configure Publisher"}
+                  </button>
+                  <button className="button ghost" onClick={() => void duplicatePublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id}>
+                    <FolderOpen size={14} />
+                    Duplicate
+                  </button>
+                  {["submitted", "preview", "approved"].includes(selectedPublishedApp.status) && (
+                    <button className="button primary" onClick={() => void reviewPublishedApp(selectedPublishedApp, "approve")} disabled={appActionBusyId === selectedPublishedApp.id}>
+                      <SquareCheck size={14} />
+                      Approve
+                    </button>
+                  )}
+                  {["submitted", "preview"].includes(selectedPublishedApp.status) && (
+                    <button className="button ghost" onClick={() => void reviewPublishedApp(selectedPublishedApp, "reject")} disabled={appActionBusyId === selectedPublishedApp.id}>
+                      <X size={14} />
+                      Reject
+                    </button>
+                  )}
+                  {(selectedPublishedApp.versions?.length ?? 0) > 1 && selectedPublishedApp.status !== "deprecated" && (
+                    <button className="button ghost" onClick={() => void rollbackPublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id}>
+                      <RefreshCw size={14} />
+                      Rollback
+                    </button>
+                  )}
+                  {selectedPublishedApp.status !== "deprecated" && (
+                    <button className="button ghost" onClick={() => void deprecatePublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id}>
+                      <ArchiveIcon size={14} />
+                      Deprecate
+                    </button>
+                  )}
+                </>
+              ) : null}
+            </div>
           </header>
           <section className="chatDetailSurface">
-            <div className="chatReviewTabs directoryDetailTabs" role="tablist" aria-label="App details">
-              {[
-                ["overview", "Overview"],
-                ["source", "Source"],
-                ["actions", "Actions"],
-              ].map(([id, label]) => (
-                <button
-                  key={id}
-                  className={selectedAppDetailTab === id ? "selected" : ""}
-                  type="button"
-                  onClick={() => setSelectedAppDetailTab(id as typeof selectedAppDetailTab)}
-                  role="tab"
-                  aria-selected={selectedAppDetailTab === id}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {selectedAppDetailTab === "overview" && selectedLocalApp && (
-              <div className="chatResultDetails directoryDetailPanel">
+            {selectedLocalApp && (
+              <>
+              <section className="directoryDetailSection">
+                <div className="directoryDetailSectionHeader">
+                  <h3>Overview</h3>
+                </div>
+                <div className="chatResultDetails directoryDetailPanel">
                 <div><strong>Description</strong><span>{selectedLocalApp.description || "No description saved."}</span></div>
                 <div><strong>Status</strong><span>Draft</span></div>
                 <div><strong>Data boundary</strong><span>{renderDeploymentChip(selectedDeployment)}</span></div>
@@ -16321,10 +18872,27 @@ function WikiView({
                 <div><strong>Target</strong><span>{selectedDeployment ? deploymentTargetLabel(selectedDeployment.target) : "Keep Local (device only)"}</span></div>
                 <div><strong>Output</strong><span>{selectedLocalApp.outputDir || "dist"}</span></div>
                 <div><strong>Updated</strong><span>{formatSkillUpdatedAt(selectedLocalApp.updatedAt)}</span></div>
-              </div>
+                </div>
+              </section>
+              <section className="directoryDetailSection">
+                <div className="directoryDetailSectionHeader">
+                  <h3>Source</h3>
+                </div>
+                <div className="chatResultDetails directoryDetailPanel">
+                  <div><strong>Directory</strong><span>{selectedLocalApp.directory}</span></div>
+                  <div><strong>Source subdir</strong><span>{selectedLocalApp.sourceSubdir || "Not set"}</span></div>
+                  <div><strong>Output dir</strong><span>{selectedLocalApp.outputDir || "dist"}</span></div>
+                </div>
+              </section>
+              </>
             )}
-            {selectedAppDetailTab === "overview" && selectedPublishedApp && (
-              <div className="chatResultDetails directoryDetailPanel">
+            {selectedPublishedApp && (
+              <>
+              <section className="directoryDetailSection">
+                <div className="directoryDetailSectionHeader">
+                  <h3>Overview</h3>
+                </div>
+                <div className="chatResultDetails directoryDetailPanel">
                 <div><strong>Description</strong><span>{selectedPublishedApp.description || "No description saved."}</span></div>
                 <div><strong>Status</strong><span>{formatStatusLabel(selectedPublishedApp.status)}</span></div>
                 <div><strong>Data boundary</strong><span>{renderDeploymentChip(selectedDeployment)}</span></div>
@@ -16335,78 +18903,20 @@ function WikiView({
                 <div><strong>Risk</strong><span>{selectedPublishedApp.riskLevel}</span></div>
                 <div><strong>Type</strong><span>{formatPublishedAppType(selectedPublishedApp.appType)}</span></div>
                 <div><strong>Updated</strong><span>{formatSkillUpdatedAt(selectedPublishedApp.updatedAt)}</span></div>
-              </div>
-            )}
-            {selectedAppDetailTab === "source" && selectedLocalApp && (
-              <div className="chatResultDetails directoryDetailPanel">
-                <div><strong>Directory</strong><span>{selectedLocalApp.directory}</span></div>
-                <div><strong>Source subdir</strong><span>{selectedLocalApp.sourceSubdir || "Not set"}</span></div>
-                <div><strong>Output dir</strong><span>{selectedLocalApp.outputDir || "dist"}</span></div>
-              </div>
-            )}
-            {selectedAppDetailTab === "source" && selectedPublishedApp && (
-              <div className="chatResultDetails directoryDetailPanel">
-                <div><strong>Repository</strong><span>{selectedPublishedApp.sourceRepo ?? "No source repo"}</span></div>
-                <div><strong>Ref</strong><span>{selectedPublishedApp.sourceRef ?? "main"}</span></div>
-                <div><strong>Subdir</strong><span>{selectedPublishedApp.sourceSubdir ?? "."}</span></div>
-                <div><strong>Version</strong><span>{selectedPublishedApp.latestVersion?.version ?? "Pending"}</span></div>
-              </div>
-            )}
-            {selectedAppDetailTab === "actions" && selectedLocalApp && (
-              <div className="directoryDetailPanel directoryActionPanel">
-                <button className="button primary" onClick={() => void previewLocalDraftApp(selectedLocalApp)} disabled={appActionBusyId === selectedLocalApp.id}>
-                  <MonitorPlay size={14} />
-                  Preview
-                </button>
-                <button className="button secondary" onClick={() => void deployLocalDraftApp(selectedLocalApp, "local-only")} disabled={appActionBusyId === selectedLocalApp.id || deploymentBusyId === `app:${selectedLocalApp.id}:local-only`}>
-                  <Save size={14} />
-                  Keep Local (device only)
-                </button>
-                <button className="button secondary" onClick={() => void deployLocalDraftApp(selectedLocalApp, "telnyx-byo-cloud")} disabled={appActionBusyId === selectedLocalApp.id || deploymentBusyId === `app:${selectedLocalApp.id}:telnyx-byo-cloud`}>
-                  <Upload size={14} />
-                  Deploy to Telnyx Cloud
-                </button>
-                <button className="button ghost" onClick={() => void deleteLocalDraftApp(selectedLocalApp)} disabled={appActionBusyId === selectedLocalApp.id}>
-                  <Trash2 size={14} />
-                  Remove
-                </button>
-              </div>
-            )}
-            {selectedAppDetailTab === "actions" && selectedPublishedApp && (
-              <div className="directoryDetailPanel directoryActionPanel">
-                <button className="button secondary" onClick={() => void openPublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id || !publisherReachable || !isPublishedAppOpenable(selectedPublishedApp)}>
-                  <ExternalLink size={14} />
-                  {publisherReachable ? "Open App" : "Configure Publisher"}
-                </button>
-                <button className="button ghost" onClick={() => void duplicatePublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id}>
-                  <FolderOpen size={14} />
-                  Duplicate
-                </button>
-                {["submitted", "preview", "approved"].includes(selectedPublishedApp.status) && (
-                  <button className="button primary" onClick={() => void reviewPublishedApp(selectedPublishedApp, "approve")} disabled={appActionBusyId === selectedPublishedApp.id}>
-                    <SquareCheck size={14} />
-                    Approve
-                  </button>
-                )}
-                {["submitted", "preview"].includes(selectedPublishedApp.status) && (
-                  <button className="button ghost" onClick={() => void reviewPublishedApp(selectedPublishedApp, "reject")} disabled={appActionBusyId === selectedPublishedApp.id}>
-                    <X size={14} />
-                    Reject
-                  </button>
-                )}
-                {(selectedPublishedApp.versions?.length ?? 0) > 1 && selectedPublishedApp.status !== "deprecated" && (
-                  <button className="button ghost" onClick={() => void rollbackPublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id}>
-                    <RefreshCw size={14} />
-                    Rollback
-                  </button>
-                )}
-                {selectedPublishedApp.status !== "deprecated" && (
-                  <button className="button ghost" onClick={() => void deprecatePublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id}>
-                    <ArchiveIcon size={14} />
-                    Deprecate
-                  </button>
-                )}
-              </div>
+                </div>
+              </section>
+              <section className="directoryDetailSection">
+                <div className="directoryDetailSectionHeader">
+                  <h3>Source</h3>
+                </div>
+                <div className="chatResultDetails directoryDetailPanel">
+                  <div><strong>Repository</strong><span>{selectedPublishedApp.sourceRepo ?? "No source repo"}</span></div>
+                  <div><strong>Ref</strong><span>{selectedPublishedApp.sourceRef ?? "main"}</span></div>
+                  <div><strong>Subdir</strong><span>{selectedPublishedApp.sourceSubdir ?? "."}</span></div>
+                  <div><strong>Version</strong><span>{selectedPublishedApp.latestVersion?.version ?? "Pending"}</span></div>
+                </div>
+              </section>
+              </>
             )}
           </section>
           {result && <pre className="resultPreview">{result}</pre>}
@@ -16414,70 +18924,8 @@ function WikiView({
       );
     }
 
-    const appDirectoryBalanced = filteredLocalDraftApps.length >= 4 && filteredApps.length >= 4;
-    const appDirectoryScrollable = filteredLocalDraftApps.length >= 4 || filteredApps.length >= 4;
-    const personalAppDirectoryClass = [
-      "appDirectorySection",
-      filteredLocalDraftApps.length === 0 ? "empty" : "",
-      filteredLocalDraftApps.length >= 4 ? "scrollable" : "",
-    ].filter(Boolean).join(" ");
-    const teamAppDirectoryClass = [
-      "appDirectorySection",
-      filteredApps.length === 0 ? "empty" : "",
-      filteredApps.length >= 4 ? "scrollable" : "",
-    ].filter(Boolean).join(" ");
-
-    return (
-      <div className={`marketplaceView embeddedMarketplace appDirectoryList ${appDirectoryBalanced ? "balanced" : ""} ${appDirectoryScrollable ? "scrolling" : ""}`}>
-	        {renderPublishAppPanel()}
-        <section className={personalAppDirectoryClass} aria-label="Personal apps">
-            <div className="appDirectorySectionHeader">
-              <h2>Personal</h2>
-	              <span className="appDirectorySectionCount">{filteredLocalDraftApps.length} {filteredLocalDraftApps.length === 1 ? "APP" : "APPS"}</span>
-            </div>
-	          <div className="chatSessionRows directoryTable appDirectoryTable" role="table" aria-label="Personal apps">
-              <div className="chatResultRow directoryResultRow appDirectoryResultRow personalAppDirectoryResultRow chatResultRowHead" role="row">
-                <span role="columnheader">App</span>
-                <span role="columnheader">Status</span>
-                <span role="columnheader" aria-label="Open app" />
-              </div>
-              <div className="chatResultRows" role="rowgroup">
-                {filteredLocalDraftApps.map(renderLocalDraftAppRow)}
-                {filteredLocalDraftApps.length === 0 && (
-                  <div className="tableEmptyState" role="row">
-                    <EmptyState title={localDraftBusy ? "Loading draft apps" : "No draft apps yet"} body="Import a local app to see it here." icon={Grid2X2Plus} />
-                  </div>
-                )}
-              </div>
-            </div>
-	        </section>
-	        <section className={teamAppDirectoryClass} aria-label="Team apps">
-            <div className="appDirectorySectionHeader">
-              <h2>Team</h2>
-	              <span className="appDirectorySectionCount">{filteredApps.length} {filteredApps.length === 1 ? "APP" : "APPS"}</span>
-            </div>
-          <div className="chatSessionRows directoryTable appDirectoryTable" role="table" aria-label="Team apps">
-            <div className="chatResultRow directoryResultRow appDirectoryResultRow teamAppDirectoryResultRow chatResultRowHead" role="row">
-              <span role="columnheader">App</span>
-              <span role="columnheader">Owner</span>
-              <span role="columnheader">Status</span>
-              <span role="columnheader">Type</span>
-              <span role="columnheader" aria-label="Open app" />
-            </div>
-            <div className="chatResultRows" role="rowgroup">
-              {filteredApps.map(renderPublishedAppRow)}
-              {filteredApps.length === 0 && (
-                <div className="tableEmptyState" role="row">
-                  <EmptyState title="No Team apps found" body="Published apps will appear here." icon={Grid2X2Plus} />
-                </div>
-              )}
-            </div>
-          </div>
-	        </section>
-        {result && <pre className="resultPreview">{result}</pre>}
-      </div>
-    );
-	  }
+    return renderAppsWorkspaceTab();
+  }
 
   function renderSkillsTab() {
     const selectedSkillDetail = selectedSkillDetailName
@@ -16629,10 +19077,452 @@ function WikiView({
     );
   }
 
+  function renderWikiDocsWorkspaceTab() {
+    if (!selectedWikiWorkspaceDoc) {
+      return (
+        <div className="wikiWorkspaceEmpty">
+          <EmptyState title="No docs yet" body="Create a doc, or turn a transcript or meeting into a working draft." icon={FileText} />
+        </div>
+      );
+    }
+
+    const latestTranscript = transcriptWorkspaceSessions[0] ?? null;
+    const latestMeeting = visibleMeetingWorkspaceRows[0] ?? null;
+    const wikiWorkspaceGrammarEnabled = Boolean(wikiWorkspaceHarperSettings?.installed && wikiWorkspaceHarperSettings.enabled);
+    const wikiWorkspaceGrammarActionLabel = wikiWorkspaceGrammarEnabled && wikiWorkspaceHarperSettings?.defaultAction === "polish"
+      ? "Polish doc"
+      : "Review grammar";
+    const wikiWorkspaceDocReadyToSubmit = Boolean(wikiWorkspaceDocMarkdownForSubmission(selectedWikiWorkspaceDoc));
+    const wikiWorkspaceSubmitSource = selectedWikiWorkspaceSubmissionSource;
+    return (
+      <div className="wikiWorkspaceShell wikiWorkspaceDocsShell">
+        <aside className="wikiWorkspaceDirectory">
+          <div className="wikiWorkspaceDirectoryHeader">
+            <div>
+              <strong>Your docs</strong>
+              <span>{visibleWikiWorkspaceDocs.length} saved</span>
+            </div>
+            <button className="button primary" type="button" onClick={() => createWikiWorkspaceDoc()}>
+              <Plus size={14} />
+              New doc
+            </button>
+          </div>
+          <div className="wikiWorkspaceDirectoryList" role="list" aria-label="Saved docs">
+            {visibleWikiWorkspaceDocs.map((doc) => (
+              <button
+                key={doc.id}
+                type="button"
+                className={`wikiWorkspaceDirectoryItem ${selectedWikiWorkspaceDoc.id === doc.id ? "selected" : ""}`}
+                onClick={() => setSelectedWikiWorkspaceDocId(doc.id)}
+              >
+                <strong>{doc.title || "Untitled doc"}</strong>
+                <span>{wikiWorkspaceDocSourceLabel(doc.source)} · {compactRelativeTime(doc.updatedAt)}</span>
+                <small>{wikiWorkspaceDocWordCount(doc)} words</small>
+              </button>
+            ))}
+          </div>
+        </aside>
+        <section className="wikiWorkspaceEditorSurface">
+          <div className="wikiWorkspaceEditorHeader">
+            <div className="wikiWorkspaceEditorMeta">
+              <Badge tone="default">{wikiWorkspaceDocSourceLabel(selectedWikiWorkspaceDoc.source)}</Badge>
+              <span>{wikiWorkspaceDocWordCount(selectedWikiWorkspaceDoc)} words</span>
+              <span>{compactRelativeTime(selectedWikiWorkspaceDoc.updatedAt)}</span>
+            </div>
+            <div className="wikiWorkspaceEditorTopRow">
+              <div className="directoryRowActions wikiWorkspacePrimaryActions">
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => {
+                    if (!wikiWorkspaceSubmissionSources.length) {
+                      setWikiWorkspaceSubmitError(true);
+                      setWikiWorkspaceSubmitStatus("Connect a review source to submit drafts.");
+                      return;
+                    }
+                    if (!wikiWorkspaceDocReadyToSubmit) {
+                      setWikiWorkspaceSubmitError(true);
+                      setWikiWorkspaceSubmitStatus("Add draft text before submitting this doc.");
+                      return;
+                    }
+                    setWikiWorkspaceSubmitOpen((current) => !current);
+                    setWikiWorkspaceSubmitStatus("");
+                    setWikiWorkspaceSubmitError(false);
+                  }}
+                  disabled={wikiWorkspaceSubmitBusy}
+                >
+                  <Send size={14} />
+                  Submit draft
+                </button>
+                {latestTranscript && (
+                  <button className="button secondary" type="button" onClick={() => openTranscriptWorkspaceDoc(latestTranscript)}>
+                    <Mic size={14} />
+                    Use latest transcript
+                  </button>
+                )}
+                {latestMeeting && (
+                  <button
+                    className="button secondary"
+                    type="button"
+                    onClick={() => openMeetingWorkspaceDoc({ session: latestMeeting.linkedSession, event: latestMeeting.event })}
+                  >
+                    <CalendarDays size={14} />
+                    Use latest meeting
+                  </button>
+                )}
+                <div className="assistantSessionMenuRoot wikiWorkspaceEditorMenuRoot" ref={wikiWorkspaceEditorMenuRef}>
+                  <button
+                    className="iconButton assistantSessionMenuTrigger"
+                    type="button"
+                    aria-label="Document options"
+                    title="Document options"
+                    aria-expanded={wikiWorkspaceEditorMenuOpen}
+                    onClick={() => setWikiWorkspaceEditorMenuOpen((open) => !open)}
+                  >
+                    <MoreHorizontal size={18} />
+                  </button>
+                  {wikiWorkspaceEditorMenuOpen && (
+                    <div className="assistantSessionMenu wikiWorkspaceEditorMenu" role="menu" aria-label="Document options">
+                      <div className="assistantSessionMenuLabel">Writing mode</div>
+                      <button role="menuitem" type="button" onClick={() => setWikiWorkspaceDocFormat(selectedWikiWorkspaceDoc, "rich-text")}>
+                        <FileText size={15} />
+                        <span>{selectedWikiWorkspaceDoc.format === "rich-text" ? "Rich text active" : "Switch to rich text"}</span>
+                      </button>
+                      <button role="menuitem" type="button" onClick={() => setWikiWorkspaceDocFormat(selectedWikiWorkspaceDoc, "markdown")}>
+                        <FileText size={15} />
+                        <span>{selectedWikiWorkspaceDoc.format === "markdown" ? "Markdown active" : "Switch to Markdown"}</span>
+                      </button>
+                      <div className="assistantSessionMenuDivider" />
+                      <div className="assistantSessionMenuLabel">Review</div>
+                      <label className="wikiWorkspaceMenuToggleLine">
+                        <span>Grammar check</span>
+                        <button
+                          className={`settingsToggle ${wikiWorkspaceGrammarEnabled ? "selected" : ""}`}
+                          type="button"
+                          aria-label={wikiWorkspaceGrammarEnabled ? "Disable grammar check" : "Enable grammar check"}
+                          onClick={() => void setWikiWorkspaceGrammarEnabled(!wikiWorkspaceGrammarEnabled)}
+                          disabled={wikiWorkspaceGrammarBusy}
+                        >
+                          <span>{wikiWorkspaceGrammarEnabled ? "On" : "Off"}</span>
+                          <i />
+                        </button>
+                      </label>
+                      {wikiWorkspaceGrammarEnabled && (
+                        <button role="menuitem" type="button" onClick={() => void reviewSelectedWikiWorkspaceDoc()} disabled={wikiWorkspaceGrammarBusy}>
+                          <Check size={15} />
+                          <span>{wikiWorkspaceGrammarBusy ? "Checking..." : wikiWorkspaceGrammarActionLabel}</span>
+                        </button>
+                      )}
+                      {wikiWorkspaceGrammarEnabled && wikiWorkspaceReview && wikiWorkspaceReview.findings.length > 0 && (
+                        <button role="menuitem" type="button" onClick={() => void polishSelectedWikiWorkspaceDoc()} disabled={wikiWorkspaceGrammarBusy}>
+                          <Zap size={15} />
+                          <span>Polish doc</span>
+                        </button>
+                      )}
+                      <div className="assistantSessionMenuDivider" />
+                      <div className="assistantSessionMenuLabel">Convert</div>
+                      {selectedWikiWorkspaceDoc.format === "rich-text" ? (
+                        <button role="menuitem" type="button" onClick={convertSelectedWikiWorkspaceDocToMarkdown}>
+                          <ArrowRight size={15} />
+                          <span>Convert to Markdown</span>
+                        </button>
+                      ) : (
+                        <button role="menuitem" type="button" onClick={convertSelectedWikiWorkspaceDocToRichText}>
+                          <ArrowRight size={15} />
+                          <span>Convert to rich text</span>
+                        </button>
+                      )}
+                      <div className="assistantSessionMenuDivider" />
+                      <button role="menuitem" type="button" onClick={() => deleteWikiWorkspaceDoc(selectedWikiWorkspaceDoc.id)}>
+                        <Trash2 size={15} />
+                        <span>Delete doc</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+          {wikiWorkspaceSubmitOpen && wikiWorkspaceSubmitSource && (
+            <section className="chatResultDetails directoryDetailPanel wikiWorkspaceSubmitPanel">
+              <div className="wikiWorkspaceSubmitHeader">
+                <div>
+                  <strong>Submit for review</strong>
+                  <span>Choose a connected source that can open an admin review workflow.</span>
+                </div>
+                <Badge tone="default">{wikiWorkspaceSubmitSource.submissionTarget === "github" ? "Draft PR" : "Review issue"}</Badge>
+              </div>
+              <div className="wikiWorkspaceSubmitFields">
+                <label className="wikiWorkspaceSubmitField">
+                  <span>Destination</span>
+                  <select value={wikiWorkspaceSubmitSource.id} onChange={(event) => setWikiWorkspaceSubmitSourceId(event.target.value)}>
+                    {wikiWorkspaceSubmissionSources.map((source) => (
+                      <option key={source.id} value={source.id}>
+                        {source.label} · {source.submissionTarget === "github" ? "GitHub draft PR" : "Pylon review issue"}
+                      </option>
+                    ))}
+                  </select>
+                  <small>{wikiWorkspaceSubmitSource.helperText}</small>
+                </label>
+                <label className="wikiWorkspaceSubmitField">
+                  <span>Review note</span>
+                  <textarea
+                    rows={3}
+                    value={wikiWorkspaceSubmitNote}
+                    onChange={(event) => setWikiWorkspaceSubmitNote(event.target.value)}
+                    placeholder="Optional context for reviewers."
+                  />
+                </label>
+              </div>
+              <div className="wikiWorkspaceSubmitActions">
+                <button className="button primary" type="button" onClick={() => void submitSelectedWikiWorkspaceDoc()} disabled={wikiWorkspaceSubmitBusy}>
+                  <Send size={14} />
+                  {wikiWorkspaceSubmitBusy ? "Submitting..." : "Submit now"}
+                </button>
+                <button
+                  className="button ghost"
+                  type="button"
+                  onClick={() => {
+                    setWikiWorkspaceSubmitOpen(false);
+                    setWikiWorkspaceSubmitStatus("");
+                    setWikiWorkspaceSubmitError(false);
+                  }}
+                  disabled={wikiWorkspaceSubmitBusy}
+                >
+                  Cancel
+                </button>
+              </div>
+            </section>
+          )}
+          {wikiWorkspaceSubmitStatus && (
+            <div className={`assistantNotice wikiWorkspaceSubmitNotice ${wikiWorkspaceSubmitError ? "warning" : ""}`.trim()} aria-live="polite">
+              <div>
+                <strong>{wikiWorkspaceSubmitError ? "Submission blocked" : "Submission update"}</strong>
+                <p>{wikiWorkspaceSubmitStatus}</p>
+              </div>
+              {!wikiWorkspaceSubmitError && wikiWorkspaceSubmitResult?.url && (
+                <a className="button ghost" href={wikiWorkspaceSubmitResult.url} target="_blank" rel="noreferrer">
+                  <ExternalLink size={14} />
+                  Open
+                </a>
+              )}
+            </div>
+          )}
+          <label className="wikiWorkspaceTitleField">
+            <span>Title</span>
+            <input
+              value={selectedWikiWorkspaceDoc.title}
+              onChange={(event) => {
+                updateWikiWorkspaceDoc(selectedWikiWorkspaceDoc.id, { title: event.target.value });
+                setWikiWorkspaceReview(null);
+              }}
+              placeholder="Untitled doc"
+            />
+          </label>
+          <div className="wikiWorkspaceBodyField">
+            <div className="wikiWorkspaceEditorChrome">
+              <div className="wikiWorkspaceEditorToolbar" role="toolbar" aria-label={selectedWikiWorkspaceDoc.format === "rich-text" ? "Rich text formatting" : "Markdown formatting"}>
+                {selectedWikiWorkspaceDoc.format === "rich-text" ? (
+                  <>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Heading" aria-label="Heading" onMouseDown={(event) => event.preventDefault()} onClick={() => runWikiWorkspaceRichTextCommand("formatBlock", "<h1>")}>
+                      <Heading1 size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Bold" aria-label="Bold" onMouseDown={(event) => event.preventDefault()} onClick={() => runWikiWorkspaceRichTextCommand("bold")}>
+                      <Bold size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Italic" aria-label="Italic" onMouseDown={(event) => event.preventDefault()} onClick={() => runWikiWorkspaceRichTextCommand("italic")}>
+                      <Italic size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Underline" aria-label="Underline" onMouseDown={(event) => event.preventDefault()} onClick={() => runWikiWorkspaceRichTextCommand("underline")}>
+                      <Underline size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Bulleted list" aria-label="Bulleted list" onMouseDown={(event) => event.preventDefault()} onClick={() => runWikiWorkspaceRichTextCommand("insertUnorderedList")}>
+                      <List size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Numbered list" aria-label="Numbered list" onMouseDown={(event) => event.preventDefault()} onClick={() => runWikiWorkspaceRichTextCommand("insertOrderedList")}>
+                      <ListOrdered size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Quote" aria-label="Quote" onMouseDown={(event) => event.preventDefault()} onClick={() => runWikiWorkspaceRichTextCommand("formatBlock", "<blockquote>")}>
+                      <Quote size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Add link" aria-label="Add link" onMouseDown={(event) => event.preventDefault()} onClick={promptWikiWorkspaceLink}>
+                      <Link2 size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Add image" aria-label="Add image" onMouseDown={(event) => event.preventDefault()} onClick={promptWikiWorkspaceImage}>
+                      <ImagePlus size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Text color" aria-label="Text color" onMouseDown={(event) => event.preventDefault()} onClick={promptWikiWorkspaceColor}>
+                      <Palette size={15} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Heading" aria-label="Heading" onClick={() => prefixMarkdownSelection("# ")}>
+                      <Heading1 size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Bold" aria-label="Bold" onClick={() => wrapMarkdownSelection("**")}>
+                      <Bold size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Italic" aria-label="Italic" onClick={() => wrapMarkdownSelection("*")}>
+                      <Italic size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Bulleted list" aria-label="Bulleted list" onClick={() => prefixMarkdownSelection("- ")}>
+                      <List size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Numbered list" aria-label="Numbered list" onClick={() => prefixMarkdownSelection("1. ")}>
+                      <ListOrdered size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Quote" aria-label="Quote" onClick={() => prefixMarkdownSelection("> ")}>
+                      <Quote size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Add link" aria-label="Add link" onClick={promptWikiWorkspaceMarkdownLink}>
+                      <Link2 size={15} />
+                    </button>
+                    <button type="button" className="wikiWorkspaceToolbarButton" title="Add image" aria-label="Add image" onClick={promptWikiWorkspaceImage}>
+                      <ImagePlus size={15} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            {selectedWikiWorkspaceDoc.format === "markdown" ? (
+              <textarea
+                ref={wikiWorkspaceMarkdownEditorRef}
+                className="wikiWorkspaceEditor"
+                value={selectedWikiWorkspaceDoc.content}
+                onChange={(event) => {
+                  updateWikiWorkspaceDoc(selectedWikiWorkspaceDoc.id, { content: event.target.value });
+                  setWikiWorkspaceReview(null);
+                }}
+                placeholder="Start writing..."
+              />
+            ) : (
+              <div
+                key={`${selectedWikiWorkspaceDoc.id}:rich-text`}
+                ref={wikiWorkspaceRichEditorRef}
+                className="wikiWorkspaceEditor wikiWorkspaceRichEditor"
+                contentEditable
+                suppressContentEditableWarning
+                spellCheck
+                data-placeholder="Start writing..."
+                aria-label="Document body"
+                onInput={syncWikiWorkspaceRichEditor}
+              />
+            )}
+          </div>
+          {wikiWorkspaceReview?.warning && <div className="voiceInputStatus" aria-live="polite">{wikiWorkspaceReview.warning}</div>}
+          {wikiWorkspaceReview && (
+            <section className="chatResultDetails directoryDetailPanel wikiWorkspaceGrammarPanel">
+              <div className="scribesGrammarSummary">
+                <Badge tone={wikiWorkspaceReview.findings.length > 0 ? "warning" : "success"}>{grammarFindingSummary(wikiWorkspaceReview.findings)}</Badge>
+                <small>{compactRelativeTime(wikiWorkspaceReview.checkedAt)}</small>
+              </div>
+              {wikiWorkspaceReview.findings.length > 0 && (
+                <div className="scribesGrammarFindingList">
+                  {wikiWorkspaceReview.findings.slice(0, 5).map((finding) => (
+                    <div className="scribesGrammarFinding" key={finding.id}>
+                      <div>
+                        <strong>{finding.lintKind}</strong>
+                        <p>{finding.message}</p>
+                        <small>
+                          {finding.problemText || "(empty)"} {finding.replacementText ? `→ ${finding.replacementText}` : ""}
+                        </small>
+                      </div>
+                      <button className="button secondary" type="button" onClick={() => void applyWikiWorkspaceFinding(finding)} disabled={wikiWorkspaceGrammarBusy}>
+                        Apply
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </section>
+      </div>
+    );
+  }
+
+  function renderWikiTranscriptsWorkspaceTab() {
+    return (
+      <div className="wikiWorkspaceRecords" aria-label="Transcript workspace">
+        {visibleTranscriptWorkspaceSessions.length > 0 ? visibleTranscriptWorkspaceSessions.map((session) => {
+          const preview = (session.artifacts.find((artifact) => artifact.kind === "summary")?.content || session.transcriptText || "No transcript text yet.").trim();
+          return (
+            <article className="wikiWorkspaceRecordCard" key={session.id}>
+              <div className="wikiWorkspaceRecordHeader">
+                <div>
+                  <h3>{session.title}</h3>
+                  <span>{scribeAssistantSessionTypeLabel(session)} · {sttProviderLabel(session.provider)} · {compactRelativeTime(session.updatedAt)}</span>
+                </div>
+                <div className="directoryRowActions">
+                  <button className="button primary" type="button" onClick={() => openTranscriptWorkspaceDoc(session)}>
+                    <Pencil size={14} />
+                    Open in Docs
+                  </button>
+                  <button className="button ghost" type="button" onClick={() => setView("scribes")}>
+                    <Mic size={14} />
+                    Scribe
+                  </button>
+                </div>
+              </div>
+              <p>{preview.slice(0, 280)}{preview.length > 280 ? "…" : ""}</p>
+            </article>
+          );
+        }) : (
+          <div className="wikiWorkspaceEmpty">
+            <EmptyState title={wikiWorkspaceLoading ? "Loading transcripts" : "No transcripts yet"} body="Dictation and imported transcript drafts will appear here." icon={Mic} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderWikiMeetingsWorkspaceTab() {
+    return (
+      <div className="wikiWorkspaceRecords" aria-label="Meeting workspace">
+        {visibleMeetingWorkspaceRows.length > 0 ? visibleMeetingWorkspaceRows.map((row) => (
+          <article className="wikiWorkspaceRecordCard" key={row.id}>
+            <div className="wikiWorkspaceRecordHeader">
+              <div>
+                <h3>{row.title}</h3>
+                <span>{row.whenLabel}{row.event?.attendees ? ` · ${row.event.attendees}` : ""}</span>
+              </div>
+              <div className="directoryRowActions">
+                <button
+                  className="button primary"
+                  type="button"
+                  onClick={() => openMeetingWorkspaceDoc({ session: row.linkedSession, event: row.event })}
+                >
+                  <Pencil size={14} />
+                  {row.linkedSession ? "Open notes" : "New notes"}
+                </button>
+                <button className="button ghost" type="button" onClick={() => setView(row.event ? "calendar" : "scribes")}>
+                  {row.event ? <CalendarDays size={14} /> : <Mic size={14} />}
+                  {row.event ? "Calendar" : "Scribe"}
+                </button>
+              </div>
+            </div>
+            <p>{row.excerpt.slice(0, 280)}{row.excerpt.length > 280 ? "…" : ""}</p>
+          </article>
+        )) : (
+          <div className="wikiWorkspaceEmpty">
+            <EmptyState title={wikiWorkspaceLoading ? "Loading meetings" : "No meetings yet"} body="Linked meeting notes and calendar sessions will appear here." icon={CalendarDays} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderWikiTab() {
     return (
       <div className="wikiView embeddedWikiView">
-        {renderDocsSourceTab(activeWikiSourceTab)}
+        {activeWikiWorkspaceTab === "workspace-docs"
+          ? renderWikiDocsWorkspaceTab()
+          : activeWikiWorkspaceTab === "workspace-transcripts"
+            ? renderWikiTranscriptsWorkspaceTab()
+            : activeWikiWorkspaceTab === "workspace-meetings"
+              ? renderWikiMeetingsWorkspaceTab()
+              : renderDocsSourceTab(activeWikiSourceTab)}
       </div>
     );
   }
@@ -16643,66 +19533,117 @@ function WikiView({
     wiki: renderWikiTab,
   }[activePage];
   const wikiSectionMeta = {
-    apps: ["Apps", Grid2X2Plus],
+    apps: ["Tools", Grid2X2Plus],
     skills: ["Skills", Zap],
-    wiki: ["Wiki", BookOpen],
+    wiki: ["Docs", BookOpen],
   } satisfies Record<WikiPage, [string, AppIcon]>;
   const [wikiHeadingTitle] = wikiSectionMeta[activePage];
   const wikiRefreshLabel = activePage === "apps"
-    ? "Refresh apps"
+    ? toolsWorkspaceTab === "company"
+      ? "Refresh company tools"
+      : "Refresh personal tools"
     : activePage === "skills"
       ? "Refresh skills"
-      : `Refresh ${activeWikiSourceTab.label}`;
+      : activeWikiWorkspaceMeta
+        ? `Refresh ${activeWikiWorkspaceMeta.label}`
+        : `Refresh ${activeWikiSourceTab.label}`;
+  const headerActionsLabel = activePage === "apps" ? "Tools actions" : activePage === "skills" ? "Skills actions" : "Docs actions";
   const wikiHeaderAction = (
-    <div className="headerActions wikiHeaderActions" aria-label="Wiki actions">
-      {activePage === "apps" && (
+    <div className="headerActions wikiHeaderActions" aria-label={headerActionsLabel}>
+      {activePage === "apps" && toolsWorkspaceTab === "personal" && (
         <button className="button secondary" type="button" onClick={() => void importLocalDraftApp()} disabled={localDraftBusy || wikiRefreshing}>
           <Upload size={15} />
           Import
         </button>
       )}
-      {activePage === "apps" && (
+      {activePage === "apps" && toolsWorkspaceTab === "personal" && (
         <button className="button primary" type="button" onClick={openNewAppChatSession}>
           <Plus size={15} />
           New App
         </button>
       )}
+      {activePage === "wiki" && activeWikiWorkspaceTab === "workspace-docs" && (
+        <button className="button primary" type="button" onClick={() => createWikiWorkspaceDoc()}>
+          <Plus size={15} />
+          New Doc
+        </button>
+      )}
+      {activePage === "wiki" && activeWikiWorkspaceTab === "workspace-transcripts" && (
+        <button className="button secondary" type="button" onClick={() => setView("scribes")}>
+          <Mic size={15} />
+          Open Scribe
+        </button>
+      )}
+      {activePage === "wiki" && activeWikiWorkspaceTab === "workspace-meetings" && (
+        <button className="button secondary" type="button" onClick={() => setView("calendar")}>
+          <CalendarDays size={15} />
+          Open Calendar
+        </button>
+      )}
     </div>
   );
 
-  if (!wikiState) return <EmptyState title="No Wiki state" body="Training data will appear when the local Link state loads." />;
+  if (!wikiState) return <EmptyState title="No Docs state" body="Training data will appear when the local Link state loads." />;
+
+  const showDirectoryChrome = !(
+    (activePage === "skills" && selectedSkillDetailName)
+    || (activePage === "apps" && selectedAppDetailId)
+  );
+  const showWikiToolbar = showDirectoryChrome && (
+    activePage === "skills"
+    || activePage === "wiki"
+    || (activePage === "apps" && (toolsWorkspaceTab === "personal" || toolsWorkspaceTab === "company"))
+  );
 
   return (
     <section className="content wikiHubView">
-      <div className={`pageSectionShell ${activePage === "wiki" ? "" : "pageSectionShellSingle"}`}>
+      <div className={`pageSectionShell ${activePage === "wiki" || activePage === "apps" ? "" : "pageSectionShellSingle"}`}>
         {activePage === "wiki" && (
           <PageSectionSidebar
-            heading="Wiki"
+            heading="Docs"
             headingIcon={viewMeta.wiki.icon}
-            groups={[{
-              title: "SOURCES",
-              tabs: wikiNavigationTabs.map((source) => [source.id, source.label, source.icon] as const),
-            }]}
+            groups={[
+              {
+                title: "WORKSPACE",
+                tabs: wikiWorkspaceSectionTabs,
+              },
+              {
+                title: "SOURCES",
+                tabs: wikiNavigationTabs.map((source) => [source.id, source.label, source.icon] as const),
+              },
+            ]}
             activeTab={tab}
             onSelect={setTab}
-            label="Wiki sections"
+            label="Docs sections"
+          />
+        )}
+        {activePage === "apps" && (
+          <PageSectionSidebar
+            heading="Tools"
+            headingIcon={viewMeta.apps.icon}
+            groups={toolsSectionGroups}
+            activeTab={toolsWorkspaceTab}
+            onSelect={setToolsWorkspaceTab}
+            label="Tools sections"
           />
         )}
         <div className="pageSectionMain">
           {activePage === "wiki" ? (
-            <PageSectionHeader parent="Link" title={activeWikiSourceTab.title} action={wikiHeaderAction} />
-          ) : (
+            <PageSectionHeader parent="Link" title={activeWikiWorkspaceMeta?.title ?? activeWikiSourceTab.title} action={wikiHeaderAction} />
+          ) : showDirectoryChrome ? (
             <header className="pageHeader">
               <h1>{wikiHeadingTitle}</h1>
               {wikiHeaderAction}
             </header>
-          )}
+          ) : null}
+      {showWikiToolbar && (
       <div className="wikiToolbar">
         <button
           className={`iconButton wikiFilterButton ${filter !== "all" || filterOpen ? "selected" : ""}`}
           aria-label={filterOpen ? "Hide filters" : "Show filters"}
           title={filterOpen ? "Hide filters" : "Show filters"}
           onClick={() => setFilterOpen((open) => !open)}
+          disabled={tabFilterOptions.length <= 1}
         >
           <ListFilter size={16} />
         </button>
@@ -16722,13 +19663,14 @@ function WikiView({
                   setFilterOpen(false);
                 }}
               >
-                {option === "all" ? "All" : option}
+                {option === "all" ? "All" : option.replace(/-/g, " ").replace(/\b\w/g, (value) => value.toUpperCase())}
               </button>
             ))}
           </div>
         )}
         <TableRefreshButton onClick={refreshActiveWikiPage} busy={wikiRefreshing} label={wikiRefreshLabel} />
       </div>
+      )}
       <div className="wikiHubContent">
         {tabContent()}
       </div>
@@ -16877,6 +19819,9 @@ function LegacySettingsView({
   setView,
   openTerminal,
   startManagedSkillSetupChat,
+  embedded = false,
+  hideSectionSidebar = false,
+  hideHeader = false,
 }: {
   connectors: ConnectorStatus[];
   agents: AgentSummary[];
@@ -16896,6 +19841,9 @@ function LegacySettingsView({
   setView: (view: ViewId) => void;
   openTerminal: () => void;
   startManagedSkillSetupChat: (skill: { label: string; query: string; connectorName: string }) => Promise<void>;
+  embedded?: boolean;
+  hideSectionSidebar?: boolean;
+  hideHeader?: boolean;
 }) {
   const [credentials, setCredentials] = useState<CredentialGroupStatus[]>([]);
   const [dialerBuilderActions, setDialerBuilderActions] = useState<ReactNode>(null);
@@ -16924,6 +19872,11 @@ function LegacySettingsView({
 	  const [vpnStatus, setVpnStatus] = useState("");
 	  const [vpnCopyStatus, setVpnCopyStatus] = useState("");
 	  const [agentMailInvites, setAgentMailInvites] = useState<MeetingInvite[]>([]);
+  useEffect(() => {
+    if (toolDomainMode !== "internal") setToolDomainMode("internal");
+    if (customToolDomain) setCustomToolDomain("");
+    if (toolDomainStatus) setToolDomainStatus("");
+  }, [customToolDomain, toolDomainMode, toolDomainStatus]);
 	  const visibleCredentials = useMemo(
     () => credentials.filter((group) => !["agent-control-plane", "mcp-proxy", "guru", "pylon"].includes(group.id)),
     [credentials],
@@ -16957,12 +19910,14 @@ function LegacySettingsView({
       New Source
     </button>
   ) : null;
+
 	  async function refreshCredentials() {
 	    setCredentials(await linkApi.listCredentials());
 	  }
 
 	  async function refreshWikiSources() {
-	    setWikiSources(await linkApi.listWikiSources());
+	    const sources = await linkApi.listWikiSources();
+	    setWikiSources(sources);
 	  }
 
 	  async function refreshAgentMailAliases() {
@@ -17052,11 +20007,11 @@ function LegacySettingsView({
 	    try {
 	      const sources = await linkApi.saveWikiSource(wikiSourceInputFromDraft(wikiSourceDraft));
 	      setWikiSources(sources);
-	      setWikiSourceStatus(wikiSourceDraft.id ? "Wiki source updated." : "Wiki source added.");
+	      setWikiSourceStatus(wikiSourceDraft.id ? "Docs source updated." : "Docs source added.");
 	      setWikiSourceDraft(emptyWikiSourceDraft(wikiSourceDraft.type));
 	      setWikiSourceEditorOpen(false);
 	    } catch (error) {
-	      setWikiSourceStatus(error instanceof Error ? error.message : "Wiki source could not be saved.");
+	      setWikiSourceStatus(error instanceof Error ? error.message : "Docs source could not be saved.");
 	    } finally {
 	      setWikiSourceBusy("");
 	    }
@@ -17066,14 +20021,15 @@ function LegacySettingsView({
 	    setWikiSourceBusy(source.id);
 	    setWikiSourceStatus("");
 	    try {
-	      setWikiSources(await linkApi.deleteWikiSource(source.id));
+	      const sources = await linkApi.deleteWikiSource(source.id);
+	      setWikiSources(sources);
 	      if (wikiSourceDraft.id === source.id) {
 	        setWikiSourceDraft(emptyWikiSourceDraft(source.type === "mcp" || source.type === "okf" ? source.type : "github"));
 	        setWikiSourceEditorOpen(false);
 	      }
 	      setWikiSourceStatus(`${source.label} removed.`);
 	    } catch (error) {
-	      setWikiSourceStatus(error instanceof Error ? error.message : "Wiki source could not be removed.");
+	      setWikiSourceStatus(error instanceof Error ? error.message : "Docs source could not be removed.");
 	    } finally {
 	      setWikiSourceBusy("");
 	    }
@@ -17083,12 +20039,13 @@ function LegacySettingsView({
 	    setWikiSourceBusy("reset");
 	    setWikiSourceStatus("");
 	    try {
-	      setWikiSources(await linkApi.resetWikiSources());
+	      const sources = await linkApi.resetWikiSources();
+	      setWikiSources(sources);
 	      setWikiSourceDraft(emptyWikiSourceDraft());
 	      setWikiSourceEditorOpen(false);
-	      setWikiSourceStatus("Wiki sources reset to Telnyx defaults.");
+	      setWikiSourceStatus("Knowledge sources reset to Telnyx defaults.");
 	    } catch (error) {
-	      setWikiSourceStatus(error instanceof Error ? error.message : "Wiki sources could not be reset.");
+	      setWikiSourceStatus(error instanceof Error ? error.message : "Knowledge sources could not be reset.");
 	    } finally {
 	      setWikiSourceBusy("");
 	    }
@@ -17118,7 +20075,7 @@ function LegacySettingsView({
 	        },
 	      });
 	      setWikiSources(sources);
-	      setWikiSourceStatus(`${label} added to Wiki sources.`);
+	      setWikiSourceStatus(`${label} added to Knowledge.`);
 	      setWikiSourceDraft(emptyWikiSourceDraft("okf"));
 	      setWikiSourceEditorOpen(false);
 	    } catch (error) {
@@ -17745,7 +20702,7 @@ function LegacySettingsView({
 
     return (
       <div className="settingsModelsPanel">
-        <div className="designTabs" role="tablist" aria-label="Models sections">
+        <div className="chatReviewTabs directoryDetailTabs modelsSectionTabs" role="tablist" aria-label="Models sections">
           {[
             ["chat", "Routing"],
             ["local", "Local"],
@@ -18280,28 +21237,30 @@ function LegacySettingsView({
   }
 
   function renderDomainsSettingsTab() {
+    const currentPublishDomain = "apidev.telnyx.com";
     const domainOptions = [
       {
         id: "internal",
         label: "Internal Telnyx domain",
-        value: "Managed by Telnyx",
+        value: currentPublishDomain,
         description: "Keep published apps on the private Telnyx-hosted domain.",
+        available: true,
       },
       {
         id: "workspace",
         label: "Workspace domain",
         value: "tools.telnyx.com",
         description: "Publish approved apps to the workspace domain your team owns.",
+        available: false,
       },
       {
         id: "custom",
         label: "Custom domain",
-        value: customToolDomain.trim() || "tools.example.com",
+        value: "tools.example.com",
         description: "Use a verified domain for apps that should not use the internal Telnyx domain.",
+        available: false,
       },
-    ] satisfies { id: typeof toolDomainMode; label: string; value: string; description: string }[];
-    const selectedOption = domainOptions.find((option) => option.id === toolDomainMode) ?? domainOptions[0];
-
+    ] satisfies { id: typeof toolDomainMode; label: string; value: string; description: string; available: boolean }[];
     return (
       <div className="settingsDomainsPanel">
         <section className="accessCard domainsSettingsCard">
@@ -18310,59 +21269,34 @@ function LegacySettingsView({
               <span className="accessIcon"><Globe size={18} /></span>
               <div>
                 <h3>App Domains</h3>
-                <p>Choose where published Link apps resolve instead of the internal Telnyx domain.</p>
               </div>
             </div>
-            <Badge tone={toolDomainMode === "internal" ? "default" : "success"}>{toolDomainMode === "internal" ? "Internal" : "Custom publish"}</Badge>
           </div>
 
-          <div className="domainOptionList" role="radiogroup" aria-label="App publication domain">
+          <div className="domainOptionList" aria-label="App publication domain">
             {domainOptions.map((option) => (
-              <label key={option.id} className={`domainOption ${toolDomainMode === option.id ? "selected" : ""}`}>
-                <input
-                  type="radio"
-                  name="tool-domain"
-                  checked={toolDomainMode === option.id}
-                  onChange={() => {
-                    setToolDomainMode(option.id);
-                    setToolDomainStatus("");
-                  }}
-                />
+              <div
+                key={option.id}
+                className={`domainOption ${option.available ? "selected" : "disabled"}`}
+                aria-disabled={!option.available}
+              >
+                <span className={`domainOptionIndicator ${option.available ? "selected" : ""}`} aria-hidden="true" />
                 <span className="domainOptionIcon"><Globe size={18} /></span>
                 <span className="domainOptionCopy">
                   <strong>{option.label}</strong>
                   <small>{option.description}</small>
                 </span>
-                <code>{option.value}</code>
-              </label>
+                <span className="domainOptionMeta">
+                  <code>{option.value}</code>
+                  {!option.available && <Badge tone="warning">Coming soon</Badge>}
+                </span>
+              </div>
             ))}
           </div>
 
-          {toolDomainMode === "custom" && (
-            <label className="domainCustomField">
-              <span>Custom domain</span>
-              <input
-                value={customToolDomain}
-                onChange={(event) => {
-                  setCustomToolDomain(event.target.value);
-                  setToolDomainStatus("");
-                }}
-                placeholder="tools.example.com"
-              />
-            </label>
-          )}
-
           <div className="domainSettingsFooter">
-            <p>Selected domain: <strong>{selectedOption.value}</strong></p>
-            <button
-              className="button primary"
-              type="button"
-              onClick={() => setToolDomainStatus(`${selectedOption.label} selected for app publishing.`)}
-              disabled={toolDomainMode === "custom" && !customToolDomain.trim()}
-            >
-              <Save size={14} />
-              Save app domain
-            </button>
+            <p>Current publish domain: <strong>{currentPublishDomain}</strong></p>
+            <Badge tone="default">Workspace and custom domains are coming soon</Badge>
           </div>
           {toolDomainStatus && <p className="wikiSourceStatus">{toolDomainStatus}</p>}
         </section>
@@ -18664,7 +21598,7 @@ function LegacySettingsView({
 	    function renderWikiSourceDetail(source: WikiDocumentationSource) {
 	      return (
 	        <div className="wikiSourceExpandedDetail" role="row">
-	          <section className="chatDetailSurface" aria-label={`${source.label} Wiki source details`}>
+	          <section className="chatDetailSurface" aria-label={`${source.label} Docs source details`}>
 	            <header className="settingsAuthExpandedHeader">
 	              <div>
 	                <strong>{source.label}</strong>
@@ -18710,11 +21644,11 @@ function LegacySettingsView({
 
 	    return (
 	      <div className="wikiSettingsPanel">
-	        {renderSettingsDirectoryToolbar("Search wiki sources or knowledge", `${filteredWikiSources.length} sources`, "Refresh Wiki sources")}
+	        {renderSettingsDirectoryToolbar("Search connected knowledge bases", `${filteredWikiSources.length} sources`, "Refresh Knowledge")}
 	        {wikiSourceStatus && <p className="wikiSourceStatus">{wikiSourceStatus}</p>}
 
 	        {wikiSourceEditorOpen && (
-	        <section className="accessCard wikiSourceEditor" aria-label="Add or repoint Wiki source">
+	        <section className="accessCard wikiSourceEditor" aria-label="Add or repoint Docs source">
 	          <form
 	            onSubmit={(event) => {
 	              event.preventDefault();
@@ -18735,7 +21669,7 @@ function LegacySettingsView({
 	                </button>
 	            </div>
 	            {canChangeWikiSourceType ? (
-	              <div className="wikiSourceTypePicker" role="tablist" aria-label="Wiki source type">
+	              <div className="wikiSourceTypePicker" role="tablist" aria-label="Docs source type">
 	                {(["github", "mcp", "okf"] as const).map((sourceType) => (
 	                <button
 	                  key={sourceType}
@@ -18760,7 +21694,7 @@ function LegacySettingsView({
 	              </label>
 	              <div className="wikiSourceField wikiIconPickerField">
 	                <span>Icon</span>
-	                <div className="wikiIconPicker" role="radiogroup" aria-label="Wiki section icon">
+	                <div className="wikiIconPicker" role="radiogroup" aria-label="Docs section icon">
 	                  {wikiIconOptions.map((option) => {
 	                    const Icon = option.icon;
 	                    return (
@@ -18798,7 +21732,7 @@ function LegacySettingsView({
 	              )}
 	              <label className="wikiSourceField wide">
 	                <span>Description</span>
-	                <input value={wikiSourceDraft.description} onChange={(event) => updateWikiSourceDraft("description", event.target.value)} placeholder="Internal docs indexed for Wiki search" />
+	                <input value={wikiSourceDraft.description} onChange={(event) => updateWikiSourceDraft("description", event.target.value)} placeholder="Internal docs indexed for Docs search" />
 	              </label>
 	              <div className="wikiSourceFormActions">
 	                <button
@@ -18820,13 +21754,13 @@ function LegacySettingsView({
 	        </section>
 	        )}
 
-	        <section className="wikiSourceTableSection" aria-label="Active Wiki sources">
-	          <div className="chatSessionRows directoryTable wikiSourceTable" role="table" aria-label="Active Wiki sources">
+	        <section className="wikiSourceTableSection" aria-label="Active Knowledge sources">
+	          <div className="chatSessionRows directoryTable wikiSourceTable" role="table" aria-label="Active Knowledge sources">
 	            <div className="chatResultRow directoryResultRow wikiSourceRow chatResultRowHead" role="row">
 	              <span role="columnheader">Source</span>
 	              <span role="columnheader">Type</span>
 	              <span role="columnheader">Status</span>
-	              <span role="columnheader" aria-label="Open Wiki source" />
+	              <span role="columnheader" aria-label="Open knowledge source" />
 	            </div>
 	            <div className="chatResultRows" role="rowgroup">
 	              {filteredWikiSources.map((source) => {
@@ -18864,7 +21798,7 @@ function LegacySettingsView({
 	                );
 	              })}
 	              {filteredWikiSources.length === 0 && (
-	                <div className="phoneNumberEmpty">{activeWikiSources.length === 0 ? "No active Wiki sources yet." : "No Wiki sources match this search."}</div>
+	                <div className="phoneNumberEmpty">{activeWikiSources.length === 0 ? "No active knowledge sources yet." : "No knowledge sources match this search."}</div>
 	              )}
 	            </div>
 	          </div>
@@ -18873,58 +21807,71 @@ function LegacySettingsView({
 	    );
 	  }
 
+  const settingsContent = (
+    <>
+      {!hideHeader && <PageSectionHeader parent="Link" title={settingsHeadingTitle} action={settingsHeaderAction} />}
+
+      {tab === "auth" && renderAuthTab()}
+      {modelCenterTabs.has(tab) && (
+        <ModelCenterSettingsView
+          tab={tab}
+          setTab={(nextTab) => setTab(nextTab as SettingsTab)}
+          embedded
+        />
+      )}
+      {tab === "plugins" && renderPluginsTab()}
+      {tab === "agentmail" && renderAgentMailSettingsTab()}
+      {(tab === "contacts" || tab === "assistants" || tab === "numbers") && (
+        <PhoneView
+          connectors={connectors}
+          linkedPhoneNumber={linkedPhoneNumber}
+          setLinkedPhoneNumber={setLinkedPhoneNumber}
+          setView={setView}
+          tab={tab}
+          setTab={(nextTab) => {
+            if (nextTab === "contacts" || nextTab === "assistants" || nextTab === "numbers") setTab(nextTab);
+          }}
+          refresh={refresh}
+          startManagedSkillSetupChat={startManagedSkillSetupChat}
+          openSettingsTab={setTab}
+          hideSectionSidebar
+          hideHeader
+          embedded
+        />
+      )}
+      {tab === "dialer" && (
+        <Suspense fallback={<div className="softphoneLazyFallback" aria-busy="true">Loading Dialpad builder</div>}>
+          <DialerBuilder activeConfig={activeDialerConfig} onActiveConfigChange={setActiveDialerConfig} renderActions={setDialerBuilderActions} />
+        </Suspense>
+      )}
+      {tab === "domains" && renderDomainsSettingsTab()}
+      {tab === "design" && <DesignSystemView embedded />}
+      {tab === "vpn" && renderVpnSettingsTab()}
+      {tab === "wiki" && renderWikiSettingsTab()}
+    </>
+  );
+
+  if (embedded) {
+    return <div className="settingsEmbeddedView">{settingsContent}</div>;
+  }
+
   return (
     <section className="content settingsView">
-      <div className="pageSectionShell">
-        <PageSectionSidebar
-          heading="Settings"
-          headingIcon={viewMeta.settings.icon}
-          groups={settingsSectionGroups}
-          activeTab={tab}
-          onSelect={setTab}
-          label="Settings sections"
-        />
+      <div className={`pageSectionShell ${hideSectionSidebar ? "pageSectionShellSingle" : ""}`}>
+        {!hideSectionSidebar && (
+          <PageSectionSidebar
+            heading="Settings"
+            headingIcon={viewMeta.settings.icon}
+            groups={settingsSectionGroups}
+            activeTab={tab}
+            onSelect={setTab}
+            label="Settings sections"
+            resizable={false}
+          />
+        )}
         <div className="pageSectionMain">
-          <PageSectionHeader parent="Link" title={settingsHeadingTitle} action={settingsHeaderAction} />
-
-          {tab === "auth" && renderAuthTab()}
-          {modelCenterTabs.has(tab) && (
-            <ModelCenterSettingsView
-              tab={tab}
-              setTab={(nextTab) => setTab(nextTab as SettingsTab)}
-              embedded
-            />
-          )}
-          {tab === "plugins" && renderPluginsTab()}
-          {tab === "agentmail" && renderAgentMailSettingsTab()}
-          {(tab === "contacts" || tab === "assistants" || tab === "numbers") && (
-            <PhoneView
-              connectors={connectors}
-              linkedPhoneNumber={linkedPhoneNumber}
-              setLinkedPhoneNumber={setLinkedPhoneNumber}
-              setView={setView}
-              tab={tab}
-              setTab={(nextTab) => {
-                if (nextTab === "contacts" || nextTab === "assistants" || nextTab === "numbers") setTab(nextTab);
-              }}
-              refresh={refresh}
-              startManagedSkillSetupChat={startManagedSkillSetupChat}
-              openSettingsTab={setTab}
-              hideSectionSidebar
-              hideHeader
-              embedded
-            />
-          )}
-          {tab === "dialer" && (
-            <Suspense fallback={<div className="softphoneLazyFallback" aria-busy="true">Loading Dialpad builder</div>}>
-              <DialerBuilder activeConfig={activeDialerConfig} onActiveConfigChange={setActiveDialerConfig} renderActions={setDialerBuilderActions} />
-            </Suspense>
-          )}
-                {tab === "domains" && renderDomainsSettingsTab()}
-                {tab === "design" && <DesignSystemView embedded />}
-                {tab === "vpn" && renderVpnSettingsTab()}
-                {tab === "wiki" && renderWikiSettingsTab()}
-	        </div>
+          {settingsContent}
+        </div>
       </div>
     </section>
   );
@@ -19633,20 +22580,20 @@ const scribesWorkspaceTabGroups: readonly PageSectionTabGroup<ScribesWorkspaceTa
     tabs: [
       ["history", "Library", ScribesArchiveIcon],
       ["configure", "Configure", Settings],
-      ["harper", "Harper", Plug],
+      ["harper", "Grammar", BookOpen],
     ],
   },
   {
     title: "Speech-to-Text",
     tabs: [
-      ["stt", "Settings", Mic],
-      ["stt-models", "Transcription Models", Download],
+      ["stt", "STT Settings", Mic],
+      ["stt-models", "Models", Download],
     ],
   },
   {
     title: "Text-to-Speech",
     tabs: [
-      ["tts", "Settings", Volume2],
+      ["tts", "TTS Settings", Volume2],
       ["tts-voices", "Voices", Volume2],
     ],
   },
@@ -19669,14 +22616,104 @@ function formatDictationLanguage(language: string) {
   return dictationLanguageOptions.find(([value]) => value === language)?.[1] || language || "Auto detect";
 }
 
+const ttsLibraryProviderOptions: readonly [string, string][] = [
+  ["telnyx", "Telnyx"],
+  ["all", "All hosted"],
+  ["aws", "AWS"],
+  ["azure", "Azure"],
+  ["minimax", "MiniMax"],
+  ["rime", "Rime"],
+  ["resemble", "Resemble"],
+  ["xai", "xAI"],
+  ["elevenlabs", "ElevenLabs"],
+];
+
+function formatTtsProviderLabel(provider: string) {
+  return ttsLibraryProviderOptions.find(([value]) => value === provider)?.[1] || provider || "Provider";
+}
+
+function deriveTtsVoiceModelLabel(voice: TelnyxTtsVoice | null) {
+  if (!voice?.voiceId) return "Default";
+  const segments = voice.voiceId.split(".").filter(Boolean);
+  if (segments.length >= 3) return segments.slice(1, -1).join(".");
+  return "Default";
+}
+
+function ttsVoiceSupportsLanguageBoost(voice: TelnyxTtsVoice | null) {
+  return Boolean(voice?.voiceId && /\.Ultra\./i.test(voice.voiceId));
+}
+
+function formatTtsVoiceOptionLabel(voice: TelnyxTtsVoice) {
+  const facets = [voice.language || "", voice.gender || ""].filter(Boolean).join(" / ");
+  return facets ? `${voice.name || voice.voiceId} - ${facets}` : voice.name || voice.voiceId;
+}
+
 function ScribesView({ setView }: { setView: (view: ViewId) => void }) {
   const [activeTab, setActiveTab] = useState<ScribesWorkspaceTab>("history");
   const [status, setStatus] = useState<ScribesStatus | null>(null);
   const [message, setMessage] = useState("");
+  const [headerBusyAction, setHeaderBusyAction] = useState("");
+  const [voiceLibraryRefreshKey, setVoiceLibraryRefreshKey] = useState(0);
 
   async function refreshScribesWorkspace() {
     const nextStatus = await linkApi.getScribesStatus();
     setStatus(nextStatus);
+  }
+
+  async function installWorkspaceHarperFromHeader() {
+    setHeaderBusyAction("install-harper");
+    setMessage("");
+    try {
+      await installHarperAddon({ enable: true });
+      await refreshScribesWorkspace();
+      setMessage("Harper installed from the latest published npm package.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Harper could not be installed.");
+    } finally {
+      setHeaderBusyAction("");
+    }
+  }
+
+  async function startDictationFromHeader() {
+    setHeaderBusyAction("start");
+    setMessage("");
+    try {
+      await linkApi.startWhisper();
+      await refreshScribesWorkspace();
+      setMessage("Scribe dictation started.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribe dictation could not start.");
+    } finally {
+      setHeaderBusyAction("");
+    }
+  }
+
+  async function stopDictationFromHeader() {
+    setHeaderBusyAction("stop");
+    setMessage("");
+    try {
+      await linkApi.stopWhisper();
+      await refreshScribesWorkspace();
+      setMessage("Scribe dictation stopped.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribe dictation could not stop.");
+    } finally {
+      setHeaderBusyAction("");
+    }
+  }
+
+  async function startScribesLocalServerFromHeader() {
+    setHeaderBusyAction("server:start");
+    setMessage("");
+    try {
+      await linkApi.startScribesLocalServer({ warm: true });
+      await refreshScribesWorkspace();
+      setMessage("Scribe local model server started.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribe local model server could not start.");
+    } finally {
+      setHeaderBusyAction("");
+    }
   }
 
   useEffect(() => {
@@ -19686,13 +22723,59 @@ function ScribesView({ setView }: { setView: (view: ViewId) => void }) {
   }, []);
 
   const activeLabel = scribesWorkspaceTabs.find(([id]) => id === activeTab)?.[1] || "Scribe";
+  const harperInstalled = Boolean(status?.workspace.addons.harper.installed);
+  const headerAction = activeTab === "configure"
+    ? (
+      <div className="scribesHeaderActions">
+        <button className="button primary" type="button" onClick={() => void startDictationFromHeader()} disabled={headerBusyAction !== ""}>
+          <Play size={14} />
+          {headerBusyAction === "start" ? "Starting" : "Start Scribe"}
+        </button>
+        <button className="button secondary" type="button" onClick={() => void stopDictationFromHeader()} disabled={headerBusyAction !== ""}>
+          <Square size={14} />
+          {headerBusyAction === "stop" ? "Stopping" : "Stop"}
+        </button>
+      </div>
+    )
+    : activeTab === "stt-models"
+    ? status?.server.running
+      ? <span className={`speakStatusPill ${status.server.ready ? "ready" : ""}`}>{status.server.ready ? "Ready" : status.server.warming ? "Starting" : "Running"}</span>
+      : (
+        <button className="button primary" type="button" onClick={() => void startScribesLocalServerFromHeader()} disabled={headerBusyAction !== ""}>
+          <Play size={14} />
+          {headerBusyAction === "server:start" ? "Starting" : "Start Server"}
+        </button>
+      )
+    : activeTab === "harper" && !harperInstalled
+    ? (
+      <button className="button primary" type="button" onClick={() => void installWorkspaceHarperFromHeader()} disabled={headerBusyAction !== ""}>
+        <Plug size={14} />
+        {headerBusyAction === "install-harper" ? "Installing Harper" : "Install Harper"}
+      </button>
+    )
+    : (
+      <button
+        className="button secondary"
+        type="button"
+        onClick={() => {
+          if (activeTab === "tts-voices") {
+            setVoiceLibraryRefreshKey((current) => current + 1);
+            return;
+          }
+          void refreshScribesWorkspace();
+        }}
+      >
+        <RefreshCw size={14} />
+        {activeTab === "tts-voices" ? "Refresh voices" : "Refresh"}
+      </button>
+    );
 
   function renderActivePanel() {
     if (!status) return <div className="appEmptyPanel">Loading Scribe workspace...</div>;
     if (activeTab === "stt") return <SpeakSettingsPanel section="stt" />;
     if (activeTab === "stt-models") return <ScribesLocalVoiceModelsPanel />;
     if (activeTab === "tts") return <SpeakSettingsPanel section="tts" />;
-    if (activeTab === "tts-voices") return <ScribesVoiceLibraryPanel />;
+    if (activeTab === "tts-voices") return <ScribesVoiceLibraryPanel refreshKey={voiceLibraryRefreshKey} />;
     if (activeTab === "history") return <ScribesHistoryPanel status={status} onRefresh={refreshScribesWorkspace} setView={setView} />;
     if (activeTab === "harper") return <ScribesWorkspaceHarperPanel status={status} onRefresh={refreshScribesWorkspace} />;
     return <ScribesWorkspaceConfigurePanel status={status} onRefresh={refreshScribesWorkspace} />;
@@ -19702,9 +22785,9 @@ function ScribesView({ setView }: { setView: (view: ViewId) => void }) {
     <section className="content scribesView">
       <div className="pageSectionShell scribesWorkspaceShell">
         <PageSectionSidebar
-          groups={scribesWorkspaceTabGroups}
           heading="Scribe"
           headingIcon={viewMeta.scribes.icon}
+          groups={scribesWorkspaceTabGroups}
           activeTab={activeTab}
           onSelect={setActiveTab}
           label="Scribe workspace sections"
@@ -19713,12 +22796,7 @@ function ScribesView({ setView }: { setView: (view: ViewId) => void }) {
           <PageSectionHeader
             parent=""
             title={activeLabel}
-            action={(
-              <button className="button secondary" type="button" onClick={() => void refreshScribesWorkspace()}>
-                <RefreshCw size={14} />
-                Refresh
-              </button>
-            )}
+            action={headerAction}
           />
           {renderActivePanel()}
           {message && <div className="voiceInputStatus" aria-live="polite">{message}</div>}
@@ -20150,6 +23228,7 @@ function ScribesWorkspaceConfigurePanel({ status, onRefresh }: { status: Scribes
   const [profileInstructions, setProfileInstructions] = useState(selectedProfile?.instructions || "");
   const [busyAction, setBusyAction] = useState("");
   const [message, setMessage] = useState("");
+  const vocabularyExamples = ["Telnyx", "OpenClaw", "Hermes", "Harper", "Kimi-K2.6", "Qwen3"];
 
   useEffect(() => {
     setVocabularyDraft(workspace.customVocabulary.join("\n"));
@@ -20193,34 +23272,6 @@ function ScribesWorkspaceConfigurePanel({ status, onRefresh }: { status: Scribes
     }
   }
 
-  async function startDictation() {
-    setBusyAction("start");
-    setMessage("");
-    try {
-      await linkApi.startWhisper();
-      await onRefresh();
-      setMessage("Scribe dictation started.");
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Scribe dictation could not start.");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  async function stopDictation() {
-    setBusyAction("stop");
-    setMessage("");
-    try {
-      await linkApi.stopWhisper();
-      await onRefresh();
-      setMessage("Scribe dictation stopped.");
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Scribe dictation could not stop.");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
   async function selectDictationProvider(provider: SpeakSettings["sttProvider"]) {
     setBusyAction(`provider:${provider}`);
     setMessage("");
@@ -20238,6 +23289,11 @@ function ScribesWorkspaceConfigurePanel({ status, onRefresh }: { status: Scribes
     } finally {
       setBusyAction("");
     }
+  }
+
+  async function selectDictationMode(mode: SpeakSettings["sttMode"]) {
+    const provider = mode === "telnyx-cloud" ? "telnyx" : preferredLocalSttProvider(status.settings.sttProvider);
+    await selectDictationProvider(provider);
   }
 
   async function saveCaptureSettings(patch: Partial<ScribesWorkspaceSettings["meetingCapture"]>) {
@@ -20283,6 +23339,19 @@ function ScribesWorkspaceConfigurePanel({ status, onRefresh }: { status: Scribes
     await saveWorkspaceSettings({ cleanupProfiles, activeCleanupProfileId: selectedProfile.id });
   }
 
+  const routeSummary = describeScribesTranscriptionRoute({
+    settings: status.settings,
+    routeReady: status.route.ready,
+    telnyxCloudReady: status.telnyxCloudReady,
+  });
+  const localSelected = status.settings.sttMode === "local";
+  const parsedVocabulary = Array.from(new Set(vocabularyDraft.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean)));
+
+  function addVocabularyExample(term: string) {
+    if (parsedVocabulary.includes(term)) return;
+    setVocabularyDraft((current) => current.trim() ? `${current.trim()}\n${term}` : term);
+  }
+
   return (
     <div className="scribesWorkspacePanel">
       <section className="accessCard speakStatusCard">
@@ -20299,19 +23368,49 @@ function ScribesWorkspaceConfigurePanel({ status, onRefresh }: { status: Scribes
           <div className="scribesGeneralSettingRow">
             <span className="accessIcon"><ListFilter size={18} /></span>
             <div>
-              <strong>Session Provider</strong>
-              <small>{sttProviderLabel(status.settings.sttProvider)}</small>
+              <strong>Transcription route</strong>
+              <small>{routeSummary.message}</small>
+            </div>
+            <div className="scribesRouteControl">
+              <div className="segmented scribesRouteSegmented" role="tablist" aria-label="Scribe transcription route">
+                <button
+                  type="button"
+                  className={localSelected ? "selected" : ""}
+                  onClick={() => void selectDictationMode("local")}
+                  disabled={busyAction !== ""}
+                  aria-selected={localSelected}
+                >
+                  Local
+                </button>
+                <button
+                  type="button"
+                  className={!localSelected ? "selected" : ""}
+                  onClick={() => void selectDictationMode("telnyx-cloud")}
+                  disabled={busyAction !== ""}
+                  aria-selected={!localSelected}
+                >
+                  Cloud
+                </button>
+              </div>
+              <span className={`speakStatusPill scribesRouteStatus ${routeSummary.ready ? "ready" : ""}`}>{routeSummary.statusLabel}</span>
+            </div>
+          </div>
+          <div className="scribesGeneralSettingRow">
+            <span className="accessIcon"><Cloud size={18} /></span>
+            <div>
+              <strong>Provider</strong>
+              <small>{routeSummary.providerLabel}</small>
             </div>
             <label className="speakShortcutSelect">
               <select
-                value={status.settings.sttProvider}
+                value={localSelected ? status.settings.sttProvider : "telnyx"}
                 onChange={(event) => void selectDictationProvider(event.target.value as SpeakSettings["sttProvider"])}
-                disabled={busyAction !== ""}
+                disabled={busyAction !== "" || !localSelected}
                 aria-label="Scribe session provider"
               >
-                <option value="openai-whisper">OpenAI Whisper local</option>
-                <option value="nvidia-parakeet">NVIDIA Parakeet local</option>
-                <option value="telnyx">Telnyx Cloud</option>
+                {localSelected && <option value="openai-whisper">OpenAI Whisper local</option>}
+                {localSelected && <option value="nvidia-parakeet">NVIDIA Parakeet local</option>}
+                {!localSelected && <option value="telnyx">Telnyx Cloud</option>}
               </select>
             </label>
           </div>
@@ -20380,17 +23479,6 @@ function ScribesWorkspaceConfigurePanel({ status, onRefresh }: { status: Scribes
               </select>
             </label>
           </div>
-          <div className={`speakStatusPill ${status.route.ready ? "ready" : ""}`}>{status.route.ready ? "Ready" : status.settings.sttMode === "telnyx-cloud" ? "Needs key" : "Preparing"}</div>
-        </div>
-        <div className="speakActionRow">
-          <button className="button primary" type="button" onClick={() => void startDictation()} disabled={busyAction !== ""}>
-            <Play size={14} />
-            {busyAction === "start" ? "Starting" : "Start Scribe"}
-          </button>
-          <button className="button secondary" type="button" onClick={() => void stopDictation()} disabled={busyAction !== ""}>
-            <Square size={14} />
-            {busyAction === "stop" ? "Stopping" : "Stop"}
-          </button>
         </div>
       </section>
 
@@ -20475,12 +23563,42 @@ function ScribesWorkspaceConfigurePanel({ status, onRefresh }: { status: Scribes
               <h3>Vocabulary</h3>
             </div>
           </div>
-          <button className="button secondary" type="button" onClick={() => void saveWorkspaceSettings({ customVocabulary: vocabularyDraft.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean) })} disabled={busyAction !== ""}>
+          <button className="button secondary" type="button" onClick={() => void saveWorkspaceSettings({ customVocabulary: parsedVocabulary })} disabled={busyAction !== ""}>
             <Save size={14} />
             Save
           </button>
         </div>
-        <textarea className="scribesSettingsTextarea" value={vocabularyDraft} onChange={(event) => setVocabularyDraft(event.target.value)} />
+        <div className="scribesModeNotice">
+          <strong>What goes here</strong>
+          <span>Add product names, acronyms, people, or uncommon terms you want Link to keep as written. Enter one term per line.</span>
+        </div>
+        <div className="scribesVocabularyExamples" aria-label="Suggested vocabulary examples">
+          {vocabularyExamples.map((term) => (
+            <button key={term} className="button secondary" type="button" onClick={() => addVocabularyExample(term)} disabled={busyAction !== "" || parsedVocabulary.includes(term)}>
+              {parsedVocabulary.includes(term) ? `Added: ${term}` : term}
+            </button>
+          ))}
+        </div>
+        <label className="speakSettingField">
+          <span>Terms</span>
+          <textarea
+            className="scribesSettingsTextarea"
+            value={vocabularyDraft}
+            onChange={(event) => setVocabularyDraft(event.target.value)}
+            placeholder={"Telnyx\nOpenClaw\nHarper\nKimi-K2.6"}
+          />
+        </label>
+        <div className="scribesVocabularyMeta">
+          <span>{parsedVocabulary.length} saved term{parsedVocabulary.length === 1 ? "" : "s"}</span>
+          <small>Link will treat commas or new lines as separate entries.</small>
+        </div>
+        {parsedVocabulary.length > 0 && (
+          <div className="scribesVocabularyPreview">
+            {parsedVocabulary.map((term) => (
+              <span key={term} className="scribesVocabularyChip">{term}</span>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="accessCard speakSettingsCard">
@@ -20550,48 +23668,6 @@ function ScribesWorkspaceHarperPanel({ status, onRefresh }: { status: ScribesSta
     });
   }
 
-  async function installWorkspaceHarperAddon() {
-    setBusyAction("harper-install");
-    setMessage("");
-    try {
-      await installHarperAddon({ enable: true });
-      await onRefresh();
-      setMessage("Harper installed from the latest published npm package.");
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Harper could not be installed.");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  async function removeWorkspaceHarperAddon() {
-    setBusyAction("harper-remove");
-    setMessage("");
-    try {
-      await removeHarperAddon();
-      await onRefresh();
-      setMessage("Harper add-on removed from this device.");
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Harper could not be removed.");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
-  async function refreshWorkspaceHarperAddon() {
-    setBusyAction("harper-refresh");
-    setMessage("");
-    try {
-      await getHarperAddonStatus({ forceRefresh: true, allowAutoUpdate: true });
-      await onRefresh();
-      setMessage("Harper package status refreshed.");
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Harper status could not be refreshed.");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
   return (
     <div className="scribesWorkspacePanel">
       <section className="accessCard speakSettingsCard">
@@ -20599,37 +23675,13 @@ function ScribesWorkspaceHarperPanel({ status, onRefresh }: { status: ScribesSta
           <div className="accessCardTitle">
             <span className="accessIcon"><Plug size={18} /></span>
             <div>
-              <h3>Harper Grammar Add-on</h3>
-              <p>Private first-pass grammar review for Scribe transcripts and Inbox drafts.</p>
+              <h3>Powered by Harper</h3>
+              <p>Use Harper to review and polish writing across Link.</p>
             </div>
           </div>
           <Badge tone={grammarAddonStatusTone(harper)}>{grammarAddonStatusLabel(harper)}</Badge>
         </div>
         <div className="speakSettingsRows">
-          <div className="scribesModeNotice">
-            <strong>Version</strong>
-            <span>{grammarAddonVersionSummary(harper)}</span>
-          </div>
-          <div className="speakToggleRow">
-            <span>Install Add-on</span>
-            <button
-              className={`settingsToggle ${harper.installed ? "selected" : ""}`}
-              type="button"
-              onClick={() => void (harper.installed ? removeWorkspaceHarperAddon() : installWorkspaceHarperAddon())}
-              disabled={busyAction !== ""}
-            >
-              <span>
-                {busyAction === "harper-install"
-                  ? "Installing"
-                  : busyAction === "harper-remove"
-                    ? "Removing"
-                    : harper.installed
-                      ? "Installed"
-                      : "Install"}
-              </span>
-              <i />
-            </button>
-          </div>
           <div className="speakToggleRow">
             <span>Auto-update</span>
             <button
@@ -20643,7 +23695,7 @@ function ScribesWorkspaceHarperPanel({ status, onRefresh }: { status: ScribesSta
             </button>
           </div>
           <div className="speakToggleRow">
-            <span>Enable Harper</span>
+            <span>Enable</span>
             <button
               className={`settingsToggle ${harper.enabled ? "selected" : ""}`}
               type="button"
@@ -20654,14 +23706,6 @@ function ScribesWorkspaceHarperPanel({ status, onRefresh }: { status: ScribesSta
               <i />
             </button>
           </div>
-          {harper.installed && harper.updateAvailable && (
-            <div className="directoryRowActions">
-              <button className="button secondary" type="button" onClick={() => void installWorkspaceHarperAddon()} disabled={busyAction !== ""}>
-                <RefreshCw size={14} />
-                {busyAction === "harper-install" ? "Updating..." : `Update to ${harper.latestVersion}`}
-              </button>
-            </div>
-          )}
           <label className="speakSettingField">
             <span>Default Action</span>
             <select value={harper.defaultAction} onChange={(event) => void saveHarperSettings({ defaultAction: event.target.value as HarperAddonSettings["defaultAction"] })} disabled={busyAction !== "" || !harper.installed}>
@@ -20680,18 +23724,6 @@ function ScribesWorkspaceHarperPanel({ status, onRefresh }: { status: ScribesSta
             </select>
           </label>
           <div className="speakToggleRow">
-            <span>Scribe transcripts</span>
-            <button
-              className={`settingsToggle ${harper.surfaces.scribeSessions ? "selected" : ""}`}
-              type="button"
-              onClick={() => void saveHarperSettings({ surfaces: { ...harper.surfaces, scribeSessions: !harper.surfaces.scribeSessions } })}
-              disabled={busyAction !== "" || !harper.installed}
-            >
-              <span>{harper.surfaces.scribeSessions ? "On" : "Off"}</span>
-              <i />
-            </button>
-          </div>
-          <div className="speakToggleRow">
             <span>Inbox drafts</span>
             <button
               className={`settingsToggle ${harper.surfaces.inboxDrafts ? "selected" : ""}`}
@@ -20701,20 +23733,6 @@ function ScribesWorkspaceHarperPanel({ status, onRefresh }: { status: ScribesSta
             >
               <span>{harper.surfaces.inboxDrafts ? "On" : "Off"}</span>
               <i />
-            </button>
-          </div>
-          <div className="directoryRowActions">
-            <button className="button secondary" type="button" onClick={() => void refreshWorkspaceHarperAddon()} disabled={busyAction !== ""}>
-              <RefreshCw size={14} />
-              Check latest
-            </button>
-            <button className="button secondary" type="button" onClick={() => openBundledDocument(harperNoticeUrl())}>
-              <Info size={14} />
-              Notice
-            </button>
-            <button className="button secondary" type="button" onClick={() => openBundledDocument(harperLicenseUrl())}>
-              <FileText size={14} />
-              License
             </button>
           </div>
           {harper.lastError && <div className="voiceInputStatus" aria-live="polite">{harper.lastError}</div>}
@@ -20742,6 +23760,43 @@ function sttProviderLabel(provider: SpeakSettings["sttProvider"]) {
   if (provider === "telnyx") return "Telnyx Cloud";
   if (provider === "nvidia-parakeet") return "NVIDIA Parakeet";
   return "OpenAI Whisper";
+}
+
+function preferredLocalSttProvider(provider: SpeakSettings["sttProvider"]) {
+  return provider === "nvidia-parakeet" ? "nvidia-parakeet" : "openai-whisper";
+}
+
+function describeScribesTranscriptionRoute({
+  settings,
+  routeReady,
+  telnyxCloudReady,
+}: {
+  settings: Pick<SpeakSettings, "sttMode" | "sttProvider">;
+  routeReady: boolean;
+  telnyxCloudReady: boolean;
+}) {
+  const cloudSelected = settings.sttMode === "telnyx-cloud" || settings.sttProvider === "telnyx";
+  if (cloudSelected) {
+    return {
+      statusLabel: telnyxCloudReady ? "Cloud connected" : "Cloud disconnected",
+      providerLabel: "Telnyx Cloud",
+      ready: telnyxCloudReady,
+      message: telnyxCloudReady
+        ? "Cloud transcription is on by default because TELNYX_API_KEY is configured."
+        : "Save TELNYX_API_KEY in Settings to use cloud transcription, or switch to local to keep dictation on this Mac.",
+    };
+  }
+
+  return {
+    statusLabel: routeReady ? "Local connected" : "Local disconnected",
+    providerLabel: sttProviderLabel(settings.sttProvider),
+    ready: routeReady,
+    message: routeReady
+      ? "Local transcription is selected and ready on this Mac."
+      : telnyxCloudReady
+      ? "Local transcription is selected, but this Mac is not ready yet. Download a model or switch back to cloud."
+      : "Local transcription is selected, but this Mac is not ready yet. Download a model to continue.",
+  };
 }
 
 function sttProviderEngineLabel(provider: SpeakSettings["sttProvider"]): SpeakSettings["sttEngine"] {
@@ -20829,24 +23884,6 @@ function ScribesLocalVoiceModelsPanel() {
     }
   }
 
-  async function toggleServer() {
-    if (!status) return;
-    setBusyAction(status.server.running ? "server:stop" : "server:start");
-    setMessage("");
-    try {
-      if (status.server.running) {
-        await linkApi.stopScribesLocalServer();
-      } else {
-        await linkApi.startScribesLocalServer({ warm: true });
-      }
-      await refreshScribesStatus();
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Scribe local server action failed.");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
   if (!status) {
     return <div className="appEmptyPanel">Loading Scribe models...</div>;
   }
@@ -20925,64 +23962,75 @@ function ScribesLocalVoiceModelsPanel() {
         <div className="accessCardTitle">
           <span className="accessIcon"><Download size={18} /></span>
           <div>
-            <h3>Transcription Models</h3>
+            <h3>Models</h3>
           </div>
         </div>
-        <button className="button secondary" type="button" onClick={() => void toggleServer()} disabled={busyAction !== ""}>
-          {status.server.running ? <Square size={14} /> : <Play size={14} />}
-          {busyAction.startsWith("server") ? "Working" : status.server.running ? "Stop Server" : "Start Server"}
-        </button>
       </div>
-      <div className="scribesServerStrip">
-        <span className={`speakStatusPill ${status.server.ready ? "ready" : ""}`}>{status.server.running ? status.server.ready ? "Ready" : "Running" : "Stopped"}</span>
-        <span>{status.server.message}</span>
-        {status.server.endpoint && <code>{status.server.endpoint}</code>}
-      </div>
+      {(status.server.lastError || (status.server.running && !status.server.ready && status.server.message)) && (
+        <div className="scribesServerStrip">
+          <span>{status.server.lastError || status.server.message}</span>
+          {status.server.endpoint && <code>{status.server.endpoint}</code>}
+        </div>
+      )}
       <div className="scribesModelTable" role="table" aria-label="Scribe transcription models">
         <div className="scribesModelRow scribesModelRowHead" role="row">
           <span role="columnheader">Model</span>
+          <span role="columnheader">Provider</span>
           <span role="columnheader">Size</span>
           <span role="columnheader">Status</span>
-          <span role="columnheader" aria-label="Model details" />
+          <span role="columnheader">Action</span>
         </div>
         {status.models.map((model) => {
           const selected = selectedModelId === model.id;
           const progress = model.download?.totalBytes ? Math.round(((model.download.receivedBytes || 0) / model.download.totalBytes) * 100) : 0;
           return (
             <div className={`scribesModelRow ${selected ? "selected" : ""}`} role="row" key={model.id}>
-              <div role="cell">
+              <button
+                className="scribesModelSummaryButton"
+                type="button"
+                role="cell"
+                onClick={() => setDetailModelId(model.id)}
+                aria-label={`Open ${model.label} details`}
+                title="Open model details"
+              >
                 <strong>{model.label}</strong>
-                <small>{sttProviderLabel(model.provider)}</small>
-              </div>
+              </button>
+              <span role="cell">{sttProviderLabel(model.provider)}</span>
               <span role="cell">{formatScribesBytes(model.sizeBytes)}</span>
               <div className="scribesModelStatusCell" role="cell">
                 <Badge tone={selected ? "success" : model.downloaded ? "default" : model.downloading ? "warning" : "default"}>
                   {selected ? "Selected" : model.downloading ? `${progress}%` : model.downloaded ? "Downloaded" : "Not downloaded"}
                 </Badge>
-                <button className="button secondary" type="button" onClick={() => void useModel(model)} disabled={busyAction !== "" || selected}>
-                  <Check size={14} />
-                  Use
-                </button>
+              </div>
+              <div className="scribesModelActions" role="cell">
                 {model.downloading ? (
                   <button className="button secondary" type="button" onClick={() => void cancelDownload(model)} disabled={busyAction !== ""}>
                     <Square size={14} />
                     Cancel
                   </button>
-                ) : model.downloaded ? (
-                  <button className="button secondary" type="button" onClick={() => void deleteModel(model)} disabled={busyAction !== ""}>
-                    <Trash2 size={14} />
-                    Delete
-                  </button>
-                ) : (
-                  <button className="button primary" type="button" onClick={() => void downloadModel(model)} disabled={busyAction !== ""}>
+                ) : !model.downloaded ? (
+                  <button className="iconButton primary" type="button" onClick={() => void downloadModel(model)} disabled={busyAction !== ""} aria-label={`Download ${model.label}`} title={`Download ${model.label}`}>
                     <Download size={14} />
-                    {busyAction === `download:${model.id}` ? "Downloading" : "Download"}
                   </button>
+                ) : selected ? (
+                  <>
+                    <span className="scribesModelActionState">Using</span>
+                    <button className="iconButton danger" type="button" onClick={() => void deleteModel(model)} disabled={busyAction !== ""} aria-label={`Delete ${model.label}`} title={`Delete ${model.label}`}>
+                      <Trash2 size={14} />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button className="button secondary" type="button" onClick={() => void useModel(model)} disabled={busyAction !== ""}>
+                      <Check size={14} />
+                      Use
+                    </button>
+                    <button className="iconButton danger" type="button" onClick={() => void deleteModel(model)} disabled={busyAction !== ""} aria-label={`Delete ${model.label}`} title={`Delete ${model.label}`}>
+                      <Trash2 size={14} />
+                    </button>
+                  </>
                 )}
               </div>
-              <button className="chatSessionOpenButton" type="button" onClick={() => setDetailModelId(model.id)} aria-label={`Open ${model.label} details`} title="Open model details">
-                <ArrowRight size={16} />
-              </button>
             </div>
           );
         })}
@@ -21001,10 +24049,13 @@ function formatScribesBytes(bytes: number) {
 
 function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
   const [settings, setSettings] = useState<SpeakSettings | null>(null);
+  const [status, setStatus] = useState<ScribesStatus | null>(null);
   const [message, setMessage] = useState("");
 
   async function refreshSpeakSettings() {
-    setSettings(await linkApi.getSpeakSettings());
+    const nextStatus = await linkApi.getScribesStatus();
+    setStatus(nextStatus);
+    setSettings(nextStatus.settings);
   }
 
   useEffect(() => {
@@ -21024,8 +24075,10 @@ function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
     setSettings(optimistic);
     setMessage("Saving");
     try {
-      const saved = await linkApi.saveSpeakSettings(patch);
-      setSettings(saved);
+      await linkApi.saveSpeakSettings(patch);
+      const nextStatus = await linkApi.getScribesStatus();
+      setStatus(nextStatus);
+      setSettings(nextStatus.settings);
       setMessage("Saved");
     } catch (err) {
       setSettings(settings);
@@ -21075,6 +24128,11 @@ function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
   const cloudSttSelected = settings.sttMode === "telnyx-cloud" && settings.sttProvider === "telnyx";
   const localSttSelected = settings.sttMode === "local";
   const cloudTtsSelected = settings.ttsMode === "telnyx-cloud";
+  const sttRouteSummary = describeScribesTranscriptionRoute({
+    settings,
+    routeReady: Boolean(status?.route.ready),
+    telnyxCloudReady: Boolean(status?.telnyxCloudReady),
+  });
 
   return (
     <div className={`speakSettings speakSettings${section === "stt" ? "Stt" : "Tts"}`}>
@@ -21090,13 +24148,27 @@ function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
               </div>
             </div>
             <div className="speakSettingsRows">
-              <label className="speakSettingField">
+              <div className="speakSettingField">
                 <span>STT Mode</span>
-                <select value={settings.sttMode} onChange={(event) => void chooseSttMode(event.target.value as SpeakSettings["sttMode"])}>
-                  <option value="local">Local</option>
-                  <option value="telnyx-cloud">Telnyx Cloud</option>
-                </select>
-              </label>
+                <div className="segmented scribesRouteSegmented" role="tablist" aria-label="Speech-to-text mode">
+                  <button
+                    type="button"
+                    className={localSttSelected ? "selected" : ""}
+                    onClick={() => void chooseSttMode("local")}
+                    aria-selected={localSttSelected}
+                  >
+                    Local
+                  </button>
+                  <button
+                    type="button"
+                    className={cloudSttSelected ? "selected" : ""}
+                    onClick={() => void chooseSttMode("telnyx-cloud")}
+                    aria-selected={cloudSttSelected}
+                  >
+                    Cloud
+                  </button>
+                </div>
+              </div>
               <label className="speakSettingField">
                 <span>Local Shortcut</span>
                 <select value={settings.localShortcutMode} onChange={(event) => void saveSpeakSettingsPatch({ localShortcutMode: event.target.value as SpeakSettings["shortcutMode"] })}>
@@ -21113,7 +24185,7 @@ function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
               </label>
               <label className="speakSettingField">
                 <span>Provider</span>
-                <select value={settings.sttProvider} onChange={(event) => void chooseSttProvider(event.target.value as SpeakSettings["sttProvider"])}>
+                <select value={localSttSelected ? settings.sttProvider : "telnyx"} onChange={(event) => void chooseSttProvider(event.target.value as SpeakSettings["sttProvider"])} disabled={!localSttSelected}>
                   {localSttSelected && <option value="openai-whisper">OpenAI Whisper</option>}
                   {localSttSelected && <option value="nvidia-parakeet">NVIDIA Parakeet</option>}
                   {cloudSttSelected && <option value="telnyx">Telnyx Cloud</option>}
@@ -21144,9 +24216,9 @@ function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
                 </button>
               </div>
               <div className="scribesRouteNote">
-                <span>{settings.sttEngine}</span>
-                <strong>{sttProviderLabel(settings.sttProvider)}</strong>
-                <small>{localSttSelected ? "Local transcription runs on this device through the selected allowlisted Scribe model, so dictation and note cleanup can stay local-first." : "Cloud transcription is gated by TELNYX_API_KEY."}</small>
+                <span>{sttRouteSummary.statusLabel}</span>
+                <strong>{sttRouteSummary.providerLabel}</strong>
+                <small>{sttRouteSummary.message}</small>
               </div>
             </div>
           </section>
@@ -21196,20 +24268,27 @@ function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
   );
 }
 
-function ScribesVoiceLibraryPanel() {
+function ScribesVoiceLibraryPanel({ refreshKey = 0 }: { refreshKey?: number }) {
   const [settings, setSettings] = useState<SpeakSettings | null>(null);
   const [voices, setVoices] = useState<TelnyxTtsVoice[]>([]);
   const [voiceProviderFilter, setVoiceProviderFilter] = useState("telnyx");
   const [voiceLanguageFilter, setVoiceLanguageFilter] = useState("all");
   const [voiceGenderFilter, setVoiceGenderFilter] = useState("all");
   const [voiceSearch, setVoiceSearch] = useState("");
+  const [selectedVoiceId, setSelectedVoiceId] = useState("");
   const [sampleText, setSampleText] = useState("Thanks for calling. How can I help you today?");
+  const [voiceSpeed, setVoiceSpeed] = useState("1");
+  const [languageBoost, setLanguageBoost] = useState("");
+  const [sampleAudioSrc, setSampleAudioSrc] = useState("");
   const [busyAction, setBusyAction] = useState("");
   const [message, setMessage] = useState("");
   const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    void linkApi.getSpeakSettings().then(setSettings).catch((err) => {
+    void linkApi.getSpeakSettings().then((nextSettings) => {
+      setSettings(nextSettings);
+      if (nextSettings.ttsProvider) setVoiceProviderFilter(nextSettings.ttsProvider.toLowerCase());
+    }).catch((err) => {
       setMessage(err instanceof Error ? err.message : "Voice library settings could not load.");
     });
     return () => {
@@ -21226,6 +24305,7 @@ function ScribesVoiceLibraryPanel() {
       setVoices(nextVoices);
       setVoiceLanguageFilter("all");
       setVoiceGenderFilter("all");
+      setSampleAudioSrc("");
       setMessage(nextVoices.length ? `${nextVoices.length.toLocaleString()} voices loaded.` : "No voices returned for this provider.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Hosted voices could not be loaded.");
@@ -21234,7 +24314,50 @@ function ScribesVoiceLibraryPanel() {
     }
   }
 
-  async function useVoice(voice: TelnyxTtsVoice) {
+  useEffect(() => {
+    void loadVoices(voiceProviderFilter);
+  }, [refreshKey, voiceProviderFilter]);
+
+  useEffect(() => {
+    if (sampleAudioSrc === "") return;
+    void audioPreviewRef.current?.play().catch(() => undefined);
+  }, [sampleAudioSrc]);
+
+  const voiceLanguageOptions = Array.from(new Set(voices.map((voice) => voice.language).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const voiceGenderOptions = Array.from(new Set(voices.map((voice) => voice.gender).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const normalizedVoiceSearch = voiceSearch.trim().toLowerCase();
+  const filteredVoices = voices.filter((voice) => {
+    const matchesLanguage = voiceLanguageFilter === "all" || voice.language === voiceLanguageFilter;
+    const matchesGender = voiceGenderFilter === "all" || voice.gender === voiceGenderFilter;
+    const haystack = [voice.name, voice.voiceId, voice.provider, voice.language, voice.gender].join(" ").toLowerCase();
+    const matchesSearch = !normalizedVoiceSearch || haystack.includes(normalizedVoiceSearch);
+    return matchesLanguage && matchesGender && matchesSearch;
+  });
+
+  useEffect(() => {
+    if (filteredVoices.length === 0) {
+      if (selectedVoiceId !== "") setSelectedVoiceId("");
+      return;
+    }
+    const selectedStillVisible = filteredVoices.some((voice) => voice.voiceId === selectedVoiceId);
+    if (selectedStillVisible) return;
+    const savedVoice = filteredVoices.find((voice) => voice.voiceId === settings?.ttsVoice);
+    setSelectedVoiceId(savedVoice?.voiceId || filteredVoices[0].voiceId);
+  }, [filteredVoices, selectedVoiceId, settings?.ttsVoice]);
+
+  const selectedVoice = filteredVoices.find((voice) => voice.voiceId === selectedVoiceId) || null;
+  const selectedVoiceProviderLabel = formatTtsProviderLabel(selectedVoice?.provider || voiceProviderFilter);
+  const selectedVoiceModelLabel = deriveTtsVoiceModelLabel(selectedVoice);
+  const selectedVoiceSupportsBoost = ttsVoiceSupportsLanguageBoost(selectedVoice);
+  const normalizedVoiceSpeed = Number.isFinite(Number(voiceSpeed)) && Number(voiceSpeed) > 0 ? Number(voiceSpeed) : 1;
+
+  useEffect(() => {
+    if (selectedVoiceSupportsBoost || languageBoost === "") return;
+    setLanguageBoost("");
+  }, [selectedVoiceSupportsBoost, languageBoost]);
+
+  async function useVoice(voice: TelnyxTtsVoice | null = selectedVoice) {
+    if (!voice) return;
     if (!settings) return;
     setBusyAction(`use:${voice.voiceId}`);
     setMessage("");
@@ -21253,7 +24376,8 @@ function ScribesVoiceLibraryPanel() {
     }
   }
 
-  async function sampleVoice(voice: TelnyxTtsVoice) {
+  async function sampleVoice(voice: TelnyxTtsVoice | null = selectedVoice) {
+    if (!voice) return;
     setBusyAction(`sample:${voice.voiceId}`);
     setMessage("");
     try {
@@ -21263,16 +24387,18 @@ function ScribesVoiceLibraryPanel() {
         text: sampleText,
         language: voice.language,
         provider: voice.provider,
+        voiceSpeed: normalizedVoiceSpeed,
+        languageBoost: selectedVoiceSupportsBoost ? languageBoost : "",
       });
       if (!sample.audioBase64) {
+        setSampleAudioSrc("");
         setMessage("Sample playback is available after saving a Telnyx API key.");
         return;
       }
-      const nextAudio = new Audio(`data:${sample.mimeType};base64,${sample.audioBase64}`);
-      audioPreviewRef.current = nextAudio;
-      await nextAudio.play();
+      setSampleAudioSrc(`data:${sample.mimeType};base64,${sample.audioBase64}`);
       setMessage(`Playing ${voice.name || voice.voiceId}.`);
     } catch (err) {
+      setSampleAudioSrc("");
       setMessage(err instanceof Error ? err.message : "Voice sample could not play.");
     } finally {
       setBusyAction("");
@@ -21283,55 +24409,60 @@ function ScribesVoiceLibraryPanel() {
     return <div className="appEmptyPanel">Loading voice library...</div>;
   }
 
-  const voiceLanguageOptions = Array.from(new Set(voices.map((voice) => voice.language).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-  const voiceGenderOptions = Array.from(new Set(voices.map((voice) => voice.gender).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-  const normalizedVoiceSearch = voiceSearch.trim().toLowerCase();
-  const filteredVoices = voices.filter((voice) => {
-    const matchesLanguage = voiceLanguageFilter === "all" || voice.language === voiceLanguageFilter;
-    const matchesGender = voiceGenderFilter === "all" || voice.gender === voiceGenderFilter;
-    const haystack = [voice.name, voice.voiceId, voice.provider, voice.language, voice.gender].join(" ").toLowerCase();
-    const matchesSearch = !normalizedVoiceSearch || haystack.includes(normalizedVoiceSearch);
-    return matchesLanguage && matchesGender && matchesSearch;
-  });
-
   return (
     <section className="accessCard ttsLibraryPanel scribeLibraryPage" aria-label="Voices">
-      <div className="ttsLibraryHeader">
-        <div>
-          <h3>Voices</h3>
-          <p>Browse hosted voices, play a short sample, then save the voice for Scribe.</p>
-        </div>
-      </div>
-      <div className="ttsLibraryControls">
+      <div className="ttsPlaygroundControls">
         <label>
-          <span>Library Provider</span>
+          <span>Provider</span>
           <select value={voiceProviderFilter} onChange={(event) => setVoiceProviderFilter(event.target.value)}>
-            <option value="telnyx">Telnyx</option>
-            <option value="all">All hosted</option>
-            <option value="aws">AWS</option>
-            <option value="azure">Azure</option>
-            <option value="minimax">MiniMax</option>
-            <option value="rime">Rime</option>
-            <option value="resemble">Resemble</option>
-            <option value="xai">xAI</option>
-            <option value="elevenlabs">ElevenLabs</option>
+            {ttsLibraryProviderOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Model</span>
+          <div className="ttsPlaygroundReadonly">{selectedVoiceModelLabel}</div>
+        </label>
+        <label className="ttsPlaygroundVoiceField">
+          <span>Voice</span>
+          <select value={selectedVoiceId} onChange={(event) => setSelectedVoiceId(event.target.value)} disabled={filteredVoices.length === 0 || busyAction === "voices"}>
+            {filteredVoices.length > 0 ? (
+              filteredVoices.map((voice) => <option key={voice.voiceId} value={voice.voiceId}>{formatTtsVoiceOptionLabel(voice)}</option>)
+            ) : (
+              <option value="">No voices available</option>
+            )}
+          </select>
+        </label>
+        <label>
+          <span>Language Boost</span>
+          <select value={languageBoost} onChange={(event) => setLanguageBoost(event.target.value)} disabled={!selectedVoiceSupportsBoost || filteredVoices.length === 0}>
+            <option value="">{selectedVoiceSupportsBoost ? "Select..." : "Not available"}</option>
+            {voiceLanguageOptions.map((language) => <option key={language} value={language}>{language}</option>)}
           </select>
         </label>
         <label>
           <span>Language</span>
           <select value={voiceLanguageFilter} onChange={(event) => setVoiceLanguageFilter(event.target.value)} disabled={voices.length === 0}>
-            <option value="all">All languages</option>
+            <option value="all">Any</option>
             {voiceLanguageOptions.map((language) => <option key={language} value={language}>{language}</option>)}
           </select>
         </label>
         <label>
           <span>Gender</span>
           <select value={voiceGenderFilter} onChange={(event) => setVoiceGenderFilter(event.target.value)} disabled={voices.length === 0}>
-            <option value="all">All voices</option>
+            <option value="all">Any</option>
             {voiceGenderOptions.map((gender) => <option key={gender} value={gender}>{gender}</option>)}
           </select>
         </label>
-        <label className="ttsLibrarySearch">
+        <label>
+          <span>Voice Speed</span>
+          <input
+            value={voiceSpeed}
+            onChange={(event) => setVoiceSpeed(event.target.value)}
+            inputMode="decimal"
+            placeholder="1"
+          />
+        </label>
+        <label className="ttsPlaygroundSearch">
           <span>Search</span>
           <div>
             <Search size={15} />
@@ -21343,45 +24474,42 @@ function ScribesVoiceLibraryPanel() {
         <span>Sample Text</span>
         <textarea value={sampleText} onChange={(event) => setSampleText(event.target.value)} maxLength={320} />
       </label>
-      {voices.length > 0 ? (
-        <div className="ttsVoiceTable" role="table" aria-label="Hosted TTS voices">
-          <div className="ttsVoiceTableHeader" role="row">
-            <span role="columnheader">Voice</span>
-            <span role="columnheader">Language</span>
-            <span role="columnheader">Gender</span>
-            <span role="columnheader">Actions</span>
-          </div>
-          <div className="ttsVoiceRows">
-            {filteredVoices.slice(0, 80).map((voice) => (
-              <div className={`ttsVoiceRow ${settings.ttsVoice === voice.voiceId ? "selected" : ""}`} role="row" key={voice.voiceId}>
-                <div role="cell">
-                  <strong>{voice.name || voice.voiceId}</strong>
-                  <small>{voice.voiceId}</small>
-                </div>
-                <span role="cell">{voice.language || "Any"}</span>
-                <span role="cell">{voice.gender || "Voice"}</span>
-                <div className="ttsVoiceActions" role="cell">
-                  <button className="button secondary" type="button" onClick={() => void sampleVoice(voice)} disabled={busyAction !== ""}>
-                    <Volume2 size={14} />
-                    {busyAction === `sample:${voice.voiceId}` ? "Playing" : "Sample"}
-                  </button>
-                  <button className="button primary" type="button" onClick={() => void useVoice(voice)} disabled={busyAction !== "" || settings.ttsVoice === voice.voiceId}>
-                    <Check size={14} />
-                    {settings.ttsVoice === voice.voiceId ? "Selected" : "Use"}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-          {filteredVoices.length > 80 && <div className="ttsVoiceLimit">Showing 80 of {filteredVoices.length.toLocaleString()} matches. Narrow the filters to see more.</div>}
-          {filteredVoices.length === 0 && <div className="ttsVoiceLimit">No voices match those filters.</div>}
+      <div className="ttsPlaygroundPreviewSection">
+        <div className="ttsPlaygroundSectionHeader">
+          <h4>Try It Out</h4>
         </div>
-      ) : (
-        <div className="ttsLibraryEmpty">
-          <Volume2 size={18} />
-          <span>Load voices to browse and sample the hosted library.</span>
+        <div className="ttsPlaygroundPreviewCard">
+          <div className="ttsPlaygroundPreviewHeader">
+            <div>
+              <h5>{selectedVoice?.name || "No voice selected"}</h5>
+              <p>
+                {[selectedVoiceProviderLabel, selectedVoiceModelLabel === "Default" ? "" : selectedVoiceModelLabel, selectedVoice?.language || "", selectedVoice?.gender || ""]
+                  .filter(Boolean)
+                  .join(" - ")}
+              </p>
+            </div>
+            {selectedVoice && settings.ttsVoice === selectedVoice.voiceId && <span className="badge">Saved for Scribe</span>}
+          </div>
+          {sampleAudioSrc ? (
+            <audio ref={audioPreviewRef} className="ttsPreviewAudio" controls src={sampleAudioSrc} />
+          ) : (
+            <div className="ttsPreviewEmpty">
+              <Volume2 size={18} />
+              <span>{filteredVoices.length > 0 ? "Generate a sample to preview this voice." : "No voices available for those filters."}</span>
+            </div>
+          )}
+          <div className="ttsPlaygroundActions">
+            <button className="button secondary" type="button" onClick={() => void sampleVoice()} disabled={!selectedVoice || busyAction !== ""}>
+              <Play size={14} />
+              {selectedVoice && busyAction === `sample:${selectedVoice.voiceId}` ? "Generating" : "Regenerate"}
+            </button>
+            <button className="button primary" type="button" onClick={() => void useVoice()} disabled={!selectedVoice || busyAction !== "" || settings.ttsVoice === selectedVoice.voiceId}>
+              <Check size={14} />
+              {selectedVoice && settings.ttsVoice === selectedVoice.voiceId ? "Selected" : "Save to Scribe"}
+            </button>
+          </div>
         </div>
-      )}
+      </div>
       {message && <div className="voiceInputStatus" aria-live="polite">{message}</div>}
     </section>
   );
@@ -21665,6 +24793,7 @@ function credentialGroupConnected(group: CredentialGroupStatus, connectors: Conn
   if (group.id === "github") return group.fields.some((field) => ["GITHUB_USER_ACCESS_TOKEN", "GH_TOKEN"].includes(field.name) && field.configured);
   if (group.id === "guru") return group.fields.some((field) => ["GURU_OAUTH_REFRESH_TOKEN", "GURU_OAUTH_ACCESS_TOKEN"].includes(field.name) && field.configured);
   if (group.id === "agentmail") return group.fields.some((field) => field.name === "AGENTMAIL_API_KEY" && field.configured);
+  if (group.id === "telnyx-storage") return group.fields.filter((field) => ["TELNYX_STORAGE_BUCKET", "TELNYX_STORAGE_REGION"].includes(field.name)).every((field) => field.configured);
   const matchingConnector = connectors.find((connector) => connector.id === group.id);
   if (matchingConnector?.status === "connected" || matchingConnector?.status === "signed_in") return true;
   return visibleFields.length > 0 && visibleFields.every((field) => field.configured);
@@ -21705,6 +24834,9 @@ function credentialFieldLabel(name: string) {
   if (name === "PYLON_MCP_TOKEN_EXPIRES_AT") return "Pylon MCP Token Expires At";
   if (name === "AGENTMAIL_API_KEY") return "Alias API Key";
   if (name === "AGENTMAIL_DOMAIN") return "Alias Domain";
+  if (name === "TELNYX_STORAGE_BUCKET") return "Bucket Name";
+  if (name === "TELNYX_STORAGE_REGION") return "Bucket Region";
+  if (name === "TELNYX_STORAGE_PREFIX") return "Backup Prefix";
   return name;
 }
 
@@ -21713,7 +24845,7 @@ function isSecretCredentialField(name: string) {
 }
 
 function isRequiredCredentialGroup(group: CredentialGroupStatus) {
-  return ["telnyx", "github", "google-workspace", "guru", "pylon", "intercom-help-center", "mintlify-developer-docs"].includes(group.id);
+  return ["telnyx", "telnyx-storage", "github", "google-workspace", "guru", "pylon", "intercom-help-center", "mintlify-developer-docs"].includes(group.id);
 }
 
 function compareCredentialGroups(left: CredentialGroupStatus, right: CredentialGroupStatus) {
@@ -22269,7 +25401,29 @@ function DesignSystemView({ embedded = false }: { embedded?: boolean }) {
             <div className="designSpecList">
               <p>Middle-section tables use the shared chatSessionRows/chatResultRow pattern: 18px row side padding, 14px column gaps, 58px rows, 48px uppercase headers, and an optional 44px trailing action column.</p>
               <p>Header labels are left-aligned to the body text in the same column. Rows are clickable as a whole, with the trailing arrow turning primary on hover in light and dark mode.</p>
+              <p>Implementation guardrail: scrollable directory tables reserve a stable scrollbar gutter in the rowgroup, so the header must carry the matching right-side compensation. App tables that do not scroll need their own header override instead of reusing the scrollable compensation blindly.</p>
             </div>
+            <pre className="designCodeBlock">{`.directoryTable .chatResultRows {
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.directoryTable .chatResultRowHead {
+  padding-right: calc(var(--table-row-inline-inset) + (var(--table-scrollbar-gutter-width) * 2));
+}
+
+.directoryTable .chatResultRows .chatResultRow {
+  padding-right: calc(var(--table-row-inline-inset) + var(--table-scrollbar-gutter-width));
+}
+
+.appDirectoryTable .chatResultRows {
+  overflow: visible;
+  scrollbar-gutter: auto;
+}
+
+.appDirectoryTable .chatResultRowHead {
+  padding-right: calc(var(--table-row-inline-inset) + var(--table-scrollbar-gutter-width));
+}`}</pre>
           </Panel>
         </div>
       )}
@@ -22503,6 +25657,10 @@ function buildLinkDesignSystemInstruction() {
     "",
     "Use compact operational layouts: full-width canvas, dense panels, icon-led buttons, tabs for views, segmented controls for modes, toggles for binary settings, and stable 32px controls or 40px header actions.",
     "For middle-section tables, use the standard Link table rhythm: 18px row side padding, 14px column gaps, 58px rows, 48px uppercase headers, left-aligned header/body columns, whole-row click targets, and a 44px trailing action column when an arrow is needed.",
+    "Implement tables with the shared chatSessionRows/chatResultRow/directoryResultRow scaffold unless there is a proven reason not to.",
+    "Important alignment rule: when the table body uses scrollbar-gutter: stable on the rowgroup, keep the header on matching grid math by adding the matching right-side gutter compensation. Do not let header tracks be wider than body tracks.",
+    "Do not override table body cells back to content-width block layout. Cells must stretch to their grid tracks so header and body columns stay aligned, especially in app tables.",
+    "If a table variant does not scroll its rowgroup, add a local header padding override for that variant instead of copying the scrollable directory-table compensation unchanged.",
     "Avoid landing-page heroes, nested cards, decorative gradients/orbs, oversized type inside panels, and layouts that depend on a single hue palette.",
     "Keep generated tools first-screen useful: show the actual app workflow in the main surface immediately.",
     "",
@@ -22743,14 +25901,6 @@ function compactRelativeTime(value?: string) {
   return `${Math.floor(months / 12)}y`;
 }
 
-function emailAddressOnly(value: string) {
-  const trimmed = value.trim();
-  const bracketed = trimmed.match(/<([^<>@\s]+@[^<>\s]+)>/);
-  if (bracketed?.[1]) return bracketed[1];
-  const loose = trimmed.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  return loose?.[0] || trimmed || "Unknown sender";
-}
-
 function cleanInboxSubject(value?: string) {
   const trimmed = (value || "").trim();
   return trimmed.replace(/\s*<<<[\s\S]*$/, "").trim();
@@ -22761,24 +25911,10 @@ function isInboxPlaceholderSubject(value?: string) {
   return !subject || subject === "(No subject)";
 }
 
-function isInboxPlaceholderSender(value?: string) {
-  const sender = String(value || "").trim();
-  return !sender || sender === "Unknown sender";
-}
-
 function displayInboxThreadSubject(thread?: Pick<GoogleInboxThread, "subject" | "messages"> | null) {
   const subject = !isInboxPlaceholderSubject(thread?.subject) ? cleanInboxSubject(thread?.subject) : "";
   const messageSubject = thread?.messages.find((message) => !isInboxPlaceholderSubject(message.subject))?.subject || "";
   return cleanInboxSubject(subject || messageSubject) || "(No subject)";
-}
-
-function displayInboxThreadSender(thread?: Pick<GoogleInboxThread, "from" | "participants" | "messages"> | null) {
-  const candidates = [
-    thread?.from,
-    thread?.messages.find((message) => !isInboxPlaceholderSender(message.from))?.from,
-    ...(thread?.participants ?? []),
-  ];
-  return candidates.find((candidate) => !isInboxPlaceholderSender(candidate)) || "Unknown sender";
 }
 
 function buildInboxMessageDocument(htmlBody?: string) {
@@ -22872,6 +26008,19 @@ function sourceInitials(source: string) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+}
+
+function explorerResultSourceLabel(source: ExplorerResult["source"]) {
+  if (source === "telnyx_support") return "Help Center";
+  if (source === "telnyx_developers") return "Dev Docs";
+  if (source === "guru") return "Guru";
+  if (source === "pylon") return "Pylon";
+  if (source === "google_drive") return "Drive";
+  if (source === "link_file") return "Local file";
+  if (source === "memory") return "Archive";
+  if (source === "okf") return "Source file";
+  if (source === "mcp") return "MCP";
+  return source.replace(/_/g, " ");
 }
 
 function initialsFromIdentity(identity: string) {

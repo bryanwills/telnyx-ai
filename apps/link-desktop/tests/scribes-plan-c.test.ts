@@ -7,7 +7,7 @@ test("Scribes Plan C persists workspace state and exposes record IPC", async () 
   const api = await readFile("src/renderer/api.ts", "utf8");
   const preload = await readFile("src/main/preload.cjs", "utf8");
 
-  assert.match(main, /const stateVersion = 14/);
+  assert.match(main, /const stateVersion = 16/);
   assert.match(main, /let scribesState = emptyScribesState\(\)/);
   assert.match(main, /scribesState = useSavedState && saved\.scribesState/);
   assert.match(main, /scribesState,/);
@@ -73,24 +73,25 @@ test("Scribes Plan C models transcripts, artifacts, meeting state, and cleanup g
 test("Scribes Plan C renders the full workspace and Telnyx cloud gating", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
 
-  for (const tab of ["Library", "Speech-to-Text", "Text-to-Speech", "Voices", "Meetings", "Configure"]) {
+  for (const tab of ["Library", "Configure", "Grammar", "STT Settings", "Models", "TTS Settings", "Voices"]) {
     assert.match(app, new RegExp(tab.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
 
   assert.doesNotMatch(app, /function ScribesDictationPanel/);
-  assert.match(app, /\["stt", "Speech-to-Text", Mic\]/);
-  assert.match(app, /\["tts", "Text-to-Speech", Volume2\]/);
+  assert.match(app, /\["stt", "STT Settings", Mic\]/);
+  assert.match(app, /\["tts", "TTS Settings", Volume2\]/);
   assert.match(app, /activeTab === "stt"\) return <SpeakSettingsPanel section="stt" \/>/);
   assert.match(app, /activeTab === "tts"\) return <SpeakSettingsPanel section="tts" \/>/);
   assert.match(app, /\["history", "Library", ScribesArchiveIcon\]/);
-  assert.match(app, /\["library", "Voices", Volume2\]/);
-  assert.match(app, /activeTab === "library"\) return <ScribesVoiceLibraryPanel \/>/);
+  assert.match(app, /\["tts-voices", "Voices", Volume2\]/);
+  assert.match(app, /activeTab === "tts-voices"\) return <ScribesVoiceLibraryPanel refreshKey=\{voiceLibraryRefreshKey\} \/>/);
   assert.match(app, /function ScribesVoiceLibraryPanel/);
   assert.match(app, /aria-label="Voices"/);
   const voiceLibraryPanelSource = app.slice(app.indexOf("function ScribesVoiceLibraryPanel"), app.indexOf("function CredentialGroupCards"));
-  const voiceLibraryTableSource = voiceLibraryPanelSource.slice(voiceLibraryPanelSource.indexOf("aria-label=\"Hosted TTS voices\""), voiceLibraryPanelSource.indexOf("{filteredVoices.length > 80"));
-  assert.match(voiceLibraryTableSource, /<span role="columnheader">Voice<\/span>[\s\S]*?<span role="columnheader">Language<\/span>[\s\S]*?<span role="columnheader">Gender<\/span>[\s\S]*?<span role="columnheader">Actions<\/span>/);
-  assert.doesNotMatch(voiceLibraryTableSource, /<span role="columnheader">Provider<\/span>/);
+  assert.doesNotMatch(voiceLibraryPanelSource, /Browse hosted voices, play a short sample, then save the voice for Scribe\./);
+  assert.match(voiceLibraryPanelSource, /<span>Voice<\/span>/);
+  assert.match(voiceLibraryPanelSource, /<h4>Try It Out<\/h4>/);
+  assert.match(voiceLibraryPanelSource, /Save to Scribe/);
   assert.doesNotMatch(app, /TTS Library/);
   const configurePanelSource = app.slice(app.indexOf("function ScribesWorkspaceConfigurePanel"), app.indexOf("function sttProviderDefaultModel"));
   assert.match(configurePanelSource, /<h3>Dictation<\/h3>/);
@@ -148,7 +149,7 @@ test("Scribes Plan C renders the full workspace and Telnyx cloud gating", async 
   assert.doesNotMatch(app, /Build Helper/);
 });
 
-test("Scribes Plan C integrates transcripts and artifacts into Drive", async () => {
+test("Scribes Plan C integrates transcripts and artifacts into Storage", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
 
   assert.match(app, /type DriveScribesSessionRow/);

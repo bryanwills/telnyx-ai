@@ -98,6 +98,14 @@ The capability list in `agent.json` is the source of truth for what Telnyx surfa
 - Markdown: GitHub-flavored. Use ATX headings (`#`, not underlines).
 - One change per PR — don't bundle skill edits with toolkit refactors.
 
+### Link desktop UI guardrails
+
+- For `apps/link-desktop` middle-section tables, reuse the shared `chatSessionRows` / `chatResultRow` / `directoryResultRow` scaffold instead of inventing a new table primitive.
+- Keep header and body columns on the same grid math. If a table body uses `scrollbar-gutter: stable`, the matching header needs the extra right-side gutter compensation so header tracks resolve to the same width as body rows.
+- Do not override shared table cells back to content-width blocks. App tables regressed before because `.appDirectoryResultRow > span` stopped stretching to the grid track, which pulled header and body columns out of alignment.
+- If a table intentionally opts out of scrollable rowgroups, add a local header padding override that matches that non-scrollable variant instead of changing the shared table rhythm globally.
+- Before shipping table changes, verify at least one populated table in the rendered UI, not just source or screenshots of empty states.
+
 ### Commit and PR conventions
 
 - Conventional Commits prefix in the title (`feat:`, `fix:`, `chore:`, `docs:`).

@@ -30,7 +30,7 @@ GitHub pairing uses a GitHub App device flow. Users only use the GitHub card's `
 
 Google Workspace uses `team-telnyx/openclaw-itops-setup-utils/gog-setup` with the bundled `gog` CLI. Run `npm run bundle:gog` before packaging so the platform/architecture-specific `apps/link-desktop/bin/gog-*` files are included in app resources. The resolver prefers `gog-{platform}-{arch}` and only falls back to a generic `gog` on PATH, so the repo does not need to track duplicate generic helper binaries. The Settings card only exposes `Connect`: Link fetches and stages the read-only setup utility, signs the user in with Google through gog, stores the gog account/keyring details with Electron `safeStorage`, and only shows `Connected` after Calendar and Contacts checks pass. Link forces gog to use its encrypted file keyring under the Electron user data directory with `GOG_KEYRING_BACKEND=file`, `GOG_HOME`, and a generated `GOG_KEYRING_PASSWORD` so macOS does not repeatedly prompt for the login Keychain. For production, set `GOOGLE_WORKSPACE_SETUP_ASSET_URL` to an Okta-protected internal endpoint that can return files from `team-telnyx/openclaw-itops-setup-utils`; `GOOGLE_WORKSPACE_SKILL_ASSET_URL` remains a compatibility alias. Developer fallbacks still work through `GH_TOKEN`/`GITHUB_TOKEN`, authenticated `gh`, `GOOGLE_WORKSPACE_SETUP_SCRIPT`, and direct `GOOGLE_WORKSPACE_ACCESS_TOKEN`, `GOOGLE_CALENDAR_ACCESS_TOKEN`, `GOOGLE_DRIVE_ACCESS_TOKEN`, or `GOOGLE_CONTACTS_ACCESS_TOKEN`.
 
-Telnyx Whisper lives under `native/telnyx-whisper` and is controlled from Settings > Speech. Link uses the saved Telnyx API key for Telnyx STT/TTS helper calls, starts the macOS helper from the Electron main process, and defaults the dictation shortcut to holding `fn`.
+Telnyx Whisper lives under `native/telnyx-whisper` and is controlled from Settings > Speech. Link uses the saved Telnyx API key for Telnyx STT/TTS helper calls, starts the macOS helper from the Electron main process, and defaults the dictation shortcut to holding `fn`. Run `npm run bundle:whisper` before packaging so release builds include `native/telnyx-whisper/Telnyx Link.app` inside app resources. Packaged users only need the prebuilt helper bundle; do not rely on shipping `Package.swift` or the full source tree.
 
 ## Runtime Configuration
 
@@ -63,6 +63,7 @@ npm test
 npm run build
 npm run whisper:test
 npm run whisper:build
+npm run bundle:whisper
 ```
 
 Phone dialer E2E:

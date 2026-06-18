@@ -567,7 +567,7 @@ function validateDraft({ creatingNewDraft, draft, selectedThread }) {
 
 function buildInboxThreadRow(thread, { selected, index }) {
   const subject = cleanInboxSubject(thread.subject) || "(No subject)";
-  const fromEmail = emailAddressOnly(thread.from);
+  const fromEmail = emailAddressOnly(displayInboxThreadSender(thread));
   return {
     id: thread.threadId,
     threadId: thread.threadId,

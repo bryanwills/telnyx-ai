@@ -99,6 +99,7 @@ For Telnyx Whisper native helper work:
 cd apps/link-desktop
 npm run whisper:test
 npm run whisper:build
+npm run bundle:whisper
 ```
 
 ## Working on Link

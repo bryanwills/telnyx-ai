@@ -19,6 +19,7 @@
     "start": "LINK_DESKTOP_RENDERER=dist/renderer/index.html electron src/main/main.js",
     "restart": "node scripts/restart.mjs",
     "bundle:gog": "node scripts/install-gog-cli.mjs",
+    "bundle:whisper": "node scripts/install-whisper-helper.mjs",
     "build": "vite build",
     "metadata:check": "scripts/check-service-metadata.sh",
     "whisper:build": "cd native/telnyx-whisper && bash Scripts/build-app.sh release",

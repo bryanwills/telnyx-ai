@@ -605,7 +605,9 @@ export function LinkSoftphone({
           setStatusText(status.message);
           return;
         }
-        await connectWebRtc(status);
+        setWebRtcError("");
+        setCallState((current) => current === "error" ? "idle" : current);
+        setStatusText("Ready to call");
       } catch (error) {
         if (cancelled) return;
         setWebRtcError(error instanceof Error ? error.message : "Unable to check WebRTC status.");
