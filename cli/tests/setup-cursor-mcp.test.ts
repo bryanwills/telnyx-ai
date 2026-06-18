@@ -58,6 +58,7 @@ describe("CLI — setup-cursor-mcp", () => {
 
     assert.ok(capability, "agent.json should expose IDE Integrations capability");
     assert.equal(capability.name, "IDE Integrations");
+    assert.equal(capability.guide, "/guides/cursor-mcp-setup.md");
     assert.ok(capability.cli.includes("setup-cursor-mcp"));
     assert.ok(capability.actions.includes("setup_cursor_mcp"));
   });
