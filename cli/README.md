@@ -9,10 +9,10 @@ Agent-friendly CLI for Telnyx API v2 — composite setup commands that reduce mu
 export TELNYX_API_KEY="KEY_xxx"
 
 # Check account status
-npx tsx bin/telnyx-agent.ts status
+npx @telnyx/agent-cli status
 
 # See all capabilities
-npx tsx bin/telnyx-agent.ts capabilities
+npx @telnyx/agent-cli capabilities
 ```
 
 ## Commands
@@ -208,7 +208,7 @@ cd cli
 npm install
 
 # Run directly
-npx tsx bin/telnyx-agent.ts status
+node bin/telnyx-agent.js status
 
 # Run tests
 npm test

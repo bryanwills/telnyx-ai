@@ -211,9 +211,9 @@ describe("CLI Write — Setup Commands (E2E)", () => {
     const { fileURLToPath } = await import("node:url");
 
     const __dir = dirname(fileURLToPath(import.meta.url));
-    const CLI = join(__dir, "..", "bin", "telnyx-agent.ts");
+    const CLI = join(__dir, "..", "bin", "telnyx-agent.js");
 
-    const proc = spawnSync("npx", ["tsx", CLI, "setup-sms", "--country", "US", "--json"], {
+    const proc = spawnSync("node", [CLI, "setup-sms", "--country", "US", "--json"], {
       encoding: "utf-8",
       timeout: 60000,
       env: { ...process.env },
@@ -250,9 +250,9 @@ describe("CLI Write — Setup Commands (E2E)", () => {
     const { fileURLToPath } = await import("node:url");
 
     const __dir = dirname(fileURLToPath(import.meta.url));
-    const CLI = join(__dir, "..", "bin", "telnyx-agent.ts");
+    const CLI = join(__dir, "..", "bin", "telnyx-agent.js");
 
-    const proc = spawnSync("npx", ["tsx", CLI, "setup-voice", "--country", "US", "--json"], {
+    const proc = spawnSync("node", [CLI, "setup-voice", "--country", "US", "--json"], {
       encoding: "utf-8",
       timeout: 60000,
       env: { ...process.env },
@@ -285,9 +285,9 @@ describe("CLI Write — Setup Commands (E2E)", () => {
     const { fileURLToPath } = await import("node:url");
 
     const __dir = dirname(fileURLToPath(import.meta.url));
-    const CLI = join(__dir, "..", "bin", "telnyx-agent.ts");
+    const CLI = join(__dir, "..", "bin", "telnyx-agent.js");
 
-    const proc = spawnSync("npx", ["tsx", CLI, "setup-ai", "--json"], {
+    const proc = spawnSync("node", [CLI, "setup-ai", "--json"], {
       encoding: "utf-8",
       timeout: 60000,
       env: { ...process.env },
@@ -320,9 +320,9 @@ describe("CLI Write — Setup Commands (E2E)", () => {
     const { fileURLToPath } = await import("node:url");
 
     const __dir = dirname(fileURLToPath(import.meta.url));
-    const CLI = join(__dir, "..", "bin", "telnyx-agent.ts");
+    const CLI = join(__dir, "..", "bin", "telnyx-agent.js");
 
-    const proc = spawnSync("npx", ["tsx", CLI, "status", "--json"], {
+    const proc = spawnSync("node", [CLI, "status", "--json"], {
       encoding: "utf-8",
       timeout: 30000,
       env: { ...process.env },

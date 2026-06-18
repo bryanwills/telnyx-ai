@@ -8,12 +8,13 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..", "..");
-const CLI = join(__dirname, "..", "bin", "telnyx-agent.ts");
+const CLI_ROOT = join(__dirname, "..");
+const CLI = join(__dirname, "..", "bin", "telnyx-agent.js");
 const TELNYX_MCP_URL = "https://api.telnyx.com/v2/mcp";
 const TELNYX_MCP_AUTH_HEADER = "Bearer ${env:TELNYX_API_KEY}";
 
 function run(args: string[], env?: NodeJS.ProcessEnv): string {
-  return execFileSync("npx", ["tsx", CLI, ...args], {
+  return execFileSync("node", [CLI, ...args], {
     encoding: "utf8",
     timeout: 30000,
     env: env ?? { ...process.env },
@@ -21,7 +22,7 @@ function run(args: string[], env?: NodeJS.ProcessEnv): string {
 }
 
 function runWithStderr(args: string[], env?: NodeJS.ProcessEnv) {
-  const result = spawnSync("npx", ["tsx", CLI, ...args], {
+  const result = spawnSync("node", [CLI, ...args], {
     encoding: "utf8",
     timeout: 30000,
     env: env ?? { ...process.env },
@@ -40,6 +41,24 @@ describe("CLI — setup-cursor-mcp", () => {
     assert.ok(output.includes("setup-cursor-mcp"));
     assert.ok(output.includes("--dir <path>"));
     assert.ok(output.includes("--force"));
+  });
+
+  it("package bin runs through npx without a tsx shebang", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
+    const output = execFileSync(
+      "npx",
+      ["--no-install", "telnyx-agent", "setup-cursor-mcp", "--dir", tempDir, "--json"],
+      {
+        cwd: CLI_ROOT,
+        encoding: "utf8",
+        timeout: 30000,
+        env: { ...process.env },
+      },
+    );
+    const data = JSON.parse(output);
+
+    assert.equal(data.ready, true);
+    assert.equal(data.config.mcpServers.telnyx.url, TELNYX_MCP_URL);
   });
 
   it("capabilities JSON includes setup-cursor-mcp", () => {

@@ -9,7 +9,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CLI = join(__dirname, "..", "bin", "telnyx-agent.ts");
+const CLI = join(__dirname, "..", "bin", "telnyx-agent.js");
 
 if (!process.env.TELNYX_API_KEY) {
   console.log("TELNYX_API_KEY not set — skipping");
@@ -20,7 +20,7 @@ const CLI_TIMEOUT_MS = Number(process.env.CLI_INTEGRATION_TIMEOUT_MS ?? 60000);
 let cachedStatusJson: any | undefined;
 
 const run = (args: string): string => {
-  return execSync(`npx tsx ${CLI} ${args}`, {
+  return execSync(`node ${CLI} ${args}`, {
     encoding: "utf-8",
     timeout: CLI_TIMEOUT_MS,
     env: { ...process.env },

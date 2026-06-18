@@ -7,7 +7,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CLI = join(__dirname, "..", "bin", "telnyx-agent.ts");
+const CLI = join(__dirname, "..", "bin", "telnyx-agent.js");
 
 function withFakeEdgeCli(mode: "none" | "oauth" | "api_key" = "api_key") {
   const tempDir = mkdtempSync(join(tmpdir(), "telnyx-edge-fake-"));
@@ -56,7 +56,7 @@ console.log('ok');
 }
 
 function run(args: string[], env?: NodeJS.ProcessEnv): string {
-  return execFileSync("npx", ["tsx", CLI, ...args], {
+  return execFileSync("node", [CLI, ...args], {
     encoding: "utf8",
     timeout: 30000,
     env: env ?? { ...process.env },
