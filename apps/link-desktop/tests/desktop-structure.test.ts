@@ -17,8 +17,8 @@ test("desktop package exposes expected local scripts", async () => {
   const whisperBundler = await readFile("scripts/install-whisper-helper.mjs", "utf8");
   const readme = await readFile("README.md", "utf8");
 
-  assert.equal(pkg.productName, "Link");
-  assert.equal(pkg.description, "Electron desktop shell for Telnyx Link.");
+  assert.equal(pkg.productName, "Cloud Link");
+  assert.equal(pkg.description, "Electron desktop shell for Telnyx Cloud Link.");
   assert.equal(pkg.license, "MIT");
   assert.equal(pkg.repository.directory, "apps/link-desktop");
   assert.equal(pkg.scripts.dev, "node scripts/dev.mjs");
@@ -31,8 +31,8 @@ test("desktop package exposes expected local scripts", async () => {
   assert.equal(pkg.dependencies["@telnyx/link"], "file:../../tools/link");
   assert.equal(pkg.overrides.uuid, "^11.1.1");
   assert.doesNotMatch(gogInstaller, /path\.join\(binDir,\s*"gog"\)/);
-  assert.match(whisperBundler, /Telnyx Link\.app/);
-  assert.match(whisperBundler, /Package `native\/telnyx-whisper\/Telnyx Link\.app` into Link app resources/);
+  assert.match(whisperBundler, /Telnyx Cloud Link\.app/);
+  assert.match(whisperBundler, /Package `native\/telnyx-whisper\/Telnyx Cloud Link\.app` into Cloud Link app resources/);
   assert.match(readme, /live-ready service adapters with deterministic local fallbacks/);
   assert.doesNotMatch(readme, /does not connect to production systems/);
   assert.match(readme, /npm run bundle:whisper/);
@@ -76,8 +76,8 @@ test("Electron windows follow the internal app security baseline", async () => {
   assert.match(main, /webSecurity:\s*true/);
   assert.match(main, /allowRunningInsecureContent:\s*false/);
   assert.match(main, /webviewTag:\s*false/);
-  assert.match(main, /const appDisplayName = "Link"/);
-  assert.match(index, /<title>Link<\/title>/);
+  assert.match(main, /const appDisplayName = "Cloud Link"/);
+  assert.match(index, /<title>Telnyx Cloud Link<\/title>/);
   assert.doesNotMatch(index, /<title>Telnyx Link<\/title>/);
   assert.match(main, /const appIconPath = path\.resolve\(__dirname,\s*"\.\.\/\.\.\/public\/link-icon\.png"\)/);
   assert.match(index, /href="\/link-favicon\.png"/);
@@ -89,18 +89,19 @@ test("Electron windows follow the internal app security baseline", async () => {
   assert.match(main, /import \{ app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, Notification, safeStorage, session, shell, Tray \} from "electron"/);
   assert.match(main, /function trayIconImage\(\)/);
   assert.match(main, /const appTrayTemplateIconPath = path\.resolve\(__dirname,\s*"\.\.\/\.\.\/public\/scribeTrayTemplate\.png"\)/);
+  assert.match(main, /const appTrayTitle = "Scribe"/);
   assert.match(main, /createFromPath\(appTrayTemplateIconPath\)/);
   assert.match(main, /setTemplateImage\(true\)/);
   assert.match(main, /function buildAppTrayMenu/);
   assert.match(main, /function canStartWhisperFromTray/);
   assert.match(main, /new Tray\(trayIconSource\(\)\)/);
-  assert.match(main, /appTray\.setTitle\(""\)/);
+  assert.match(main, /appTray\.setTitle\(appTrayTitle\)/);
   assert.match(main, /label: "Dictation Enabled"/);
   assert.match(main, /label: "Copy Last Transcript"/);
   assert.match(main, /label: "Transcription Route"/);
   assert.match(main, /label: "Shortcuts"/);
   assert.match(main, /label: "Languages"/);
-  assert.match(main, /Dictation is unavailable right now\. Open Link to finish setup\./);
+  assert.match(main, /Dictation is unavailable right now\. Open Telnyx Cloud Link to finish setup\./);
   assert.match(main, /available: process\.platform === "darwin" && \(sourceAvailable \|\| built\)/);
   assert.match(main, /function whisperRootCandidates\(\)/);
   assert.match(main, /process\.env\.LINK_DESKTOP_RENDERER/);
@@ -174,10 +175,10 @@ test("desktop launch notes prevent duplicate Electron apps", async () => {
   assert.match(launchScript, /kill -KILL \$remaining/);
   assert.match(macDevRuntime, /copyIfPresent\(sourceIconPath, path\.join\(bundleResourcesPath, macDevIconName\)\)/);
   assert.match(macDevRuntime, /copyIfPresent\(sourceIconPath, path\.join\(bundleResourcesPath, "electron\.icns"\)\)/);
-  assert.match(macDevRuntime, /setPlistValue\(infoPlistPath, "CFBundleName", "string", "Link"\)/);
-  assert.match(macDevRuntime, /setPlistValue\(infoPlistPath, "CFBundleDisplayName", "string", "Link"\)/);
+  assert.match(macDevRuntime, /setPlistValue\(infoPlistPath, "CFBundleName", "string", "Cloud Link"\)/);
+  assert.match(macDevRuntime, /setPlistValue\(infoPlistPath, "CFBundleDisplayName", "string", "Cloud Link"\)/);
   assert.match(macDevRuntime, /setPlistValue\(infoPlistPath, "CFBundleIconFile", "string", macDevIconName\)/);
-  assert.match(restartScript, /if exists process "Link" then/);
+  assert.match(restartScript, /repeat with processName in \{"Telnyx Cloud Link", "Link", "Electron"\}/);
   assert.doesNotMatch(restartScript, /process targetName/);
   assert.match(restartScript, /Raw Electron\.app process survived restart\./);
 });
@@ -207,7 +208,7 @@ test("main-process privileged entrypoints fail closed", async () => {
   assert.match(main, /link:publisher-open-app/);
   assert.match(main, /linkAppAllowedHostSuffixes/);
   assert.match(main, /isAllowedLinkAppUrl/);
-  assert.match(main, /Refusing to open a non-approved Link app URL/);
+  assert.match(main, /Refusing to open a non-approved Cloud Link app URL/);
   assert.match(main, /\/publish-intents/);
   assert.match(main, /secureIpcHandle\("link:edge-compute-status", \(\) => getEdgeComputeStatus\(\{ seedAuth: true \}\)\)/);
   assert.doesNotMatch(main, /createGitHubDraftPr|link:create-change-request|link:approve-change-request|link:dismiss-change-request|link:list-change-requests/);
@@ -529,7 +530,7 @@ test("renderer includes canonical Link pages in the primary navigation", async (
   assert.doesNotMatch(app, /link-menu\.svg/);
   assert.doesNotMatch(app, /expanded \? "\.\/link-menu\.svg" : "\.\/link-icon\.svg"/);
   assert.doesNotMatch(app, /<span className="railIconSlot"><img src="\.\/telnyx-link-logo\.png" alt="" aria-hidden="true" \/><\/span>/);
-  assert.doesNotMatch(app, /<span className="railLabel">Telnyx Link<\/span>/);
+  assert.doesNotMatch(app, /<span className="railLabel">Telnyx Cloud Link<\/span>/);
   assert.match(styles, /\.workspace\s*\{[\s\S]*?grid-template-columns:\s*54px 270px minmax\(0,\s*1fr\)/);
   assert.match(styles, /\.workspaceNoSidebar\s*\{[\s\S]*?grid-template-columns:\s*54px minmax\(0,\s*1fr\)/);
   assert.match(styles, /\.railButton\s*\{[\s\S]*?width:\s*var\(--top-control-height\)[\s\S]*?height:\s*var\(--top-control-height\)/);
@@ -561,19 +562,36 @@ test("renderer includes canonical Link pages in the primary navigation", async (
   assert.doesNotMatch(app, /className="tabStrip"/);
 });
 
-test("signed out users only see the Okta auth gate", async () => {
+test("expired auth sessions see the Okta auth gate", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
+  const main = await readFile("src/main/main.js", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
 
   assert.match(app, /const signedIn = Boolean\(accountStatus\?\.signedIn && !signedOutLocally\)/);
   assert.doesNotMatch(app, /const signedIn = Boolean\(accountStatus\?\.ready && !signedOutLocally\)/);
-  assert.match(app, /!\s*signedIn \? \(/);
+  assert.match(app, /const authSessionExpired = authStatusMessageNeedsSignIn\(authGateError \|\| accountStatus\?\.message \|\| ""\)/);
+  assert.match(app, /const showAuthGate = authSessionExpired \|\| !signedIn/);
+  assert.match(app, /showAuthGate \? \(/);
+  assert.match(app, /const terminalVisible = signedIn && terminalOpen/);
+  assert.match(app, /className=\{`desktop \$\{terminalVisible \? "terminalOpen" : ""\}`\}/);
+  assert.match(app, /useEffect\(\(\) => \{[\s\S]*?if \(signedIn\) return;[\s\S]*?setTerminalOpen\(false\);[\s\S]*?setMemoryOpen\(false\);[\s\S]*?\}, \[signedIn\]\)/);
+  assert.match(app, /function handleDesktopShortcut\(event: KeyboardEvent\) \{[\s\S]*?if \(showAuthGate\) return;/);
+  assert.match(app, /\}, \[appShortcuts, showAuthGate\]\)/);
+  assert.match(app, /signedIn=\{signedIn\}/);
   assert.match(app, /<AuthGate/);
   assert.match(app, /function AuthGate/);
+  assert.match(main, /function authCallbackIconDataUrl\(\)/);
+  assert.match(main, /fsSync\.readFileSync\(appIconPath\)\.toString\("base64"\)/);
+  assert.match(main, /<img class="mark" src="\$\{iconDataUrl\}" alt="Cloud Link" \/>/);
+  assert.doesNotMatch(main, /<div class="mark">TL<\/div>/);
   assert.match(app, /function authGateErrorMessage\(error: unknown, fallback: string\)/);
+  assert.match(app, /function authStatusMessageNeedsSignIn\(message: string\)/);
   assert.match(app, /Error invoking remote method/);
-  assert.match(app, /Set AUTH_INTERNAL_URL to the HTTPS auth bridge endpoint in Settings or apps\/link-desktop\/\.env\.local/);
-  assert.match(app, /Manage tasks and agents inside\s*<br \/>[\s\S]*?one connected workspace\./);
+  assert.match(app, /Okta sign-in is not available right now\. Open Settings and confirm the Agent Control Plane service configuration, then restart Telnyx Cloud Link\./);
+  assert.match(app, /<h1>Cloud Link<\/h1>/);
+  assert.doesNotMatch(app, /<h1>Telnyx Cloud Link<\/h1>/);
+  assert.match(app, /Manage your tasks and agents locally\s*<br \/>[\s\S]*?with a cloud connected workspace/);
+  assert.doesNotMatch(app, /with a cloud connected workspace\./);
   assert.doesNotMatch(app, /Sign in with Telnyx Okta to bring your agents, tasks, calls, calendar, docs, and internal tools into one secure workspace/);
   assert.match(app, /visibleError = \/sign in with telnyx okta to bring your agents\/i\.test\(error\) \? "" : error/);
   assert.match(app, /Sign in with Okta/);
@@ -980,7 +998,7 @@ test("onboarding is persisted, dismissible, and tied to setup steps", async () =
   assert.match(app, /onboarding:\s*\{\s*label:\s*"Get Started",\s*icon:\s*Flag\s*\}/);
   assert.match(app, /\{renderRailButton\(\{ id: "onboarding", label: "Start", icon: Flag \}\)\}/);
   assert.doesNotMatch(app, /\{renderRailButton\(\{ id: "memory", label: "Archive", icon: ArchiveIcon \}\)\}/);
-  assert.match(app, /\{renderRailButton\(\{ id: "scribes", label: "Scribe", icon: ScribesWaveformIcon \}\)\}\n\s*\{renderRailButton\(\{ id: "wiki", label: "Docs", icon: BookOpen \}\)\}\n\s*<div className="railSecondaryGroup">[\s\S]*?\{renderRailButton\(\{ id: "storage", label: "Storage", icon: FolderOpen \}\)\}[\s\S]*?\{renderRailButton\(\{ id: "models", label: "Models", icon: ModelsIcon \}\)\}[\s\S]*?\{renderRailButton\(\{ id: "settings", label: "Settings", icon: Settings \}\)\}/);
+  assert.match(app, /\{renderRailButton\(\{ id: "scribes", label: "Scribe", icon: ScribesWaveformIcon \}\)\}\n\s*\{renderRailButton\(\{ id: "wiki", label: "Composer", icon: BookOpen \}\)\}\n\s*<div className="railSecondaryGroup">[\s\S]*?\{renderRailButton\(\{ id: "storage", label: "Storage", icon: FolderOpen \}\)\}[\s\S]*?\{renderRailButton\(\{ id: "models", label: "Models", icon: ModelsIcon \}\)\}[\s\S]*?\{renderRailButton\(\{ id: "settings", label: "Settings", icon: Settings \}\)\}/);
   assert.match(app, /view === "scribes" && <ScribesView setView=\{setView\} \/>/);
   assert.match(app, /<SidebarSection title="Scribe" count=\{0\} icon=\{<ScribesWaveformIcon size=\{13\} \/>\} compact active=\{view === "scribes"\} \/>/);
   assert.match(app, /\{renderRailButton\(\{ id: "settings", label: "Settings", icon: Settings \}\)\}/);
@@ -1027,7 +1045,7 @@ test("removed desktop pages stay unwired", async () => {
   assert.match(app, /function ExplorerView\(\{/);
 });
 
-test("app marketplace uses the managed Link App Publisher catalog", async () => {
+test("app marketplace uses the managed Cloud Link App Publisher catalog", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
   const api = await readFile("src/renderer/api.ts", "utf8");
@@ -1042,7 +1060,7 @@ test("app marketplace uses the managed Link App Publisher catalog", async () => 
   assert.match(app, /embeddedMarketplace/);
   assert.match(app, /publishedApps/);
   assert.match(api, /interface LinkPublishedApp/);
-  assert.match(main, /Link App Publisher/);
+  assert.match(main, /Cloud Link App Publisher/);
   assert.match(main, /let livePublishedApps = \[\]/);
   assert.match(main, /return mergePublishedApps\(livePublishedApps, publishedApps\)/);
   assert.match(main, /return mergePublishedApps\(livePublishedApps, publishedApps\)\.find/);
@@ -1083,7 +1101,7 @@ test("app marketplace uses the managed Link App Publisher catalog", async () => 
   assert.match(main, /async function deployLocalEdgeApp/);
   assert.match(main, /Select Edge app directory/);
   assert.match(main, /runAllowedLocalAppCommand/);
-  assert.match(main, /telnyx-edge did not return an approved Link app URL/);
+  assert.match(main, /telnyx-edge did not return an approved Cloud Link app URL/);
   assert.match(main, /\.telnyxcompute\.com/);
 	  assert.match(api, /interface LinkLocalEdgeDeployResult/);
 	  assert.match(api, /interface LinkLocalEdgeImportResult/);
@@ -1161,7 +1179,8 @@ test("app marketplace uses the managed Link App Publisher catalog", async () => 
   assert.match(app, /Keep Local/);
   assert.match(app, /Telnyx BYO Cloud/);
   assert.match(app, /Telnyx Managed/);
-  assert.match(app, /Deploy to Telnyx Cloud/);
+  assert.match(app, /Publish to Link Cloud/);
+  assert.doesNotMatch(app, /Deploy Cloud/);
   assert.match(api, /ArtifactDeploymentTarget = "local-only" \| "local-shared" \| "telnyx-byo-cloud" \| "telnyx-managed"/);
   assert.match(api, /interface ArtifactDeploymentRecord/);
   assert.match(preload, /listArtifactDeployments:\s*\(\) => ipcRenderer\.invoke\("link:list-artifact-deployments"\)/);
@@ -1196,6 +1215,13 @@ test("app marketplace uses the managed Link App Publisher catalog", async () => 
   assert.match(app, /Env schema/);
   const wikiViewSource = app.slice(app.indexOf("function WikiView"), app.indexOf("function LegacySettingsView"));
   const settingsSectionsSource = app.slice(app.indexOf("const settingsSectionGroups"), app.indexOf("const modelCenterSectionGroups"));
+  assert.match(settingsSectionsSource, /\["wiki", "Knowledge", BookOpen\][\s\S]*\["sessions", "Terminal", SquareTerminal\][\s\S]*\["shortcuts", "Shortcuts", Keyboard\]/);
+  assert.doesNotMatch(settingsSectionsSource, /\["sessions", "Sessions", SquareTerminal\]/);
+  assert.match(app, /const settingsHeadingTitle = tab === "sessions" \? "Terminal Sessions"/);
+  assert.match(app, /className="phoneSetupAlert serviceSetupAlert telnyxSetupAlert sessionsSetupAlert"/);
+  assert.match(app, /<span className="serviceSetupAlertIcon" aria-hidden="true"><SquareTerminal size=\{18\} \/><\/span>/);
+  assert.doesNotMatch(app, /<h2>Terminal Sessions<\/h2>/);
+  assert.match(app, /aria-label="Terminal Sessions setup status"/);
   assert.doesNotMatch(wikiViewSource, /Install locally/);
   assert.doesNotMatch(app, /Publish an app for Telnyx employees/);
   assert.doesNotMatch(app, /bot-owned workflow/);
@@ -1233,7 +1259,7 @@ test("app marketplace uses the managed Link App Publisher catalog", async () => 
   assert.match(styles, /\.appDirectorySection\s*\{[\s\S]*?width:\s*100%/);
 });
 
-test("managed Link App Publisher API satisfies the desktop publish contract", async () => {
+test("managed Cloud Link App Publisher API satisfies the desktop publish contract", async () => {
   const server = createLinkAppPublisherServer(undefined, { requireAuth: true });
   const listener = await listenLinkAppPublisherServer(server);
   const headers = {
@@ -1470,29 +1496,51 @@ test("settings ships the enterprise hybrid Model Center IA", async () => {
 
   assert.match(app, /SettingsView as ModelCenterSettingsView/);
   assert.match(app, /settingsTab, setSettingsTab\] = useState<SettingsTab>\("auth"\)/);
-  assert.match(app, /<ModelCenterSettingsView[\s\S]*?tab=\{settingsTab\}[\s\S]*?setTab=\{\(tab\) => setSettingsTab\(tab as SettingsTab\)\}/);
-  assert.match(app, /type SettingsTab =[\s\S]*"general"[\s\S]*"shortcuts"[\s\S]*"storage-privacy"[\s\S]*"models"[\s\S]*"local-engines"[\s\S]*"cloud-providers"[\s\S]*"local-api-server"[\s\S]*"mcp-routing"[\s\S]*"diagnostics"/);
+  assert.match(app, /<ModelCenterSettingsView[\s\S]*?tab=\{tab\}[\s\S]*?setTab=\{\(nextTab\) => setTab\(nextTab as SettingsTab\)\}/);
+  assert.match(app, /type SettingsTab =[\s\S]*"shortcuts"[\s\S]*"models"[\s\S]*"local-models"[\s\S]*"cloud-models"[\s\S]*"local-api-server"[\s\S]*"mcp-routing"[\s\S]*"diagnostics"/);
 
-  assert.match(settings, /const tabs:[\s\S]*"General"[\s\S]*"Shortcuts"[\s\S]*"Storage & Privacy"[\s\S]*"Local Engines"[\s\S]*"Cloud Providers"[\s\S]*"Local API Server"[\s\S]*"MCP & Tool Routing"[\s\S]*"Diagnostics"/);
+  assert.match(settings, /const tabs:[\s\S]*"Shortcuts"[\s\S]*"Local Models"[\s\S]*"Cloud Models"[\s\S]*"API Server"[\s\S]*"Routing"[\s\S]*"Diagnostics"/);
+  assert.match(settings, /icon: GitBranch/);
+  assert.match(app, /\["mcp-routing", "Routing", GitBranch\]/);
   assert.match(settings, /legacyTabMap/);
-  assert.match(settings, /models:\s*"general"/);
+  assert.match(settings, /models:\s*"local-models"/);
   assert.match(settings, /shortcuts:\s*"shortcuts"/);
-  assert.match(settings, /const \[generalModelsTab, setGeneralModelsTab\] = useState<GeneralModelsTab>\("general"\)/);
+  assert.doesNotMatch(settings, /generalModelsTab/);
   assert.match(settings, /function renderShortcutsTab\(\)/);
-  assert.match(settings, /"Application"/);
+  assert.match(settings, /title:\s*"App"/);
   assert.match(settings, /"Send Message"/);
   assert.match(settings, /"New Line"/);
   assert.match(settings, /"Local Dictation"/);
+  assert.match(settings, /modelCenterSectionLabel modelCenterShortcutSectionLabel/);
   assert.match(settings, /modelCenterShortcutKeys/);
   assert.match(settings, /getSpeakSettings\(\)/);
-  assert.match(settings, /\{ id: "general", label: "General"[\s\S]*\{ id: "installed", label: "Installed"[\s\S]*\{ id: "catalog", label: "Catalog"[\s\S]*\{ id: "providers", label: "Providers"/);
-  assert.match(settings, /Link Local API Server/);
+  assert.match(styles, /\.modelCenterShortcutSectionLabel\s*\{[\s\S]*?border-top:\s*1px solid var\(--border\)[\s\S]*?border-bottom:\s*1px solid var\(--border\)[\s\S]*?background:\s*var\(--surface-raised\)/);
+  assert.match(styles, /\.modelCenterShortcutGroup\s*\{[\s\S]*?gap:\s*0/);
+  assert.match(settings, /type ModelPageTab = "installed" \| "available"/);
+  assert.match(settings, /const modelPageTabs/);
+  assert.match(settings, /designTabs modelCenterDesignTabs/);
+  assert.match(settings, /aria-label=\{label\}/);
+  assert.doesNotMatch(settings, /\{ id: "general", label: "General"/);
+  assert.doesNotMatch(settings, /renderGeneralModelWorkspace/);
+  assert.match(settings, /Installed/);
+  assert.match(settings, /Available/);
+  assert.doesNotMatch(styles, /\.modelCenterPageTabs\s*\{/);
+  assert.match(settings, /Let apps on this Mac use your selected models\./);
+  assert.match(settings, /Start the server and copy the API URL\./);
+  assert.match(settings, /Choose what apps can use/);
+  assert.match(settings, /localApiEndpointUrl/);
   assert.match(settings, /Curated Catalog/);
+  assert.match(settings, /Recommended Telnyx catalog entries come first/);
   assert.match(settings, /Task routing/);
   assert.match(settings, /ACP-hosted agents do not inherit desktop role overrides\./);
   assert.match(settings, /Pull custom model/);
   assert.match(settings, /Import GGUF/);
-  assert.match(settings, /Only lightweight routing-eligible models appear in the task-routing picker\./);
+  assert.match(settings, /Choose the model roles used for task routing and default agent work\./);
+  assert.match(settings, /Run diagnostics/);
+  assert.match(settings, /Check routes/);
+  assert.match(settings, /Check local fit/);
+  assert.match(settings, /Refresh status/);
+  assert.match(styles, /\.modelCenterDiagnosticActions\s*\{/);
 
   assert.match(api, /export interface EngineDefinition/);
   assert.match(api, /export interface EngineStatus/);
@@ -1552,7 +1600,7 @@ test("settings ships the enterprise hybrid Model Center IA", async () => {
 
   assert.match(styles, /\.modelCenterShell\s*\{/);
   assert.match(styles, /\.modelCenterRailNav button\.selected\s*\{/);
-  assert.match(styles, /\.modelCenterDesignTabs\s*\{/);
+  assert.match(styles, /\.modelCenterDesignTabs\s*\{[\s\S]*?align-self:\s*stretch[\s\S]*?width:\s*100%[\s\S]*?min-height:\s*34px[\s\S]*?margin-bottom:\s*14px/);
   assert.match(styles, /\.modelCenterImportRow\s*\{/);
   assert.match(styles, /\.modelCenterLogPanel\s*\{/);
   assert.match(styles, /\.modelCenterBadge\.success\s*\{/);
@@ -1689,6 +1737,7 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.doesNotMatch(styles, /\.windowTitle\s*\{/);
   assert.doesNotMatch(titleBarSource, /<div className="windowTitle">(?:Telnyx )?Link<\/div>/);
   assert.match(app, /titleBarActions/);
+  assert.match(titleBarSource, /signedIn \? \(/);
   assert.match(app, /aria-label=\{terminalOpen \? "Close terminal" : "Open terminal"\}/);
   assert.match(app, /function CodexBottomPanelIcon/);
   assert.match(app, /function CodexLeftSidebarIcon/);
@@ -1708,7 +1757,7 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.doesNotMatch(app, /className=\{`titleBarAction/);
   assert.doesNotMatch(app, /titleBarAction \$\{/);
   assert.match(app, /function TerminalDock/);
-  assert.match(app, /const \[tabs, setTabs\] = useState\(\[\{ id: initialTerminalId, title: "Telnyx Link" \}\]\)/);
+  assert.match(app, /const \[tabs, setTabs\] = useState\(\[\{ id: initialTerminalId, title: "Telnyx Cloud Link" \}\]\)/);
   assert.match(app, /const \[activeTerminalId, setActiveTerminalId\] = useState\(initialTerminalId\)/);
   assert.match(app, /async function addTerminalTab/);
   assert.match(app, /async function closeTerminalTab/);
@@ -1768,8 +1817,12 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.doesNotMatch(styles, /\.titleBarColorInput\s*\{/);
   assert.match(styles, /\.titleBarAction:hover\s*\{[\s\S]*?background:\s*transparent/);
   assert.doesNotMatch(styles, /\.titleBarAction\.selected/);
-  assert.match(styles, /\.desktop\.terminalOpen\s*\{[\s\S]*?grid-template-rows:\s*30px minmax\(0,\s*1fr\) minmax\(220px,\s*30vh\)/);
+  assert.match(styles, /\.desktop\.terminalOpen\s*\{[\s\S]*?grid-template-rows:\s*30px minmax\(0,\s*1fr\) clamp\(260px,\s*34vh,\s*380px\)/);
+  assert.match(styles, /\.desktop\.terminalOpen \.pageSectionShell\s*\{[\s\S]*?min-height:\s*0/);
+  assert.match(styles, /\.mainPane\s*\{[\s\S]*?overflow:\s*hidden/);
+  assert.match(styles, /\.appSurface\s*\{[\s\S]*?overflow:\s*hidden/);
   assert.match(styles, /\.terminalDock\s*\{[\s\S]*?grid-template-rows:\s*40px minmax\(0,\s*1fr\) 38px/);
+  assert.match(app, /return "Telnyx Cloud Link % "/);
   assert.match(styles, /\.terminalDockTabs\s*\{/);
   assert.match(styles, /\.terminalDockTab\.selected\s*\{/);
   assert.match(styles, /\.terminalDockTabClose\s*\{/);
@@ -1826,7 +1879,7 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.match(main, /new URL\(targetUrl, `\$\{baseUrl\}\/`\)/);
   assert.match(app, /id:\s*linkGettingStartedAgentId/);
   assert.match(app, /displayName:\s*linkGettingStartedAgentName/);
-  assert.match(app, /Central OpenClaw agent for Link app help/);
+  assert.match(app, /Central OpenClaw agent for Cloud Link app help/);
   assert.match(app, /telnyx-link-bookmarked-agents/);
   assert.match(app, /agent\.id !== "slack-bot-troubleshooting"/);
   assert.doesNotMatch(app, /<em>\{agent\.source\}<\/em>/);
@@ -1896,7 +1949,7 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.match(app, /toggleDeployAppMode\(true\)/);
   assert.match(app, /designSystemSessionPreferences/);
   assert.match(app, /designSystemSessionStorageKey/);
-  assert.match(app, /Use Link design system/);
+  assert.match(app, /Use Cloud Link design system/);
   assert.match(app, /setSessionDesignSystemPreference/);
   assert.doesNotMatch(app, /pullRequestMode/);
   assert.match(app, /createSkillMode/);
@@ -1905,7 +1958,7 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.match(app, /Local skill workflow:[\s\S]*?only installed for their agents/);
   assert.match(app, /Skill publishing workflow:[\s\S]*?telnyx-clawdbot-skills/);
   assert.match(app, /Edge app deployment workflow:[\s\S]*?Telnyx Edge Compute app/);
-  assert.match(app, /Link design system instruction:[\s\S]*?embedded Link tool/);
+  assert.match(app, /Cloud Link design system instruction:[\s\S]*?embedded Cloud Link tool/);
   assert.match(app, /Primary actions in page headers and section headers use the shared 40px top-control height/);
   assert.match(app, /Middle-section tables use the shared chatSessionRows\/chatResultRow pattern/);
   assert.match(app, /For middle-section tables, use the standard Link table rhythm:[\s\S]*?whole-row click targets/);
@@ -2036,6 +2089,9 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.match(app, /https:\/\/developers\.telnyx\.com\/docs\/overview/);
   assert.match(styles, /\.docsSuggestionButton,\s*\n\.runtimeSettingsButton\s*{/);
   assert.match(styles, /\.runtimeSettingsButton\s*{/);
+  assert.match(styles, /\.phoneSetupAlert\s*\{[\s\S]*?container-type:\s*inline-size/);
+  assert.match(styles, /@container \(max-width:\s*440px\)\s*\{[\s\S]*?\.phoneSetupAlert\s*\{[\s\S]*?grid-template-columns:\s*36px minmax\(0,\s*1fr\)/);
+  assert.match(styles, /@container \(max-width:\s*440px\)\s*\{[\s\S]*?\.phoneSetupAlert \.runtimeSettingsButton\s*\{[\s\S]*?grid-column:\s*2[\s\S]*?justify-self:\s*start/);
   assert.match(main, /aidaAgentRouteInstruction/);
   assert.match(main, /createAidaAgentHandoff/);
   assert.match(main, /install LiteLLM for local chat, or select an explicit Telnyx Cloud route/);
@@ -2268,10 +2324,20 @@ test("chats page uses compact session table rows and a detail review page", asyn
   assert.doesNotMatch(app, /No docs yet/);
   assert.match(app, /type WikiWorkspaceDocFormat = "markdown" \| "rich-text"/);
   assert.match(app, /format: "rich-text"/);
-  assert.match(app, /aria-label="Document editor mode"/);
+  assert.match(app, /className=\{`chatSessionRows directoryTable wikiWorkspaceDraftTable/);
+  assert.match(app, /aria-label="Saved drafts and docs"/);
+  assert.match(app, /className="chatResultRow directoryResultRow wikiWorkspaceDraftRow chatResultRowHead"/);
+  assert.doesNotMatch(app, /<small>\{doc\.format === "rich-text" \? "Rich text" : "Markdown"\}<\/small>/);
+  assert.doesNotMatch(app, /<span role="columnheader">Source<\/span>/);
+  assert.doesNotMatch(app, /<span role="columnheader">Words<\/span>/);
+  assert.match(styles, /\.wikiWorkspaceDraftRow\s*\{[\s\S]*?grid-template-columns:\s*minmax\(240px,\s*1fr\) minmax\(120px,\s*160px\) var\(--table-action-column-width\)/);
+  assert.match(app, /className="wikiWorkspaceShell wikiWorkspaceDocsShell wikiWorkspaceEditorMode"/);
+  assert.match(app, /onClick=\{\(\) => setSelectedWikiWorkspaceDocId\(""\)\}/);
+  assert.doesNotMatch(app, /<strong>Your drafts<\/strong>[\s\S]*?New draft/);
+  assert.match(styles, /\.wikiWorkspaceBodyField\s*\{[\s\S]*?gap:\s*0/);
   assert.match(app, /Rich text/);
   assert.match(app, /Markdown/);
-  assert.match(app, /className="miniToggle wikiWorkspaceGrammarToggle"/);
+  assert.match(app, /aria-label="Document options"/);
   assert.doesNotMatch(app, /title="Grammar check"/);
   assert.doesNotMatch(app, /No outputs yet/);
   assert.match(app, /chatReviewPane phoneContentTable/);
@@ -2454,6 +2520,18 @@ test("chats page uses compact session table rows and a detail review page", asyn
   assert.match(styles, /\.archiveTabsSurface\.compact/);
 });
 
+test("top-level page titles only keep Cloud Link breadcrumb where intended", async () => {
+  const app = await readFile("src/renderer/App.tsx", "utf8");
+
+  assert.match(app, /<PageSectionHeader parent="Cloud Link" title="Get Started" \/>/);
+  assert.match(app, /<PageSectionHeader parent="Cloud Link" title=\{settingsHeadingTitle\} action=\{settingsHeaderAction\} \/>/);
+  assert.match(app, /<PageSectionHeader[\s\S]*?parent=""[\s\S]*?title="Gateway"/);
+  assert.match(app, /<PageSectionHeader parent="" title=\{activeStorageLabel\} action=\{storageHeaderAction\} \/>/);
+  assert.match(app, /<PageSectionHeader parent="" title=\{activeWikiWorkspaceMeta\?\.title \?\? activeWikiSourceTab\.title\} action=\{wikiHeaderAction\} \/>/);
+  assert.match(app, /const sectionParent = headerParent \?\? ""/);
+  assert.doesNotMatch(app, /headerParent="Cloud Link"/);
+});
+
 test("chat sessions are selectable without the global top tab bar", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
   const api = await readFile("src/renderer/api.ts", "utf8");
@@ -2474,12 +2552,13 @@ test("chat sessions are selectable without the global top tab bar", async () => 
 test("main process has v2 state, live-ready adapters, and Taskbox review flow", async () => {
   const main = await readFile("src/main/main.js", "utf8");
   const app = await readFile("src/renderer/App.tsx", "utf8");
+  const api = await readFile("src/renderer/api.ts", "utf8");
   const preload = await readFile("src/main/preload.cjs", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
 
   assert.match(main, /const stateVersion = 16/);
   assert.match(main, /saved\.version === stateVersion \|\| saved\.version === 14 \|\| saved\.version === 13 \|\| saved\.version === 12 \|\| saved\.version === 11 \|\| saved\.version === 10 \|\| saved\.version === 9 \|\| saved\.version === 8 \|\| saved\.version === 7 \|\| saved\.version === 6 \|\| saved\.version === 5 \|\| saved\.version === 4/);
-  assert.match(main, /const defaultAuthInternalUrl = ""/);
+  assert.match(main, /const defaultAuthInternalUrl = "https:\/\/auth-internal\.query\.prod\.telnyx\.io:6674"/);
   assert.match(main, /const defaultHindsightUrl = ""/);
   assert.match(main, /const defaultAidaMcpUrl = ""/);
   assert.match(main, /const defaultLinkAppPublisherUrl = ""/);
@@ -2494,10 +2573,7 @@ test("main process has v2 state, live-ready adapters, and Taskbox review flow", 
   assert.match(main, /configuredInternalServiceUrl\(credentialValue\("LINK_APP_PUBLISHER_URL"\) \|\| process\.env\.LINK_APP_PUBLISHER_URL \|\| defaultLinkAppPublisherUrl, "LINK_APP_PUBLISHER_URL"\)/);
   assert.match(main, /configuredInternalServiceUrl\(credentialValue\("LINK_SKILL_REGISTRY_URL"\) \|\| process\.env\.LINK_SKILL_REGISTRY_URL \|\| defaultSkillRegistryUrl, "LINK_SKILL_REGISTRY_URL"\)/);
   assert.match(main, /configuredInternalServiceUrl\(credentialValue\("LINK_MESSAGE_GATEWAY_URL"\) \|\| process\.env\.LINK_MESSAGE_GATEWAY_URL \|\| defaultMessageGatewayUrl, "LINK_MESSAGE_GATEWAY_URL"\)/);
-  assert.doesNotMatch(main, /auth-[a-z]+\.query\.prod\.telnyx\.io/);
-  assert.doesNotMatch(main, /api-[a-z]+\.telnyx\.com/);
-  assert.doesNotMatch(main, /\.internal\.telnyx\.com/);
-  assert.doesNotMatch(app, /\.internal\.telnyx\.com/);
+  assert.match(main, /const defaultAgentControlPlaneUrl = "https:\/\/agent-control-plane\.query\.prod\.telnyx\.io:8000"/);
   assert.match(main, /link:skill-registry-event/);
   assert.match(main, /link:list-tool-catalog/);
   assert.match(main, /link:publish-tool-manifest/);
@@ -2571,7 +2647,7 @@ test("main process has v2 state, live-ready adapters, and Taskbox review flow", 
   assert.match(main, /listAccountPhoneNumbers/);
   assert.match(main, /const defaultA2aDiscoveryUrl = ""/);
   assert.match(main, /configuredInternalServiceUrl\(process\.env\.A2A_DISCOVERY_URL \|\| defaultA2aDiscoveryUrl, "A2A_DISCOVERY_URL"\)/);
-  assert.doesNotMatch(main, /a2a-discovery\.query\.prod\.telnyx\.io:4000/);
+  assert.match(api, /Sign in with Telnyx Okta to use hosted agents and internal workspace tools\./);
   assert.match(main, /\/api\/agents\?page=1&page_size=50/);
   assert.match(main, /telnyxDocsSources/);
   assert.doesNotMatch(main, /GitHub Markdown source of truth/);
@@ -2796,8 +2872,8 @@ test("phone page links existing Telnyx numbers and keeps calling controls in the
   assert.doesNotMatch(app, /Telnyx API key<\/span>/);
   assert.match(app, /Add your Telnyx API key in Settings/);
   assert.match(app, /Telnyx Voice AI assistants/);
-  assert.match(app, /\["assistants", "Assistants", Bot\]/);
-  assert.match(app, /view === "phone"[\s\S]*?tab="calls"[\s\S]*?hideSectionSidebar[\s\S]*?headerParent="Link"/);
+  assert.match(app, /\["assistants", "Voice AI", Bot\]/);
+  assert.match(app, /view === "phone"[\s\S]*?tab=\{phoneTab\}[\s\S]*?setTab=\{setPhoneTab\}/);
   assert.match(app, /tab === "contacts" \|\| tab === "assistants" \|\| tab === "numbers"/);
   assert.match(app, /settingsPhoneView/);
   assert.match(app, /hideHeader/);
@@ -2823,13 +2899,16 @@ test("phone page links existing Telnyx numbers and keeps calling controls in the
   assert.doesNotMatch(dialerConfig, /name: "Support"/);
   assert.match(dialerConfig, /id: "local-calling"/);
   assert.match(dialerConfig, /enabledFeatures: \["local-calling", "crm", "transcription", "recording", "notes", "salesforce-notes-sync", "dispositions", "analytics"\]/);
+  assert.match(softphone, /normalizeDialerConfig/);
+  assert.match(softphone, /const config = useMemo\(\(\) => normalizeDialerConfig\(rawConfig\), \[rawConfig\]\)/);
+  assert.match(softphone, /function defaultRecordingEnabled\(config: Partial<DialerConfig> \| null \| undefined\)/);
   assert.match(softphone, /const localCallingByDefault = config\.showCountryPrefix/);
   assert.match(softphone, /resolveDialDestination/);
   assert.match(builder, /Allow local calling without country code by default/);
   assert.match(builder, /Add local country code/);
   assert.match(dialerConfig, /actions: \["mute", "hold", "transfer", "end", "speaker", "record"\]/);
   assert.doesNotMatch(builder, /Reset draft/);
-  assert.match(app, /const settingsHeaderAction = tab === "dialer" \? dialerBuilderActions : tab === "models" \? \([\s\S]*?: tab === "wiki"/);
+  assert.match(app, /const settingsHeaderAction = tab === "dialer" \? dialerBuilderActions : tab === "mcps" \? \([\s\S]*?Add MCP[\s\S]*?: tab === "wiki"/);
   assert.doesNotMatch(app, /<div className="tabPageActionBar">\{dialerBuilderActions\}<\/div>/);
   assert.match(app, /Refresh assistants/);
   assert.match(app, /phoneAssistantTable/);
@@ -3089,6 +3168,8 @@ test("phone page links existing Telnyx numbers and keeps calling controls in the
   assert.match(softphone, /\}, \[initialDialNumber, initialDialNumberRequestId, isInCall\]\)/);
   assert.match(softphone, /setStatusText\("Ready to call"\)/);
   assert.doesNotMatch(softphone, /await connectWebRtc\(status\);/);
+  assert.match(styles, /\.linkSoftphoneSetup\s*\{[\s\S]*?grid-template-columns:\s*38px minmax\(0,\s*1fr\) auto[\s\S]*?align-items:\s*start/);
+  assert.match(styles, /\.linkSoftphoneSetup \.runtimeSettingsButton\s*\{[\s\S]*?justify-self:\s*end[\s\S]*?white-space:\s*nowrap/);
   assert.match(softphone, /linkSoftphoneSearchMenu/);
   assert.match(softphone, /Invite bot/);
   assert.match(softphone, /Include Bot/);
@@ -3242,6 +3323,21 @@ test("phone page links existing Telnyx numbers and keeps calling controls in the
   assert.doesNotMatch(app, /panelPhoneFeature/);
   assert.doesNotMatch(styles, /\.panelPhoneFeature/);
   assert.doesNotMatch(app, /Link can handle the phone number, dialer, and Voice AI setup for you\./);
+});
+
+test("call assistant normalizes partial dialer config before rendering", async () => {
+  const softphone = await readFile("src/renderer/phone/softphone.tsx", "utf8");
+
+  assert.match(softphone, /normalizeDialerConfig/);
+  assert.match(softphone, /import \* as TelnyxWebRtc from "@telnyx\/webrtc"/);
+  assert.doesNotMatch(softphone, /import \{ TelnyxRTC \} from "@telnyx\/webrtc"/);
+  assert.match(softphone, /type TelnyxRtcConstructor = new \(input: Record<string, unknown>\) => SdkClient/);
+  assert.match(softphone, /const telnyxWebRtcModule = TelnyxWebRtc as unknown as \{ TelnyxRTC\?: TelnyxRtcConstructor; default\?: \{ TelnyxRTC\?: TelnyxRtcConstructor \} \}/);
+  assert.match(softphone, /telnyxWebRtcModule\.default/);
+  assert.match(softphone, /config: rawConfig/);
+  assert.match(softphone, /const config = useMemo\(\(\) => normalizeDialerConfig\(rawConfig\), \[rawConfig\]\)/);
+  assert.match(softphone, /function defaultRecordingEnabled\(config: Partial<DialerConfig> \| null \| undefined\)/);
+  assert.match(softphone, /const normalizedConfig = normalizeDialerConfig\(config\)/);
 });
 
 test("calendar page uses Google Calendar events for meetings, calls, and descriptions", async () => {
@@ -3537,7 +3633,7 @@ test("agents page includes search and squad filtering for discovered agents", as
   assert.doesNotMatch(app, /Use agent/);
   assert.doesNotMatch(app, /activeAgent\?\.id === agent\.id \? "Active" : "Use agent"/);
   assert.doesNotMatch(app, /setActiveAgent\(\{ id: agent\.id, displayName: agent\.displayName \}\)/);
-  assert.match(app, /type SettingsTab =[\s\S]*"general"[\s\S]*"models"[\s\S]*"assistants"[\s\S]*"wiki"/);
+  assert.match(app, /type SettingsTab =[\s\S]*"models"[\s\S]*"assistants"[\s\S]*"wiki"/);
   assert.match(app, /tab=\{settingsTab\}/);
   assert.doesNotMatch(app, /setSetupTab/);
   assert.match(app, /\["plugins", "Plugins", Link2\]/);
@@ -3645,6 +3741,107 @@ test("agents page includes search and squad filtering for discovered agents", as
   assert.match(styles, /\.agentEmojiPicker\s*{/);
   assert.match(styles, /\.agentEmojiPicker button\.selected\s*{/);
   assert.match(styles, /\.desktop select\s*\{[\s\S]*?background-position:\s*right 9px center/);
+});
+
+test("custom MCP servers are manageable from Settings", async () => {
+  const main = await readFile("src/main/main.js", "utf8");
+  const preload = await readFile("src/main/preload.cjs", "utf8");
+  const api = await readFile("src/renderer/api.ts", "utf8");
+  const app = await readFile("src/renderer/App.tsx", "utf8");
+  const styles = await readFile("src/renderer/styles.css", "utf8");
+
+  assert.match(main, /secureIpcHandle\("link:list-custom-mcps"/);
+  assert.match(main, /secureIpcHandle\("link:save-custom-mcp"/);
+  assert.match(main, /secureIpcHandle\("link:test-custom-mcp"/);
+  assert.match(main, /secureIpcHandle\("link:set-custom-mcp-enabled"/);
+  assert.match(main, /secureIpcHandle\("link:delete-custom-mcp"/);
+  assert.match(main, /const customMcpTokenPrefix = "CUSTOM_MCP_TOKEN_"/);
+  assert.match(main, /customMcpServers = useSavedState && Array\.isArray\(saved\.customMcpServers\)/);
+  assert.match(main, /listCustomMcpServerConnectors/);
+  assert.match(main, /listCustomMcpTools/);
+  assert.match(main, /fetchCustomMcpJsonRpcTools/);
+  assert.match(main, /postCustomMcpJsonRpc\(server, "tools\/list"/);
+  assert.match(main, /fetchCustomMcpRegistryTools\(server, "\/mcp-registry\/tools"/);
+  assert.match(main, /fetchCustomMcpRegistryTools\(server, "\/tools"/);
+  assert.match(main, /saveSecureCredential\(credentialName, token\)/);
+
+  assert.match(preload, /listCustomMcps: \(\) => ipcRenderer\.invoke\("link:list-custom-mcps"\)/);
+  assert.match(preload, /saveCustomMcp: \(input\) => ipcRenderer\.invoke\("link:save-custom-mcp", input\)/);
+  assert.match(preload, /testCustomMcp: \(input\) => ipcRenderer\.invoke\("link:test-custom-mcp", input\)/);
+  assert.match(preload, /setCustomMcpEnabled: \(input\) => ipcRenderer\.invoke\("link:set-custom-mcp-enabled", input\)/);
+  assert.match(preload, /deleteCustomMcp: \(id\) => ipcRenderer\.invoke\("link:delete-custom-mcp", id\)/);
+
+  assert.match(api, /export interface CustomMcpServer/);
+  assert.match(api, /listCustomMcps\(\): Promise<CustomMcpServer\[\]>/);
+  assert.match(api, /saveCustomMcp\(input: CustomMcpServerInput\): Promise<CustomMcpServer\[\]>/);
+  assert.match(api, /testCustomMcp\(input: CustomMcpServerInput \| string\): Promise<CustomMcpTestResult>/);
+  assert.match(api, /setCustomMcpEnabled\(input: \{ id: string; enabled: boolean \}\): Promise<CustomMcpServer\[\]>/);
+  assert.match(api, /deleteCustomMcp\(id: string\): Promise<CustomMcpServer\[\]>/);
+  assert.match(api, /previewCustomMcpConnectors/);
+  assert.match(api, /previewCustomMcpTools/);
+
+  assert.match(app, /Add MCP/);
+  assert.match(app, /linkApi\.listCustomMcps/);
+  assert.match(app, /linkApi\.saveCustomMcp/);
+  assert.match(app, /linkApi\.testCustomMcp/);
+  assert.match(app, /linkApi\.setCustomMcpEnabled/);
+  assert.match(app, /linkApi\.deleteCustomMcp/);
+  assert.match(app, /customMcpServerIdFromConnectorId/);
+  assert.match(app, /customMcpEditor/);
+  assert.match(app, /customMcpRowActions/);
+  assert.match(app, /Clear saved bearer token/);
+  assert.match(app, /Test connection/);
+
+  assert.match(styles, /\.settingsMcpsDirectoryTable \.settingsDirectoryResultRow/);
+  assert.match(styles, /\.customMcpRowActions/);
+  assert.match(styles, /\.customMcpCheckboxField/);
+});
+
+test("Merge.dev employee plugins are gated and manageable from Plugins", async () => {
+  const main = await readFile("src/main/main.js", "utf8");
+  const preload = await readFile("src/main/preload.cjs", "utf8");
+  const api = await readFile("src/renderer/api.ts", "utf8");
+  const app = await readFile("src/renderer/App.tsx", "utf8");
+
+  assert.match(main, /const defaultMergeAgentHandlerMcpUrl = "https:\/\/ah-api\.merge\.dev\/mcp"/);
+  assert.match(main, /id: "merge-dev"/);
+  assert.match(main, /secureIpcHandle\("link:list-employee-plugins"/);
+  assert.match(main, /secureIpcHandle\("link:save-employee-plugin"/);
+  assert.match(main, /secureIpcHandle\("link:set-employee-plugin-enabled"/);
+  assert.match(main, /secureIpcHandle\("link:delete-employee-plugin"/);
+  assert.match(main, /secureIpcHandle\("link:connect-merge-dev"/);
+  assert.match(main, /employeePlugins = useSavedState && Array\.isArray\(saved\.employeePlugins\)/);
+  assert.match(main, /listEmployeePluginConnectors/);
+  assert.match(main, /listEmployeePluginTools/);
+  assert.match(main, /Connect Merge\.dev before adding employee plugins/);
+  assert.match(main, /saveSecureCredential\(mergeAgentHandlerMcpUrlField, defaultMergeAgentHandlerMcpUrl\)/);
+
+  assert.match(preload, /listEmployeePlugins: \(\) => ipcRenderer\.invoke\("link:list-employee-plugins"\)/);
+  assert.match(preload, /saveEmployeePlugin: \(input\) => ipcRenderer\.invoke\("link:save-employee-plugin", input\)/);
+  assert.match(preload, /setEmployeePluginEnabled: \(input\) => ipcRenderer\.invoke\("link:set-employee-plugin-enabled", input\)/);
+  assert.match(preload, /deleteEmployeePlugin: \(id\) => ipcRenderer\.invoke\("link:delete-employee-plugin", id\)/);
+  assert.match(preload, /connectMergeDev: \(\) => ipcRenderer\.invoke\("link:connect-merge-dev"\)/);
+
+  assert.match(api, /export interface EmployeePlugin/);
+  assert.match(api, /listEmployeePlugins\(\): Promise<EmployeePlugin\[\]>/);
+  assert.match(api, /saveEmployeePlugin\(input: EmployeePluginInput\): Promise<EmployeePlugin\[\]>/);
+  assert.match(api, /setEmployeePluginEnabled\(input: \{ id: string; enabled: boolean \}\): Promise<EmployeePlugin\[\]>/);
+  assert.match(api, /deleteEmployeePlugin\(id: string\): Promise<EmployeePlugin\[\]>/);
+  assert.match(api, /connectMergeDev\(\): Promise<MergeDevConnectionResult>/);
+  assert.match(api, /previewEmployeePluginConnectors/);
+  assert.match(api, /previewEmployeePluginTools/);
+
+  assert.match(app, /New Plugin/);
+  assert.match(app, /Connect Merge\.dev to add employee plugins/);
+  assert.match(app, /Merge\.dev Agent Handler/);
+  assert.match(app, /linkApi\.listEmployeePlugins/);
+  assert.match(app, /linkApi\.saveEmployeePlugin/);
+  assert.match(app, /linkApi\.setEmployeePluginEnabled/);
+  assert.match(app, /linkApi\.deleteEmployeePlugin/);
+  assert.match(app, /linkApi\.connectMergeDev/);
+  assert.match(app, /employeePluginForConnector/);
+  assert.match(app, /customMcpRowActions/);
+  assert.match(app, /group\.id === "merge-dev"/);
 });
 
 test("local credentials stay out of source and Okta password storage is not supported", async () => {

@@ -39,7 +39,7 @@ export function buildPhoneWorkspaceViewModel(input = {}) {
     ? null
     : {
         title: "Call history is not connected",
-        body: capability?.message || "Save TELNYX_API_KEY to load calls, numbers, and assistants.",
+        body: capability?.message || "Save a Telnyx API Key to load calls, numbers, and assistants.",
         action: surfaceAction({
           id: "open-settings",
           label: "Open settings",
@@ -102,7 +102,7 @@ export function buildPhoneWorkspaceViewModel(input = {}) {
           ? {
               kind: "setup_required",
               title: "Call history is not connected",
-              body: capability?.message || "Save TELNYX_API_KEY to load calls and assistants.",
+              body: capability?.message || "Save a Telnyx API Key to load calls and assistants.",
               cta: surfaceAction({ id: "open-settings", label: "Open settings", kind: "menu" }),
             }
           : {
@@ -172,7 +172,7 @@ export function buildPhoneWorkspaceViewModel(input = {}) {
         label: "Refresh",
         kind: "menu",
         enabled: ready,
-        reason: ready ? "" : "Save TELNYX_API_KEY first.",
+        reason: ready ? "" : "Save a Telnyx API Key first.",
       }),
     },
     setupState,
@@ -522,7 +522,7 @@ function summarizeCallFilters({ agentFilter, directionFilter, statusFilter }) {
 }
 
 function callWorkspaceSubtitle({ ready, query, visibleNumbers, totalNumbers }) {
-  if (!ready) return "Save TELNYX_API_KEY to load recent calls and assistants.";
+  if (!ready) return "Save a Telnyx API Key to load recent calls and assistants.";
   if (query) return `${visibleNumbers} ${visibleNumbers === 1 ? "number" : "numbers"} match "${query}".`;
   return `${visibleNumbers} of ${totalNumbers} ${totalNumbers === 1 ? "number" : "numbers"} visible.`;
 }

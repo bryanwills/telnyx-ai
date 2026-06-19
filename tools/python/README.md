@@ -15,11 +15,14 @@ pip install telnyx-agent-toolkit[openai]
 pip install telnyx-agent-toolkit[langchain]
 
 # With CrewAI support
-pip install telnyx-agent-toolkit[crewai]
+# Install a security-reviewed CrewAI distribution separately, then:
+pip install telnyx-agent-toolkit
 
 # Everything
 pip install telnyx-agent-toolkit[all]
 ```
+
+The toolkit keeps a CrewAI adapter, but it does not install CrewAI automatically. Current CrewAI dependency trees can pull unresolved `chromadb` and `diskcache` advisories into lockfiles, so teams should install a vetted CrewAI build from their own dependency policy.
 
 ## Quick Start
 

@@ -1,6 +1,6 @@
-# Telnyx Link Instructions
+# Telnyx Cloud Link Instructions
 
-This package contains the local Telnyx Link runtime plus the managed-service contracts that the desktop app consumes.
+This package contains the local Telnyx Cloud Link runtime plus the managed-service contracts that the desktop app consumes.
 
 Preserve these boundaries:
 

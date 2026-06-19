@@ -100,6 +100,7 @@ button {
 }
 
 .desktop {
+  --terminal-dock-height: 0px;
   display: grid;
   grid-template-rows: 30px minmax(0, 1fr);
   width: 100%;
@@ -108,7 +109,16 @@ button {
 }
 
 .desktop.terminalOpen {
-  grid-template-rows: 30px minmax(0, 1fr) minmax(220px, 30vh);
+  --terminal-dock-height: clamp(260px, 34vh, 380px);
+  grid-template-rows: 30px minmax(0, 1fr) var(--terminal-dock-height);
+}
+
+.desktop.terminalOpen .workspace,
+.desktop.terminalOpen .mainPane,
+.desktop.terminalOpen .appSurface,
+.desktop.terminalOpen .pageSurface,
+.desktop.terminalOpen .pageSectionShell {
+  min-height: 0;
 }
 
 .desktop[data-theme="dark"] {
@@ -256,6 +266,7 @@ button {
   display: grid;
   grid-template-columns: 54px 270px minmax(0, 1fr);
   min-height: 0;
+  height: 100%;
   transition: grid-template-columns 160ms ease;
 }
 
@@ -389,6 +400,19 @@ button {
 }
 
 .desktop[data-theme="dark"] .settingsView .pageSectionSidebar button.selected {
+  background: #2d2b28;
+}
+
+.desktop[data-theme="dark"] .phoneView .pageSectionSidebar,
+.desktop[data-theme="dark"] .phoneView .pageSectionSidebarHeading {
+  background: #1b1a19;
+}
+
+.desktop[data-theme="dark"] .phoneView .pageSectionSidebarGroupTitle {
+  background: #242321;
+}
+
+.desktop[data-theme="dark"] .phoneView .pageSectionSidebar button.selected {
   background: #2d2b28;
 }
 
@@ -1256,6 +1280,7 @@ button {
   grid-template-rows: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   background: var(--bg);
 }
 
@@ -1388,6 +1413,7 @@ button {
   min-height: 32px;
   padding: 0 16px;
   border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   color: var(--text-muted);
   background: var(--surface-raised);
   font-size: 10px;
@@ -1553,6 +1579,8 @@ button {
   grid-template-columns: minmax(0, 2fr) minmax(var(--assistant-panel-min-width), var(--assistant-panel-width, 1fr));
   min-width: 0;
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .appSurface.assistantCollapsed {
@@ -2939,6 +2967,54 @@ button {
   margin-top: 0;
 }
 
+.explorerDirectorySection {
+  display: grid;
+}
+
+.explorerDirectoryTable .chatResultRows {
+  scrollbar-gutter: stable;
+}
+
+.explorerDirectoryRow,
+.chatSessionRows:not(.bulkEditing) .explorerDirectoryRow {
+  grid-template-columns:
+    minmax(300px, 1fr)
+    minmax(88px, 0.2fr)
+    minmax(96px, 0.22fr)
+    minmax(84px, auto);
+}
+
+.explorerDirectoryNameCell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.explorerDirectoryNameCell strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorerDirectoryNameCell small {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+  text-transform: none;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.explorerDirectoryActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .explorerResult {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) auto;
@@ -3085,21 +3161,6 @@ button {
   justify-content: space-between;
 }
 
-.helpCenterGuardrail {
-  margin: 0;
-  max-width: 100%;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-style: italic;
-  line-height: 1.45;
-}
-
-.helpCenterGuardrail strong {
-  color: var(--text);
-  font-style: italic;
-  font-weight: 760;
-}
-
 .helpCenterQuestionComposer {
   display: grid;
   gap: 6px;
@@ -3113,9 +3174,9 @@ button {
 
 .helpCenterQuestionComposer textarea {
   width: 100%;
-  min-height: 88px;
+  min-height: 104px;
   resize: vertical;
-  padding: 10px 12px;
+  padding: 18px 20px;
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
@@ -3128,6 +3189,18 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.helpCenterActions {
+  justify-content: flex-end;
+}
+
+.helpCenterActions .button {
+  min-width: 112px;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 8px;
 }
 
 .helpCenterExamples button {
@@ -3835,13 +3908,27 @@ button {
   grid-template-columns: minmax(220px, 0.9fr) minmax(180px, 0.42fr) var(--table-action-column-width);
 }
 
+.ownershipSourceResultRow,
+.chatSessionRows:not(.bulkEditing) .ownershipSourceResultRow {
+  grid-template-columns:
+    minmax(180px, 0.72fr)
+    minmax(96px, 0.24fr)
+    minmax(96px, 0.24fr)
+    minmax(220px, 0.84fr)
+    minmax(132px, 0.28fr)
+    minmax(150px, 0.34fr)
+    var(--table-action-column-width);
+}
+
 .agentDirectoryTable .chatResultRows,
-.skillDirectoryTable .chatResultRows {
+.skillDirectoryTable .chatResultRows,
+.ownershipSourceDirectoryTable .chatResultRows {
   scrollbar-gutter: stable;
 }
 
 .agentDirectoryTable .chatResultRowHead,
-.skillDirectoryTable .chatResultRowHead {
+.skillDirectoryTable .chatResultRowHead,
+.ownershipSourceDirectoryTable .chatResultRowHead {
   margin-right: 0;
 }
 
@@ -3881,6 +3968,110 @@ button {
   grid-template-columns: 44px minmax(0, 1fr) 44px;
 }
 
+.telnyxSetupPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.telnyxSetupHero,
+.telnyxSetupCredentialCard {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.telnyxSetupHero {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+}
+
+.telnyxSetupHeroIcon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  background: rgba(14, 212, 162, 0.12);
+  color: #00664e;
+}
+
+.telnyxSetupHero h2,
+.telnyxSetupSectionHeader h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+.telnyxSetupHero p,
+.telnyxSetupSectionHeader p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.telnyxSetupGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.telnyxSetupGrid > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.telnyxSetupGrid strong {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 820;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.telnyxSetupGrid span {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 820;
+}
+
+.telnyxSetupAlert {
+  margin: 0;
+}
+
+.sessionsSetupAlert {
+  grid-template-columns: 36px minmax(0, 1fr);
+}
+
+.telnyxSetupCredentialCard {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.telnyxSetupCredentialCard .credentialList,
+.telnyxSetupCredentialCard .credentialCard {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .telnyxSetupHero,
+  .telnyxSetupGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .telnyxSetupHero {
+    align-items: start;
+  }
+}
+
 .modelsDirectorySearchRow {
   grid-template-columns: 44px minmax(0, 1fr) 44px;
 }
@@ -3901,6 +4092,11 @@ button {
   padding-bottom: 9px;
 }
 
+.settingsMcpsDirectoryTable .settingsDirectoryResultRow,
+.chatSessionRows:not(.bulkEditing).settingsMcpsDirectoryTable .settingsDirectoryResultRow {
+  grid-template-columns: minmax(280px, 1fr) minmax(110px, 0.16fr) minmax(132px, 0.18fr) minmax(164px, 0.24fr);
+}
+
 .settingsAuthDirectoryTable .settingsDirectoryResultRow,
 .chatSessionRows:not(.bulkEditing).settingsAuthDirectoryTable .settingsDirectoryResultRow {
   grid-template-columns: minmax(300px, 1fr) minmax(132px, 0.2fr) var(--table-action-column-width);
@@ -3910,6 +4106,21 @@ button {
   min-height: var(--table-row-min-height);
   padding-top: 0;
   padding-bottom: 0;
+}
+
+.settingsMcpsDirectoryTable .settingsProviderNameCell {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.customMcpRowActions {
+  gap: 6px;
+}
+
+.customMcpRowActions .iconButton {
+  width: 36px;
+  height: 36px;
 }
 
 .settingsDirectoryFilterBar,
@@ -4420,9 +4631,22 @@ button {
   height: 18px;
 }
 
+.settingsProviderLogoImage {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  object-fit: contain;
+}
+
 .settingsProviderLogoBox.telnyx svg {
   width: 22px;
   height: 22px;
+}
+
+.settingsProviderLogoBox.telnyx .settingsProviderLogoImage {
+  width: 18px;
+  height: 18px;
 }
 
 .settingsProviderLogoBox.github svg {
@@ -4438,6 +4662,11 @@ button {
 .settingsAuthDirectoryTable .settingsProviderLogoBox svg {
   width: 14px;
   height: 14px;
+}
+
+.settingsAuthDirectoryTable .settingsProviderLogoImage {
+  width: 18px;
+  height: 18px;
 }
 
 .settingsAuthDirectoryTable .settingsProviderLogoBox.telnyx svg {
@@ -4737,12 +4966,17 @@ button {
 }
 
 .storagePathRow {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
   padding: 20px 0;
   border-top: 1px solid var(--border-soft);
+}
+
+.storagePathRow > div:first-child {
+  min-width: 0;
 }
 
 .storagePathRow:first-child {
@@ -4761,6 +4995,7 @@ button {
 }
 
 .storagePathValue {
+  width: 100%;
   margin-top: 12px;
   padding: 12px 14px;
   border: 1px solid var(--border-soft);
@@ -4778,8 +5013,14 @@ button {
 .storagePathActions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex-shrink: 0;
+}
+
+.storagePathActions .iconButton {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
 }
 
 .storagePathRow small {
@@ -4829,8 +5070,10 @@ button {
 }
 
 .driveBreadcrumbs button {
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-width: 0;
   border: 0;
   padding: 0;
@@ -4840,8 +5083,10 @@ button {
 }
 
 .driveBreadcrumbs .driveHomeCrumb {
-  width: 34px;
+  width: auto;
+  min-width: 34px;
   height: 34px;
+  padding: 0 12px 0 10px;
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--text);
@@ -5197,6 +5442,25 @@ button {
   height: 100%;
 }
 
+.artifactPublishBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  background: var(--surface-soft);
+  font-size: 12px;
+}
+
+.artifactPublishBar span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .artifactDocument {
   width: 100%;
   min-height: 0;
@@ -5204,6 +5468,20 @@ button {
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
+  background: var(--surface);
+}
+
+.artifactDocument-html {
+  display: flex;
+  overflow: hidden;
+}
+
+.artifactHtmlFrame {
+  width: 100%;
+  min-width: 0;
+  min-height: 480px;
+  height: 100%;
+  border: 0;
   background: var(--surface);
 }
 
@@ -5380,6 +5658,7 @@ body.assistantPanelResizing {
 
 .terminalDock {
   display: grid;
+  grid-row: 3;
   grid-template-rows: 40px minmax(0, 1fr) 38px;
   min-height: 0;
   border-top: 1px solid var(--border);
@@ -5879,6 +6158,10 @@ body.assistantPanelResizing {
   padding: 2px 2px 6px;
 }
 
+.scribeAssistantSetupAlert {
+  margin: 0 2px 2px;
+}
+
 .scribeServerNotice {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -6052,6 +6335,24 @@ body.assistantPanelResizing {
   margin: 0 14px;
 }
 
+.scribeLiveStatusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  margin: 0 14px;
+}
+
+.scribeLiveStatusRow .scribeLiveStatus {
+  min-width: 0;
+  margin: 0;
+}
+
+.scribeLiveStatusRow .button {
+  flex: 0 0 auto;
+}
+
 .scribeComposerActions {
   display: flex;
   align-items: center;
@@ -6067,6 +6368,10 @@ body.assistantPanelResizing {
 }
 
 .assistantChatDock .scribeLiveStatus {
+  margin: 0;
+}
+
+.assistantChatDock .scribeLiveStatusRow {
   margin: 0;
 }
 
@@ -6398,6 +6703,10 @@ body.assistantPanelResizing {
 
 .assistantNotice .button {
   justify-self: start;
+}
+
+.assistantAgentSetupAlert {
+  margin: 0;
 }
 
 .storageSetupSteps {
@@ -8071,6 +8380,16 @@ body.assistantPanelResizing {
   background: var(--surface-raised);
 }
 
+.linkSoftphoneSetup {
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.linkSoftphoneSetup .runtimeSettingsButton {
+  justify-self: end;
+  white-space: nowrap;
+}
+
 .linkSoftphoneSetupIcon {
   display: inline-flex;
   align-items: center;
@@ -9415,6 +9734,13 @@ body.assistantPanelResizing {
   width: 100%;
 }
 
+.phoneDialerBuilder.phoneContentTable {
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+}
+
 .dialerBuilderActions {
   display: flex;
   flex-wrap: wrap;
@@ -9488,11 +9814,6 @@ body.assistantPanelResizing {
 
 .dialerPreview .linkSoftphoneContactCard {
   grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.dialerBuilderSettings,
-.dialerBuilderFeatures {
-  border-right: 0;
 }
 
 .dialerSettingGroup {
@@ -9882,6 +10203,15 @@ body.assistantPanelResizing {
 }
 
 @media (max-width: 520px) {
+  .linkSoftphoneSetup {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .linkSoftphoneSetup .runtimeSettingsButton {
+    grid-column: 2;
+    justify-self: start;
+  }
+
   .linkSoftphoneIdentity,
   .dialerPreview header {
     grid-template-columns: 1fr;
@@ -9923,6 +10253,14 @@ body.assistantPanelResizing {
   align-items: center;
   gap: 12px;
   margin-top: 0;
+}
+
+.agentControlsWithActions {
+  grid-template-columns: minmax(280px, 1fr) auto;
+}
+
+.agentControlsWithActions .toolbarSpacer {
+  display: none;
 }
 
 .agentFilterButton {
@@ -10379,6 +10717,16 @@ body.assistantPanelResizing {
 
 .workboardView {
   overflow-x: hidden;
+}
+
+.taskboxIntroAlert {
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+}
+
+.taskboxIntroAlert > div {
+  min-width: 0;
+  text-align: left;
 }
 
 .workboardSearchRow {
@@ -11016,13 +11364,17 @@ body.assistantPanelResizing {
 .calendarEventDateCell {
   display: grid;
   align-content: center;
+  justify-items: start;
   gap: 3px;
+  text-align: left;
 }
 
 .calendarJoinCell {
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  justify-self: stretch;
+  text-align: left;
 }
 
 .calendarJoinButton {
@@ -11039,6 +11391,8 @@ body.assistantPanelResizing {
   display: grid;
   gap: 3px;
   min-width: 0;
+  justify-items: start;
+  text-align: left;
 }
 
 .calendarEventPrimary,
@@ -11463,6 +11817,7 @@ body.assistantPanelResizing {
 
 .phoneView,
 .agentsView,
+.skillsView,
 .driveView,
 .wikiHubView,
 .settingsView {
@@ -11484,16 +11839,13 @@ body.assistantPanelResizing {
   scroll-padding-bottom: var(--app-bottom-inset);
 }
 
-.agentsView .pageSectionShell {
-  display: block;
-}
-
-.agentsView .pageSectionSidebar {
-  display: none;
-}
-
+.skillsView .pageSectionMain,
 .agentsView .pageSectionMain {
-  overflow: auto;
+  overflow: hidden;
+}
+
+.skillsView .pageSectionShell {
+  min-height: 100%;
 }
 
 .phoneView .pageHeader,
@@ -11627,6 +11979,54 @@ body.assistantPanelResizing {
   height: var(--top-control-height);
   min-height: var(--top-control-height);
   border-radius: calc(var(--top-control-height) / 2);
+}
+
+.phoneContactComposer {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+}
+
+.phoneContactComposerHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.phoneContactComposerHeader h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.phoneContactComposerHeader p {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+}
+
+.phoneContactComposerFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.phoneContactComposerFields .componentField {
+  margin: 0;
+}
+
+.phoneContactComposerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .phoneContactComposerFields {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .phoneContactRows {
@@ -13150,9 +13550,33 @@ body.assistantPanelResizing {
     grid-template-columns: minmax(0, 1fr) var(--table-action-column-width);
   }
 
+  .ownershipSourceResultRow,
+  .chatSessionRows:not(.bulkEditing) .ownershipSourceResultRow {
+    grid-template-columns: minmax(0, 1fr) var(--table-action-column-width);
+  }
+
+  .wikiPersonalWikiRow,
+  .chatSessionRows:not(.bulkEditing) .wikiPersonalWikiRow {
+    grid-template-columns: minmax(0, 1fr) var(--table-action-column-width);
+  }
+
   .agentDirectoryResultRow > span:nth-child(n+2),
   .appDirectoryResultRow > span:nth-child(n+2),
   .skillDirectoryResultRow > span:nth-child(2) {
+    display: none;
+  }
+
+  .ownershipSourceResultRow > span:nth-child(2),
+  .ownershipSourceResultRow > span:nth-child(3),
+  .ownershipSourceResultRow > span:nth-child(4),
+  .ownershipSourceResultRow > span:nth-child(5),
+  .ownershipSourceResultRow > span:nth-child(6) {
+    display: none;
+  }
+
+  .wikiPersonalWikiRow > span:nth-child(2),
+  .wikiPersonalWikiRow > span:nth-child(3),
+  .wikiPersonalWikiRow > span:nth-child(4) {
     display: none;
   }
 
@@ -13178,6 +13602,10 @@ body.assistantPanelResizing {
 
   .availabilitySummary,
   .availabilityDay {
+    grid-template-columns: 1fr;
+  }
+
+  .wikiPersonalWikiStats {
     grid-template-columns: 1fr;
   }
 
@@ -13440,9 +13868,10 @@ body.assistantPanelResizing {
 }
 
 .phoneSetupAlert {
-  display: flex;
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 18px;
   width: 100%;
   margin-bottom: 14px;
@@ -13457,6 +13886,7 @@ body.assistantPanelResizing {
   display: block;
   margin-bottom: 4px;
   font-size: 14px;
+  overflow-wrap: normal;
 }
 
 .phoneSetupAlert p {
@@ -13464,10 +13894,58 @@ body.assistantPanelResizing {
   color: var(--text-muted);
   font-size: 13px;
   line-height: 1.35;
+  overflow-wrap: normal;
 }
 
 .phoneSetupAlert .runtimeSettingsButton {
+  justify-self: end;
   flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.phoneSetupAlert:not(.serviceSetupAlert)::before {
+  content: "";
+}
+
+.serviceSetupAlertIcon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: #00664e;
+  background: rgba(14, 212, 162, 0.12);
+}
+
+.publisherWideField > .serviceSetupAlert {
+  margin-bottom: 0;
+}
+
+@container (max-width: 440px) {
+  .phoneSetupAlert {
+    grid-template-columns: 36px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+
+  .phoneSetupAlert .runtimeSettingsButton {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 520px) {
+  .phoneSetupAlert {
+    grid-template-columns: 36px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+
+  .phoneSetupAlert .runtimeSettingsButton {
+    grid-column: 2;
+    justify-self: start;
+  }
 }
 
 .phoneNumberTable {
@@ -13604,7 +14082,7 @@ body.assistantPanelResizing {
 
 .storageBucketRow {
   display: grid;
-  grid-template-columns: minmax(170px, 1.35fr) minmax(115px, 0.8fr) minmax(150px, 1fr) minmax(180px, 1.15fr) minmax(96px, 0.7fr) auto;
+  grid-template-columns: minmax(180px, 1.35fr) minmax(120px, 0.75fr) minmax(220px, 1.45fr) minmax(104px, 0.65fr) auto;
   align-items: center;
   gap: var(--table-row-gap);
   width: 100%;
@@ -14078,12 +14556,23 @@ body.assistantPanelResizing {
   min-height: 0;
 }
 
+.wikiWorkspaceEditorMode {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .wikiWorkspaceDirectory,
+.wikiWorkspaceDraftsLanding,
 .wikiWorkspaceEditorSurface,
 .wikiWorkspaceRecordCard {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
+}
+
+.wikiWorkspaceDraftsLanding {
+  display: grid;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .wikiWorkspaceDirectory {
@@ -14155,6 +14644,28 @@ body.assistantPanelResizing {
 .wikiWorkspaceDirectoryItem.selected {
   border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
   background: color-mix(in srgb, var(--accent-soft) 35%, #ffffff);
+}
+
+.wikiWorkspaceDraftTable .chatResultRows {
+  max-height: none;
+}
+
+.wikiWorkspaceDraftsLanding > .wikiWorkspaceDraftTable {
+  border: 0;
+  border-radius: 0;
+}
+
+.chatSessionRows:not(.bulkEditing) .wikiWorkspaceDraftRow,
+.wikiWorkspaceDraftRow {
+  grid-template-columns: minmax(240px, 1fr) minmax(120px, 160px) var(--table-action-column-width);
+}
+
+.wikiWorkspaceDraftRow:not(.chatResultRowHead) {
+  cursor: pointer;
+}
+
+.wikiWorkspaceDraftRow > span {
+  min-width: 0;
 }
 
 .wikiWorkspaceEditorSurface {
@@ -14298,6 +14809,10 @@ body.assistantPanelResizing {
 .wikiWorkspaceBodyField {
   display: grid;
   gap: 6px;
+}
+
+.wikiWorkspaceBodyField {
+  gap: 0;
 }
 
 .wikiWorkspaceTitleField span,
@@ -14543,10 +15058,24 @@ body.assistantPanelResizing {
   margin: 0 auto;
 }
 
+.wikiToolbarWithActions {
+  grid-template-columns: 44px minmax(260px, 1fr) auto;
+}
+
+.wikiSourceSearchToolbar {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
 .wikiToolbar .button {
   height: 44px;
   border-radius: 8px;
   white-space: nowrap;
+}
+
+.toolbarSpacer {
+  width: 44px;
+  height: 44px;
 }
 
 .wikiFilterButton {
@@ -14599,6 +15128,45 @@ body.assistantPanelResizing {
 .wikiSection {
   width: min(1120px, 100%);
   margin: 0 auto 12px;
+}
+
+.compactHeaderActions {
+  justify-self: end;
+  justify-content: flex-end;
+}
+
+.compactHeaderActions .button,
+.compactHeaderActions .iconButton {
+  flex: 0 0 auto;
+}
+
+.catalogFilterChips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: min(1120px, 100%);
+  margin: 0 auto 12px;
+}
+
+.catalogFilterChips button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.catalogFilterChips button.selected {
+  color: var(--accent-ink);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 16%, #ffffff);
 }
 
 .tabPageActionBar {
@@ -14705,6 +15273,64 @@ body.assistantPanelResizing {
   box-shadow: none !important;
   background: transparent !important;
   outline: 0;
+}
+
+.wikiSearchFieldStacked {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  height: auto;
+  min-height: 132px;
+  padding: 14px;
+  background: var(--surface);
+}
+
+.wikiSearchFieldLabel {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 820;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.wikiSearchInputLine {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 104px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+
+.wikiSearchFieldStacked textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 68px;
+  resize: vertical;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+  outline: 0;
+  line-height: 1.45;
+}
+
+.wikiSearchActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.wikiSearchActions .button {
+  min-width: 112px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 8px;
 }
 
 .wikiSelectField {
@@ -15189,10 +15815,6 @@ body.assistantPanelResizing {
   background: #fbfaf9;
 }
 
-.settingsView .pageSectionSidebarHeading + .pageSectionSidebarGroup .pageSectionSidebarGroupTitle {
-  border-top: 0;
-}
-
 .settingsView .pageSectionSidebarHeading + .pageSectionSidebarGroup {
   margin-top: var(--top-row-gap);
 }
@@ -15209,6 +15831,35 @@ body.assistantPanelResizing {
 }
 
 .settingsView .pageSectionSidebar button.selected {
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.phoneView .pageSectionSidebar {
+  background: #fbfaf9;
+}
+
+.phoneView .pageSectionSidebarHeading {
+  border-bottom: 1px solid var(--border);
+  background: #fbfaf9;
+}
+
+.phoneView .pageSectionSidebarHeading + .pageSectionSidebarGroup {
+  margin-top: var(--top-row-gap);
+}
+
+.phoneView .pageSectionSidebarGroup {
+  gap: 4px;
+  padding-bottom: 14px;
+}
+
+.phoneView .pageSectionSidebarGroupTitle {
+  min-height: var(--top-control-height);
+  margin-bottom: 4px;
+  background: #f1efeb;
+}
+
+.phoneView .pageSectionSidebar button.selected {
   background: var(--surface);
   box-shadow: none;
 }
@@ -15246,20 +15897,38 @@ body.assistantPanelResizing {
   background: #fbfaf9;
 }
 
+.skillsView .pageSectionSidebar,
+.agentsView .pageSectionSidebar {
+  background: #fbfaf9;
+}
+
 .wikiHubView .pageSectionSidebarHeading {
   border-bottom: 1px solid var(--border);
   background: #fbfaf9;
 }
 
-.wikiHubView .pageSectionSidebarHeading + .pageSectionSidebarGroup .pageSectionSidebarGroupTitle {
-  border-top: 0;
+.skillsView .pageSectionSidebarHeading,
+.agentsView .pageSectionSidebarHeading {
+  border-bottom: 1px solid var(--border);
+  background: #fbfaf9;
 }
 
 .wikiHubView .pageSectionSidebarHeading + .pageSectionSidebarGroup {
   margin-top: var(--top-row-gap);
 }
 
+.skillsView .pageSectionSidebarHeading + .pageSectionSidebarGroup,
+.agentsView .pageSectionSidebarHeading + .pageSectionSidebarGroup {
+  margin-top: var(--top-row-gap);
+}
+
 .wikiHubView .pageSectionSidebarGroup {
+  gap: 4px;
+  padding-bottom: 14px;
+}
+
+.skillsView .pageSectionSidebarGroup,
+.agentsView .pageSectionSidebarGroup {
   gap: 4px;
   padding-bottom: 14px;
 }
@@ -15270,7 +15939,20 @@ body.assistantPanelResizing {
   background: #f1efeb;
 }
 
+.skillsView .pageSectionSidebarGroupTitle,
+.agentsView .pageSectionSidebarGroupTitle {
+  min-height: var(--top-control-height);
+  margin-bottom: 4px;
+  background: #f1efeb;
+}
+
 .wikiHubView .pageSectionSidebar button.selected {
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.skillsView .pageSectionSidebar button.selected,
+.agentsView .pageSectionSidebar button.selected {
   background: var(--surface);
   box-shadow: none;
 }
@@ -15282,10 +15964,6 @@ body.assistantPanelResizing {
 .scribesView .pageSectionSidebarHeading {
   border-bottom: 1px solid var(--border);
   background: #fbfaf9;
-}
-
-.scribesView .pageSectionSidebarHeading + .pageSectionSidebarGroup .pageSectionSidebarGroupTitle {
-  border-top: 0;
 }
 
 .scribesView .pageSectionSidebarHeading + .pageSectionSidebarGroup {
@@ -15369,7 +16047,8 @@ body.assistantPanelResizing {
 
 .onboardingFlowPanelBody {
   display: grid;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  align-content: start;
   min-height: 0;
   padding: 16px;
 }
@@ -16720,6 +17399,10 @@ body.assistantPanelResizing {
   width: 100%;
 }
 
+.domainsSettingsCard .accessCardTitle {
+  align-items: center;
+}
+
 .appVpnSettingsCard,
 .vpnTableSection {
   display: grid;
@@ -16734,6 +17417,10 @@ body.assistantPanelResizing {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.vpnSummaryGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .vpnSummaryGrid strong {
@@ -17163,6 +17850,27 @@ body.assistantPanelResizing {
   background: var(--surface-raised);
 }
 
+.customMcpCheckboxField {
+  display: inline-flex;
+  align-items: center;
+  align-self: end;
+  gap: 8px;
+  min-height: 36px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.customMcpCheckboxField input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.customMcpStatus {
+  margin-top: -2px;
+}
+
 .wikiIconPicker {
   display: flex;
   flex-wrap: wrap;
@@ -17194,9 +17902,137 @@ body.assistantPanelResizing {
   min-width: 0;
 }
 
+.wikiPersonalWikiPage {
+  display: grid;
+  gap: 14px;
+}
+
+.wikiPersonalWikiOverview {
+  display: grid;
+  gap: 14px;
+}
+
+.wikiPersonalWikiStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wikiPersonalWikiStats .appSummaryCard {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-raised);
+}
+
+.wikiPersonalWikiStats .appSummaryCard span,
+.wikiPersonalWikiStats .appSummaryCard small {
+  color: var(--text-muted);
+}
+
+.wikiPersonalWikiStats .appSummaryCard strong {
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.wikiPersonalWikiRow,
+.chatSessionRows:not(.bulkEditing) .wikiPersonalWikiRow {
+  grid-template-columns: minmax(280px, 1fr) minmax(150px, 0.22fr) minmax(160px, 0.2fr) var(--table-action-column-width);
+}
+
+.wikiPersonalWikiNameCell small {
+  display: block;
+}
+
+.wikiAddSourcePage {
+  display: grid;
+  gap: 14px;
+}
+
+.wikiAddSourceModeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.wikiAddSourceModeCard {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface-raised);
+  text-align: left;
+}
+
+.wikiAddSourceModeCard.selected {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 36%, var(--surface-raised));
+}
+
+.wikiAddSourceModeIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.wikiAddSourceModeCard strong,
+.wikiAddSourceModeCard small,
+.wikiAddSourceModeCard em {
+  min-width: 0;
+}
+
+.wikiAddSourceModeCard small,
+.wikiAddSourceModeCard em {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  font-style: normal;
+}
+
+.wikiAddSourceActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wikiAddSourcePrimaryActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wikiAddSourceStatusControl {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.wikiAddSourceStatusLabel {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .wikiSourceRow,
 .chatSessionRows:not(.bulkEditing) .wikiSourceRow {
-  grid-template-columns: minmax(260px, 1fr) minmax(140px, 0.22fr) minmax(132px, 0.2fr) var(--table-action-column-width);
+  grid-template-columns: minmax(220px, 0.9fr) minmax(48px, 0.08fr) minmax(140px, 0.22fr) minmax(132px, 0.2fr) var(--table-action-column-width);
 }
 
 .wikiSourceRow.expanded {
@@ -17228,12 +18064,16 @@ body.assistantPanelResizing {
 
 .wikiSourceNameCell {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
 }
 
-.wikiSourceNameCell > svg {
+.wikiSourceIconCell {
+  justify-content: flex-start;
+  color: var(--text-muted);
+}
+
+.wikiSourceIconCell > svg {
   color: var(--text-muted);
 }
 
@@ -17642,6 +18482,10 @@ body.assistantPanelResizing {
   grid-template-columns: minmax(128px, 168px) minmax(0, 1fr);
 }
 
+.localTtsRuntimeNotice {
+  grid-template-columns: minmax(128px, 168px) minmax(0, 1fr) auto;
+}
+
 .scribesModeNotice strong,
 .scribesRouteNote strong {
   color: var(--text);
@@ -17733,6 +18577,11 @@ body.assistantPanelResizing {
   color: var(--text-muted);
   font-size: 13px;
   line-height: 1.35;
+}
+
+.scribesModelsSearchRow {
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
 }
 
 .scribesServerStrip {
@@ -17840,7 +18689,7 @@ body.assistantPanelResizing {
 
 .scribesModelActions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
 }
 
@@ -18119,16 +18968,28 @@ body.assistantPanelResizing {
 }
 
 .speakSettingField input,
-.speakSettingField select {
+.speakSettingField select,
+.speakSettingField textarea {
   width: 100%;
   min-width: 0;
-  height: 34px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
   color: var(--text);
   font: inherit;
+}
+
+.speakSettingField input,
+.speakSettingField select {
+  height: 34px;
   padding: 0 10px;
+}
+
+.speakSettingField textarea {
+  min-height: 84px;
+  resize: vertical;
+  padding: 10px;
+  line-height: 1.4;
 }
 
 .scribesRouteControl {
@@ -18144,6 +19005,44 @@ body.assistantPanelResizing {
 .scribesRouteSegmented button {
   width: auto;
   padding: 0 14px;
+}
+
+.scribesModeCheckboxes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.scribesModeCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 760;
+}
+
+.scribesModeCheckbox.selected {
+  border-color: rgba(14, 212, 162, 0.58);
+  color: var(--text);
+  background: rgba(14, 212, 162, 0.1);
+}
+
+.scribesModeCheckbox input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.scribeSttSetupAlert {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
 }
 
 .scribesRouteStatus {
@@ -19680,10 +20579,17 @@ body.assistantPanelResizing {
 
 .credentialLogoImage {
   display: block;
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   border-radius: 8px;
   object-fit: cover;
+}
+
+.credentialLogoImageTelnyx {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  object-fit: contain;
 }
 
 .credentialChevron {
@@ -20195,10 +21101,14 @@ body.assistantPanelResizing {
 
 .publisherStatusBody span,
 .publisherStatusBody small {
-  overflow: hidden;
   color: var(--text-muted);
   font-size: 12px;
-  text-overflow: ellipsis;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.publisherStatus .button {
+  align-self: center;
   white-space: nowrap;
 }
 
@@ -20439,6 +21349,28 @@ body.assistantPanelResizing {
   gap: 12px;
 }
 
+.designPanelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.designPanelHeader h3 {
+  margin: 0;
+}
+
+.designPanelHeader > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.designPanelHeader p {
+  margin: 0;
+}
+
 .typeScale h1,
 .typeScale h2,
 .typeScale p {
@@ -20549,6 +21481,21 @@ body.assistantPanelResizing {
   gap: 8px;
 }
 
+.designGuideNotes {
+  display: grid;
+  gap: 8px;
+}
+
+.designGuideNotes > * {
+  margin: 0;
+}
+
+.designGuideNotes ul,
+.designGuideNotes ol {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .agentInstructionPreview {
   display: grid;
   gap: 8px;
@@ -20577,6 +21524,32 @@ body.assistantPanelResizing {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.designInstructionsBlock {
+  max-height: min(72vh, 960px);
+}
+
+.designWidgetEditor {
+  display: grid;
+  gap: 14px;
+}
+
+.designWidgetEditorFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.designWidgetTextarea {
+  min-height: 160px;
+}
+
+.designWidgetEditorActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .demoDesignToggle {
@@ -20952,7 +21925,8 @@ body.assistantPanelResizing {
 	  .vpnSettingsControlGrid,
 	  .vpnDetailGrid,
 	  .wikiSourceMetrics,
-	  .wikiSourceFormGrid {
+	  .wikiSourceFormGrid,
+    .wikiAddSourceModeGrid {
 	    grid-template-columns: 1fr;
 	  }
 
@@ -20968,6 +21942,10 @@ body.assistantPanelResizing {
 	    width: 100%;
 	    justify-self: stretch;
 	  }
+
+    .wikiAddSourceStatusControl {
+      margin-left: 0;
+    }
 
 	  .domainOption {
 	    grid-template-columns: auto auto minmax(0, 1fr);
@@ -21021,7 +21999,7 @@ body.assistantPanelResizing {
 
 	  .wikiSourceRow,
 	  .chatSessionRows:not(.bulkEditing) .wikiSourceRow {
-	    grid-template-columns: minmax(190px, 1fr) minmax(92px, 0.24fr) minmax(86px, 0.18fr) var(--table-action-column-width);
+	    grid-template-columns: minmax(150px, 1fr) minmax(34px, 0.08fr) minmax(92px, 0.24fr) minmax(86px, 0.18fr) var(--table-action-column-width);
 	  }
 
 	  .wikiSourceExpandedDetail {
@@ -21126,6 +22104,11 @@ body.assistantPanelResizing {
 
   .agentControls {
     grid-template-columns: 44px minmax(0, 1fr) 44px;
+  }
+
+  .agentControlsWithActions,
+  .wikiToolbarWithActions {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
   }
 
   .phoneSetupGrid,
@@ -21353,6 +22336,10 @@ body.assistantPanelResizing {
     border-radius: 7px;
   }
 
+  .designWidgetEditorFields {
+    grid-template-columns: 1fr;
+  }
+
   .surfaceAnatomy,
   .designSpecGrid,
   .skillBlueprint,
@@ -21415,6 +22402,11 @@ body.assistantPanelResizing {
   .wikiToolbar,
   .agentControls {
     grid-template-columns: 1fr;
+  }
+
+  .compactHeaderActions {
+    justify-self: stretch;
+    justify-content: flex-start;
   }
 
   .wikiSelectField {
@@ -21571,8 +22563,12 @@ body.assistantPanelResizing {
 
 .modelCenterEmbedded {
   display: grid;
-  gap: 22px;
+  gap: 8px;
   min-width: 0;
+}
+
+.modelCenterEmbedded .modelCenterHeader {
+  margin-bottom: 0;
 }
 
 .modelCenterHeader {
@@ -21600,6 +22596,10 @@ body.assistantPanelResizing {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.modelCenterRouteSetupAlert {
+  margin-bottom: 0;
 }
 
 .modelCenterStack {
@@ -21630,26 +22630,43 @@ body.assistantPanelResizing {
   gap: 18px;
 }
 
-.modelCenterSummaryGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+.modelCenterApiIntro {
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.modelCenterSummaryStat {
+.modelCenterSetupSteps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.modelCenterSetupSteps > div {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
   border: 1px solid var(--border-soft);
   border-radius: 14px;
   background: var(--surface);
-  padding: 14px;
 }
 
-.modelCenterSummaryStat strong {
-  display: block;
-  font-size: 22px;
+.modelCenterSetupSteps strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
 }
 
-.modelCenterSummaryStat span {
-  color: var(--text-dim);
+.modelCenterSetupSteps span {
+  min-width: 0;
+  color: var(--text);
 }
 
 .modelCenterCardHeader {
@@ -21667,6 +22684,53 @@ body.assistantPanelResizing {
 .modelCenterCardHeader p {
   margin: 6px 0 0;
   color: var(--text-dim);
+}
+
+.modelCenterProviderCard {
+  padding: 0;
+}
+
+.modelCenterProviderSummary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 96px;
+  padding: 22px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.modelCenterProviderSummary::-webkit-details-marker {
+  display: none;
+}
+
+.modelCenterProviderSummary h3 {
+  margin: 0;
+}
+
+.modelCenterProviderSummary p {
+  margin: 6px 0 0;
+  color: var(--text-dim);
+}
+
+.modelCenterProviderSummaryActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modelCenterProviderSummaryActions svg {
+  color: var(--text-dim);
+  transition: transform 160ms ease;
+}
+
+.modelCenterProviderCard[open] .modelCenterProviderSummaryActions svg {
+  transform: rotate(180deg);
+}
+
+.modelCenterProviderDetails {
+  padding: 0 22px 22px;
 }
 
 .modelCenterField {
@@ -21780,6 +22844,16 @@ body.assistantPanelResizing {
   flex-wrap: wrap;
 }
 
+.modelCenterDiagnosticActions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.modelCenterDiagnosticActions .button {
+  justify-content: center;
+}
+
 .modelCenterPrimaryActions {
   margin-top: 6px;
   margin-bottom: 4px;
@@ -21823,6 +22897,19 @@ body.assistantPanelResizing {
   margin-top: 8px;
 }
 
+.modelCenterApiSummary > div {
+  position: relative;
+  padding-right: 76px;
+}
+
+.modelCenterApiSummary .button {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-height: 30px;
+  padding: 0 12px;
+}
+
 .modelCenterMetaGrid > div {
   display: grid;
   gap: 4px;
@@ -21844,6 +22931,75 @@ body.assistantPanelResizing {
   gap: 10px;
 }
 
+.modelCenterShortcutGroups {
+  display: grid;
+  gap: 22px;
+}
+
+.modelCenterShortcutTopbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.modelCenterShortcutComposer {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 0.8fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.modelCenterShortcutCapture.capturing {
+  border-color: rgba(0, 227, 170, 0.34);
+  background: rgba(0, 227, 170, 0.08);
+}
+
+.modelCenterShortcutSelect select {
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  padding: 0 10px;
+}
+
+.modelCenterShortcutGroup {
+  display: grid;
+  gap: 0;
+}
+
+.modelCenterShortcutSectionLabel {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: var(--top-control-height);
+  margin: 0 0 4px;
+  padding: 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  background: #f1efeb;
+  font-size: 10px;
+  font-weight: 820;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.modelCenterShortcutList.compact {
+  gap: 0;
+}
+
 .modelCenterRouteRow,
 .modelCenterTableRow,
 .modelCenterCatalogRow,
@@ -21859,12 +23015,166 @@ body.assistantPanelResizing {
   padding: 14px;
 }
 
+.modelCenterRouteRowActionable {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(180px, auto);
+  align-items: center;
+}
+
+.modelCenterRoutePrimary {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.modelCenterRouteFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.modelCenterRouteFacts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.modelCenterRouteFacts b {
+  color: var(--text-muted);
+  font-weight: 820;
+  text-transform: uppercase;
+}
+
+.modelCenterRouteFacts code,
+.modelCenterRouteFacts em {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-style: normal;
+}
+
+.modelCenterRouteActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modelCenterRouteActions .button {
+  white-space: nowrap;
+}
+
+.modelCenterShortcutRow.compact {
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 0;
+  background: transparent;
+  padding: 14px 0;
+}
+
+.modelCenterShortcutList.compact .modelCenterShortcutRow:last-child {
+  border-bottom: 0;
+}
+
+.modelCenterShortcutRowActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .modelCenterRouteRow small,
 .modelCenterTableRow small,
 .modelCenterProviderModelRow small,
 .modelCenterCatalogRow small,
 .modelCenterShortcutRow small {
   display: block;
+  color: var(--text-dim);
+}
+
+.modelCenterShortcutRow.compact small {
+  margin-top: 4px;
+}
+
+.modelCenterActiveModelMeta {
+  display: grid;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.modelCenterActiveModelMeta span {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.modelCenterActiveModelMeta b {
+  flex: 0 0 64px;
+  color: var(--text-muted);
+  font-weight: 780;
+}
+
+.modelCenterActiveModelMeta em {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-style: normal;
+}
+
+.modelCenterRouteDefinitions {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.modelCenterRouteDefinitions h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 820;
+}
+
+.modelCenterRouteDefinitions > div {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.35fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.modelCenterRouteDefinitions code {
+  min-width: 0;
+  color: var(--text);
+  font-family: "SFMono-Regular", ui-monospace, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.modelCenterRouteDefinitions span {
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.modelCenterShortcutEmpty {
+  padding: 14px 0;
   color: var(--text-dim);
 }
 
@@ -21906,40 +23216,107 @@ body.assistantPanelResizing {
 }
 
 .modelCenterDesignTabs {
-  margin-bottom: 0;
-}
-
-.modelCenterTabs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.modelCenterTabs button {
-  min-height: 36px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--text-dim);
-  font: inherit;
-  padding: 0 14px;
-}
-
-.modelCenterTabs button.selected {
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
-  color: var(--text);
+  align-self: stretch;
+  width: 100%;
+  min-height: 34px;
+  margin-bottom: 14px;
 }
 
 .modelCenterImportRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
-  gap: 10px;
-  margin-bottom: 16px;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.modelCenterImportLabel {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.modelCenterImportGroup {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto;
+  gap: 8px;
+  min-width: 0;
 }
 
 .modelCenterImportRow input {
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  padding: 0 12px;
+}
+
+.modelCenterCatalogSearch {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 1 430px;
+  min-width: min(430px, 100%);
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text-dim);
+  padding: 0 12px;
+}
+
+.modelCenterCatalogSearch input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.modelCenterCatalogControls {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(260px, 1fr);
+  align-items: end;
+  gap: 10px;
+  flex: 0 1 720px;
+  min-width: min(720px, 100%);
+}
+
+.modelCenterCatalogControls .modelCenterCatalogSearch {
+  flex: none;
+  min-width: 0;
+  width: 100%;
+}
+
+.modelCenterProviderSelect {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.modelCenterProviderSelect span {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.modelCenterProviderSelect select {
+  width: 100%;
+  min-width: 0;
   min-height: 42px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -21947,6 +23324,27 @@ body.assistantPanelResizing {
   color: var(--text);
   font: inherit;
   padding: 0 12px;
+}
+
+.modelCenterCatalogNotice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: 16px;
+}
+
+.modelCenterCatalogNotice strong {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.modelCenterCatalogNotice p {
+  margin: 0;
+  color: var(--text-dim);
 }
 
 .modelCenterCatalogHeading {
@@ -22022,6 +23420,31 @@ body.assistantPanelResizing {
     grid-template-columns: 1fr;
   }
 
+  .modelCenterImportRow {
+    grid-template-columns: 1fr;
+  }
+
+  .modelCenterImportGroup {
+    grid-template-columns: 1fr;
+  }
+
+  .modelCenterCatalogSearch {
+    flex-basis: 100%;
+  }
+
+  .modelCenterCatalogControls {
+    grid-template-columns: 1fr;
+    flex-basis: 100%;
+  }
+
+  .modelCenterProviderSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .modelCenterProviderSummaryActions {
+    justify-content: space-between;
+  }
+
   .modelCenterRail {
     border-right: 0;
     border-bottom: 1px solid var(--border);
@@ -22033,8 +23456,17 @@ body.assistantPanelResizing {
 
   .modelCenterGrid.two,
   .modelCenterSplitFields,
-  .modelCenterSummaryGrid,
+  .modelCenterSetupSteps,
+  .modelCenterDiagnosticActions,
+  .modelCenterRouteRowActionable,
+  .modelCenterRouteDefinitions > div,
+  .modelCenterCatalogNotice,
   .modelCenterImportRow {
     grid-template-columns: 1fr;
+  }
+
+  .modelCenterRouteMeta,
+  .modelCenterRouteActions {
+    justify-content: flex-start;
   }
 }

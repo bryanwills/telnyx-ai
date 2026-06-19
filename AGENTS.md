@@ -50,21 +50,43 @@ cd tools/python && pip install -e ".[dev]"
 
 Run the relevant package's test suite before declaring a task done. Don't run all of them — pick the one you touched.
 
-For the Telnyx Link desktop shell, use `./script/build_and_run.sh` from the repo root as the default kill/build/run entrypoint. Use `./script/build_and_run.sh --verify` for a launch smoke test. Do not open additional Electron instances for handoff or QA; replace the existing Link process with this script, or quit the active app before launching another one.
+### Local Electron testing
+
+For the Telnyx Cloud Link desktop shell on macOS, use `./script/build_and_run.sh` from the repo root as the default kill/build/run entrypoint. Use `./script/build_and_run.sh --verify` for a launch smoke test and `./script/build_and_run.sh --logs` when you need the unified Electron log stream. Do not open additional Electron instances for handoff or QA; replace the existing Cloud Link process with this script, or quit the active app before launching another one.
+
+For Windows or Linux development, use the package runner from `apps/link-desktop`:
+
+```bash
+cd apps/link-desktop
+npm ci
+npm run dev
+```
+
+For a Windows bundled-renderer smoke test, build first and launch Electron from PowerShell with the renderer path set explicitly:
+
+```powershell
+cd apps/link-desktop
+npm --prefix ../../tools/link run build
+npm run build
+$env:LINK_DESKTOP_RENDERER="dist/renderer/index.html"
+.\node_modules\.bin\electron.cmd .\src\main\main.js
+```
+
+On Linux, use the same build sequence and launch with `LINK_DESKTOP_RENDERER=dist/renderer/index.html ./node_modules/.bin/electron src/main/main.js`.
 
 ### Where things live
 
 | Path                    | What it contains                                                          |
 | ----------------------- | ------------------------------------------------------------------------- |
-| `apps/link-desktop/`    | Electron desktop shell for Telnyx Link.                                   |
+| `apps/link-desktop/`    | Electron desktop shell for Telnyx Cloud Link.                                   |
 | `skills/`               | Canonical agent skills (SKILL.md files). 235+ skills covering messaging, voice, numbers, AI, IoT, WebRTC, Twilio migration. |
 | `providers/claude/`     | Claude Code plugin packaging — synced from `skills/` via `scripts/sync-skills.sh`. Don't edit by hand. |
 | `providers/cursor/`     | Cursor plugin packaging — synced from `skills/` via `scripts/sync-skills.sh`. Don't edit by hand. |
 | `plugins/opencode/`     | OpenCode plugin (auth + TUI for Telnyx-hosted models).                    |
 | `tools/python/`         | Python agent toolkit (PyPI: `telnyx-agent-toolkit`).                      |
 | `tools/typescript/`     | TypeScript agent toolkit (npm).                                           |
-| `tools/link/`           | Telnyx Link local runtime and managed-service contracts for skills, apps, approvals, and shared-channel safety. |
-| `tools/link-skill-registry/` | Private Link Skill Registry Edge service for skill stars, installs/downloads, and run counts. |
+| `tools/link/`           | Telnyx Cloud Link local runtime and managed-service contracts for skills, apps, approvals, and shared-channel safety. |
+| `tools/link-skill-registry/` | Private Cloud Link Skill Registry Edge service for skill stars, installs/downloads, and run counts. |
 | `tools/mcp/`            | MCP proxy server for the generic Telnyx API MCP endpoint.                |
 | `tools/mcp-apps/`       | Focused app-layer MCP servers with MCP Apps UI resources.                |
 | `tools/ffl-cli/`        | Filling-from-life CLI tooling.                                            |
@@ -98,7 +120,7 @@ The capability list in `agent.json` is the source of truth for what Telnyx surfa
 - Markdown: GitHub-flavored. Use ATX headings (`#`, not underlines).
 - One change per PR — don't bundle skill edits with toolkit refactors.
 
-### Link desktop UI guardrails
+### Cloud Link Desktop UI guardrails
 
 - For `apps/link-desktop` middle-section tables, reuse the shared `chatSessionRows` / `chatResultRow` / `directoryResultRow` scaffold instead of inventing a new table primitive.
 - Keep header and body columns on the same grid math. If a table body uses `scrollbar-gutter: stable`, the matching header needs the extra right-side gutter compensation so header tracks resolve to the same width as body rows.

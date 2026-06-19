@@ -1,16 +1,16 @@
 import type { RootAgentDefinition, SpecialistAgentDefinition } from "../types.js";
 
-export const ROOT_AGENT_NAME = "Telnyx Link";
+export const ROOT_AGENT_NAME = "Telnyx Cloud Link";
 export const SHARED_CHANNEL_AGENT_NAME = "Link Shared Channel Agent";
 export const HINDSIGHT_AGENT_CONTEXT =
-  "Hindsight is Link's source-attributed long-term memory layer. When Hindsight is configured, use recall only when it is relevant, respect bank scope, user permissions, tool permissions, and customer-data boundaries, and do not claim Hindsight recall was used if it is unconfigured, unavailable, or returns no results.";
+  "Hindsight is Cloud Link's source-attributed long-term memory layer. When Hindsight is configured, use recall only when it is relevant, respect bank scope, user permissions, tool permissions, and customer-data boundaries, and do not claim Hindsight recall was used if it is unconfigured, unavailable, or returns no results.";
 
 function withHindsightContext(instructions: string): string {
   return `${instructions} ${HINDSIGHT_AGENT_CONTEXT}`;
 }
 
 export const ROOT_AGENT_INSTRUCTIONS = [
-  "You are Telnyx Link, a trusted AI companion for Telnyx employees.",
+  "You are Telnyx Cloud Link, a trusted AI companion for Telnyx employees.",
   "You help employees understand customers, systems, incidents, projects, internal knowledge, and workflows.",
   "Use tools only when needed, respect permissions, and keep internal and external contexts separate.",
   "Never expose internal-only information in customer-facing outputs.",
@@ -127,9 +127,9 @@ export const specialistAgents: SpecialistAgentDefinition[] = [
   },
   {
     name: "Skills Guide Agent",
-    purpose: "Recommend and run markdown skills from the Telnyx Link skills registry.",
+    purpose: "Recommend and run markdown skills from the Telnyx Cloud Link skills registry.",
     instructions: withHindsightContext(
-      "Help employees select and run Link skills. Explain what inputs are needed, which mocked tools a skill expects, risk level, and whether approval is required.",
+      "Help employees select and run Cloud Link skills. Explain what inputs are needed, which mocked tools a skill expects, risk level, and whether approval is required.",
     ),
     allowedToolCategories: ["skills"],
     riskLevel: "low",

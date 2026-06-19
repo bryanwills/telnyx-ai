@@ -300,7 +300,7 @@ export class MessageGatewayService {
     message.deliveries = routes.map((route) => route.delivery).filter((delivery): delivery is MessageGatewayDelivery => Boolean(delivery));
     this.messages.set(message.id, message);
     this.idempotency.set(scopedIdempotencyKey, message.id);
-    this.events.push(this.event(message.id, "message.accepted", "Message envelope accepted by Link Message Gateway.", {
+    this.events.push(this.event(message.id, "message.accepted", "Message envelope accepted by Cloud Link Message Gateway.", {
       transportHint,
       recipients,
     }));
@@ -690,8 +690,8 @@ async function handleMessageGatewayRequest(
     if (options.requireAuth && !isAuthorizedMessageGatewayRequest(request, options.requireAuthContext)) {
       sendJson(response, 401, {
         error: options.requireAuthContext
-          ? "Link Message Gateway requires auth plus Telnyx actor or group context."
-          : "Link Message Gateway requires Okta Rev2 auth or TELNYX_API_KEY.",
+          ? "Cloud Link Message Gateway requires auth plus Telnyx actor or group context."
+          : "Cloud Link Message Gateway requires Okta Rev2 auth or TELNYX_API_KEY.",
       });
       return;
     }
@@ -775,13 +775,13 @@ function withHttpReadinessChecks(
 function messageGatewayMetricsText(): string {
   const uptimeSeconds = Math.max(0, (Date.now() - messageGatewayMetricsStartedAt) / 1000);
   return [
-    "# HELP link_message_gateway_up Link Message Gateway process health.",
+    "# HELP link_message_gateway_up Cloud Link Message Gateway process health.",
     "# TYPE link_message_gateway_up gauge",
     "link_message_gateway_up 1",
-    "# HELP link_message_gateway_http_requests_total Total HTTP requests handled by Link Message Gateway.",
+    "# HELP link_message_gateway_http_requests_total Total HTTP requests handled by Cloud Link Message Gateway.",
     "# TYPE link_message_gateway_http_requests_total counter",
     `link_message_gateway_http_requests_total ${messageGatewayHttpRequestsTotal}`,
-    "# HELP link_message_gateway_process_uptime_seconds Link Message Gateway process uptime in seconds.",
+    "# HELP link_message_gateway_process_uptime_seconds Cloud Link Message Gateway process uptime in seconds.",
     "# TYPE link_message_gateway_process_uptime_seconds gauge",
     `link_message_gateway_process_uptime_seconds ${uptimeSeconds.toFixed(3)}`,
     "",

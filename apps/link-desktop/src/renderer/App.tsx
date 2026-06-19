@@ -17,11 +17,14 @@ import {
   Component,
   Copy,
   Download,
+  Eye,
+  EyeOff,
   ExternalLink,
   FileText,
   Flag,
   FolderOpen,
   Github as GithubIcon,
+  GitBranch,
   Globe,
   Grid2X2,
   Grid2X2Plus,
@@ -78,9 +81,10 @@ import {
   Zap,
   Quote,
 } from "lucide-react";
-import type { ComponentType, CSSProperties, DragEvent, ErrorInfo, FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type { ChangeEvent, ComponentType, CSSProperties, DragEvent, ErrorInfo, FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { Children, Component as ReactComponent, Fragment, isValidElement, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { SettingsView as ModelCenterSettingsView } from "./settings/SettingsView.js";
+import type { DesktopShortcutActionId, DesktopShortcutBinding } from "./settings/SettingsView.js";
 import { displayInboxThreadSender, emailAddressOnly, mergeInboxLatestSenderRecord, preferredInboxSender } from "./inbox-senders.js";
 import type {
   AgentControlPlaneAuthStatus,
@@ -91,7 +95,11 @@ import type {
   ChatMessage,
   ChatSession,
   ConnectorStatus,
+  CustomMcpServer,
+  CustomMcpServerInput,
   CredentialGroupStatus,
+  EmployeePlugin,
+  EmployeePluginInput,
   WikiKit,
   WikiState,
   ExplorerResult,
@@ -105,6 +113,7 @@ import type {
   GoogleInboxThreadSummary,
   HostedAgentSummary,
   KnowledgeAgentAskResponse,
+  LinkHtmlArtifactMaterializationResult,
   AiModelRoute,
   LiteLlmRuntimeStatus,
   LocalStorageWorkspaceEntry,
@@ -123,6 +132,7 @@ import type {
   MessageGatewayMessage,
   MessageGatewayReadiness,
   MessageGatewayTransport,
+  SessionDaemonReadiness,
   LinkPublishedApp,
   LinkPublishedAppRisk,
   LinkPublishedAppStatus,
@@ -146,7 +156,6 @@ import type {
   VpnWorkspace,
   SkillMarkdownResult,
   SkillMetadata,
-  StorageBackupResult,
   StorageBackupStatus,
   StorageBucketSummary,
   ScribesArtifactKind,
@@ -284,18 +293,18 @@ type SkillMarkdownLoadState =
   | { status: "loading" }
   | { status: "ready"; result: SkillMarkdownResult }
   | { status: "error"; message: string };
-type PhoneViewTab = "numbers" | "calls" | "contacts" | "assistants" | "inbox";
+type PhoneViewTab = "numbers" | "calls" | "contacts" | "assistants" | "dialer" | "inbox";
 type SettingsTab =
-  | "general"
   | "shortcuts"
-  | "storage-privacy"
   | "models"
-  | "local-engines"
-  | "cloud-providers"
+  | "local-models"
+  | "cloud-models"
   | "local-api-server"
   | "mcp-routing"
   | "diagnostics"
   | "auth"
+  | "sessions"
+  | "mcps"
   | "plugins"
   | "agentmail"
   | "contacts"
@@ -307,11 +316,9 @@ type SettingsTab =
   | "vpn"
   | "wiki";
 type ModelCenterTab =
-  | "general"
-  | "storage-privacy"
   | "models"
-  | "local-engines"
-  | "cloud-providers"
+  | "local-models"
+  | "cloud-models"
   | "local-api-server"
   | "mcp-routing"
   | "diagnostics";
@@ -326,36 +333,99 @@ type WikiSourceDraft = {
   path: string;
   enabled: boolean;
 };
+type CustomMcpDraft = {
+  id: string;
+  name: string;
+  url: string;
+  description: string;
+  bearerToken: string;
+  clearBearerToken: boolean;
+  enabled: boolean;
+};
+type EmployeePluginDraft = {
+  id: string;
+  name: string;
+  description: string;
+  audience: string;
+  toolPack: string;
+  enabled: boolean;
+};
 type PageSectionTab<T extends string> = readonly [T, string, AppIcon];
 type PageSectionTabGroup<T extends string> = {
   title: string;
   tabs: readonly PageSectionTab<T>[];
 };
+type OwnershipWorkspaceTab = "personal" | "team" | "catalog" | "sources";
+type OwnershipSourceKind = "github" | "directory" | "upload" | "draft";
+type OwnershipSourceScope = "personal" | "team";
+type OwnershipSourceStatus = "ready" | "syncing" | "needs_setup";
+type OwnershipSourceSurface = "agents" | "skills";
+type OwnershipSourceSummary = {
+  id: string;
+  label: string;
+  kind: OwnershipSourceKind;
+  scope: OwnershipSourceScope;
+  target: string;
+  status: OwnershipSourceStatus;
+  lastUpdated: string;
+  itemCount: number;
+  items: string[];
+  branch?: string;
+  subdirectory?: string;
+};
+type LocalPhoneContact = {
+  id: string;
+  name: string;
+  role: string;
+  phone: string;
+  source: "local";
+  detail: string;
+  connected: true;
+};
+type LocalPhoneContactDraft = {
+  name: string;
+  role: string;
+  phone: string;
+  detail: string;
+};
+
+const ownershipWorkspaceSectionGroups: readonly PageSectionTabGroup<OwnershipWorkspaceTab>[] = [
+  {
+    title: "WORKSPACE",
+    tabs: [
+      ["personal", "Personal", Users],
+      ["team", "Team", Building2],
+      ["catalog", "Catalog", Store],
+      ["sources", "Sources", FolderOpen],
+    ],
+  },
+] as const;
 
 const settingsSectionGroups: readonly PageSectionTabGroup<SettingsTab>[] = [
   {
     title: "Workspace",
     tabs: [
-      ["auth", "Services", ShieldCheck],
+      ["auth", "Telnyx", Cloud],
+      ["mcps", "MCPs", Plug],
       ["plugins", "Plugins", Link2],
       ["agentmail", "Aliases", Mail],
       ["wiki", "Knowledge", BookOpen],
+      ["sessions", "Terminal", SquareTerminal],
+      ["shortcuts", "Shortcuts", Keyboard],
+      ["design", "Designs", Palette],
     ],
   },
+] as const;
+
+const phoneSectionGroups: readonly PageSectionTabGroup<PhoneViewTab>[] = [
   {
-    title: "Phone",
+    title: "WORKSPACE",
     tabs: [
+      ["calls", "Calls", Phone],
       ["contacts", "Contacts", Users],
       ["dialer", "Dialpad", Grid3X3],
       ["numbers", "Numbers", PhoneCall],
       ["assistants", "Voice AI", Bot],
-    ],
-  },
-  {
-    title: "Tools",
-    tabs: [
-      ["shortcuts", "Shortcuts", Keyboard],
-      ["design", "Designs", Palette],
     ],
   },
 ] as const;
@@ -364,13 +434,11 @@ const modelCenterSectionGroups: readonly PageSectionTabGroup<ModelCenterTab>[] =
   {
     title: "Workspace",
     tabs: [
-      ["general", "General", SlidersHorizontal],
-      ["storage-privacy", "Storage & Privacy", ShieldCheck],
-      ["local-engines", "Local Engines", SquareTerminal],
-      ["cloud-providers", "Cloud Providers", Cloud],
-      ["local-api-server", "Local API Server", SquareTerminal],
-      ["mcp-routing", "MCP & Tool Routing", Bot],
+      ["local-models", "Local Models", SquareTerminal],
+      ["cloud-models", "Cloud Models", Cloud],
+      ["mcp-routing", "Routing", GitBranch],
       ["diagnostics", "Diagnostics", Activity],
+      ["local-api-server", "API Server", SquareTerminal],
     ],
   },
 ] as const;
@@ -385,6 +453,69 @@ const railDefaultExpandedWidth = 175;
 const railMinExpandedWidth = 120;
 const railMaxExpandedWidth = 260;
 const railSnapThreshold = 10;
+const appShortcutsStorageKey = "telnyx-link-app-shortcuts";
+const defaultDesktopShortcuts: DesktopShortcutBinding[] = [
+  { id: "shortcut-open-chat", actionId: "open-chat", shortcut: "Meta+1" },
+  { id: "shortcut-open-settings", actionId: "open-settings", shortcut: "Meta+Comma" },
+  { id: "shortcut-open-start", actionId: "open-start", shortcut: "Meta+Shift+1" },
+];
+const localPhoneContactsStorageKey = "telnyx-link-local-phone-contacts";
+
+function emptyLocalPhoneContactDraft(): LocalPhoneContactDraft {
+  return {
+    name: "",
+    role: "",
+    phone: "",
+    detail: "",
+  };
+}
+
+function isDesktopShortcutActionId(value: string): value is DesktopShortcutActionId {
+  return [
+    "open-start",
+    "open-chat",
+    "open-settings",
+    "open-calendar",
+    "open-phone",
+    "open-docs",
+    "open-agents",
+    "open-skills",
+    "open-tools",
+    "new-chat",
+  ].includes(value);
+}
+
+function readDesktopShortcutBindings(): DesktopShortcutBinding[] {
+  if (typeof window === "undefined") return defaultDesktopShortcuts;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(appShortcutsStorageKey) ?? "null");
+    if (!Array.isArray(stored)) return defaultDesktopShortcuts;
+    const parsed = stored.filter((binding): binding is DesktopShortcutBinding => Boolean(
+      binding
+      && typeof binding.id === "string"
+      && typeof binding.shortcut === "string"
+      && typeof binding.actionId === "string"
+      && isDesktopShortcutActionId(binding.actionId),
+    ));
+    return parsed.length > 0 ? parsed : defaultDesktopShortcuts;
+  } catch {
+    return defaultDesktopShortcuts;
+  }
+}
+
+function shortcutEventToString(event: KeyboardEvent) {
+  const key = event.key;
+  if (["Meta", "Shift", "Alt", "Control"].includes(key)) return "";
+  const normalizedKey = key === "," ? "Comma" : key === "." ? "Period" : key.length === 1 ? key.toUpperCase() : key;
+  const modifiers = [
+    event.metaKey ? "Meta" : "",
+    event.ctrlKey ? "Control" : "",
+    event.altKey ? "Alt" : "",
+    event.shiftKey ? "Shift" : "",
+  ].filter(Boolean);
+  if (modifiers.length === 0) return "";
+  return [...modifiers, normalizedKey].join("+");
+}
 
 function PageSectionSidebar<T extends string>({
   tabs,
@@ -612,12 +743,6 @@ function GetStartedFlowPanels({
     scroller.scrollTo({ left: scroller.clientWidth * nextPage, behavior: "smooth" });
   }
 
-  function syncPageFromScroll(scroller: HTMLDivElement | null, setPage: (page: number) => void) {
-    if (!scroller || scroller.clientWidth <= 0) return;
-    const nextPage = Math.round(scroller.scrollLeft / scroller.clientWidth);
-    setPage(nextPage);
-  }
-
   function renderStepHeader(
     title: string,
     page: number,
@@ -683,15 +808,14 @@ function GetStartedFlowPanels({
 
   return (
     <div className="onboardingFlowGrid">
-      <section className="onboardingFlowPanel" aria-label="Configure Link steps">
+      <section className="onboardingFlowPanel" aria-label="Configure Cloud Link steps">
         <div className="onboardingFlowPanelBody">
           <div
             className="onboardingHeroScroller"
             ref={configurationScrollerRef}
-            onScroll={() => syncPageFromScroll(configurationScrollerRef.current, setConfigurationPage)}
           >
-            {configurationPages.map((steps, pageIndex) => (
-              <div className="onboardingHeroStepPage" key={`configuration-page-${pageIndex}`}>
+            {[(configurationPages[configurationPage] ?? [])].map((steps) => (
+              <div className="onboardingHeroStepPage" key={`configuration-page-${configurationPage}`}>
                 <div className="onboardingHeroStepList">
                   {steps.map((step) => {
                     const Icon = step.icon;
@@ -732,15 +856,14 @@ function GetStartedFlowPanels({
         </div>
         {renderStepHeader("Setup", configurationPage, configurationPageCount, setConfigurationPage, configurationScrollerRef)}
       </section>
-      <section className="onboardingFlowPanel" aria-label="Learn Link steps">
+      <section className="onboardingFlowPanel" aria-label="Learn Cloud Link steps">
         <div className="onboardingFlowPanelBody">
           <div
             className="onboardingHeroScroller"
             ref={learningScrollerRef}
-            onScroll={() => syncPageFromScroll(learningScrollerRef.current, setLearningPage)}
           >
-            {learningPages.map((steps, pageIndex) => (
-              <div className="onboardingHeroStepPage" key={`learning-page-${pageIndex}`}>
+            {[(learningPages[learningPage] ?? [])].map((steps) => (
+              <div className="onboardingHeroStepPage" key={`learning-page-${learningPage}`}>
                 <div className="onboardingHeroStepList">
                   {steps.map((step) => {
                     const Icon = step.icon;
@@ -779,7 +902,7 @@ function GetStartedFlowPanels({
             ))}
           </div>
         </div>
-        {renderStepHeader("Learn Link", learningPage, learningPageCount, setLearningPage, learningScrollerRef)}
+        {renderStepHeader("Learn Cloud Link", learningPage, learningPageCount, setLearningPage, learningScrollerRef)}
       </section>
     </div>
   );
@@ -1315,22 +1438,23 @@ function readableInkColor(hexColor: string) {
 }
 
 const navItems: { id: ViewId; label: string; icon: AppIcon }[] = [
-  { id: "chats", label: "Chat", icon: MessageSquare },
+  { id: "chats", label: "Work", icon: MessageSquare },
   { id: "workboard", label: "Taskbox", icon: SquareCheck },
   { id: "inbox", label: "Inbox", icon: Inbox },
   { id: "calendar", label: "Calendar", icon: CalendarDays },
-  { id: "phone", label: "Calls", icon: Phone },
+  { id: "phone", label: "Phone", icon: Phone },
+  { id: "scribes", label: "Scribe", icon: ScribesWaveformIcon },
+  { id: "wiki", label: "Compose", icon: BookOpen },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "skills", label: "Skills", icon: Zap },
-  { id: "apps", label: "Apps", icon: Grid2X2Plus },
 ];
 
 const linkGettingStartedAgentId = "c4de5f6a-e2e9-4568-9611-80cd35b483f7";
-const linkGettingStartedAgentName = "Link";
+const linkGettingStartedAgentName = "Cloud Link";
 
 const viewMeta: Record<ViewId, { label: string; icon: AppIcon }> = {
   onboarding: { label: "Get Started", icon: Flag },
-  chats: { label: "Chat", icon: MessageSquare },
+  chats: { label: "Work", icon: MessageSquare },
   gateway: { label: "Gateway", icon: Send },
   apps: { label: "Apps", icon: Grid2X2Plus },
   skills: { label: "Skills", icon: Zap },
@@ -1339,10 +1463,10 @@ const viewMeta: Record<ViewId, { label: string; icon: AppIcon }> = {
   workboard: { label: "Taskbox", icon: SquareCheck },
   scribes: { label: "Scribe", icon: ScribesWaveformIcon },
   storage: { label: "Storage", icon: FolderOpen },
-  phone: { label: "Calls", icon: Phone },
+  phone: { label: "Phone", icon: Phone },
   calendar: { label: "Calendar", icon: CalendarDays },
   memory: { label: "Archive", icon: ArchiveIcon },
-  wiki: { label: "Docs", icon: BookOpen },
+  wiki: { label: "Compose", icon: BookOpen },
   models: { label: "Models", icon: ModelsIcon },
   settings: { label: "Settings", icon: Settings },
 };
@@ -1379,6 +1503,33 @@ interface MarketplaceApp {
 }
 
 const marketplaceApps: MarketplaceApp[] = [];
+
+function ServiceSetupAlert({
+  title,
+  body,
+  actionLabel,
+  onAction,
+  icon: Icon = Plug,
+}: {
+  title: string;
+  body: string;
+  actionLabel: string;
+  onAction: () => void;
+  icon?: AppIcon;
+}) {
+  return (
+    <section className="phoneSetupAlert serviceSetupAlert">
+      <span className="serviceSetupAlertIcon" aria-hidden="true"><Icon size={18} /></span>
+      <div>
+        <strong>{title}</strong>
+        <p>{body}</p>
+      </div>
+      <button className="runtimeSettingsButton" type="button" onClick={onAction}>
+        {actionLabel}
+      </button>
+    </section>
+  );
+}
 
 const initialOnboardingState: OnboardingState = {
   dismissed: false,
@@ -1460,14 +1611,16 @@ export function App() {
   const [assistantPanelWidth, setAssistantPanelWidth] = useState<number | null>(() => readAssistantPanelWidth());
   const [assistantPanelResizing, setAssistantPanelResizing] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
-  const [, setPhoneTab] = useState<PhoneViewTab>("calls");
+  const [phoneTab, setPhoneTab] = useState<PhoneViewTab>("calls");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("auth");
-  const [modelCenterTab, setModelCenterTab] = useState<ModelCenterTab>("general");
+  const [modelCenterTab, setModelCenterTab] = useState<ModelCenterTab>("local-models");
   const [toolsWorkspaceTab, setToolsWorkspaceTab] = useState<ToolsWorkspaceTab>("personal");
+  const [scribeInitialTab, setScribeInitialTab] = useState<ScribesWorkspaceTab>("history");
   const [linkedPhoneNumber, setLinkedPhoneNumber] = useState("");
   const [phoneDialTarget, setPhoneDialTarget] = useState("");
   const [phoneDialTargetRequestId, setPhoneDialTargetRequestId] = useState(0);
   const [activeDialerConfig, setActiveDialerConfig] = useState<DialerConfig>(() => createDefaultDialerConfig());
+  const [appShortcuts, setAppShortcuts] = useState<DesktopShortcutBinding[]>(() => readDesktopShortcutBindings());
   const [telnyxCredentialReady, setTelnyxCredentialReady] = useState(false);
   const [liteLlmCredentialReady, setLiteLlmCredentialReady] = useState(false);
   const [liteLlmRuntime, setLiteLlmRuntime] = useState<LiteLlmRuntimeStatus | null>(null);
@@ -1539,6 +1692,10 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem(designSystemSessionStorageKey, JSON.stringify(designSystemSessionPreferences));
   }, [designSystemSessionPreferences]);
+
+  useEffect(() => {
+    window.localStorage.setItem(appShortcutsStorageKey, JSON.stringify(appShortcuts));
+  }, [appShortcuts]);
 
   useEffect(() => {
     if (activeAgent) window.localStorage.setItem("telnyx-link-active-agent", JSON.stringify(activeAgent));
@@ -1725,8 +1882,8 @@ export function App() {
     if (selectedChatAgentId === "link-default-runtime") {
       return {
         id: "link-default-runtime",
-        displayName: "Link",
-        description: "Default runtime route for Link chats.",
+        displayName: "Cloud Link",
+        description: "Default runtime route for Cloud Link chats.",
         source: "link" as const,
         type: "local",
         status: "available",
@@ -1759,8 +1916,8 @@ export function App() {
     }
     return {
       id: "link-default-runtime",
-      displayName: "Link",
-      description: "Default runtime route for Link chats.",
+      displayName: "Cloud Link",
+      description: "Default runtime route for Cloud Link chats.",
       source: "link" as const,
       type: "local",
       status: "available",
@@ -1800,7 +1957,7 @@ export function App() {
     const agent = draft.agentId
       ? {
           id: draft.agentId,
-          displayName: draft.agentName || "Link",
+          displayName: draft.agentName || "Cloud Link",
           source: draft.agentSource || ("agent-control-plane" as const),
           type: draft.agentType || "openclaw",
         }
@@ -1854,22 +2011,6 @@ export function App() {
     setNewSessionDraftOpen(false);
   }
 
-  async function startSkillBuilderChat(prompt: string) {
-    setAssistantMode("chat");
-    setSelectedChatAgentId(activeAgent?.id ?? linkGettingStartedAgentId);
-    const session = await linkApi.sendChatMessage({
-      workspaceId: defaultWorkspaceId,
-      agentId: activeAgent?.id ?? linkGettingStartedAgentId,
-      agentName: activeAgent?.displayName ?? linkGettingStartedAgentName,
-      approvalMode: "review",
-      modelMode: activeAgent ? "agent-control-plane" : "agent-control-plane",
-      contextScope: "workspace",
-      content: prompt,
-    });
-    setChatSessions((current) => [session, ...current.filter((item) => item.id !== session.id)]);
-    setSelectedSessionId(session.id);
-  }
-
   async function startOnboardingPromptChat(prompt: string, title: string) {
     const agent = resolveNewSessionAgent();
     setAssistantMode("chat");
@@ -1921,7 +2062,7 @@ export function App() {
     const prompt = [
       "Edge app deployment workflow: help me turn this chat work into a deployable Telnyx Edge Compute app.",
       "Default to OpenClaw for build work unless the selected active agent is Hermes.",
-      "Goal: build the app, verify it locally, prepare a Git-backed source folder, then deploy it to apidev.telnyx.com using Link's bundled telnyx-edge setup.",
+      "Goal: build the app, verify it locally, prepare a Git-backed source folder, then deploy it to apidev.telnyx.com using Cloud Link's bundled telnyx-edge setup.",
       "Default Git target: sourceRepo=https://github.com/team-telnyx/link and sourceSubdir=edge-apps/<app-slug> unless the user chooses another controlled team-telnyx repo.",
       "If a source repo or folder is missing, create a concrete build checklist and ask only for the minimum missing input.",
       "For a basic browser game or static app, use a simple static build that emits dist/ and can be hosted by Edge Compute.",
@@ -1956,7 +2097,7 @@ export function App() {
       modelMode: "agent-control-plane",
       contextScope: "workspace",
       content: [
-        `Contact connection workflow: help me connect ${skill.label} for Link contacts.`,
+        `Contact connection workflow: help me connect ${skill.label} for Cloud Link contacts.`,
         `Open or use the managed skill/MCP matching "${skill.query}" and walk me through the connection flow.`,
         `Once connected, verify ${skill.connectorName} contacts are available in the Phone contacts view and summarize any required credentials or approvals.`,
         "Ask one concise question at a time.",
@@ -1968,6 +2109,15 @@ export function App() {
   }
 
   const signedIn = Boolean(accountStatus?.signedIn && !signedOutLocally);
+  const authSessionExpired = authStatusMessageNeedsSignIn(authGateError || accountStatus?.message || "");
+  const showAuthGate = authSessionExpired || !signedIn;
+  const terminalVisible = signedIn && terminalOpen;
+
+  useEffect(() => {
+    if (signedIn) return;
+    setTerminalOpen(false);
+    setMemoryOpen(false);
+  }, [signedIn]);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -1980,7 +2130,7 @@ export function App() {
         setAccountStatus(next);
         if (!next.ready) {
           setSignedOutLocally(false);
-          setAuthGateError(next.message || "Your Telnyx Okta session expired. Sign in again to use Link.");
+          setAuthGateError(next.message || "Your Telnyx Okta session expired. Sign in again to use Cloud Link.");
         }
       } catch (error) {
         if (!cancelled) {
@@ -2021,7 +2171,7 @@ export function App() {
   }
 
   function openModelsHome() {
-    setModelCenterTab("general");
+    setModelCenterTab("local-models");
     setView("models");
   }
 
@@ -2049,8 +2199,84 @@ export function App() {
     setView("settings");
   }
 
+  function saveDesktopShortcut(binding: DesktopShortcutBinding) {
+    setAppShortcuts((current) => {
+      const existingIndex = current.findIndex((item) => item.id === binding.id);
+      if (existingIndex === -1) return [...current, binding];
+      const next = [...current];
+      next[existingIndex] = binding;
+      return next;
+    });
+  }
+
+  function deleteDesktopShortcut(id: string) {
+    setAppShortcuts((current) => current.filter((binding) => binding.id !== id));
+  }
+
+  function runDesktopShortcutAction(actionId: DesktopShortcutActionId) {
+    switch (actionId) {
+      case "open-start":
+        setSelectedArtifact(null);
+        setView("onboarding");
+        return;
+      case "open-chat":
+        setSelectedArtifact(null);
+        setView("chats");
+        return;
+      case "open-settings":
+        openSettingsTab("auth");
+        return;
+      case "open-calendar":
+        setSelectedArtifact(null);
+        setView("calendar");
+        return;
+      case "open-phone":
+        setPhoneTab("calls");
+        setSelectedArtifact(null);
+        setView("phone");
+        return;
+      case "open-docs":
+        setSelectedArtifact(null);
+        setView("wiki");
+        return;
+      case "open-agents":
+        setSelectedArtifact(null);
+        setView("agents");
+        return;
+      case "open-skills":
+        setSelectedArtifact(null);
+        setView("skills");
+        return;
+      case "open-tools":
+        openToolsHome();
+        return;
+      case "new-chat":
+        void openNewChatSessionDraft();
+        return;
+      default:
+        return;
+    }
+  }
+
+  useEffect(() => {
+    function handleDesktopShortcut(event: KeyboardEvent) {
+      if (showAuthGate) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-shortcut-capture='true']")) return;
+      const shortcut = shortcutEventToString(event);
+      if (!shortcut) return;
+      const binding = appShortcuts.find((item) => item.shortcut === shortcut);
+      if (!binding) return;
+      event.preventDefault();
+      event.stopPropagation();
+      runDesktopShortcutAction(binding.actionId);
+    }
+    document.addEventListener("keydown", handleDesktopShortcut);
+    return () => document.removeEventListener("keydown", handleDesktopShortcut);
+  }, [appShortcuts, showAuthGate]);
+
   return (
-    <div className={`desktop ${terminalOpen ? "terminalOpen" : ""}`} data-theme={colorMode} style={primaryColorStyle}>
+    <div className={`desktop ${terminalVisible ? "terminalOpen" : ""}`} data-theme={colorMode} style={primaryColorStyle}>
       <TitleBar
         signedIn={signedIn}
         railExpanded={railExpanded}
@@ -2060,7 +2286,7 @@ export function App() {
         terminalOpen={terminalOpen}
         toggleTerminal={() => setTerminalOpen((open) => !open)}
       />
-      {!signedIn ? (
+      {showAuthGate ? (
         <AuthGate
           busy={authGateBusy}
           error={authGateError}
@@ -2164,14 +2390,12 @@ export function App() {
                 <AgentsView
                   agents={agents}
                   connectors={connectors}
-                  skills={skills}
                   refresh={refresh}
                   setView={setView}
                   bookmarkedAgentIds={bookmarkedAgentIds}
                   setBookmarkedAgentIds={setBookmarkedAgentIds}
                   activeAgent={activeAgent}
                   setActiveAgent={setActiveAgent}
-                  startSkillBuilderChat={startSkillBuilderChat}
                   openTerminal={() => setTerminalOpen(true)}
                 />
               )}
@@ -2186,7 +2410,7 @@ export function App() {
                   openTaskMonitoringSession={openTaskMonitoringSession}
                 />
               )}
-              {!selectedArtifact && view === "scribes" && <ScribesView setView={setView} />}
+              {!selectedArtifact && view === "scribes" && <ScribesView setView={setView} openSettingsTab={openSettingsTab} telnyxCredentialReady={telnyxCredentialReady} initialTab={scribeInitialTab} />}
               {!selectedArtifact && view === "storage" && (
                 <DriveView
                   sessions={chatSessions}
@@ -2200,7 +2424,7 @@ export function App() {
                 />
               )}
               {!selectedArtifact && view === "calendar" && (
-                <CalendarView connectors={connectors} linkedPhoneNumber={linkedPhoneNumber} setView={setView} refresh={refresh} />
+                <CalendarView connectors={connectors} linkedPhoneNumber={linkedPhoneNumber} setView={setView} openSettingsTab={openSettingsTab} refresh={refresh} />
               )}
               {!selectedArtifact && view === "inbox" && (
                 <PhoneView
@@ -2216,7 +2440,9 @@ export function App() {
                     }
                   }}
                   refresh={refresh}
-                  startManagedSkillSetupChat={startManagedSkillSetupChat}
+                  activeDialerConfig={activeDialerConfig}
+                  setActiveDialerConfig={setActiveDialerConfig}
+                  openSettingsTab={openSettingsTab}
                   startEmailDraftChat={startEmailDraftChat}
                   emailDraftAgentReady={liteLlmCredentialReady || Boolean(accountStatus?.ready)}
                   standaloneInbox
@@ -2229,10 +2455,11 @@ export function App() {
                   linkedPhoneNumber={linkedPhoneNumber}
                   setLinkedPhoneNumber={setLinkedPhoneNumber}
                   setView={setView}
-                  tab="calls"
+                  tab={phoneTab}
                   setTab={setPhoneTab}
                   refresh={refresh}
-                  startManagedSkillSetupChat={startManagedSkillSetupChat}
+                  activeDialerConfig={activeDialerConfig}
+                  setActiveDialerConfig={setActiveDialerConfig}
                   openSettingsTab={openSettingsTab}
                   startEmailDraftChat={startEmailDraftChat}
                   emailDraftAgentReady={liteLlmCredentialReady || Boolean(accountStatus?.ready)}
@@ -2242,14 +2469,20 @@ export function App() {
                     setAssistantMode("phone");
                     setAssistantCollapsed(false);
                   }}
-                  hideSectionSidebar
-                  headerParent="Link"
                 />
               )}
               {!selectedArtifact && view === "memory" && <MemoryView banks={memoryBanks} openMemory={() => setMemoryOpen(true)} />}
-              {!selectedArtifact && (view === "apps" || view === "skills" || view === "wiki") && (
+              {!selectedArtifact && view === "skills" && (
+                <SkillsView
+                  skills={skills}
+                  activeAgent={activeAgent}
+                  setView={setView}
+                  refresh={refresh}
+                />
+              )}
+              {!selectedArtifact && (view === "apps" || view === "wiki") && (
                 <WikiView
-                  initialTab={view === "apps" || view === "skills" ? view : undefined}
+                  initialTab={view === "apps" ? view : undefined}
                   toolsWorkspaceTab={toolsWorkspaceTab}
                   setToolsWorkspaceTab={setToolsWorkspaceTab}
                   connectors={connectors}
@@ -2268,6 +2501,7 @@ export function App() {
 	                  skillSearchRequest=""
 	                  shareExplorerResultToAgent={shareExplorerResultToAgent}
 	                  setView={setView}
+                  openSettingsTab={openSettingsTab}
                   renderEmbeddedSettingsTab={(tab) => (
                     <LegacySettingsView
                       connectors={connectors}
@@ -2286,6 +2520,9 @@ export function App() {
                       linkedPhoneNumber={linkedPhoneNumber}
                       setLinkedPhoneNumber={setLinkedPhoneNumber}
                       setView={setView}
+                      appShortcuts={appShortcuts}
+                      saveAppShortcut={saveDesktopShortcut}
+                      deleteAppShortcut={deleteDesktopShortcut}
                       openTerminal={() => setTerminalOpen(true)}
                       startManagedSkillSetupChat={startManagedSkillSetupChat}
                       embedded
@@ -2318,6 +2555,9 @@ export function App() {
                   linkedPhoneNumber={linkedPhoneNumber}
                   setLinkedPhoneNumber={setLinkedPhoneNumber}
                   setView={setView}
+                  appShortcuts={appShortcuts}
+                  saveAppShortcut={saveDesktopShortcut}
+                  deleteAppShortcut={deleteDesktopShortcut}
                   openTerminal={() => setTerminalOpen(true)}
                   startManagedSkillSetupChat={startManagedSkillSetupChat}
                 />
@@ -2360,6 +2600,10 @@ export function App() {
               openPhoneContacts={() => {
                 setView("phone");
               }}
+              openScribeSttSettings={() => {
+                setScribeInitialTab("stt");
+                setView("scribes");
+              }}
               liteLlmReady={liteLlmCredentialReady}
               liteLlmRuntime={liteLlmRuntime}
               chatModelMode={chatModelMode}
@@ -2386,7 +2630,7 @@ export function App() {
         </main>
       </div>
       )}
-      {signedIn && terminalOpen && <TerminalDock onClose={() => setTerminalOpen(false)} />}
+      {terminalVisible && <TerminalDock onClose={() => setTerminalOpen(false)} />}
       {signedIn && memoryOpen && <MemoryModal onClose={() => setMemoryOpen(false)} sources={connectors.map((connector) => connector.name)} />}
     </div>
   );
@@ -2409,11 +2653,11 @@ function AuthGate({
           <img src="./link-icon.png" alt="" aria-hidden="true" />
         </div>
         <div>
-          <h1>Telnyx Link</h1>
+          <h1>Cloud Link</h1>
           <p>
-            Manage tasks and agents inside
+            Manage your tasks and agents locally
             <br />
-            one connected workspace.
+            with a cloud connected workspace
           </p>
         </div>
         <button className="button primary" onClick={onSignIn} disabled={busy}>
@@ -2429,9 +2673,13 @@ function authGateErrorMessage(error: unknown, fallback: string) {
   const raw = error instanceof Error ? error.message : String(error || fallback);
   const message = raw.replace(/^Error invoking remote method '[^']+': Error:\s*/i, "").trim();
   if (/Configure AUTH_INTERNAL_URL with an HTTPS Okta auth bridge endpoint/i.test(message)) {
-    return "Okta sign-in is not configured for this local build. Set AUTH_INTERNAL_URL to the HTTPS auth bridge endpoint in Settings or apps/link-desktop/.env.local, then restart Telnyx Link.";
+    return "Okta sign-in is not available right now. Open Settings and confirm the Agent Control Plane service configuration, then restart Telnyx Cloud Link.";
   }
   return message || fallback;
+}
+
+function authStatusMessageNeedsSignIn(message: string) {
+  return /session expired|expired[\s\S]*sign in again/i.test(message);
 }
 
 function GatewayView({
@@ -2478,7 +2726,7 @@ function GatewayView({
           surface: "gateway-view",
         },
       });
-      setNotice(result.warning || `Message ${result.message.status} through ${result.mode === "live" ? "Link Message Gateway" : result.mode}.`);
+      setNotice(result.warning || `Message ${result.message.status} through ${result.mode === "live" ? "Cloud Link Message Gateway" : result.mode}.`);
       setSelectedMessageId(result.message.id);
       setBody("");
       await refresh();
@@ -2511,7 +2759,7 @@ function GatewayView({
   return (
     <section className="gatewayView">
       <PageSectionHeader
-        parent="Link"
+        parent=""
         title="Gateway"
         action={(
           <button className="button secondary" type="button" onClick={() => void refresh()}>
@@ -2526,7 +2774,7 @@ function GatewayView({
           <StatusDot tone={readinessTone} />
           <div>
             <strong>{readiness?.ready ? "Ready" : readiness?.reachable ? "Reachable" : "Unavailable"}</strong>
-            <span>{readiness?.message || "Checking Link Message Gateway."}</span>
+            <span>{readiness?.message || "Checking Cloud Link Message Gateway."}</span>
           </div>
         </div>
         <div className="gatewayStatusItem">
@@ -2555,7 +2803,7 @@ function GatewayView({
         <form className="gatewayComposer" onSubmit={sendMessage}>
           <div className="gatewayComposerHeader">
             <div>
-              <strong>Send via Link</strong>
+              <strong>Send via Cloud Link</strong>
               <small>Create a routed delivery envelope.</small>
             </div>
             <Badge tone={readinessTone === "success" ? "success" : readinessTone === "warning" ? "warning" : "danger"}>
@@ -2596,7 +2844,7 @@ function GatewayView({
             <button className="button secondary" type="button" onClick={() => {
               setTo("group:messaging-ops");
               setSubject("Messaging ops update");
-              setBody("Quick update from Link.");
+              setBody("Quick update from Cloud Link.");
               setTransport("auto");
             }}>
               <Users size={15} />
@@ -2737,7 +2985,7 @@ function TitleBar({
 }) {
   return (
     <header className="titleBar">
-      {signedIn && (
+      {signedIn ? (
         <div className="titleBarActions">
           <button
             className="titleBarAction"
@@ -2767,7 +3015,7 @@ function TitleBar({
             <CodexRightSidebarIcon collapsed={assistantCollapsed} />
           </button>
         </div>
-      )}
+      ) : null}
     </header>
   );
 }
@@ -2803,7 +3051,7 @@ function CodexLeftSidebarIcon({ collapsed }: { collapsed: boolean }) {
 
 function TerminalDock({ onClose }: { onClose: () => void }) {
   const initialTerminalId = "terminal-1";
-  const [tabs, setTabs] = useState([{ id: initialTerminalId, title: "Telnyx Link" }]);
+  const [tabs, setTabs] = useState([{ id: initialTerminalId, title: "Telnyx Cloud Link" }]);
   const [activeTerminalId, setActiveTerminalId] = useState(initialTerminalId);
   const [statuses, setStatuses] = useState<Record<string, TerminalStatus>>({});
   const [outputs, setOutputs] = useState<Record<string, string>>({});
@@ -2850,7 +3098,7 @@ function TerminalDock({ onClose }: { onClose: () => void }) {
       }
     }
 
-    void openTerminal(initialTerminalId, "Telnyx Link");
+    void openTerminal(initialTerminalId, "Telnyx Cloud Link");
     return () => {
       cancelled = true;
       unsubscribe();
@@ -2864,7 +3112,7 @@ function TerminalDock({ onClose }: { onClose: () => void }) {
   async function addTerminalTab() {
     terminalSequenceRef.current += 1;
     const terminalId = `terminal-${terminalSequenceRef.current}`;
-    const title = `Telnyx Link ${terminalSequenceRef.current}`;
+    const title = `Telnyx Cloud Link ${terminalSequenceRef.current}`;
     setTabs((current) => [...current, { id: terminalId, title }]);
     setActiveTerminalId(terminalId);
     setBusy(true);
@@ -2976,7 +3224,7 @@ function TerminalDock({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="terminalDockMeta">
-          <span>{terminalDisabled ? "Disabled" : activeStatus?.running ? "Running" : busy ? "Starting" : "Stopped"}</span>
+          <span>{terminalStatusLabel(activeStatus, busy)}</span>
           <button className="iconButton terminalCloseButton" type="button" onClick={onClose} aria-label="Close terminal" title="Close terminal">
             <X size={15} />
           </button>
@@ -3005,9 +3253,18 @@ function TerminalDock({ onClose }: { onClose: () => void }) {
   );
 }
 
-function terminalPrompt(status: TerminalStatus | null) {
-  const cwd = status?.cwd?.split("/").filter(Boolean).pop() || "Telnyx Link";
-  return `${cwd} % `;
+function terminalPrompt(_status: TerminalStatus | null) {
+  return "Telnyx Cloud Link % ";
+}
+
+function terminalStatusLabel(status: TerminalStatus | null, busy: boolean) {
+  if (status?.enabled === false) return "Disabled";
+  if (status?.mode === "managed") {
+    const state = status.agentState ? status.agentState.replace("_", " ") : status.running ? "running" : "stopped";
+    return `Managed ${state}`;
+  }
+  if (busy) return "Starting";
+  return status?.running ? "Running" : "Stopped";
 }
 
 function sanitizeTerminalText(value: string) {
@@ -3018,6 +3275,7 @@ const internalTestingChecklistStorageKey = "telnyx-link-internal-testing-checkli
 
 const internalTestingChecklistItems = [
   { id: "chat", label: "Send one chat request", assistantTab: "chat", actionLabel: "Chat" },
+  { id: "managed-session", label: "Review Terminal Sessions", settingsTab: "sessions", actionLabel: "Terminal Sessions" },
   { id: "taskbox", label: "Review one Taskbox card", view: "workboard" },
   { id: "inbox", label: "Read one inbox thread", view: "inbox" },
   { id: "calendar", label: "Open one calendar event", view: "calendar" },
@@ -3032,7 +3290,8 @@ const internalTestingChecklistItems = [
   { id: "archive-memory", label: "Review one archive memory", view: "memory" },
   { id: "plugin-settings", label: "Open plugin settings", view: "settings", actionLabel: "Plugins" },
   { id: "contact-preview", label: "Review one call contact", view: "phone", actionLabel: "Calls" },
-] satisfies { id: string; label: string; view?: ViewId; assistantTab?: AssistantMode; actionLabel?: string }[];
+  { id: "feedback-report", label: "Write one feedback note", view: "chats", actionLabel: "Work" },
+] satisfies { id: string; label: string; view?: ViewId; settingsTab?: SettingsTab; assistantTab?: AssistantMode; actionLabel?: string }[];
 
 function readInternalTestingChecklist() {
   if (typeof window === "undefined") return [];
@@ -3086,8 +3345,12 @@ function OnboardingView({
   startPromptChat: (prompt: string, title: string) => Promise<void>;
 }) {
   const [acpAuth, setAcpAuth] = useState<AgentControlPlaneAuthStatus | null>(null);
+  const [harperStatus, setHarperStatus] = useState<HarperAddonSettings | null>(null);
+  const [speakSettings, setSpeakSettings] = useState<SpeakSettings | null>(null);
+  const [storageBackupStatus, setStorageBackupStatus] = useState<StorageBackupStatus | null>(null);
   const [whisperStatus, setWhisperStatus] = useState<WhisperStatus | null>(null);
   const [webRtcStatus, setWebRtcStatus] = useState<WebRtcStatus | null>(null);
+  const [sessionDaemonReadiness, setSessionDaemonReadiness] = useState<SessionDaemonReadiness | null>(null);
   const [testingChecklist, setTestingChecklist] = useState<string[]>(() => readInternalTestingChecklist());
   const [busy, setBusy] = useState("");
   const [introSlideIndex, setIntroSlideIndex] = useState(0);
@@ -3101,10 +3364,6 @@ function OnboardingView({
   };
   const oktaComplete = Boolean(acpAuth?.ready || connector("agent-control-plane")?.status === "connected" || connector("agent-control-plane")?.status === "signed_in");
   const accountComplete = connectedConnectors.length >= 3 || completed.has("accounts");
-  const squadToolsComplete = completed.has("squad-tools") || (skills.length > 0 && agents.length > 0 && completed.has("squad-review"));
-  const hindsightComplete = connector("hindsight")?.status === "connected" && memoryBanks.length > 0;
-  const rescueComplete = agents.some((agent) => agent.id === "slack-bot-troubleshooting");
-  const squadBank = memoryBanks.find((bank) => bank.scope === "squad" || /squad|team|wiki/i.test(`${bank.name} ${bank.mission}`));
   const onboardingModelRoutes = liteLlmRuntime?.routes?.length ? liteLlmRuntime.routes : fallbackAiModelRoutes();
   const onboardingPrimaryRoute = onboardingModelRoutes.find((route) => route.id === chatModelMode)
     ?? onboardingModelRoutes.find((route) => route.default)
@@ -3113,6 +3372,14 @@ function OnboardingView({
     ?? onboardingModelRoutes.find((route) => route.id !== onboardingPrimaryRoute?.id)
     ?? onboardingModelRoutes[0];
   const selfHostedAgentCount = agents.filter((agent) => agent.source === "self-hosted").length;
+  const skillSourceCount = readOwnershipSources("skills").length;
+  const primaryAgentOsReady = Boolean(selfHostedAgentCount > 0 || connectorReady("agent-control-plane") || completed.has("primary-agent-os"));
+  const sttReady = Boolean((whisperStatus?.available && whisperStatus.built) || speakSettings?.sttMode === "telnyx-cloud" || completed.has("scribe-stt"));
+  const ttsReady = Boolean((speakSettings?.ttsVoice || "").trim() || completed.has("scribe-tts"));
+  const dictationReady = Boolean(speakSettings?.whisperEnabled || completed.has("dictation-menu"));
+  const grammarReady = Boolean(harperStatus?.installed || completed.has("grammar-plugin"));
+  const storageReady = Boolean(storageBackupStatus?.ready || storageBackupStatus?.bucket || completed.has("cloud-storage"));
+  const sessionDaemonReady = Boolean(sessionDaemonReadiness?.ready || completed.has("session-daemon"));
   const onboardingFallbackRouteLabel = onboardingFallbackRoute && onboardingFallbackRoute.id !== onboardingPrimaryRoute?.id
     ? onboardingFallbackRoute.label
     : "No separate fallback route yet";
@@ -3136,8 +3403,8 @@ function OnboardingView({
       tabLabel: "Overview",
       title: "Keep AI work local until you choose otherwise.",
       body: onboardingPrimaryRoute
-        ? `Link can run chat, dictation, agents, and draft outputs on this Mac first. Your current everyday route is ${onboardingPrimaryRoute.label}.`
-        : "Link can keep chat, dictation, agents, and draft outputs on this Mac first. Choose a primary route in Workspace > Models to lock that in.",
+        ? `Cloud Link can run chat, dictation, agents, and draft outputs on this Mac first. Your current everyday route is ${onboardingPrimaryRoute.label}.`
+        : "Cloud Link can keep chat, dictation, agents, and draft outputs on this Mac first. Choose a primary route in Workspace > Models to lock that in.",
       icon: ShieldCheck,
       statusTone: liteLlmRuntime?.ready ? "success" : "warning",
       statusLabel: liteLlmRuntime?.ready ? "Local runtime ready" : "Review local runtime",
@@ -3197,10 +3464,10 @@ function OnboardingView({
     {
       id: "agents",
       tabLabel: "Agents",
-      title: "Agents can stay local or reach cloud inference through Link.",
+      title: "Agents can stay local or reach cloud inference through Cloud Link.",
       body: selfHostedAgentCount > 0
-        ? `${selfHostedAgentCount} self-hosted agent${selfHostedAgentCount === 1 ? "" : "s"} already appear in Link, alongside hosted agents and Telnyx-connected model routes.`
-        : "Install Hermes or OpenClaw for local agents, then use Link routing when those agents need cloud inference or shared services through Telnyx.",
+        ? `${selfHostedAgentCount} self-hosted agent${selfHostedAgentCount === 1 ? "" : "s"} already appear in Cloud Link, alongside hosted agents and Telnyx-connected model routes.`
+        : "Install Hermes or OpenClaw for local agents, then use Cloud Link routing when those agents need cloud inference or shared services through Telnyx.",
       icon: Bot,
       statusTone: selfHostedAgentCount > 0 ? "success" : "warning",
       statusLabel: selfHostedAgentCount > 0 ? "Self-hosted agents available" : "Install a local runtime",
@@ -3208,17 +3475,17 @@ function OnboardingView({
       facts: [
         { label: "Where they appear", value: "Agents page and the chat agent picker." },
         { label: "Current count", value: selfHostedAgentCount > 0 ? `${selfHostedAgentCount} self-hosted agent${selfHostedAgentCount === 1 ? "" : "s"} detected` : "No self-hosted agents detected yet" },
-        { label: "Related setup", value: "Workspace > Models for inference routes and MCP & Tool Routing for service access." },
+        { label: "Related setup", value: "Workspace > Models for inference routes and Routing for service access." },
       ],
       primaryActionLabel: "Open Agents",
       onPrimaryAction: () => setView("agents"),
-      secondaryActionLabel: "Review tool routing",
+      secondaryActionLabel: "Review model routing",
       onSecondaryAction: () => openSettingsTab("mcp-routing"),
     },
     {
       id: "outputs",
       tabLabel: "Build",
-      title: "Start by building a local app for yourself, or make a simple game to learn Link.",
+      title: "Start by building a local app for yourself, or make a simple game to learn Cloud Link.",
       body: "Use Apps to prototype a personal workflow, a tiny utility, or a simple game locally first, then decide when it should stay on-device versus move through Telnyx-connected publishing or cloud services.",
       icon: ArchiveIcon,
       statusTone: "default",
@@ -3226,12 +3493,12 @@ function OnboardingView({
       surfaceLabel: "Drafts",
       facts: [
         { label: "Start small", value: "Build a personal app, an internal helper, or a lightweight game to learn the workflow end to end." },
-        { label: "Docs", value: "Pull in squad docs and archive context when you want shared knowledge behind the app." },
+        { label: "Compose", value: "Draft from squad docs and archive context when you want shared knowledge behind the app." },
         { label: "Publish path", value: "Choose whether the app stays local, is shared privately, or gets published through Telnyx Cloud." },
       ],
       primaryActionLabel: "Open Apps",
       onPrimaryAction: () => setView("apps"),
-      secondaryActionLabel: "Open Docs",
+      secondaryActionLabel: "Open Compose",
       onSecondaryAction: () => setView("wiki"),
     },
   ];
@@ -3243,8 +3510,14 @@ function OnboardingView({
     `Google Workspace: ${connectorReady("google-drive") || connectorReady("google-calendar") ? "ready" : "missing"}`,
     `GitHub: ${connectorReady("github") ? "ready" : "missing"}`,
     `Telnyx API: ${telnyxCredentialReady || connectorReady("telnyx") ? "ready" : "missing"}`,
+    `Storage: ${storageReady ? "ready" : "missing"}`,
     `Phone: ${webRtcStatus?.ready ? "ready" : webRtcStatus?.message ?? "unknown"}`,
     `Whisper: ${whisperStatus?.available && whisperStatus.built ? "built" : whisperStatus?.message ?? "unknown"}`,
+    `TTS: ${ttsReady ? "ready" : "review needed"}`,
+    `Grammar: ${grammarReady ? "installed" : "optional"}`,
+    `Sessions: ${sessionDaemonReadiness?.ready ? "ready" : sessionDaemonReadiness?.reachable ? "reachable" : sessionDaemonReadiness?.message ?? "unknown"}`,
+    `Memory banks: ${memoryBanks.length}`,
+    `Docs profile skills: ${wikiState?.profile.masteredSkills ?? 0}`,
     `Publisher: ${publisherReadiness?.message ?? "unknown"}`,
     `Completed tester checks: ${testingChecklist.length}/${internalTestingChecklistItems.length}`,
   ].join("\n");
@@ -3257,10 +3530,21 @@ function OnboardingView({
     let cancelled = false;
 
     async function loadReadiness() {
-      const [nextWhisper, nextWebRtc] = await Promise.allSettled([linkApi.getWhisperStatus(), linkApi.getWebRtcStatus()]);
+      const [nextWhisper, nextWebRtc, nextSpeakSettings, nextHarperStatus, nextStorageBackupStatus, nextSessionDaemonReadiness] = await Promise.allSettled([
+        linkApi.getWhisperStatus(),
+        linkApi.getWebRtcStatus(),
+        linkApi.getSpeakSettings(),
+        getHarperAddonStatus({ forceRefresh: false, allowAutoUpdate: true }),
+        linkApi.getStorageBackupStatus(),
+        linkApi.getSessionDaemonReadiness(),
+      ]);
       if (cancelled) return;
       if (nextWhisper.status === "fulfilled") setWhisperStatus(nextWhisper.value);
       if (nextWebRtc.status === "fulfilled") setWebRtcStatus(nextWebRtc.value);
+      if (nextSpeakSettings.status === "fulfilled") setSpeakSettings(nextSpeakSettings.value);
+      if (nextHarperStatus.status === "fulfilled") setHarperStatus(nextHarperStatus.value);
+      if (nextStorageBackupStatus.status === "fulfilled") setStorageBackupStatus(nextStorageBackupStatus.value);
+      if (nextSessionDaemonReadiness.status === "fulfilled") setSessionDaemonReadiness(nextSessionDaemonReadiness.value);
     }
 
     void loadReadiness();
@@ -3318,7 +3602,7 @@ function OnboardingView({
   async function startFeedbackReport() {
     await startPromptChat([
       "Internal testing feedback report.",
-      "Help me turn this into a concise Link bug report or product feedback note. Ask for the missing reproduction details, expected behavior, actual behavior, and severity.",
+      "Help me turn this into a concise Cloud Link bug report or product feedback note. Ask for the missing reproduction details, expected behavior, actual behavior, and severity.",
       "",
       "Current readiness context:",
       testerContext,
@@ -3573,7 +3857,7 @@ function OnboardingView({
         return (
           <div className="onboardingMockup onboardingMockupSettings" aria-hidden="true">
             <div className="onboardingMockupRow">
-              <span>Link</span>
+              <span>Cloud Link</span>
               <span className="onboardingMockupBadge">Ready</span>
             </div>
           </div>
@@ -3622,7 +3906,7 @@ function OnboardingView({
     {
       id: "okta",
       title: "Sign in with SSO",
-      body: "Use the native Okta flow so Link can pick up employee identity, internal auth cookies, and future squad context without storing passwords.",
+      body: "Use the native Okta flow so Cloud Link can pick up employee identity, internal auth cookies, and future squad context without storing passwords.",
       complete: oktaComplete || completed.has("okta"),
       icon: ShieldCheck,
       meta: oktaComplete ? "Okta connected." : "Sign in required.",
@@ -3630,33 +3914,20 @@ function OnboardingView({
       required: true,
     },
     {
-      id: "accounts",
-      title: "Set up Agent Plugins",
-      body: "Connect the accounts and plugin permissions Link can use: LiteLLM, Slack, Hindsight, Guru or Drive, GitHub, Linear, Telnyx, and squad-standard tools.",
-      complete: accountComplete,
-      icon: Plug,
-      meta: connectedConnectors.length > 0 ? `${connectedConnectors.length} plugins connected.` : "No plugins connected.",
+      id: "session-daemon",
+      title: "Configure Terminal Sessions",
+      body: "Use Terminal Sessions when you want server-owned terminal and agent runs that can continue after this laptop sleeps.",
+      complete: sessionDaemonReady,
+      icon: SquareTerminal,
+      meta: sessionDaemonReadiness?.ready
+        ? "Server-owned sessions are ready."
+        : sessionDaemonReadiness?.reachable
+          ? "Terminal Sessions service is reachable; review readiness checks."
+          : sessionDaemonReadiness?.message ? readableSetupText(sessionDaemonReadiness.message) : "Add a Terminal Sessions endpoint and optional SMS alert numbers.",
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => openSettingsTab("auth")}>Settings</button>
-          <button className="button ghost" onClick={() => openSettingsTab("plugins")}>Plugins</button>
-          {!accountComplete && <button className="button ghost" onClick={() => void markStep("accounts")}>Use current set</button>}
-        </div>
-      ),
-      required: true,
-    },
-    {
-      id: "squad-tools",
-      title: "Review your squad's standard tools and plugins",
-      body: "Confirm the skills, public agents, Slack agents, rescue bot, and workboard adapters your squad expects to use in Link.",
-      complete: squadToolsComplete,
-      icon: Tags,
-      meta: `${skills.length} skills, ${agents.length} agents.`,
-      action: (
-        <div className="onboardingActions">
-          <button className="button secondary" onClick={() => setView("wiki")}>Docs</button>
-          <button className="button ghost" onClick={() => setView("agents")}>Agents</button>
-          {!squadToolsComplete && <button className="button ghost" onClick={() => void markStep("squad-tools")}>Mark reviewed</button>}
+          <button className="button secondary" onClick={() => openSettingsTab("sessions")}>Terminal Sessions</button>
+          {!sessionDaemonReady && <button className="button ghost" onClick={() => void markStep("session-daemon")}>Use current sessions setup</button>}
         </div>
       ),
       required: true,
@@ -3664,7 +3935,7 @@ function OnboardingView({
     {
       id: "model-gateway",
       title: "Choose where AI runs",
-      body: "Set up the on-device stack for local chat, self-hosted agents, Speech-to-Text, and keep-local artifacts, then choose when Link is allowed to fall back to cloud routes.",
+      body: "Choose when Cloud Link should stay local, when it can fall back to Telnyx cloud routes, and how chat, agents, and Scribe behave when both are available.",
       complete: liteLlmReady || connectorReady("litellm") || completed.has("model-gateway"),
       icon: Cloud,
       meta: liteLlmReady || connectorReady("litellm") ? "Local and cloud routing reviewed." : "AI runtime guidance still needs setup.",
@@ -3693,6 +3964,57 @@ function OnboardingView({
       required: true,
     },
     {
+      id: "primary-agent-os",
+      title: "Pick a primary agent OS",
+      body: "Decide whether your main agent runtime comes from Telnyx ACP or from locally installed OpenClaw or Hermes gateways on this Mac.",
+      complete: primaryAgentOsReady,
+      icon: Bot,
+      meta: selfHostedAgentCount > 0
+        ? `${selfHostedAgentCount} local agent${selfHostedAgentCount === 1 ? "" : "s"} detected.`
+        : connectorReady("agent-control-plane")
+          ? "ACP is available for hosted agents."
+          : "Choose ACP or a local gateway.",
+      action: (
+        <div className="onboardingActions">
+          <button className="button secondary" onClick={() => setView("agents")}>Agents</button>
+          <button className="button ghost" onClick={() => openSettingsTab("models")}>Models</button>
+          {!primaryAgentOsReady && <button className="button ghost" onClick={() => void markStep("primary-agent-os")}>Use current agent OS</button>}
+        </div>
+      ),
+      required: true,
+    },
+    {
+      id: "models-general",
+      title: "Confirm default models",
+      body: "Review Models > General so chat, agents, and Scribe start from the default routes you actually want the workspace to use.",
+      complete: completed.has("models-general"),
+      icon: MonitorPlay,
+      meta: onboardingPrimaryRoute ? `Primary route: ${onboardingPrimaryRoute.label}.` : "Choose a default route.",
+      action: (
+        <div className="onboardingActions">
+          <button className="button secondary" onClick={() => openSettingsTab("models")}>Models</button>
+          {!completed.has("models-general") && <button className="button ghost" onClick={() => void markStep("models-general")}>Defaults look right</button>}
+        </div>
+      ),
+      required: true,
+    },
+    {
+      id: "accounts",
+      title: "Set up Agent Plugins",
+      body: "Connect the accounts and plugin permissions Cloud Link can use: LiteLLM, Slack, Hindsight, Guru or Drive, GitHub, Linear, Telnyx, and squad-standard tools.",
+      complete: accountComplete,
+      icon: Plug,
+      meta: connectedConnectors.length > 0 ? `${connectedConnectors.length} plugins connected.` : "No plugins connected.",
+      action: (
+        <div className="onboardingActions">
+          <button className="button secondary" onClick={() => openSettingsTab("auth")}>Settings</button>
+          <button className="button ghost" onClick={() => openSettingsTab("plugins")}>Plugins</button>
+          {!accountComplete && <button className="button ghost" onClick={() => void markStep("accounts")}>Use current set</button>}
+        </div>
+      ),
+      required: true,
+    },
+    {
       id: "telnyx-api",
       title: "Connect the Telnyx API",
       body: "Save or verify Telnyx credentials so numbers, voice, assistants, and Edge publishing can reach the API.",
@@ -3706,6 +4028,21 @@ function OnboardingView({
         </div>
       ),
       required: true,
+    },
+    {
+      id: "cloud-storage",
+      title: "Set up cloud backup",
+      body: "Attach a Telnyx Cloud Storage bucket if you want local workspace data to be available to online agents and backup flows later.",
+      complete: storageReady,
+      icon: FolderOpen,
+      meta: storageBackupStatus?.bucket ? `Linked bucket: ${storageBackupStatus.bucket}.` : "No cloud backup bucket linked yet.",
+      action: (
+        <div className="onboardingActions">
+          <button className="button secondary" onClick={() => setView("storage")}>Storage</button>
+          {!storageReady && <button className="button ghost" onClick={() => void markStep("cloud-storage")}>Skip backups for now</button>}
+        </div>
+      ),
+      required: false,
     },
     {
       id: "phone-calling",
@@ -3724,24 +4061,88 @@ function OnboardingView({
       required: true,
     },
     {
-      id: "scribe-voice",
-      title: "Configure Scribe voice",
-      body: "Check local dictation, Scribe model status, or Telnyx Cloud STT before recording notes.",
-      complete: Boolean((whisperStatus?.available && whisperStatus.built) || completed.has("scribe-voice")),
+      id: "scribe-stt",
+      title: "Set up Speech-to-Text",
+      body: "Choose your transcription path for Scribe, whether that means local capture on this Mac or a Telnyx cloud speech route.",
+      complete: sttReady,
       icon: Mic,
-      meta: whisperStatus?.available && whisperStatus.built ? "Scribe ready." : "Configure voice.",
+      meta: whisperStatus?.available && whisperStatus.built
+        ? "Local STT is ready."
+        : speakSettings?.sttMode === "telnyx-cloud"
+          ? "Telnyx Cloud STT is selected."
+          : "Review STT setup.",
       action: (
         <div className="onboardingActions">
           <button className="button secondary" onClick={() => setView("scribes")}>Scribe</button>
-          {!((whisperStatus?.available && whisperStatus.built) || completed.has("scribe-voice")) && <button className="button ghost" onClick={() => void markStep("scribe-voice")}>Mark ready</button>}
+          {!sttReady && <button className="button ghost" onClick={() => void markStep("scribe-stt")}>Mark STT ready</button>}
         </div>
       ),
       required: true,
     },
     {
+      id: "dictation-menu",
+      title: "Enable Start Dictation",
+      body: "Open the Cloud Link icon in the top menu bar and make sure Start Dictation is turned on before you depend on voice capture during the day.",
+      complete: dictationReady,
+      icon: Mic,
+      meta: speakSettings?.whisperEnabled ? "Start Dictation is enabled." : "Check the Cloud Link menu bar item.",
+      action: (
+        <div className="onboardingActions">
+          <button className="button secondary" onClick={() => setView("scribes")}>Open Scribe</button>
+          {!dictationReady && <button className="button ghost" onClick={() => void markStep("dictation-menu")}>Enabled in menu bar</button>}
+        </div>
+      ),
+      required: false,
+    },
+    {
+      id: "scribe-tts",
+      title: "Set up Text-to-Speech",
+      body: "Pick the voice and playback route you want for spoken responses, previews, and voice-first agent workflows.",
+      complete: ttsReady,
+      icon: Volume2,
+      meta: (speakSettings?.ttsVoice || "").trim() ? `Voice selected: ${speakSettings?.ttsVoice}.` : "Choose a voice or output route.",
+      action: (
+        <div className="onboardingActions">
+          <button className="button secondary" onClick={() => setView("scribes")}>Scribe</button>
+          {!ttsReady && <button className="button ghost" onClick={() => void markStep("scribe-tts")}>Mark TTS ready</button>}
+        </div>
+      ),
+      required: false,
+    },
+    {
+      id: "grammar-plugin",
+      title: "Install Grammar plugin",
+      body: "Install Harper if you want local grammar review for docs, inbox drafts, and Scribe transcripts without sending text to a cloud grammar service.",
+      complete: grammarReady,
+      icon: BookOpen,
+      meta: harperStatus?.installed ? harperStatus.enabled ? "Grammar review is installed and enabled." : "Grammar review is installed." : "Optional local grammar review.",
+      action: (
+        <div className="onboardingActions">
+          <button className="button secondary" onClick={() => setView("scribes")}>Open Grammar</button>
+          {!grammarReady && <button className="button ghost" onClick={() => void markStep("grammar-plugin")}>Skip grammar for now</button>}
+        </div>
+      ),
+      required: false,
+    },
+    {
+      id: "skill-sources",
+      title: "Add skill sources",
+      body: "Connect GitHub repos, local directories, or uploads so Cloud Link can keep your skill catalog fresh without auto-installing everything it finds.",
+      complete: Boolean(skillSourceCount > 0 || completed.has("skill-sources")),
+      icon: FolderOpen,
+      meta: skillSourceCount > 0 ? `${skillSourceCount} skill source${skillSourceCount === 1 ? "" : "s"} linked.` : "No skill sources linked yet.",
+      action: (
+        <div className="onboardingActions">
+          <button className="button secondary" onClick={() => setView("skills")}>Skills</button>
+          {!skillSourceCount && <button className="button ghost" onClick={() => void markStep("skill-sources")}>Use built-in catalog</button>}
+        </div>
+      ),
+      required: false,
+    },
+    {
       id: "app-publisher",
       title: "Choose your app publishing path",
-      body: "Decide how you want Link apps to ship: keep them local on this Mac, share them privately, or publish them through the managed Telnyx app flow after reviewing the publisher setup.",
+      body: "Decide how you want Cloud Link apps to ship: keep them local on this Mac, share them privately, or publish them through the managed Telnyx app flow after reviewing the publisher setup.",
       complete: Boolean(publisherReadiness?.ready || completed.has("app-publisher")),
       icon: Store,
       meta: publisherReadiness?.ready ? "Publisher ready for cloud releases." : "Publishing path still needs review.",
@@ -3755,16 +4156,16 @@ function OnboardingView({
       required: true,
     },
     {
-      id: "hindsight-wiki",
-      title: "Attach the squad archive",
-      body: "If a squad archive exists, Link can use it as the user's starting wiki and long-term context layer.",
-      complete: hindsightComplete || completed.has("hindsight-wiki"),
-      icon: ArchiveIcon,
-      meta: squadBank ? `Archive: ${squadBank.name}` : hindsightComplete ? `${memoryBanks.length} archives connected.` : "Optional archive.",
+      id: "smoke-test",
+      title: "Run one final smoke test",
+      body: "Before you treat Cloud Link as ready, run one short end-to-end pass across Work, Taskbox, Scribe, and one connected plugin so setup gaps are obvious.",
+      complete: completed.has("smoke-test"),
+      icon: Check,
+      meta: completed.has("smoke-test") ? "Final smoke test marked complete." : "Run one short pass before daily use.",
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => setView("memory")}>Archive</button>
-          {!(hindsightComplete || completed.has("hindsight-wiki")) && <button className="button ghost" onClick={() => void markStep("hindsight-wiki")}>No squad wiki yet</button>}
+          <button className="button secondary" onClick={() => setView("chats")}>Open Work</button>
+          {!completed.has("smoke-test") && <button className="button ghost" onClick={() => void markStep("smoke-test")}>Smoke test done</button>}
         </div>
       ),
       required: false,
@@ -3794,62 +4195,111 @@ function OnboardingView({
     okta: [
       "Use the native employee sign-in flow.",
       "Unlock internal auth and squad context.",
-      "Avoid storing passwords in Link.",
-    ],
-    accounts: [
-      "Connect GitHub, Google, Telnyx, Slack, and Linear.",
-      "Enable the plugins Link can route through.",
-      "Start from the tools your team already uses.",
+      "Avoid storing passwords in Cloud Link.",
     ],
     "model-gateway": [
       "Choose when work stays local.",
       "Keep Telnyx Cloud fallback available.",
       "Review chat, agent, and Scribe routing.",
     ],
+    "primary-agent-os": [
+      "Choose hosted ACP agents or local gateways first.",
+      "Use OpenClaw or Hermes when you want on-device agents.",
+      "Keep ACP available for shared team agents.",
+    ],
+    "session-daemon": [
+      "Add a Terminal Sessions endpoint for server-owned terminal and agent runs.",
+      "Use a Telnyx-hosted runner so work can continue when this laptop sleeps.",
+      "Add SMS numbers for blocked, approval, and done alerts.",
+    ],
+    "models-general": [
+      "Review the General models page.",
+      "Confirm the default route for chat and agents.",
+      "Check your backup model path before daily use.",
+    ],
+    accounts: [
+      "Connect GitHub, Google, Telnyx, Slack, and Linear.",
+      "Enable the plugins Cloud Link can route through.",
+      "Start from the tools your team already uses.",
+    ],
     "google-workspace": [
-      "Bring Calendar, Gmail, Drive, and Contacts into Link.",
+      "Bring Calendar, Gmail, Drive, and Contacts into Cloud Link.",
       "Power meeting, inbox, and caller context.",
       "Keep shared workspace workflows in one place.",
     ],
     "telnyx-api": [
       "Verify numbers, voice, and app access.",
       "Support publishing and telephony workflows.",
-      "Use the active account credentials already linked to Link.",
+      "Use the active account credentials already linked to Cloud Link.",
+    ],
+    "cloud-storage": [
+      "Link a bucket from Storage.",
+      "Keep local backups available to online agents later.",
+      "Use cloud backup only when your team wants it.",
     ],
     "phone-calling": [
       "Check WebRTC readiness.",
       "Confirm your linked number.",
       "Tune local calling defaults in Dialpad.",
     ],
-    "scribe-voice": [
-      "Verify local or cloud transcription readiness.",
-      "Check model and server state before recording.",
-      "Prepare dictation and transcript cleanup.",
+    "scribe-stt": [
+      "Pick local or cloud transcription.",
+      "Check capture before recording real notes.",
+      "Confirm transcript cleanup fits your workflow.",
+    ],
+    "dictation-menu": [
+      "Open the Cloud Link menu bar item.",
+      "Make sure Start Dictation is enabled.",
+      "Verify the shortcut behaves the way you expect.",
+    ],
+    "scribe-tts": [
+      "Choose the playback route you want.",
+      "Save a default voice for spoken output.",
+      "Use previews before relying on voice handoffs.",
+    ],
+    "grammar-plugin": [
+      "Install Harper if you want local grammar review.",
+      "Use it for docs, drafts, and transcripts.",
+      "Keep writing cleanup on this Mac.",
+    ],
+    "skill-sources": [
+      "Link GitHub repos, folders, or uploads.",
+      "Keep the skill catalog fresh without auto-installs.",
+      "Review new skill sources from the Sources subpage.",
     ],
     "app-publisher": [
       "Open the app workspace.",
       "Confirm draft and publish routes.",
       "Make sure the publisher is reachable.",
     ],
-    "hindsight-wiki": [
-      "Attach a squad archive when one exists.",
-      "Bring long-term context into Link.",
-      "Keep wiki memory close to daily work.",
+    "smoke-test": [
+      "Send one Work request.",
+      "Create or review one Taskbox item.",
+      "Check Scribe and one connected plugin before calling setup complete.",
     ],
   };
   const configurationStepCtas: Record<string, { label: string; run: () => void }> = {
     okta: { label: oktaComplete ? "Review SSO" : "Sign in with SSO", run: () => void signInOkta() },
-    accounts: { label: "Open Plugins", run: () => openSettingsTab("plugins") },
     "model-gateway": { label: "Open Models", run: () => openSettingsTab("models") },
+    "primary-agent-os": { label: "Open Agents", run: () => setView("agents") },
+    "session-daemon": { label: "Open Terminal Sessions", run: () => openSettingsTab("sessions") },
+    "models-general": { label: "Open Models", run: () => openSettingsTab("models") },
+    accounts: { label: "Open Plugins", run: () => openSettingsTab("plugins") },
     "google-workspace": { label: "Open Plugins", run: () => openSettingsTab("plugins") },
     "telnyx-api": { label: "Open Numbers", run: () => openSettingsTab("numbers") },
+    "cloud-storage": { label: "Open Storage", run: () => setView("storage") },
     "phone-calling": { label: "Open Dialpad", run: () => openSettingsTab("dialer") },
-    "scribe-voice": { label: "Open Scribe", run: () => setView("scribes") },
+    "scribe-stt": { label: "Open Scribe", run: () => setView("scribes") },
+    "dictation-menu": { label: "Open Scribe", run: () => setView("scribes") },
+    "scribe-tts": { label: "Open Scribe", run: () => setView("scribes") },
+    "grammar-plugin": { label: "Open Grammar", run: () => setView("scribes") },
+    "skill-sources": { label: "Open Skills", run: () => setView("skills") },
     "app-publisher": { label: "Open Apps", run: () => setView("apps") },
-    "hindsight-wiki": { label: "Open Archive", run: () => setView("memory") },
+    "smoke-test": { label: "Open Work", run: () => setView("chats") },
   };
   const learningStepIcons: Record<string, AppIcon> = {
     chat: MessageSquare,
+    "managed-session": SquareTerminal,
     taskbox: Grid2X2Plus,
     inbox: Inbox,
     calendar: CalendarDays,
@@ -3864,6 +4314,7 @@ function OnboardingView({
     "archive-memory": ArchiveIcon,
     "plugin-settings": Plug,
     "contact-preview": Users,
+    "feedback-report": MessageSquare,
   };
   const learningStepCopy: Record<string, { description: string; bullets: string[] }> = {
     chat: {
@@ -3872,6 +4323,14 @@ function OnboardingView({
         "Send one prompt through the main chat surface.",
         "Watch Link use the route already configured for you.",
         "Use the assistant sidebar when you want quick follow-up.",
+      ],
+    },
+    "managed-session": {
+      description: "Review Terminal Sessions before starting server-owned agent or terminal runs.",
+      bullets: [
+        "Confirm the Terminal Sessions endpoint is connected.",
+        "Add SMS alert numbers if you want long-running work updates.",
+        "Start managed terminal runs after setup is ready.",
       ],
     },
     taskbox: {
@@ -3883,7 +4342,7 @@ function OnboardingView({
       ],
     },
     inbox: {
-      description: "Open Inbox to review messages and draft replies without leaving Link.",
+      description: "Open Inbox to review messages and draft replies without leaving Cloud Link.",
       bullets: [
         "Read one active thread.",
         "Check sender context and recent history.",
@@ -3902,7 +4361,7 @@ function OnboardingView({
       description: "Use Call when you want to test your own number, verify routing, or confirm phone readiness.",
       bullets: [
         "Open the Call assistant tab.",
-        "Start from the dialer already configured in Link.",
+        "Start from the dialer already configured in Cloud Link.",
         "Use it to validate the phone setup end to end.",
       ],
     },
@@ -3958,7 +4417,7 @@ function OnboardingView({
       description: "Use Docs to browse internal docs, squad context, and connected sources from one place.",
       bullets: [
         "Open one wiki source.",
-        "Review how Link surfaces team knowledge.",
+        "Review how Cloud Link surfaces team knowledge.",
         "Use it when a task needs shared context before action.",
       ],
     },
@@ -3971,25 +4430,37 @@ function OnboardingView({
       ],
     },
     "plugin-settings": {
-      description: "Open plugin settings to review what services Link can currently access and route through.",
+      description: "Open plugin settings to review what services Cloud Link can currently access and route through.",
       bullets: [
         "Review the connected services.",
-        "Confirm the routes Link can use right now.",
+        "Confirm the routes Cloud Link can use right now.",
         "Use this when a workflow depends on an external tool.",
       ],
     },
     "contact-preview": {
-      description: "Use the phone contact preview flow to check whether Link can match a number to the right person.",
+      description: "Use the phone contact preview flow to check whether Cloud Link can match a number to the right person.",
       bullets: [
         "Open the Calls surface.",
         "Review one contact preview result.",
         "Confirm the dialer can pull useful caller context.",
       ],
     },
+    "feedback-report": {
+      description: "Finish by writing one short feedback note while the setup and learn pass are still fresh.",
+      bullets: [
+        "Open Work after trying the main surfaces.",
+        "Capture what worked, what broke, and what felt confusing.",
+        "Use the note as a product bug report or follow-up task.",
+      ],
+    },
   };
 
   function openLearningStep(item: typeof internalTestingChecklistItems[number]) {
     if (!testingChecklist.includes(item.id)) toggleTestingChecklistItem(item.id);
+    if (item.settingsTab) {
+      openSettingsTab(item.settingsTab);
+      return;
+    }
     if (item.assistantTab) {
       openAssistantTab(item.assistantTab);
       return;
@@ -4005,7 +4476,7 @@ function OnboardingView({
     id: step.id,
     title: step.title,
     description: step.body,
-    bullets: configurationStepBullets[step.id] ?? ["Review this setup in Link."],
+    bullets: configurationStepBullets[step.id] ?? ["Review this setup in Cloud Link."],
     ctaLabel: configurationStepCtas[step.id]?.label ?? "Open",
     onCtaClick: configurationStepCtas[step.id]?.run ?? (() => undefined),
     icon: step.icon,
@@ -4017,8 +4488,8 @@ function OnboardingView({
   const learningSteps = internalTestingChecklistItems.map((item) => ({
       id: item.id,
       title: item.label,
-      description: learningStepCopy[item.id]?.description ?? "Use this area to learn the core Link workflow.",
-      bullets: learningStepCopy[item.id]?.bullets ?? ["Open this area in Link."],
+      description: learningStepCopy[item.id]?.description ?? "Use this area to learn the core Cloud Link workflow.",
+      bullets: learningStepCopy[item.id]?.bullets ?? ["Open this area in Cloud Link."],
       ctaLabel: item.actionLabel ?? (item.view ? viewMeta[item.view].label : "Open"),
       onCtaClick: () => openLearningStep(item),
       icon: learningStepIcons[item.id] ?? MessageSquare,
@@ -4033,7 +4504,7 @@ function OnboardingView({
 
   return (
     <section className="content onboardingView" ref={onboardingViewRef}>
-      <PageSectionHeader parent="Link" title="Get Started" />
+      <PageSectionHeader parent="" title="Get Started" />
       <GetStartedFlowPanels
         configurationSteps={configurationSteps}
         learningSteps={learningSteps}
@@ -4210,12 +4681,12 @@ function Rail({
 
   return (
     <nav className="rail" aria-label="Primary" data-expanded={expanded} ref={railRef}>
-      <button className="railButton brandButton" title="Telnyx Link" onClick={() => setView("chats")}>
+      <button className="railButton brandButton" title="Telnyx Cloud Link" onClick={() => setView("chats")}>
         <span className="railIconSlot">
           <TelnyxLinkIcon />
         </span>
         <span className="railTooltip" role="tooltip">
-          Telnyx Link
+          Telnyx Cloud Link
         </span>
       </button>
       <div className="railOnboardingItem">
@@ -4227,8 +4698,7 @@ function Rail({
         )}
       </div>
       {navItems.map(renderRailButton)}
-      {renderRailButton({ id: "scribes", label: "Scribe", icon: ScribesWaveformIcon })}
-      {renderRailButton({ id: "wiki", label: "Docs", icon: BookOpen })}
+      {renderRailButton({ id: "apps", label: "Apps", icon: Grid2X2Plus })}
       <div className="railSecondaryGroup">
         {renderRailButton({ id: "storage", label: "Storage", icon: FolderOpen })}
         {renderRailButton({ id: "models", label: "Models", icon: ModelsIcon })}
@@ -4330,7 +4800,7 @@ function Sidebar({
         <Search size={15} />
         <input placeholder="Search..." />
       </div>
-      <SidebarSection title="Chat" count={chatSessions.length} icon={<MessageSquare size={13} />} compact active={view === "chats"}>
+      <SidebarSection title="Work" count={chatSessions.length} icon={<MessageSquare size={13} />} compact active={view === "chats"}>
         {chatSessions.slice(0, 4).map((session) => (
           <button
             key={session.id}
@@ -4362,7 +4832,7 @@ function Sidebar({
       <SidebarSection title="Calendar" count={3} icon={<CalendarDays size={13} />} compact active={view === "calendar"} />
       <SidebarSection title="Agents" count={agents.length} icon={<Bot size={13} />} compact active={view === "agents"} />
       <SidebarSection title="Archive" count={memoryBanks.length} icon={<ArchiveIcon size={13} />} compact active={view === "memory"} />
-      <SidebarSection title="Docs" count={wikiState?.profile.masteredSkills ?? 0} icon={<BookOpen size={13} />} compact active={view === "wiki"} />
+      <SidebarSection title="Compose" count={wikiState?.profile.masteredSkills ?? 0} icon={<BookOpen size={13} />} compact active={view === "wiki"} />
     </aside>
   );
 }
@@ -4409,7 +4879,7 @@ function isModelCenterTab(tab: string): tab is ModelCenterTab {
 }
 
 function normalizeModelCenterTab(tab: ModelCenterTab): Exclude<ModelCenterTab, "models"> {
-  return tab === "models" ? "general" : tab;
+  return tab === "models" ? "local-models" : tab;
 }
 
 function ModelsWorkspaceView({
@@ -4449,7 +4919,7 @@ function ModelsWorkspaceView({
 
 type ExplorerSourceTab = "support" | "developers" | "wiki" | "pylon" | "custom" | "local";
 type WikiSourceTab = string;
-type WikiWorkspaceTab = "workspace-docs" | "workspace-transcripts" | "workspace-meetings";
+type WikiWorkspaceTab = "workspace-docs" | "workspace-personal-wiki" | "workspace-transcripts" | "workspace-meetings" | "workspace-manage";
 type WikiTab = "apps" | "skills" | WikiWorkspaceTab | WikiSourceTab;
 type WikiPage = "apps" | "skills" | "wiki";
 type ToolsWorkspaceTab = "personal" | "company" | "domains" | "vpn";
@@ -4482,6 +4952,7 @@ type ExplorerSourceConfig = {
 };
 
 type WikiSourceConfig = Omit<ExplorerSourceConfig, "id"> & { id: WikiSourceTab; externalSource: ExplorerSourceTab };
+type WikiNewSourceMode = "repo" | "mcp" | "api" | "bundle";
 type WikiWorkspaceSubmissionSource = WikiDocumentationSource & {
   submissionTarget: "github" | "pylon";
   helperText: string;
@@ -4489,9 +4960,11 @@ type WikiWorkspaceSubmissionSource = WikiDocumentationSource & {
 
 const wikiWorkspaceDocStorageKey = "telnyx-link-wiki-workspace-docs";
 const wikiWorkspaceSectionTabs: readonly PageSectionTab<WikiWorkspaceTab>[] = [
-  ["workspace-docs", "Docs", FileText],
+  ["workspace-docs", "Compose", FileText],
+  ["workspace-personal-wiki", "Agent Context", BookOpen],
   ["workspace-transcripts", "Transcripts", Mic],
   ["workspace-meetings", "Meetings", CalendarDays],
+  ["workspace-manage", "Manage", Settings],
 ];
 
 function isWikiWorkspaceTab(tab: string): tab is WikiWorkspaceTab {
@@ -4499,9 +4972,11 @@ function isWikiWorkspaceTab(tab: string): tab is WikiWorkspaceTab {
 }
 
 function wikiWorkspaceTabMeta(tab: WikiWorkspaceTab) {
+  if (tab === "workspace-manage") return { label: "Manage", title: "Manage Sources", icon: Settings };
+  if (tab === "workspace-personal-wiki") return { label: "Agent Context", title: "Agent Context", icon: BookOpen };
   if (tab === "workspace-transcripts") return { label: "Transcripts", title: "Transcripts", icon: Mic };
   if (tab === "workspace-meetings") return { label: "Meetings", title: "Meetings", icon: CalendarDays };
-  return { label: "Docs", title: "Docs", icon: FileText };
+  return { label: "Compose", title: "Compose", icon: FileText };
 }
 
 function createWikiWorkspaceDocId() {
@@ -4849,7 +5324,7 @@ const explorerSourceTabs: ExplorerSourceConfig[] = [
     label: "Dev Docs",
     icon: FileText,
     title: "Dev Docs",
-    body: "Public Telnyx API guides, SDK references, and implementation docs.",
+    body: "",
     setup: "No matching Dev Docs found. Try an API name, endpoint, SDK, error code, or product area.",
     emptyActionLabel: "Open Dev Docs",
     emptyActionUrl: "https://developers.telnyx.com/docs/overview",
@@ -4859,18 +5334,22 @@ const explorerSourceTabs: ExplorerSourceConfig[] = [
     id: "wiki",
     label: "Guru",
     icon: BookOpen,
-    title: "Company Guru",
-    body: "Internal Guru cards after a user connects Guru OAuth.",
+    title: "Guru",
+    body: "",
     setup: "No matching Guru cards found. Connect Guru in Settings, then try a team, policy, launch, or internal tool.",
+    emptyActionLabel: "Open Guru",
+    emptyActionUrl: "https://app.getguru.com/",
     sources: ["guru"],
   },
   {
     id: "pylon",
     label: "Pylon",
     icon: FileText,
-    title: "Pylon tickets",
-    body: "Support issues and account context through the approved Pylon MCP connector.",
+    title: "Pylon",
+    body: "",
     setup: "No matching Pylon tickets found. Connect Pylon in Settings, then try an issue number, customer name, or ticket title.",
+    emptyActionLabel: "Open Pylon",
+    emptyActionUrl: "https://app.usepylon.com/issues/views/all-issues",
     sources: ["pylon"],
   },
   {
@@ -4930,19 +5409,27 @@ function ExplorerView({
   const activeSourceTab = availableSourceTabs.find((tab) => tab.id === sourceTab) ?? availableSourceTabs[0] ?? explorerSourceTabs[0]!;
   const activeExternalTab = externalSource && externalSource !== "all" ? availableSourceTabs.find((tab) => tab.id === externalSource) : undefined;
   const displayedSourceTab = activeExternalTab ?? activeSourceTab;
+  const showSourceTable = Boolean(docSourcesOnly || activeExternalTab);
+  const recentSource = displayedSourceTab.sources.length === 1 ? displayedSourceTab.sources[0] : undefined;
+  const sourceHeaderNote = shareStatus || displayedSourceTab.statusNote || displayedSourceTab.body;
   const sourceFilteredResults = activeExternalTab
     ? results.filter((result) => activeExternalTab.sources.includes(result.source))
     : results.filter((result) => activeSourceTab.sources.includes(result.source));
-  const visibleResults = trimmedQuery && externalSort === "az"
+  const visibleResults = !trimmedQuery || externalSort === "az"
     ? sourceFilteredResults
-    : [...sourceFilteredResults].sort((left, right) => (
-      externalSort === "za" ? right.title.localeCompare(left.title) : left.title.localeCompare(right.title)
-    ));
+    : [...sourceFilteredResults].sort((left, right) => right.title.localeCompare(left.title));
 
   async function search() {
     setBusy(true);
-    setResults(await linkApi.searchExplorer({ query, workspaceId: defaultWorkspaceId }));
-    setBusy(false);
+    try {
+      if (!trimmedQuery && showSourceTable && recentSource) {
+        setResults(await linkApi.listExplorerSourceItems({ source: recentSource, workspaceId: defaultWorkspaceId, limit: 25 }));
+        return;
+      }
+      setResults(await linkApi.searchExplorer({ query, workspaceId: defaultWorkspaceId }));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function shareResult(result: ExplorerResult) {
@@ -4995,79 +5482,113 @@ function ExplorerView({
           })}
         </div>
       )}
-      <section className="explorerSourceHeader" aria-label={displayedSourceTab.title}>
-        <span>{shareStatus || displayedSourceTab.statusNote || displayedSourceTab.body}</span>
-      </section>
+      {sourceHeaderNote && (
+        <section className="explorerSourceHeader" aria-label={displayedSourceTab.title}>
+          <span>{sourceHeaderNote}</span>
+        </section>
+      )}
       <div className="explorerResults">
-        {visibleResults.map((result) => (
-          <article className="explorerResult" key={result.id}>
-            <div className="connectorIcon explorerResultIcon">{sourceInitials(result.source)}</div>
-            <div className="explorerResultBody">
-              <div className="explorerResultTopline">
-                <strong>{result.title}</strong>
-                {result.permission !== "allowed" && (
-                  <Badge tone={result.permission === "needs_access" ? "warning" : "default"}>
-                    {result.permission.replace("_", " ")}
-                  </Badge>
-                )}
-              </div>
-              <small className="explorerResultMeta">{explorerResultSourceLabel(result.source)} · {result.freshness}</small>
-              <p>{result.excerpt}</p>
-            </div>
-            {(onShareResult || result.url) && (
-              <div className="explorerResultActions">
-                {onShareResult && (
-                  <button className="button secondary" onClick={() => void shareResult(result)}>
-                    <Send size={13} />
-                    Share
-                  </button>
-                )}
-                {result.url ? (
-                  <a className="iconButton explorerResultLinkButton" href={result.url} target="_blank" rel="noreferrer" aria-label={`Open ${result.title}`} title="Open source">
-                    <ExternalLink size={15} />
-                  </a>
-                ) : null}
-              </div>
-            )}
-          </article>
-        ))}
-        {visibleResults.length === 0 && (docSourcesOnly || activeExternalTab) ? (
-          <section className="docsSetupState">
-            <div className="connectorIcon">{sourceInitials(displayedSourceTab.sources[0] ?? displayedSourceTab.id)}</div>
-            <div>
-              <h3>{trimmedQuery ? "No results found" : `Search ${displayedSourceTab.title}`}</h3>
-              <p>{trimmedQuery ? displayedSourceTab.setup : displayedSourceTab.body}</p>
-              {trimmedQuery && <small>Try another phrase or use a more specific product, API, team, or card title.</small>}
-            </div>
-            {displayedSourceTab.emptyActionUrl ? (
-              <div className="docsSetupActions">
-                <a className="button secondary" href={displayedSourceTab.emptyActionUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink size={13} />
-                  {displayedSourceTab.emptyActionLabel ?? "Open source"}
-                </a>
-              </div>
-            ) : null}
+        {showSourceTable ? (
+          <section className={`explorerDirectorySection ${visibleResults.length === 0 ? "empty" : ""}`} aria-label={displayedSourceTab.title}>
+            <DirectoryTable
+              ariaLabel={`${displayedSourceTab.title} files`}
+              className="explorerDirectoryTable"
+              rowClassName="explorerDirectoryRow"
+              columns={[
+                <span role="columnheader" key="title">Page</span>,
+                <span role="columnheader" key="type">Type</span>,
+                <span role="columnheader" key="updated">Updated</span>,
+                <span role="columnheader" key="actions" aria-label="Source actions" />,
+              ]}
+            >
+              {visibleResults.map((result) => (
+                <div className="chatResultRow directoryResultRow explorerDirectoryRow" role="row" key={result.id}>
+                  <span className="directoryNameCell explorerDirectoryNameCell" role="cell">
+                    <strong>{result.title}</strong>
+                    <small>{result.excerpt}</small>
+                  </span>
+                  <span role="cell">{explorerResultTypeLabel(result)}</span>
+                  <span role="cell">{compactRelativeTime(result.updatedAt) || result.freshness}</span>
+                  <span className="directoryRowActions explorerDirectoryActions" role="cell">
+                    {onShareResult && (
+                      <button
+                        className="iconButton"
+                        type="button"
+                        onClick={() => void shareResult(result)}
+                        aria-label={`Share ${result.title}`}
+                        title="Share with agent"
+                      >
+                        <Send size={14} />
+                      </button>
+                    )}
+                    {result.url ? (
+                      <a className="iconButton explorerResultLinkButton" href={result.url} target="_blank" rel="noreferrer" aria-label={`Open ${result.title}`} title="Open source">
+                        <ExternalLink size={15} />
+                      </a>
+                    ) : null}
+                  </span>
+                </div>
+              ))}
+              {visibleResults.length === 0 && (
+                <div className="tableEmptyState" role="row">
+                  <EmptyState
+                    title={trimmedQuery ? "No files found" : `No recent ${displayedSourceTab.label.toLowerCase()} items`}
+                    body={trimmedQuery ? explorerSourceNoResultsBody(displayedSourceTab) : "Recent files, pages, and tickets will appear here when this source returns them."}
+                    hideIcon
+                  />
+                </div>
+              )}
+            </DirectoryTable>
           </section>
         ) : (
-          visibleResults.length === 0 && <EmptyState title="No results found" body="Try another source tab or search term." />
+          <>
+            {visibleResults.map((result) => (
+              <article className="explorerResult" key={result.id}>
+                <div className="connectorIcon explorerResultIcon">{sourceInitials(result.source)}</div>
+                <div className="explorerResultBody">
+                  <div className="explorerResultTopline">
+                    <strong>{result.title}</strong>
+                    {result.permission !== "allowed" && (
+                      <Badge tone={result.permission === "needs_access" ? "warning" : "default"}>
+                        {result.permission.replace("_", " ")}
+                      </Badge>
+                    )}
+                  </div>
+                  <small className="explorerResultMeta">{explorerResultSourceLabel(result.source)} · {result.freshness}</small>
+                  <p>{result.excerpt}</p>
+                </div>
+                {(onShareResult || result.url) && (
+                  <div className="explorerResultActions">
+                    {onShareResult && (
+                      <button className="button secondary" onClick={() => void shareResult(result)}>
+                        <Send size={13} />
+                        Share
+                      </button>
+                    )}
+                    {result.url ? (
+                      <a className="iconButton explorerResultLinkButton" href={result.url} target="_blank" rel="noreferrer" aria-label={`Open ${result.title}`} title="Open source">
+                        <ExternalLink size={15} />
+                      </a>
+                    ) : null}
+                  </div>
+                )}
+              </article>
+            ))}
+            {visibleResults.length === 0 && <EmptyState title="No results found" body="Try another source tab or search term." />}
+          </>
         )}
       </div>
     </section>
   );
 }
 
-const helpCenterQuestionExamples = [
-  "How do I troubleshoot failed outbound SMS?",
-  "What are the requirements for 10DLC registration?",
-  "How do I configure inbound call screening?",
-  "How do I attach an AI Assistant to a voice call?",
-];
-
 function HelpCenterConsole({
+  source,
   question,
   setQuestion,
   refreshKey = 0,
 }: {
+  source: WikiSourceConfig;
   question: string;
   setQuestion: (value: string) => void;
   refreshKey?: number;
@@ -5079,6 +5600,8 @@ function HelpCenterConsole({
   const [answerRequested, setAnswerRequested] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
   const trimmedQuestion = question.trim();
+  const sourceNames = source.sources;
+  const sourceLabel = source.label;
   const sourceUrls = useMemo(() => {
     const urls = [
       ...(answer?.citations ?? []).map((citation) => citation.url),
@@ -5102,7 +5625,7 @@ function HelpCenterConsole({
       void linkApi.searchExplorer({ query: term, workspaceId: defaultWorkspaceId })
         .then((results) => {
           if (cancelled) return;
-          setRelatedSources(results.filter((result) => result.source === "telnyx_support" || result.source === "telnyx_developers"));
+          setRelatedSources(results.filter((result) => sourceNames.includes(result.source)));
         })
         .catch(() => {
           if (!cancelled) setRelatedSources([]);
@@ -5112,7 +5635,7 @@ function HelpCenterConsole({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [trimmedQuestion, refreshKey]);
+  }, [sourceNames, trimmedQuestion, refreshKey]);
 
   useEffect(() => {
     if (!refreshKey || !answer || !trimmedQuestion || answerBusy) return;
@@ -5139,43 +5662,15 @@ function HelpCenterConsole({
     }
   }
 
-  async function copyBotSafeAnswer() {
-    if (!answer) return;
-    const sourceLines = sourceUrls.length
-      ? sourceUrls.map((url) => `- ${url}`).join("\n")
-      : "- No citations returned; verify against related docs before customer-visible use.";
-    const text = [
-      `Question: ${trimmedQuestion}`,
-      "",
-      answer.answer,
-      "",
-      "Sources:",
-      sourceLines,
-      "",
-      "Safety: This answer is for general documentation questions only. Do not include secrets, private customer data, call logs, billing records, or account-specific identifiers.",
-    ].join("\n");
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopyStatus("Copied bot-safe answer.");
-    } catch {
-      setCopyStatus("Clipboard access is unavailable.");
-    }
-  }
-
-  function openFirstSource() {
-    const [url] = sourceUrls;
-    if (url) window.open(url, "_blank", "noreferrer");
-  }
-
   return (
     <div className="helpCenterConsole embeddedExplorerView">
-      <section className="helpCenterAskPanel" aria-label="Ask Knowledge Agent">
+      <section className="helpCenterAskPanel" aria-label={`Ask ${sourceLabel} Knowledge Agent`}>
         <label className="helpCenterQuestionComposer">
-          <span>Question</span>
+          <span>ASK</span>
           <textarea
             value={question}
             rows={3}
-            placeholder="Ask a general docs or support question..."
+            placeholder={`Ask the agent to research ${sourceLabel}, connected docs, and available internal tools. Do not send secrets, private customer data, call logs, billing details, or account-specific identifiers.`}
             onChange={(event) => setQuestion(event.target.value)}
             onKeyDown={(event) => {
               if (!shouldSubmitComposer(event)) return;
@@ -5184,39 +5679,9 @@ function HelpCenterConsole({
             }}
           />
         </label>
-        <p className="helpCenterGuardrail">
-          <strong>Note:</strong> Ask general support and developer documentation questions only. Do not send secrets, private customer data, call logs, billing details, or account-specific identifiers.
-        </p>
-        <div className="helpCenterExamples" aria-label="Example questions">
-          {helpCenterQuestionExamples.map((example) => (
-            <button
-              key={example}
-              type="button"
-              onClick={() => {
-                setQuestion(example);
-                void askQuestion(example);
-              }}
-            >
-              {example}
-            </button>
-          ))}
-        </div>
         <div className="helpCenterActions">
           <button className="button primary" onClick={() => void askQuestion()} disabled={answerBusy || !trimmedQuestion}>
-            <Send size={14} />
-            {answerBusy ? "Asking" : "Ask Knowledge Agent"}
-          </button>
-          <button className="button secondary" onClick={() => void askQuestion()} disabled={answerBusy || !trimmedQuestion}>
-            <RefreshCw size={14} />
-            Retry
-          </button>
-          <button className="button secondary" onClick={copyBotSafeAnswer} disabled={!answer}>
-            <FileText size={14} />
-            Copy bot-safe answer
-          </button>
-          <button className="button ghost" onClick={openFirstSource} disabled={sourceUrls.length === 0}>
-            <ExternalLink size={14} />
-            Open sources
+            {answerBusy ? "Asking" : "Ask"}
           </button>
         </div>
         {copyStatus && (
@@ -5441,7 +5906,7 @@ function ChatsView({
       artifacts,
       messages,
       sources,
-      agentName: formatChatAgentName(attachedAgentName ?? "Link"),
+      agentName: formatChatAgentName(attachedAgentName ?? "Cloud Link"),
       lastMessageAt: lastVisibleMessage?.createdAt ?? session.updatedAt,
       messageCount: messages.length,
     };
@@ -5507,7 +5972,7 @@ function ChatsView({
 	  const edgeDeploySlugInputRef = useRef<HTMLInputElement | null>(null);
 	  const archiveQueryForSession = (session: ChatSession) => {
 	    const lastUserMessage = [...session.messages].reverse().find((message) => message.role === "user");
-	    return (lastUserMessage?.content || session.title || "What did we decide about Link improvement requests?").slice(0, 220);
+	    return (lastUserMessage?.content || session.title || "What did we decide about Cloud Link improvement requests?").slice(0, 220);
 	  };
 
 	  async function previewEdgeAppFromSession(session: ChatSession) {
@@ -5762,7 +6227,7 @@ function ChatsView({
       <div className="chatResultDetails">
         <div className="chatReviewTabs" role="tablist" aria-label={`${session.title} review`}>
           {([
-            ["chat", "Chat", MessageSquare],
+            ["chat", "Work", MessageSquare],
             ["actions", "Actions", SquareCheck],
             ["sources", "Sources", ExternalLink],
             ["archive", "Archive", ArchiveIcon],
@@ -6002,7 +6467,7 @@ function ChatsView({
     <section className="content chatView canonicalChat chatListView">
       <header className="pageHeader">
         <div>
-          <h1>Chat</h1>
+          <h1>Work</h1>
         </div>
         <div className="headerActions">
           <button className="button primary" onClick={() => void startNewSession()}>
@@ -6203,7 +6668,7 @@ function driveBreadcrumbs(path: string) {
   const normalized = normalizeDrivePath(path);
   const parts = normalized.replace(/^~\/Link\/?/, "").split("/").filter(Boolean);
   return [
-    { label: "Link", path: "~/Link/" },
+    { label: "Cloud Link", path: "~/Link/" },
     ...parts.map((part, index) => ({
       label: part,
       path: `~/Link/${parts.slice(0, index + 1).join("/")}/`,
@@ -6250,9 +6715,7 @@ function DriveView({
   const [storageBucketRegionFilter, setStorageBucketRegionFilter] = useState("all");
   const [storageBucketsBusy, setStorageBucketsBusy] = useState(false);
   const [storageBucketLinkBusy, setStorageBucketLinkBusy] = useState("");
-  const [storageBackupBusy, setStorageBackupBusy] = useState(false);
   const [storageBackupMessage, setStorageBackupMessage] = useState("");
-  const [includeEncryptedCredentials, setIncludeEncryptedCredentials] = useState(false);
   const [storageLocationsOpen, setStorageLocationsOpen] = useState(false);
   const [storagePathCopyStatus, setStoragePathCopyStatus] = useState("");
 
@@ -6273,6 +6736,15 @@ function DriveView({
       setStorageBuckets(nextBuckets);
     } finally {
       setStorageBucketsBusy(false);
+    }
+  }
+
+  async function refreshCloudStorageTable() {
+    setStorageBackupMessage("");
+    try {
+      await Promise.all([refreshStorageBackupStatus(), refreshStorageBuckets()]);
+    } catch (error) {
+      setStorageBackupMessage(error instanceof Error ? error.message : "Cloud Storage could not refresh.");
     }
   }
 
@@ -6312,20 +6784,20 @@ function DriveView({
   const folderRows = useMemo<DriveFolderRow[]>(() => {
     return [
       { id: "folder:workspace", kind: "folder", path: "~/Link/", owner: "You", contents: "Per-user Link workspace", updated: "Internal" },
-      { id: "folder:apps", kind: "folder", path: "~/Link/apps/", owner: "Link App Publisher", contents: "Apps, manifests, previews, and publish records", updated: "Managed" },
+      { id: "folder:apps", kind: "folder", path: "~/Link/apps/", owner: "Cloud Link App Publisher", contents: "Apps, manifests, previews, and publish records", updated: "Managed" },
       { id: "folder:apps-personal", kind: "folder", path: "~/Link/apps/personal/", owner: "You", contents: "Imported personal app drafts", updated: "Local" },
       { id: "folder:apps-team", kind: "folder", path: "~/Link/apps/team/", owner: "Team", contents: "Team app drafts and publisher handoffs", updated: "Shared" },
-      { id: "folder:apps-publish-intents", kind: "folder", path: "~/Link/apps/publish-intents/", owner: "Link App Publisher", contents: "Review, version, rollback, and deployment records", updated: "Managed" },
+      { id: "folder:apps-publish-intents", kind: "folder", path: "~/Link/apps/publish-intents/", owner: "Cloud Link App Publisher", contents: "Review, version, rollback, and deployment records", updated: "Managed" },
       { id: "folder:agents", kind: "folder", path: "~/Link/agents/", owner: "Agent Control Plane", contents: "Active agents, saved agents, and setup context", updated: "Synced" },
-      { id: "folder:chats", kind: "folder", path: "~/Link/chats/", owner: "Link", contents: "Chat sessions and generated outputs", updated: "Local" },
-      { id: "folder:storage", kind: "folder", path: "~/Link/storage/", owner: "Link", contents: "Generated files and local workspace artifacts", updated: "Local" },
+      { id: "folder:chats", kind: "folder", path: "~/Link/chats/", owner: "Cloud Link", contents: "Chat sessions and generated outputs", updated: "Local" },
+      { id: "folder:storage", kind: "folder", path: "~/Link/storage/", owner: "Cloud Link", contents: "Generated files and local workspace artifacts", updated: "Local" },
       { id: "folder:artifacts", kind: "folder", path: "~/Link/storage/artifacts/", owner: "Agents", contents: "Files generated from assistant sessions", updated: "Local" },
       { id: "folder:scribes", kind: "folder", path: "~/Link/scribes/", owner: "Scribe", contents: "Transcripts, models, and generated notes", updated: "Local" },
       { id: "folder:scribes-transcripts", kind: "folder", path: "~/Link/scribes/transcripts/", owner: "Scribe", contents: "Dictation and meeting transcripts", updated: "Local" },
       { id: "folder:scribes-summaries", kind: "folder", path: "~/Link/scribes/summaries/", owner: "Scribe", contents: "Generated summaries and meeting notes", updated: "Local" },
       { id: "folder:scribes-audio", kind: "folder", path: "~/Link/scribes/audio/", owner: "Scribe", contents: "Retained audio references when enabled", updated: "Local" },
-      { id: "folder:archive", kind: "folder", path: "~/Link/archive/", owner: "Link", contents: "Hidden rows, dismissed items, and archived references", updated: "Local" },
-      { id: "folder:archive-chats", kind: "folder", path: "~/Link/archive/chats/", owner: "Link", contents: "Archived chat sessions", updated: "Local" },
+      { id: "folder:archive", kind: "folder", path: "~/Link/archive/", owner: "Cloud Link", contents: "Hidden rows, dismissed items, and archived references", updated: "Local" },
+      { id: "folder:archive-chats", kind: "folder", path: "~/Link/archive/chats/", owner: "Cloud Link", contents: "Archived chat sessions", updated: "Local" },
     ];
   }, []);
   const archivedSessionRows = useMemo<DriveArchivedSessionRow[]>(() => sessions
@@ -6336,7 +6808,7 @@ function DriveView({
       path: `~/Link/archive/chats/${driveSafeSlug(session.title)}.chat`,
       sessionId: session.id,
       sessionTitle: session.title,
-      agentName: formatChatAgentName(sessionSelectedAgentName(session) || activeAgent?.displayName || "Link"),
+      agentName: formatChatAgentName(sessionSelectedAgentName(session) || activeAgent?.displayName || "Cloud Link"),
       messageCount: session.messages.length,
       archivedAt: session.archivedAt || session.updatedAt,
     }))
@@ -6349,7 +6821,7 @@ function DriveView({
       path: `~/Link/chats/${driveSafeSlug(session.title)}.chat`,
       sessionId: session.id,
       sessionTitle: session.title,
-      agentName: formatChatAgentName(sessionSelectedAgentName(session) || activeAgent?.displayName || "Link"),
+      agentName: formatChatAgentName(sessionSelectedAgentName(session) || activeAgent?.displayName || "Cloud Link"),
       messageCount: session.messages.length,
       updatedAt: session.updatedAt,
     }))
@@ -6358,7 +6830,7 @@ function DriveView({
     const hidden = new Set(hiddenDriveRowIds);
     return sessions
       .flatMap((session) => {
-        const selectedAgentName = sessionSelectedAgentName(session) || activeAgent?.displayName || "Link";
+        const selectedAgentName = sessionSelectedAgentName(session) || activeAgent?.displayName || "Cloud Link";
         return session.messages
           .filter((message) => message.role === "assistant")
           .flatMap((message) => (message.artifacts ?? []).map((artifact) => ({
@@ -6551,31 +7023,14 @@ function DriveView({
     setDriveBulkEdit(false);
   }
 
-  async function runStorageBackup() {
-    setStorageBackupBusy(true);
-    setStorageBackupMessage("");
-    try {
-      const result: StorageBackupResult = await linkApi.backupStorageWorkspace({ includeEncryptedCredentials });
-      setStorageBackupStatus(result.status);
-      setStorageBackupMessage(`Uploaded ${result.objectKeys.length} objects to ${result.bucket} in ${result.region}.`);
-    } catch (error) {
-      setStorageBackupMessage(error instanceof Error ? error.message : "Storage backup failed.");
-      await refreshStorageBackupStatus().catch(() => undefined);
-    } finally {
-      setStorageBackupBusy(false);
-    }
-  }
-
   const storageScopeLabel = storageBackupStatus
     ? [storageBackupStatus.bucket, storageBackupStatus.region, storageBackupStatus.prefix].filter(Boolean).join(" · ")
     : "";
-  const storageWorkspaceSummary = `${sessions.length} chats · ${scribesSessions.length} Scribe sessions · ${publishedApps.length} app records`;
   const storageMissingFields = storageBackupStatus?.missing ?? [];
-  const storageReady = Boolean(storageBackupStatus?.ready);
   const storageApiKeyReady = !storageMissingFields.includes("TELNYX_API_KEY");
   const activeStorageLabel = storageWorkspaceTabs.find(([id]) => id === activeStorageTab)?.[1] || "Storage";
   const storagePathRows = modelCenterState ? [
-    { label: "Workspace folder", value: modelCenterState.storage.appDataPath, description: "Main place Link keeps local files and workspace data." },
+    { label: "Workspace folder", value: modelCenterState.storage.appDataPath, description: "Main place Cloud Link keeps local files and workspace data." },
     { label: "App settings", value: modelCenterState.storage.statePath, description: "Saved app settings and local preferences." },
     { label: "Local model gateway", value: modelCenterState.storage.liteLlmConfigPath, description: "Advanced config used for local model routing." },
     { label: "Imported models", value: modelCenterState.storage.importsPath, description: "Files added for local model use." },
@@ -6614,7 +7069,7 @@ function DriveView({
       const nextStatus = await linkApi.getStorageBackupStatus();
       setStorageBackupStatus(nextStatus);
       await refreshStorageBuckets();
-      setStorageBackupMessage(`Linked ${bucket.name} for Link backups.`);
+      setStorageBackupMessage(`Linked ${bucket.name} for Cloud Link backups.`);
     } catch (error) {
       setStorageBackupMessage(error instanceof Error ? error.message : "Bucket could not be linked.");
     } finally {
@@ -6642,8 +7097,8 @@ function DriveView({
         {!storageApiKeyReady && (
           <div className="phoneSetupAlert" aria-live="polite">
             <div>
-              <strong>Connect a Telnyx API key to load cloud buckets</strong>
-              <p>Link can only list and attach Telnyx Cloud Storage buckets after your account key is connected.</p>
+              <strong>Connect a Telnyx API Key to load cloud buckets</strong>
+              <p>Cloud Link can only list and attach Telnyx Cloud Storage buckets after your account key is connected.</p>
             </div>
             <button className="runtimeSettingsButton" type="button" onClick={openSettings}>
               <Settings size={14} />
@@ -6670,7 +7125,7 @@ function DriveView({
               placeholder="Search buckets, regions, or backup paths"
             />
           </div>
-          <TableRefreshButton onClick={refreshStorageBuckets} busy={storageBucketsBusy} disabled={!storageApiKeyReady} label="Refresh buckets" />
+          <TableRefreshButton onClick={refreshCloudStorageTable} busy={storageBucketsBusy} disabled={!storageApiKeyReady} label="Refresh buckets" />
         </div>
 
         {storageBucketFiltersOpen && (
@@ -6693,26 +7148,27 @@ function DriveView({
           </div>
         )}
 
+        {!linkedBucket && storageApiKeyReady && (
+          <div className="assistantNotice chatRefreshNotice storageBackupSetupNotice" aria-live="polite">
+            <p><strong>No backup bucket yet.</strong> Select a bucket below to enable cloud backup for this workspace.</p>
+          </div>
+        )}
+
         <section className="storageBucketTable phoneContentTable" aria-label="Telnyx cloud storage buckets">
           <div className="storageBucketRows" role="table" aria-label="Available Telnyx buckets">
             <div className="storageBucketRow storageBucketRowHead" role="row">
               <span role="columnheader">Bucket</span>
               <span role="columnheader">Region</span>
-              <span role="columnheader">Created</span>
               <span role="columnheader">Backup Path</span>
               <span role="columnheader">Status</span>
               <span role="columnheader" aria-label="Link bucket" />
             </div>
             {filteredStorageBuckets.map((bucket) => {
-              const createdLabel = bucket.createdAt
-                ? `${relativeDate(bucket.createdAt)} · ${new Date(bucket.createdAt).toLocaleDateString()}`
-                : "Existing bucket";
               const statusLabel = bucket.linked ? "Linked" : bucket.lastBackupAt ? "Used before" : "Available";
               return (
                 <div className={`storageBucketRow ${bucket.linked ? "selected" : ""}`} key={`${bucket.name}:${bucket.region}`} role="row">
                   <strong role="cell">{bucket.name}</strong>
                   <span role="cell">{bucket.region}</span>
-                  <span role="cell">{createdLabel}</span>
                   <span role="cell">{bucket.prefix || "link-desktop/backups"}</span>
                   <span role="cell"><em>{statusLabel}</em></span>
                   <button
@@ -6729,8 +7185,8 @@ function DriveView({
             {filteredStorageBuckets.length === 0 && (
               <div className="tableEmptyState" role="row">
                 <EmptyState
-                  title={!storageApiKeyReady ? "Connect a Telnyx API key" : storageBucketsBusy ? "Loading buckets..." : storageBucketQuery.trim() || storageBucketRegionFilter !== "all" ? "No buckets found" : "No buckets available"}
-                  body={!storageApiKeyReady ? "Add your Telnyx API key in Settings to browse cloud storage buckets." : storageBucketsBusy ? "Loading available Telnyx Cloud Storage buckets for this account." : storageBucketQuery.trim() || storageBucketRegionFilter !== "all" ? "Try another search term or filter." : "Create a bucket in the Telnyx portal, then refresh to link it here."}
+                  title={!storageApiKeyReady ? "Connect a Telnyx API Key" : storageBucketsBusy ? "Loading buckets..." : storageBucketQuery.trim() || storageBucketRegionFilter !== "all" ? "No buckets found" : "No buckets available"}
+                  body={!storageApiKeyReady ? "Add your Telnyx API Key in Settings to browse cloud storage buckets." : storageBucketsBusy ? "Loading available Telnyx Cloud Storage buckets for this account." : storageBucketQuery.trim() || storageBucketRegionFilter !== "all" ? "Try another search term or filter." : "Create a bucket in the Telnyx portal, then refresh to link it here."}
                   icon={Cloud}
                 />
               </div>
@@ -6738,62 +7194,6 @@ function DriveView({
           </div>
         </section>
 
-        <section className="accessCard storageLinkedBucketCard">
-          <div className="accessCardHeader">
-            <div className="accessCardTitle">
-              <span className="accessIcon"><Cloud size={18} /></span>
-              <div>
-                <h3>{linkedBucket ? "Linked bucket" : "No bucket linked yet"}</h3>
-                <p>{linkedBucket ? "This is the bucket Link will use for workspace backups." : "Pick a bucket above to connect cloud backup for this workspace."}</p>
-              </div>
-            </div>
-          </div>
-          <div className="assistantNoticeMetaGrid">
-            <div>
-              <strong>Workspace</strong>
-              <span>{storageWorkspaceSummary}</span>
-            </div>
-            <div>
-              <strong>Bucket</strong>
-              <span>{storageBackupStatus?.bucket || linkedBucket?.name || "Not linked"}</span>
-            </div>
-            <div>
-              <strong>Last backup</strong>
-              <span>{storageBackupStatus?.lastBackupAt ? `${relativeDate(storageBackupStatus.lastBackupAt)} · ${new Date(storageBackupStatus.lastBackupAt).toLocaleString()}` : "Never"}</span>
-            </div>
-          </div>
-          {storageReady ? (
-            <>
-              <div className="memorySettingsToggleRow">
-                <div>
-                  <strong>Include encrypted credentials</strong>
-                  <small>Optional. Include the encrypted desktop credentials snapshot in this backup.</small>
-                </div>
-                <label className="miniToggle">
-                  <input
-                    type="checkbox"
-                    checked={includeEncryptedCredentials}
-                    onChange={(event) => setIncludeEncryptedCredentials(event.target.checked)}
-                  />
-                  <span>{includeEncryptedCredentials ? "Included" : "Excluded"}</span>
-                </label>
-              </div>
-              <div className="headerActions storageBucketActions">
-                <button className="button primary" type="button" onClick={() => void runStorageBackup()} disabled={storageBackupBusy}>
-                  <Upload size={15} />
-                  {storageBackupBusy ? "Backing up" : "Back Up Now"}
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="headerActions storageBucketActions">
-              <button className="button secondary" type="button" onClick={openSettings}>
-                <Settings size={14} />
-                Open Settings
-              </button>
-            </div>
-          )}
-        </section>
       </div>
     );
   }
@@ -6833,6 +7233,43 @@ function DriveView({
             <span className="chatFilterCount">{filteredRows.length} items in {driveQuery.trim() ? "search" : currentFolder}</span>
           </div>
         )}
+        {storageLocationsOpen && (
+          <section className="accessCard storagePathCard" aria-label="Local storage paths">
+            <div className="storagePathRows">
+              {storagePathRows.map((row) => (
+                <div className="storagePathRow" key={row.label}>
+                  <div>
+                    <strong>{row.label}</strong>
+                    <small>{row.description}</small>
+                    <code className="storagePathValue">{row.value}</code>
+                  </div>
+                  <div className="storagePathActions">
+                    <button
+                      className="iconButton"
+                      type="button"
+                      aria-label={`Reveal ${row.label}`}
+                      title={`Reveal ${row.label}`}
+                      onClick={() => void revealStoragePath(row.value, row.label)}
+                    >
+                      <ExternalLink size={14} />
+                    </button>
+                    <button
+                      className="iconButton"
+                      type="button"
+                      aria-label={`Copy ${row.label}`}
+                      title={`Copy ${row.label}`}
+                      onClick={() => void copyStoragePath(row.value, row.label)}
+                    >
+                      <Copy size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {storagePathCopyStatus && <p className="wikiSourceStatus">{storagePathCopyStatus}</p>}
+            {!modelCenterState && <p className="wikiSourceStatus">Loading local paths...</p>}
+          </section>
+        )}
         <div className="drivePathBar" aria-label="Current Storage folder">
           {!driveAtRoot && (
             <IconCircleButton
@@ -6858,7 +7295,7 @@ function DriveView({
                   aria-label={index === 0 ? "Go to Storage home" : undefined}
                   title={index === 0 ? "Storage home" : undefined}
                 >
-                  {index === 0 ? <Home size={16} /> : crumb.label}
+                  {index === 0 ? <><Home size={16} /><span>Home</span></> : crumb.label}
                 </button>
               </Fragment>
             ))}
@@ -6868,7 +7305,7 @@ function DriveView({
           className="driveFileRows"
           rowClassName="driveResultRow"
           bulkEditing={driveBulkEdit}
-          ariaLabel="Link workspace files and folders"
+          ariaLabel="Cloud Link workspace files and folders"
           columns={[
             <span className="bulkSelectCell" role="columnheader" aria-label="Select files" />,
             <span className="driveFileHeaderCell" role="columnheader">Name</span>,
@@ -6952,48 +7389,12 @@ function DriveView({
             </div>
           )}
         </DirectoryTable>
-        <section className="accessCard storagePathCard">
-          <div className="accessCardHeader">
-            <button className="button secondary" type="button" onClick={() => setStorageLocationsOpen((open) => !open)} aria-expanded={storageLocationsOpen}>
-              {storageLocationsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              {storageLocationsOpen ? "Hide" : "Show locations"}
-            </button>
-          </div>
-          {storageLocationsOpen && (
-            <>
-              <div className="storagePathRows">
-                {storagePathRows.map((row) => (
-                  <div className="storagePathRow" key={row.label}>
-                    <div>
-                      <strong>{row.label}</strong>
-                      <small>{row.description}</small>
-                      <code className="storagePathValue">{row.value}</code>
-                    </div>
-                    <div className="storagePathActions">
-                      <button className="button ghost" type="button" onClick={() => void revealStoragePath(row.value, row.label)}>
-                        <ExternalLink size={14} />
-                        Reveal
-                      </button>
-                      <button className="button ghost" type="button" onClick={() => void copyStoragePath(row.value, row.label)}>
-                        <Copy size={14} />
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {storagePathCopyStatus && <p className="wikiSourceStatus">{storagePathCopyStatus}</p>}
-              {!modelCenterState && <p className="wikiSourceStatus">Loading local locations…</p>}
-            </>
-          )}
-        </section>
       </div>
     );
   }
 
   const storageHeaderAction = activeStorageTab === "cloud-storage" ? (
     <div className="headerActions">
-      <TableRefreshButton onClick={refreshStorageBuckets} busy={storageBucketsBusy} disabled={!storageApiKeyReady} label="Refresh buckets" />
       <button className="button primary" type="button" onClick={() => openExternalPortalUrl(telnyxPortalNewBucketUrl)}>
         <Plus size={15} />
         New Bucket
@@ -7001,6 +7402,14 @@ function DriveView({
     </div>
   ) : activeStorageTab === "local-storage" ? (
     <div className="headerActions">
+      <button className="button secondary" type="button" onClick={() => setStorageLocationsOpen((open) => !open)} aria-expanded={storageLocationsOpen}>
+        {storageLocationsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        {storageLocationsOpen ? "Hide local paths" : "Show local paths"}
+      </button>
+      <button className="button secondary" type="button" onClick={() => openExternalPortalUrl(telnyxPortalNewBucketUrl)}>
+        <Cloud size={15} />
+        Backup in cloud
+      </button>
       <div className="publishMenuWrap storageCreateMenuWrap" ref={driveCreateMenuRef}>
         <button
           className="button primary"
@@ -7054,7 +7463,7 @@ function DriveView({
           resizable={false}
         />
         <div className="pageSectionMain">
-          <PageSectionHeader parent="Link" title={activeStorageLabel} action={storageHeaderAction} />
+          <PageSectionHeader parent="" title={activeStorageLabel} action={storageHeaderAction} />
           {activeStorageTab === "cloud-storage" && renderCloudStoragePanel()}
           {activeStorageTab === "local-storage" && renderLocalStoragePanel()}
         </div>
@@ -7071,7 +7480,7 @@ function MessageArtifacts({ artifacts, openArtifact }: { artifacts?: ChatArtifac
       {artifacts.map((artifact) => (
         <button key={artifact.id} className="messageArtifactLink" onClick={() => openArtifact(artifact)}>
           <FileText size={14} />
-          <span>{artifact.filename}</span>
+          <span>{artifact.kind === "html" ? `Session Review: ${artifact.title}` : artifact.filename}</span>
         </button>
       ))}
     </div>
@@ -7079,29 +7488,158 @@ function MessageArtifacts({ artifacts, openArtifact }: { artifacts?: ChatArtifac
 }
 
 function ArtifactViewer({ artifact, onClose }: { artifact: ChatArtifact; onClose: () => void }) {
+  const [busyAction, setBusyAction] = useState<"" | "local" | "preview" | "deploy">("");
+  const [status, setStatus] = useState("");
+  const [materialized, setMaterialized] = useState<LinkHtmlArtifactMaterializationResult | null>(null);
+  const [previewUrl, setPreviewUrl] = useState(artifact.previewUrl ?? "");
+  const [publishedUrl, setPublishedUrl] = useState(artifact.publishedUrl ?? "");
+  const artifactSlug = artifact.slug || driveSafeSlug(artifact.title || artifact.filename);
+
+  async function ensureMaterialized() {
+    if (materialized) return materialized;
+    const result = await linkApi.materializeHtmlArtifact({ artifact, slug: artifactSlug, replaceExisting: true });
+    setMaterialized(result);
+    return result;
+  }
+
+  async function saveLocalHtmlArtifact() {
+    if (artifact.kind !== "html") return;
+    setBusyAction("local");
+    setStatus("Saving Session Review locally...");
+    try {
+      const result = await ensureMaterialized();
+      const deployment = await linkApi.deployArtifact({
+        artifactKind: "app",
+        artifactId: `app-${result.slug}`,
+        artifactName: artifact.title,
+        target: "local-shared",
+        app: {
+          ...(result.publishInput ?? {
+            name: artifact.title,
+            slug: result.slug,
+            description: "Session Review generated from a Cloud Link chat session.",
+            ownerSquad: "personal.tools",
+            audience: "Personal workspace",
+            appType: "web" as const,
+            sourceRepo: "https://github.com/team-telnyx/link",
+            sourceRef: "main",
+            sourceSubdir: `edge-apps/personal/${result.slug}`,
+            buildCommand: "node scripts/link-build.mjs",
+            outputDir: "dist",
+            riskLevel: "low" as const,
+          }),
+          directory: result.directory,
+        },
+      });
+      setStatus(`${deployment.message} Local folder: ${result.directory}`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Session Review could not be saved locally.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function previewHtmlArtifact() {
+    if (artifact.kind !== "html") return;
+    setBusyAction("preview");
+    setStatus("Building local preview...");
+    try {
+      const result = await ensureMaterialized();
+      const preview = await linkApi.previewLocalEdgeApp({ directory: result.directory, slug: result.slug });
+      if (preview.canceled || !preview.url) {
+        setStatus("Preview canceled.");
+        return;
+      }
+      setPreviewUrl(preview.url);
+      setStatus(`Preview ready: ${preview.url}`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Session Review preview failed.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function deployHtmlArtifact() {
+    if (artifact.kind !== "html") return;
+    setBusyAction("deploy");
+    setStatus("Deploying Session Review to Telnyx Cloud...");
+    try {
+      const result = await ensureMaterialized();
+      const deployment = await linkApi.deployLocalEdgeApp({ directory: result.directory, slug: result.slug, replaceExisting: true });
+      if (deployment.canceled || !deployment.url) {
+        setStatus("Deploy canceled.");
+        return;
+      }
+      setPublishedUrl(deployment.url);
+      setPreviewUrl(deployment.url);
+      setStatus(`Published: ${deployment.url}`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Session Review deploy failed.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
   return (
     <section className="content artifactViewer">
       <header className="pageHeader">
         <div>
           <h1>{artifact.title}</h1>
-          <p>{artifact.filename} - generated from chat</p>
+          <p>{artifact.kind === "html" ? "Session Review generated from chat" : `${artifact.filename} - generated from chat`}</p>
         </div>
         <div className="headerActions">
-          <Badge tone={artifact.kind === "pdf" ? "warning" : "default"}>{artifact.kind.toUpperCase()}</Badge>
+          <Badge tone={artifact.kind === "pdf" ? "warning" : "default"}>{artifact.kind === "html" ? "Session Review" : artifact.kind.toUpperCase()}</Badge>
+          {artifact.kind === "html" && (
+            <>
+              <button className="button secondary" onClick={saveLocalHtmlArtifact} disabled={Boolean(busyAction)}>
+                <Save size={15} />
+                Keep Local
+              </button>
+              <button className="button secondary" onClick={previewHtmlArtifact} disabled={Boolean(busyAction)}>
+                <MonitorPlay size={15} />
+                Preview
+              </button>
+              <button className="button" onClick={deployHtmlArtifact} disabled={Boolean(busyAction)}>
+                <Cloud size={15} />
+                Deploy
+              </button>
+            </>
+          )}
           <button className="button secondary" onClick={onClose}>
             <X size={15} />
             Close
           </button>
         </div>
       </header>
+      {artifact.kind === "html" && (
+        <div className="artifactPublishBar">
+          <span>Slug: {artifactSlug}</span>
+          {materialized?.directory && <span>Local: {materialized.directory}</span>}
+          {status && <span>{status}</span>}
+          {(previewUrl || publishedUrl) && (
+            <button className="button secondary" onClick={() => openExternalPortalUrl(publishedUrl || previewUrl)}>
+              <ExternalLink size={15} />
+              Open
+            </button>
+          )}
+        </div>
+      )}
       <article className={`artifactDocument artifactDocument-${artifact.kind}`}>
-        {artifact.kind === "pdf" && (
+        {artifact.kind === "html" ? (
+          <iframe
+            className="artifactHtmlFrame"
+            title={artifact.title}
+            src={previewUrl || undefined}
+            srcDoc={previewUrl ? undefined : artifact.content}
+            sandbox="allow-forms allow-popups allow-scripts"
+          />
+        ) : artifact.kind === "pdf" && (
           <div className="pdfPreviewChrome">
             <FileText size={18} />
             <span>PDF preview</span>
           </div>
         )}
-        <pre>{artifact.content}</pre>
+        {artifact.kind !== "html" && <pre>{artifact.content}</pre>}
       </article>
     </section>
   );
@@ -7284,7 +7822,7 @@ function HarperReviewCard({
   );
 }
 
-function ScribeAssistantPanel() {
+function ScribeAssistantPanel({ openScribeSttSettings }: { openScribeSttSettings: () => void }) {
   const [settings, setSettings] = useState<SpeakSettings | null>(null);
   const [whisperStatus, setWhisperStatus] = useState<WhisperStatus | null>(null);
   const [scribeStatus, setScribeStatus] = useState<ScribesStatus | null>(null);
@@ -7328,6 +7866,9 @@ function ScribeAssistantPanel() {
   const localSttSelected = settings?.sttMode === "local";
   const cloudSttSelected = settings?.sttMode === "telnyx-cloud" || settings?.sttProvider === "telnyx";
   const cloudSttReady = Boolean(scribeStatus?.telnyxCloudReady);
+  const localScribeServiceOffMessage = "Your local service is off. Open the Scribe menu to start the local server or switch to cloud transcription.";
+  const showCloudScribeSetupAlert = Boolean(settings && scribeStatus && !cloudSttReady);
+  const showLocalScribeSetupAlert = message === localScribeServiceOffMessage;
 
   useEffect(() => {
     void refreshScribeAssistant().catch((err) => {
@@ -7463,7 +8004,7 @@ function ScribeAssistantPanel() {
       return;
     }
     if (localSttSelected && !localServerRunning) {
-      setMessage("Local transcription is off. Open the menu to start the local server or switch to cloud.");
+      setMessage(localScribeServiceOffMessage);
       return;
     }
     setLiveTranscript("");
@@ -7847,6 +8388,21 @@ function ScribeAssistantPanel() {
             />
           </>
         )}
+        {(showCloudScribeSetupAlert || showLocalScribeSetupAlert) && (
+          <section className="linkSoftphoneSetup scribeAssistantSetupAlert" aria-live="polite">
+            <div className="linkSoftphoneSetupIcon">
+              <Mic size={18} />
+            </div>
+            <div>
+              <strong>{showLocalScribeSetupAlert ? "Start Scribe service" : "Finish Scribe setup"}</strong>
+              <p>{showLocalScribeSetupAlert ? localScribeServiceOffMessage : "Connect Telnyx for cloud transcription, or open STT settings to use a local model and start the local service."}</p>
+            </div>
+            <button className="runtimeSettingsButton" type="button" onClick={openScribeSttSettings}>
+              <Settings size={14} />
+              Open STT Settings
+            </button>
+          </section>
+        )}
         {showLibrarySearch && (
           <section className="assistantSessionBar assistantSessionSearchBar" aria-label="Search Scribe library">
             <label className="assistantSessionBarTitle assistantSessionSearchField">
@@ -7941,7 +8497,7 @@ function ScribeAssistantPanel() {
                   )}
                   <div className="assistantSessionMenuHint">
                     {cloudSttSelected
-                      ? (cloudSttReady ? "Cloud transcription is ready." : "Add TELNYX_API_KEY to use cloud transcription.")
+                      ? (cloudSttReady ? "Cloud transcription is ready." : "Add your Telnyx API Key to use cloud transcription.")
                       : (localServerReady ? "Local transcription is ready on this Mac." : "Local transcription uses the on-device Scribe server.")}
                   </div>
                   <div className="assistantSessionMenuDivider" />
@@ -8051,7 +8607,11 @@ function ScribeAssistantPanel() {
             <span className="scribeLivePlaceholder">Speak to Scribe...</span>
           )}
         </div>
-        {message && <div className="voiceInputStatus scribeLiveStatus" aria-live="polite">{message}</div>}
+        {message && !showLocalScribeSetupAlert && (
+          <div className="scribeLiveStatusRow" aria-live="polite">
+            <div className="voiceInputStatus scribeLiveStatus">{message}</div>
+          </div>
+        )}
         <div className="scribeComposerActions assistantComposerActions">
           <div className="scribeComposerTools assistantComposerTools">
             <div className="scribeComposerMenuRoot" ref={addMenuRef}>
@@ -8161,7 +8721,7 @@ class AssistantPaneBoundary extends ReactComponent<{
     return (
       <div className="assistantPaneFallback" role="alert">
         <strong>{this.props.label} is unavailable right now.</strong>
-        <p>Link kept the rest of the app running. Return to chat and try again after refreshing the underlying service.</p>
+        <p>Cloud Link kept the rest of the app running. Return to chat and try again after refreshing the underlying service.</p>
         <button className="button secondary" type="button" onClick={this.props.onRecover}>
           Back to chat
         </button>
@@ -8197,6 +8757,7 @@ function AssistantPanel({
   setView,
   openModelSettings,
   openPhoneContacts,
+  openScribeSttSettings,
   liteLlmReady,
   liteLlmRuntime,
   chatModelMode,
@@ -8242,6 +8803,7 @@ function AssistantPanel({
   setView: (view: ViewId) => void;
   openModelSettings: () => void;
   openPhoneContacts: () => void;
+  openScribeSttSettings: () => void;
   liteLlmReady: boolean;
   liteLlmRuntime: LiteLlmRuntimeStatus | null;
   chatModelMode: string;
@@ -8340,7 +8902,7 @@ function AssistantPanel({
   const chatAgents = useMemo(() => {
     const defaultRuntimeAgent: ChatAgentOption = {
       id: "link-default-runtime",
-      displayName: "Link",
+      displayName: "Cloud Link",
       description: selectedModelRoute
         ? `Primary route: ${selectedModelRoute.label}. Fallback: ${selectedFallbackModelRoute?.label ?? "auto/local-only"}. ${selectedModelRoute.description}`
         : "Default local-first runtime route. Install LiteLLM and Ollama locally, or select an explicit cloud route.",
@@ -8352,7 +8914,7 @@ function AssistantPanel({
     const gettingStartedAgent: ChatAgentOption = {
       id: linkGettingStartedAgentId,
       displayName: linkGettingStartedAgentName,
-      description: "Central OpenClaw agent for Link app help, onboarding, and getting started guidance.",
+      description: "Central OpenClaw agent for Cloud Link app help, onboarding, and getting started guidance.",
       source: "agent-control-plane",
       type: "openclaw",
       status: "available",
@@ -8378,7 +8940,7 @@ function AssistantPanel({
 	      .map((assistant): ChatAgentOption => ({
         id: `voice-assistant-${assistant.id}`,
         displayName: assistant.name,
-        description: assistant.description || "Telnyx Voice AI assistant. Text chat routes through Link while voice calling uses the phone assistant.",
+        description: assistant.description || "Telnyx Voice AI assistant. Text chat routes through Cloud Link while voice calling uses the phone assistant.",
         source: "voice-assistant",
         type: "voice-assistant",
 	        status: assistant.status || "available",
@@ -8403,6 +8965,7 @@ function AssistantPanel({
 	    return uniqueAgents([defaultRuntimeAgent, ...availableHostedAgents, gettingStartedAgent, ...voiceAssistantAgents, ...availableA2aAgents, ...availableDirectoryAgents, ...(activeChatAgent ? [activeChatAgent] : []), ...bookmarkedAgents]);
 	  }, [activeAgent, agents, bookmarkedAgentIdSet, liteLlmReady, phoneAssistants, selectedFallbackModelRoute?.label, selectedModelRoute]);
   const selectedChatAgent = chatAgents.find((agent) => agent.id === selectedChatAgentId) ?? chatAgents[0];
+  const showChatAgentSetupAlert = !activeAgent;
   const newSessionBotSearch = newSessionBotQuery.trim().toLowerCase();
   const newSessionBotMatches = chatAgents.filter((agent) =>
     !newSessionBotSearch || `${agent.displayName} ${agent.description} ${agent.type} ${agent.source} ${agent.squad}`.toLowerCase().includes(newSessionBotSearch),
@@ -8426,7 +8989,7 @@ function AssistantPanel({
     if (agent.source === "voice-assistant") return `${agent.displayName} (Voice)`;
     return agent.displayName;
   };
-  const newSessionDefaultTitle = `New ${selectedChatAgent?.source === "a2a-discovery" ? "A2A" : selectedChatAgent?.source === "voice-assistant" ? "Voice Assistant" : selectedChatAgent?.source === "self-hosted" ? "Self-hosted" : selectedChatAgent?.type === "hermes" ? "Hermes" : selectedChatAgent?.type === "litellm" ? "Link" : "OpenClaw"} session`;
+  const newSessionDefaultTitle = `New ${selectedChatAgent?.source === "a2a-discovery" ? "A2A" : selectedChatAgent?.source === "voice-assistant" ? "Voice Assistant" : selectedChatAgent?.source === "self-hosted" ? "Self-hosted" : selectedChatAgent?.type === "hermes" ? "Hermes" : selectedChatAgent?.type === "litellm" ? "Cloud Link" : "OpenClaw"} session`;
   const visibleSessionMessages = useMemo(
     () => (selectedSession?.messages ?? []).filter((message) => message.role !== "system"),
     [selectedSession?.messages],
@@ -8680,8 +9243,8 @@ function AssistantPanel({
     setDesignSystemSessionPreferences((current) => ({ ...current, [currentSessionSkillKey]: enabled }));
     if (deployAppMode) {
       setVoiceInputStatus(enabled
-        ? "Build app mode will direct the agent to use the Link design system."
-        : "Build app mode will not add Link design-system instructions.");
+        ? "Build app mode will direct the agent to use Design.md."
+        : "Build app mode will not add Design.md.");
     }
   }
 
@@ -8743,7 +9306,7 @@ function AssistantPanel({
         id: optimisticSessionId,
         title: visibleContent.slice(0, 54),
         workspaceId: defaultWorkspaceId,
-        model: selectedChatAgent?.displayName ?? "Link",
+        model: selectedChatAgent?.displayName ?? "Cloud Link",
         requestedModelRouteId: selectedChatAgent?.source === "agent-control-plane" || selectedChatAgent?.source === "a2a-discovery"
           ? undefined
           : modelMode,
@@ -8770,7 +9333,7 @@ function AssistantPanel({
       const workflowPrefix = createSkillMode
         ? skillPublishMode === "repo"
           ? "Skill publishing workflow: help this Telnyx user turn repeated agent work into a SKILL.md package, capture inputs, source of truth, expected output, repeated checks, human checkpoints, test fixture, owner, reviewers, and approval gates, then prepare a branch and reviewable PR for https://github.com/team-telnyx/telnyx-clawdbot-skills."
-          : "Local skill workflow: help this Telnyx user turn repeated agent work into a SKILL.md package that is only installed for their agents and hosted locally in Link. Capture inputs, source of truth, expected output, repeated checks, human checkpoints, test fixture, owner, reviewers, and approval gates. Do not prepare a GitHub PR unless the user switches the skill publish target to the shared skills repository."
+          : "Local skill workflow: help this Telnyx user turn repeated agent work into a SKILL.md package that is only installed for their agents and hosted locally in Cloud Link. Capture inputs, source of truth, expected output, repeated checks, human checkpoints, test fixture, owner, reviewers, and approval gates. Do not prepare a GitHub PR unless the user switches the skill publish target to the shared skills repository."
           : deployAppMode
             ? buildEdgeAppSystemInstruction(edgeAppSlug, useLinkDesignSystemForSession)
             : "";
@@ -8824,7 +9387,7 @@ function AssistantPanel({
         role: "assistant",
         content: error instanceof Error ? `Message failed to send: ${error.message}` : "Message failed to send.",
         createdAt: failedAt,
-        displayName: "Link",
+        displayName: "Cloud Link",
       };
       setChatSessions((current) => current.map((item) =>
         item.id === optimisticSessionId
@@ -9127,7 +9690,7 @@ function AssistantPanel({
 
   function seedToolFromMessage(message: ChatMessage) {
     setPrompt([
-      "Turn this repeated workflow into a reusable Link skill.",
+      "Turn this repeated workflow into a reusable Cloud Link skill.",
       "Capture the inputs, source of truth, expected output, repeated checks, human checkpoints, test fixture, owner, reviewers, and approval gates.",
       "",
       "Chat context:",
@@ -9175,7 +9738,7 @@ function AssistantPanel({
 	      setEdgeDeployStage("idle");
 	      setEdgeDeployError("");
 	      setEdgeDeployDetailsOpen(false);
-	      setVoiceInputStatus(useLinkDesignSystemForSession ? "Build app mode will direct the agent to use the Link design system." : "");
+	      setVoiceInputStatus(useLinkDesignSystemForSession ? "Build app mode will direct the agent to use Design.md." : "");
 	    } else {
 	      setEdgeDeployResult(null);
 	      setEdgePreviewResult(null);
@@ -9367,7 +9930,7 @@ function AssistantPanel({
     setEdgeDeployTick(0);
 	    setEdgeDeployStage("deploying");
 	    setEdgeDeployError("");
-	    setVoiceInputStatus(`Deploying edge-apps/${slug} to https://${slug}.apidev.telnyx.com. If the generated folder is missing, Link will ask you to choose it.`);
+	    setVoiceInputStatus(`Deploying edge-apps/${slug} to https://${slug}.apidev.telnyx.com. If the generated folder is missing, Cloud Link will ask you to choose it.`);
 	    try {
 	      const result = await linkApi.deployLocalEdgeApp({ directory: edgePreviewResult?.directory ?? edgePreviewSurface?.directory, slug, replaceExisting: edgeDeployReplaceExisting });
 	      if (result.canceled) {
@@ -9384,7 +9947,7 @@ function AssistantPanel({
 	        const deployMessage: ChatMessage = {
 	          id: `edge-deploy-message-${Date.now()}`,
 	          role: "assistant",
-	          displayName: "Link",
+	          displayName: "Cloud Link",
 	          createdAt,
 	          content: `Edge app deployed: ${result.url}`,
 	        };
@@ -9515,8 +10078,8 @@ function AssistantPanel({
             className="assistantRailButton"
             type="button"
             onClick={() => openAssistantMode("chat")}
-            aria-label="Open Chat assistant"
-            title="Chat"
+            aria-label="Open Work assistant"
+            title="Work"
           >
             <MessageSquare size={17} />
           </button>
@@ -9565,7 +10128,7 @@ function AssistantPanel({
       />
       <div className="assistantPanelTop">
         <div className="assistantTabs">
-          <button className={mode === "chat" ? "selected" : ""} onClick={() => setMode("chat")}><MessageSquare size={15} />Chat</button>
+          <button className={mode === "chat" ? "selected" : ""} onClick={() => setMode("chat")}><MessageSquare size={15} />Work</button>
           <button className={mode === "phone" ? "selected" : ""} onClick={() => setMode("phone")}><Phone size={15} />Call</button>
           <button className={mode === "scribe" ? "selected" : ""} onClick={() => setMode("scribe")}><Mic size={15} />Scribe</button>
         </div>
@@ -9573,6 +10136,21 @@ function AssistantPanel({
       {mode === "chat" ? (
         <div className="assistantChatFrame" ref={assistantChatFrameRef}>
           <div className="assistantChatBody">
+            {showChatAgentSetupAlert && (
+              <div className="linkSoftphoneSetup assistantAgentSetupAlert" role="alert">
+                <div className="linkSoftphoneSetupIcon" aria-hidden="true">
+                  <Bot size={18} />
+                </div>
+                <div>
+                  <strong>Choose an active agent for chat.</strong>
+                  <p>Pick or create an agent so Chat knows which agent should handle your requests.</p>
+                </div>
+                <button className="runtimeSettingsButton" type="button" onClick={() => setView("agents")}>
+                  <Settings size={14} />
+                  Open Agents
+                </button>
+              </div>
+            )}
             {newSessionDraftOpen && (
               <div className="assistantNewSessionCard">
                 <div className="assistantNewSessionHeader">
@@ -10027,7 +10605,7 @@ function AssistantPanel({
                               }}
                             >
                               <span>Only my agents</span>
-                              <small>Hosted locally in Link.</small>
+                            <small>Hosted locally in Cloud Link.</small>
                             </button>
                             <button
                               type="button"
@@ -10050,7 +10628,7 @@ function AssistantPanel({
                         </label>
                         {deployAppMode && (
                           <label className="assistantAttachToggle assistantAttachSubToggle">
-                            <span><Grid2X2 size={16} />Use Link design system</span>
+                            <span><Grid2X2 size={16} />Use Cloud Link design system</span>
                             <input
                               type="checkbox"
                               checked={useLinkDesignSystemForSession}
@@ -10225,13 +10803,13 @@ function AssistantPanel({
 	                <div className="assistantDeployCard" aria-live="polite">
 	                  <div>
 	                    <strong>Build app for Edge</strong>
-	                    <small>{edgeDeployResult?.url ?? `Send a normal app request. Link adds Edge setup in the background, checks whether the URL is free, lets you test the generated app here, then deploys when you approve it.`}</small>
+	                    <small>{edgeDeployResult?.url ?? `Send a normal app request. Cloud Link adds Edge setup in the background, checks whether the URL is free, lets you test the generated app here, then deploys when you approve it.`}</small>
 	                  </div>
 	                  <label className="assistantDesignSystemOption">
 	                    <span>
 	                      <Grid2X2 size={14} />
-	                      <strong>Use Link design system</strong>
-	                      <small>Session preference for generated apps.</small>
+	                      <strong>Use Cloud Link design system</strong>
+	                      <small>Uses Design.md for generated apps.</small>
 	                    </span>
 	                    <input
 	                      type="checkbox"
@@ -10372,54 +10950,1002 @@ function AssistantPanel({
         </AssistantPaneBoundary>
       ) : (
         <AssistantPaneBoundary key="scribe" label="Scribe assistant" onRecover={() => setMode("chat")}>
-          <ScribeAssistantPanel />
+          <ScribeAssistantPanel openScribeSttSettings={openScribeSttSettings} />
         </AssistantPaneBoundary>
       )}
     </aside>
   );
 }
 
-function SkillsView({ skills }: { skills: SkillMetadata[] }) {
+function SkillsView({
+  skills,
+  activeAgent,
+  setView,
+  refresh,
+}: {
+  skills: SkillMetadata[];
+  activeAgent: ActiveAgentSelection | null;
+  setView: (view: ViewId) => void;
+  refresh: () => Promise<void>;
+}) {
+  const [tab, setTab] = useState<OwnershipWorkspaceTab>("personal");
   const [query, setQuery] = useState("");
+  const [teamFilter, setTeamFilter] = useState("all");
+  const [catalogFilter, setCatalogFilter] = useState<"all" | "telnyx" | "linked" | "internal">("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState("");
+  const [selectedSkillDetailName, setSelectedSkillDetailName] = useState("");
+  const [selectedSkillDetailTab, setSelectedSkillDetailTab] = useState<"overview" | "source" | "usage">("overview");
+  const [selectedSourceId, setSelectedSourceId] = useState("");
+  const [selectedSourceDetailTab, setSelectedSourceDetailTab] = useState<"overview" | "actions" | "contents">("overview");
   const [result, setResult] = useState("");
-  const filtered = skills.filter((skill) => `${skill.name} ${skill.description} ${skill.team}`.toLowerCase().includes(query.toLowerCase()));
+  const [skillSortColumn, setSkillSortColumn] = useState<"skill" | "owner">("skill");
+  const [skillSortDirection, setSkillSortDirection] = useState<SortDirection>("asc");
+  const [skillMarkdownByName, setSkillMarkdownByName] = useState<Record<string, SkillMarkdownLoadState>>({});
+  const [localSkillStatsById, setLocalSkillStatsById] = useState<Record<string, Partial<SkillMetadata>>>({});
+  const [installedSkillKeys, setInstalledSkillKeys] = useState<string[]>(() => readInstalledAgentSkillKeys());
+  const [artifactDeployments, setArtifactDeployments] = useState<ArtifactDeploymentRecord[]>([]);
+  const [deploymentBusyId, setDeploymentBusyId] = useState("");
+  const [skillDeploymentTarget, setSkillDeploymentTarget] = useState<ArtifactDeploymentTarget>("local-only");
+  const [sources, setSources] = useState<OwnershipSourceSummary[]>(() => readOwnershipSources("skills"));
+  const [newSkillMenuOpen, setNewSkillMenuOpen] = useState(false);
+  const newSkillMenuRef = useRef<HTMLDivElement | null>(null);
+  const directoryInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const skillMarkdownInputRef = useRef<HTMLInputElement | null>(null);
 
-  async function runSkill(skill: SkillMetadata) {
-    setSelectedSkill(skill.name);
-    setResult("Running skill...");
-    try {
-      const response = await linkApi.runSkill(skill.name);
-      setResult(JSON.stringify(response, null, 2));
-    } catch (err) {
-      setResult(err instanceof Error ? err.message : "Skill run failed.");
+  useEffect(() => {
+    window.localStorage.setItem("telnyx-link-installed-agent-skills", JSON.stringify(installedSkillKeys));
+  }, [installedSkillKeys]);
+
+  useEffect(() => {
+    window.localStorage.setItem(ownershipSourceStorageKey("skills"), JSON.stringify(sources));
+  }, [sources]);
+
+  useEffect(() => {
+    void refreshArtifactDeployments();
+  }, []);
+
+  useEffect(() => {
+    if (!newSkillMenuOpen) return;
+    function closeNewSkillMenu(event: MouseEvent) {
+      if (!newSkillMenuRef.current?.contains(event.target as Node)) setNewSkillMenuOpen(false);
     }
+    document.addEventListener("mousedown", closeNewSkillMenu);
+    return () => document.removeEventListener("mousedown", closeNewSkillMenu);
+  }, [newSkillMenuOpen]);
+
+  function isTelnyxSkill(skill: SkillMetadata) {
+    return skill.source === "telnyx" || /telnyx/i.test(skill.team || "") || /telnyx/i.test(skill.owner || "");
+  }
+
+  function skillWithLocalStats(skill: SkillMetadata): SkillMetadata {
+    const skillId = skill.skillId ?? rendererSkillRegistryId(skill);
+    return {
+      ...skill,
+      ...(localSkillStatsById[skillId] ?? {}),
+      skillId,
+    };
+  }
+
+  const linkedSourceSkills = useMemo(() => {
+    return sources.flatMap((source) =>
+      source.items.map((item, index) => ({
+        skillId: `linked-skill:${source.id}:${index}`,
+        name: source.items.length > 1 ? `${item} (${source.label})` : item,
+        description: source.kind === "draft"
+          ? `Draft skill created in Cloud Link. ${source.target && source.target !== "Manual draft" ? source.target : ""}`.trim()
+          : `${formatOwnershipSourceKind(source.kind)} source linked from ${source.target}.`,
+        owner: source.scope === "team" ? "Team source" : "Personal source",
+        team: source.scope === "team" ? "Linked Team" : "Linked Personal",
+        riskLevel: "medium",
+        toolsRequired: [],
+        customerSafe: true,
+        approvalRequired: false,
+        source: "link" as const,
+        product: formatOwnershipSourceKind(source.kind),
+        language: "Skill",
+        audience: source.scope === "team" ? "Team workspace" : "Personal workspace",
+        sourceOfTruth: source.target,
+        repeatedChecks: "Refresh this source to pull in the latest directory contents before installing.",
+        humanCheckpoints: "Review the imported source before enabling it for wider use.",
+        testFixture: source.items.join(", "),
+        reviewers: source.scope === "team" ? ["workspace-admins"] : [],
+        version: source.branch ? `${source.branch}${source.subdirectory ? ` / ${source.subdirectory}` : ""}` : "latest",
+        visibility: source.scope === "team" ? "internal" : "private",
+        updatedAt: source.lastUpdated,
+      }) satisfies SkillMetadata),
+    );
+  }, [sources]);
+
+  const installedSkillRows = useMemo(() => {
+    return installedSkillKeys.map((key) => {
+      const [agentId, ...skillNameParts] = key.split(":");
+      const skillName = skillNameParts.join(":");
+      const skill = skills.find((item) => item.name === skillName) ?? linkedSourceSkills.find((item) => item.name === skillName);
+      return {
+        key,
+        agentId,
+        skillName,
+        skill,
+        team: skill?.team ?? "Personal",
+        description: skill?.description ?? "Installed in the active workspace.",
+      };
+    });
+  }, [installedSkillKeys, linkedSourceSkills, skills]);
+
+  const personalSkills = useMemo(() => {
+    const map = new Map<string, SkillMetadata>();
+    for (const row of installedSkillRows) {
+      const fallbackSkill = row.skill ?? {
+        skillId: `installed:${row.key}`,
+        name: row.skillName,
+        description: row.description,
+        owner: "Local workspace",
+        team: row.team,
+        riskLevel: "medium",
+        toolsRequired: [],
+        customerSafe: true,
+        approvalRequired: false,
+        source: "link" as const,
+        product: "Installed",
+        language: "Skill",
+        visibility: "private",
+      };
+      map.set(fallbackSkill.name, skillWithLocalStats(fallbackSkill));
+    }
+    for (const skill of skills) {
+      const trackedSkill = skillWithLocalStats(skill);
+      if (trackedSkill.starredByActor || trackedSkill.source === "tool-studio") map.set(trackedSkill.name, trackedSkill);
+    }
+    for (const skill of linkedSourceSkills.filter((item) => item.team === "Linked Personal")) {
+      map.set(skill.name, skillWithLocalStats(skill));
+    }
+    return [...map.values()];
+  }, [installedSkillRows, linkedSourceSkills, localSkillStatsById, skills]);
+
+  const teamSkills = useMemo(() => {
+    return [...skills.map(skillWithLocalStats), ...linkedSourceSkills.map(skillWithLocalStats)]
+      .filter((skill) => !isTelnyxSkill(skill))
+      .filter((skill) => skill.team !== "Linked Personal")
+      .filter((skill) => skill.team !== "Personal")
+      .filter((skill) => !personalSkills.some((personalSkill) => personalSkill.name === skill.name))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [linkedSourceSkills, personalSkills, skills]);
+
+  const catalogSkills = useMemo(() => {
+    return [...skills.map(skillWithLocalStats), ...linkedSourceSkills.map(skillWithLocalStats)]
+      .filter((skill) => {
+        if (catalogFilter === "telnyx") return isTelnyxSkill(skill);
+        if (catalogFilter === "linked") return linkedSourceSkills.some((item) => item.name === skill.name);
+        if (catalogFilter === "internal") return !isTelnyxSkill(skill) && !linkedSourceSkills.some((item) => item.name === skill.name);
+        return true;
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [catalogFilter, linkedSourceSkills, skills]);
+
+  const visibleSkills = useMemo(() => {
+    const source = tab === "personal" ? personalSkills : tab === "team" ? teamSkills : catalogSkills;
+    const term = query.trim().toLowerCase();
+    return source
+      .filter((skill) => teamFilter === "all" || skill.team === teamFilter)
+      .filter((skill) => !term || `${skill.name} ${skill.description} ${skill.team} ${skill.owner} ${skill.product ?? ""}`.toLowerCase().includes(term))
+      .sort((left, right) => {
+        const leftValue = skillSortColumn === "owner" ? left.team : left.name;
+        const rightValue = skillSortColumn === "owner" ? right.team : right.name;
+        const primary = leftValue.localeCompare(rightValue, undefined, { sensitivity: "base" });
+        const fallback = left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+        const result = primary || fallback;
+        return skillSortDirection === "asc" ? result : -result;
+      });
+  }, [catalogSkills, personalSkills, query, skillSortColumn, skillSortDirection, tab, teamFilter, teamSkills]);
+
+  const visibleTeamOptions = useMemo(() => {
+    const source = tab === "personal" ? personalSkills : tab === "team" ? teamSkills : catalogSkills;
+    return [...new Set(source.map((skill) => skill.team).filter(Boolean))].sort((left, right) => left.localeCompare(right));
+  }, [catalogSkills, personalSkills, tab, teamSkills]);
+
+  const selectedSkillDetail = selectedSkillDetailName
+    ? [...skills.map(skillWithLocalStats), ...linkedSourceSkills.map(skillWithLocalStats), ...personalSkills].find((skill) => skill.name === selectedSkillDetailName)
+    : undefined;
+  const selectedSource = selectedSourceId ? sources.find((source) => source.id === selectedSourceId) : undefined;
+
+  function deploymentForArtifact(artifactId: string) {
+    return artifactDeployments.find((deployment) => deployment.artifactKind === "skill" && deployment.artifactId === artifactId);
+  }
+
+  async function refreshArtifactDeployments() {
+    try {
+      setArtifactDeployments(await linkApi.listArtifactDeployments());
+    } catch {
+      setArtifactDeployments([]);
+    }
+  }
+
+  function updateSkillStats(stats: {
+    skillId: string;
+    starCount: number;
+    installCount: number;
+    downloadCount: number;
+    runCount: number;
+    viewCount: number;
+    starredByActor: boolean;
+    installedByActor: boolean;
+    updatedAt: string;
+  }) {
+    setLocalSkillStatsById((current) => ({
+      ...current,
+      [stats.skillId]: {
+        skillId: stats.skillId,
+        starCount: stats.starCount,
+        installCount: stats.installCount,
+        downloadCount: stats.downloadCount,
+        runCount: stats.runCount,
+        viewCount: stats.viewCount,
+        starredByActor: stats.starredByActor,
+        installedByActor: stats.installedByActor,
+        registryUpdatedAt: stats.updatedAt,
+      },
+    }));
+  }
+
+  async function loadSkillMarkdown(skillName: string) {
+    const current = skillMarkdownByName[skillName];
+    if (current?.status === "loading" || current?.status === "ready") return;
+    const linkedSkill = [...linkedSourceSkills, ...personalSkills].find((skill) => skill.name === skillName);
+    if (linkedSkill) {
+      setSkillMarkdownByName((items) => ({
+        ...items,
+        [skillName]: {
+          status: "ready",
+          result: {
+            name: linkedSkill.name,
+            markdown: `# ${linkedSkill.name}\n\n${linkedSkill.description}\n\n## Source\n- ${linkedSkill.sourceOfTruth || linkedSkill.source || "Local Cloud Link source"}\n- Team: ${linkedSkill.team}\n- Owner: ${linkedSkill.owner}\n`,
+            sourcePath: linkedSkill.sourceOfTruth || linkedSkill.source || "Linked source",
+            sourceUrl: linkedSkill.source === "link" && linkedSkill.sourceOfTruth?.includes("/") ? `https://github.com/${linkedSkill.sourceOfTruth}` : "",
+          },
+        },
+      }));
+      return;
+    }
+    setSkillMarkdownByName((items) => ({ ...items, [skillName]: { status: "loading" } }));
+    try {
+      const markdown = await linkApi.getSkillMarkdown(skillName);
+      setSkillMarkdownByName((items) => ({ ...items, [skillName]: { status: "ready", result: markdown } }));
+    } catch (error) {
+      setSkillMarkdownByName((items) => ({
+        ...items,
+        [skillName]: { status: "error", message: error instanceof Error ? error.message : "Unable to load SKILL.md." },
+      }));
+    }
+  }
+
+  async function toggleSkillStar(skill: SkillMetadata) {
+    const trackedSkill = skillWithLocalStats(skill);
+    setSelectedSkill(trackedSkill.name);
+    const eventType = trackedSkill.starredByActor ? "unstar" : "star";
+    const stats = await linkApi.recordSkillRegistryEvent({
+      skillId: trackedSkill.skillId,
+      skillName: trackedSkill.name,
+      source: trackedSkill.source,
+      eventType,
+    });
+    updateSkillStats(stats);
+    setResult(eventType === "star" ? `${trackedSkill.name} starred.` : `${trackedSkill.name} unstarred.`);
+  }
+
+  async function installSkill(skill: SkillMetadata) {
+    const trackedSkill = skillWithLocalStats(skill);
+    setSelectedSkill(trackedSkill.name);
+    if (!activeAgent) {
+      setResult("Choose an active agent on Agents > Personal before installing skills.");
+      setView("agents");
+      return;
+    }
+    const installKey = `${activeAgent.id}:${trackedSkill.name}`;
+    setInstalledSkillKeys((current) => current.includes(installKey) ? current : [...current, installKey]);
+    const stats = await linkApi.recordSkillRegistryEvent({
+      skillId: trackedSkill.skillId,
+      skillName: trackedSkill.name,
+      source: trackedSkill.source,
+      eventType: "install",
+    });
+    updateSkillStats(stats);
+    setResult(`${trackedSkill.name} installed on ${activeAgent.displayName}.`);
+  }
+
+  async function deploySkill(skill: SkillMetadata) {
+    const trackedSkill = skillWithLocalStats(skill);
+    const markdownState = skillMarkdownByName[trackedSkill.name];
+    setDeploymentBusyId(trackedSkill.skillId ?? rendererSkillRegistryId(trackedSkill));
+    try {
+      const deployment = await linkApi.deployArtifact({
+        artifactKind: "skill",
+        artifactId: trackedSkill.skillId ?? rendererSkillRegistryId(trackedSkill),
+        artifactName: trackedSkill.name,
+        target: skillDeploymentTarget,
+        skill: {
+          toolId: trackedSkill.skillId ?? rendererSkillRegistryId(trackedSkill),
+          name: trackedSkill.name,
+          description: trackedSkill.description,
+          owner: trackedSkill.owner || "Local user",
+          team: trackedSkill.team || "Personal",
+          audience: trackedSkill.audience || "Local workspace",
+          artifactType: trackedSkill.artifactType ?? "skill",
+          inputs: "User prompt or selected chat context.",
+          outputs: "Reviewable agent output.",
+          toolsRequired: trackedSkill.toolsRequired ?? [],
+          riskLevel: trackedSkill.riskLevel ?? "medium",
+          customerSafe: Boolean(trackedSkill.customerSafe),
+          approvalRequired: Boolean(trackedSkill.approvalRequired),
+          sourceOfTruth: trackedSkill.sourceOfTruth || trackedSkill.source || "Local Cloud Link skill",
+          repeatedChecks: trackedSkill.repeatedChecks || "Run the included local skill fixture before publishing.",
+          humanCheckpoints: trackedSkill.humanCheckpoints || "Human owner reviews external or destructive actions.",
+          testFixture: trackedSkill.testFixture || "Use the current chat request as a fixture.",
+          reviewers: trackedSkill.reviewers ?? [],
+          version: trackedSkill.version || "1.0.0",
+          visibility: trackedSkill.visibility || "private",
+          skillMarkdown: markdownState?.status === "ready" ? markdownState.result.markdown : "",
+          checklist: ["No secrets in SKILL.md", "Data boundary reviewed", "Owner accepted deployment target"],
+        },
+        permissions: trackedSkill.toolsRequired ?? [],
+        secretsRequired: [],
+      });
+      await refreshArtifactDeployments();
+      setResult(JSON.stringify({
+        status: deployment.status,
+        target: skillDeploymentTarget,
+        artifact: deployment.artifactName,
+        message: deployment.message,
+        updatedAt: deployment.updatedAt,
+      }, null, 2));
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : "Unable to deploy skill.");
+    } finally {
+      setDeploymentBusyId("");
+    }
+  }
+
+  function openSkillDetail(skill: SkillMetadata) {
+    setSelectedSkill(skill.name);
+    setSelectedSkillDetailName(skill.name);
+    setSelectedSkillDetailTab("overview");
+    void loadSkillMarkdown(skill.name);
+  }
+
+  function sortSkillsBy(column: "skill" | "owner") {
+    setSkillSortDirection((current) => nextSortDirection(skillSortColumn === column, current));
+    setSkillSortColumn(column);
+  }
+
+  async function refreshSkillsWorkspace() {
+    await refresh();
+    await refreshArtifactDeployments();
+    setSources((current) => current.map((source) => ({ ...source, lastUpdated: new Date().toISOString(), status: "ready" })));
+    setResult("Skills refreshed.");
+  }
+
+  function upsertSource(nextSource: OwnershipSourceSummary) {
+    setSources((current) => {
+      const withoutExisting = current.filter((source) => source.id !== nextSource.id);
+      return [nextSource, ...withoutExisting];
+    });
+  }
+
+  function promptGithubSource() {
+    const repo = window.prompt("GitHub repo URL or owner/repo");
+    if (!repo?.trim()) return;
+    const branch = window.prompt("Branch", "main") ?? "main";
+    const subdirectory = window.prompt("Subdirectory", tab === "sources" ? "skills" : "");
+    const scopeInput = (window.prompt("Scope: personal or team", "personal") ?? "personal").trim().toLowerCase();
+    const scope: OwnershipSourceScope = scopeInput === "team" ? "team" : "personal";
+    const nextSource = createGithubOwnershipSource("skills", {
+      repo,
+      branch,
+      subdirectory: subdirectory ?? "",
+      scope,
+    });
+    upsertSource(nextSource);
+    setTab(scope === "team" ? "team" : "personal");
+    setResult(`${nextSource.label} linked from GitHub.`);
+  }
+
+  function openDirectoryPicker() {
+    directoryInputRef.current?.click();
+  }
+
+  function openUploadPicker() {
+    uploadInputRef.current?.click();
+  }
+
+  function openSkillMarkdownPicker() {
+    setNewSkillMenuOpen(false);
+    skillMarkdownInputRef.current?.click();
+  }
+
+  function openNewSkillRepo() {
+    setNewSkillMenuOpen(false);
+    promptGithubSource();
+  }
+
+  function openNewSkillDirectory() {
+    setNewSkillMenuOpen(false);
+    openDirectoryPicker();
+  }
+
+  function createManualSkillDraft() {
+    setNewSkillMenuOpen(false);
+    const name = window.prompt("Skill name");
+    if (!name?.trim()) return;
+    const description = window.prompt("What should this skill help with?", "Describe when the agent should use this skill.") ?? "";
+    const scopeInput = (window.prompt("Scope: personal or team", "personal") ?? "personal").trim().toLowerCase();
+    const scope: OwnershipSourceScope = scopeInput === "team" ? "team" : "personal";
+    const nextSource = createManualSkillOwnershipSource("skills", { name, description, scope });
+    upsertSource(nextSource);
+    setTab(scope === "team" ? "team" : "personal");
+    setResult(`${nextSource.label} draft skill created.`);
+  }
+
+  function handleDirectoryPicked(event: ChangeEvent<HTMLInputElement>) {
+    const nextFiles = Array.from(event.currentTarget.files ?? []);
+    const scopeInput = (window.prompt("Scope: personal or team", "team") ?? "team").trim().toLowerCase();
+    const scope: OwnershipSourceScope = scopeInput === "personal" ? "personal" : "team";
+    const nextSource = createFileOwnershipSource("skills", "directory", nextFiles, scope);
+    if (nextSource) {
+      upsertSource(nextSource);
+      setTab(scope === "team" ? "team" : "personal");
+      setResult(`${nextSource.label} directory added.`);
+    }
+    event.currentTarget.value = "";
+  }
+
+  function handleUploadPicked(event: ChangeEvent<HTMLInputElement>) {
+    const nextFiles = Array.from(event.currentTarget.files ?? []);
+    const scopeInput = (window.prompt("Scope: personal or team", "personal") ?? "personal").trim().toLowerCase();
+    const scope: OwnershipSourceScope = scopeInput === "team" ? "team" : "personal";
+    const nextSource = createFileOwnershipSource("skills", "upload", nextFiles, scope);
+    if (nextSource) {
+      upsertSource(nextSource);
+      setTab(scope === "team" ? "team" : "personal");
+      setResult(`${nextSource.label} uploaded.`);
+    }
+    event.currentTarget.value = "";
+  }
+
+  async function handleSkillMarkdownPicked(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const files = Array.from(input.files ?? []).filter((file) => /\.md(?:own)?$/i.test(file.name));
+    if (files.length === 0) {
+      input.value = "";
+      return;
+    }
+    const scopeInput = (window.prompt("Scope: personal or team", "personal") ?? "personal").trim().toLowerCase();
+    const scope: OwnershipSourceScope = scopeInput === "team" ? "team" : "personal";
+    const parsedSkills = await Promise.all(files.map(async (file) => parseSkillMarkdownFile(file)));
+    const nextSource = createMarkdownSkillOwnershipSource("skills", files, parsedSkills, scope);
+    upsertSource(nextSource);
+    setTab(scope === "team" ? "team" : "personal");
+    setResult(`${nextSource.label} imported from ${files.length === 1 ? "SKILL.md" : `${files.length} Markdown files`}.`);
+    input.value = "";
+  }
+
+  function refreshSource(sourceId: string) {
+    setSources((current) => current.map((source) => source.id === sourceId ? { ...source, status: "ready", lastUpdated: new Date().toISOString() } : source));
+    setResult("Source refreshed.");
+  }
+
+  function removeSource(sourceId: string) {
+    setSources((current) => current.filter((source) => source.id !== sourceId));
+    if (selectedSourceId === sourceId) setSelectedSourceId("");
+    setResult("Source removed.");
+  }
+
+  function toggleSourceScope(sourceId: string) {
+    setSources((current) => current.map((source) => source.id === sourceId ? {
+      ...source,
+      scope: source.scope === "team" ? "personal" : "team",
+      lastUpdated: new Date().toISOString(),
+    } : source));
+    setResult("Source scope updated.");
+  }
+
+  const filteredSources = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return sources
+      .filter((source) => !term || `${source.label} ${source.target} ${source.kind} ${source.scope}`.toLowerCase().includes(term))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [query, sources]);
+
+  if (selectedSkillDetail) {
+    const trackedSkill = skillWithLocalStats(selectedSkillDetail);
+    const installed = activeAgent ? installedSkillKeys.includes(`${activeAgent.id}:${trackedSkill.name}`) : false;
+    const skillMarkdown = skillMarkdownByName[trackedSkill.name];
+    const deployment = deploymentForArtifact(trackedSkill.skillId ?? rendererSkillRegistryId(trackedSkill));
+    const downloadCount = trackedSkill.downloadCount ?? trackedSkill.installCount ?? 0;
+    return (
+      <section className="content skillsView">
+        <div className="pageSectionShell pageSectionShellSingle">
+          <div className="pageSectionMain">
+            <div className="marketplaceView embeddedMarketplace directoryDetailView embeddedDirectoryDetailView">
+              <header className="directoryEmbeddedDetailHeader">
+                <button className="iconButton chatDetailBackButton" type="button" onClick={() => setSelectedSkillDetailName("")} aria-label="Back to skills">
+                  <ArrowLeft size={17} />
+                </button>
+                <div>
+                  <span>Skills / {trackedSkill.team}</span>
+                  <h2>{trackedSkill.name}</h2>
+                  <p>{trackedSkill.description}</p>
+                </div>
+              </header>
+              <section className="chatDetailSurface">
+                <div className="chatReviewTabs directoryDetailTabs" role="tablist" aria-label="Skill details">
+                  {[
+                    ["overview", "Overview"],
+                    ["source", "Source"],
+                    ["usage", "Actions"],
+                  ].map(([id, label]) => (
+                    <button
+                      key={id}
+                      className={selectedSkillDetailTab === id ? "selected" : ""}
+                      type="button"
+                      onClick={() => setSelectedSkillDetailTab(id as typeof selectedSkillDetailTab)}
+                      role="tab"
+                      aria-selected={selectedSkillDetailTab === id}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {selectedSkillDetailTab === "overview" && (
+                  <div className="chatResultDetails directoryDetailPanel">
+                    <div><strong>Team</strong><span>{trackedSkill.team}</span></div>
+                    <div><strong>Owner</strong><span>{trackedSkill.owner}</span></div>
+                    <div><strong>Source</strong><span>{trackedSkill.sourceOfTruth || trackedSkill.source || "Local Cloud Link"}</span></div>
+                    <div><strong>Status</strong><span>{trackedSkill.approvalRequired ? "Approval gated" : "Ready"}</span></div>
+                    <div><strong>Stats</strong><span>{formatCompactCount(trackedSkill.starCount)} stars / {formatCompactCount(downloadCount)} installs</span></div>
+                    <div><strong>Deployment</strong><span>{deployment ? deployment.target : "Keep Local (device only)"}</span></div>
+                  </div>
+                )}
+                {selectedSkillDetailTab === "source" && (
+                  <div className="directoryDetailPanel skillMarkdownPanel directoryMarkdownPanel">
+                    <div className="skillMarkdownHeader">
+                      <span><FileText size={14} />SKILL.md</span>
+                    </div>
+                    {skillMarkdown?.status === "loading" && <p className="skillMarkdownStatus">Loading SKILL.md...</p>}
+                    {skillMarkdown?.status === "error" && <p className="skillMarkdownStatus error">{skillMarkdown.message}</p>}
+                    {skillMarkdown?.status === "ready" ? <pre>{skillMarkdown.result.markdown}</pre> : null}
+                    {!skillMarkdown && <p className="skillMarkdownStatus">Open the source tab to load SKILL.md.</p>}
+                  </div>
+                )}
+                {selectedSkillDetailTab === "usage" && (
+                  <div className="directoryDetailPanel directoryActionPanel">
+                    <div className="chatResultDetails directoryDetailPanel">
+                      <div><strong>Active agent</strong><span>{activeAgent?.displayName ?? "None selected"}</span></div>
+                      <div><strong>Installed</strong><span>{installed ? "Yes" : "No"}</span></div>
+                      <div><strong>Updated</strong><span>{formatSkillUpdatedAt(trackedSkill.updatedAt)}</span></div>
+                    </div>
+                    <button className={`button secondary ${trackedSkill.starredByActor ? "selected" : ""}`} type="button" onClick={() => void toggleSkillStar(trackedSkill)}>
+                      <Star size={14} />
+                      {trackedSkill.starredByActor ? "Unstar" : "Star"}
+                    </button>
+                    <button className={`button primary ${installed ? "selected" : ""}`} type="button" onClick={() => void installSkill(trackedSkill)}>
+                      <Plus size={14} />
+                      {installed ? "Installed" : "Install"}
+                    </button>
+                    <label className="deploymentTargetField">
+                      <span>Deployment target</span>
+                      <select value={skillDeploymentTarget} onChange={(event) => setSkillDeploymentTarget(event.target.value as ArtifactDeploymentTarget)}>
+                        <option value="local-only">Keep Local (device only)</option>
+                        <option value="local-shared">Local Shared</option>
+                        <option value="telnyx-managed">Telnyx Managed</option>
+                        <option value="telnyx-byo-cloud">Telnyx BYO Cloud</option>
+                      </select>
+                    </label>
+                    <button className="button secondary" type="button" onClick={() => void deploySkill(trackedSkill)} disabled={deploymentBusyId === (trackedSkill.skillId ?? rendererSkillRegistryId(trackedSkill))}>
+                      <Upload size={14} />
+                      {skillDeploymentTarget === "local-only" ? "Keep Local (device only)" : "Publish Cloud"}
+                    </button>
+                  </div>
+                )}
+              </section>
+              {result && <pre className="resultPreview">{result}</pre>}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (selectedSource) {
+    return (
+      <section className="content skillsView">
+        <div className="pageSectionShell pageSectionShellSingle">
+          <div className="pageSectionMain">
+            <div className="marketplaceView embeddedMarketplace directoryDetailView embeddedDirectoryDetailView">
+              <header className="directoryEmbeddedDetailHeader">
+                <button className="iconButton chatDetailBackButton" type="button" onClick={() => setSelectedSourceId("")} aria-label="Back to sources">
+                  <ArrowLeft size={17} />
+                </button>
+                <div>
+                  <span>Skills / Sources</span>
+                  <h2>{selectedSource.label}</h2>
+                  <p>{selectedSource.target}</p>
+                </div>
+              </header>
+              <section className="chatDetailSurface">
+                <div className="chatReviewTabs directoryDetailTabs" role="tablist" aria-label="Source details">
+                  {[
+                    ["overview", "Overview"],
+                    ["actions", "Actions"],
+                    ["contents", "Contents"],
+                  ].map(([id, label]) => (
+                    <button
+                      key={id}
+                      className={selectedSourceDetailTab === id ? "selected" : ""}
+                      type="button"
+                      onClick={() => setSelectedSourceDetailTab(id as typeof selectedSourceDetailTab)}
+                      role="tab"
+                      aria-selected={selectedSourceDetailTab === id}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {selectedSourceDetailTab === "overview" && (
+                  <div className="chatResultDetails directoryDetailPanel">
+                    <div><strong>Type</strong><span>{formatOwnershipSourceKind(selectedSource.kind)}</span></div>
+                    <div><strong>Scope</strong><span>{formatOwnershipSourceScope(selectedSource.scope)}</span></div>
+                    <div><strong>Status</strong><span>{formatOwnershipSourceStatus(selectedSource.status)}</span></div>
+                    <div><strong>Target</strong><span>{selectedSource.target}</span></div>
+                    <div><strong>Last updated</strong><span>{formatSkillUpdatedAt(selectedSource.lastUpdated)}</span></div>
+                    <div><strong>Item count</strong><span>{selectedSource.itemCount}</span></div>
+                  </div>
+                )}
+                {selectedSourceDetailTab === "actions" && (
+                  <div className="directoryDetailPanel directoryActionPanel">
+                    <button className="button secondary" type="button" onClick={() => refreshSource(selectedSource.id)}>
+                      <RefreshCw size={14} />
+                      Refresh source
+                    </button>
+                    <button className="button secondary" type="button" onClick={() => toggleSourceScope(selectedSource.id)}>
+                      <Users size={14} />
+                      Move to {selectedSource.scope === "team" ? "Personal" : "Team"}
+                    </button>
+                    <button className="button ghost" type="button" onClick={() => removeSource(selectedSource.id)}>
+                      <Trash2 size={14} />
+                      Remove source
+                    </button>
+                  </div>
+                )}
+                {selectedSourceDetailTab === "contents" && (
+                  <div className="directoryDetailPanel">
+                    <div className="tagList">
+                      {selectedSource.items.map((item) => <span key={item}>{item}</span>)}
+                    </div>
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  function renderSkillRow(skill: SkillMetadata) {
+    const trackedSkill = skillWithLocalStats(skill);
+    return (
+      <div
+        key={trackedSkill.name}
+        className={`chatResultRow directoryResultRow skillDirectoryResultRow ${selectedSkill === trackedSkill.name ? "selected" : ""}`}
+        role="row"
+        tabIndex={0}
+        onClick={() => openSkillDetail(trackedSkill)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openSkillDetail(trackedSkill);
+          }
+        }}
+      >
+        <span className="directoryNameCell" role="cell">
+          <strong>{trackedSkill.name}</strong>
+        </span>
+        <span role="cell">{trackedSkill.team}</span>
+        <button
+          className="chatSessionOpenButton"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            openSkillDetail(trackedSkill);
+          }}
+          aria-label={`Open ${trackedSkill.name}`}
+          title="Open skill"
+        >
+          <ArrowRight size={16} />
+        </button>
+      </div>
+    );
+  }
+
+  function renderSourceRow(source: OwnershipSourceSummary) {
+    return (
+      <div
+        key={source.id}
+        className="chatResultRow directoryResultRow ownershipSourceResultRow"
+        role="row"
+        tabIndex={0}
+        onClick={() => {
+          setSelectedSourceId(source.id);
+          setSelectedSourceDetailTab("overview");
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setSelectedSourceId(source.id);
+            setSelectedSourceDetailTab("overview");
+          }
+        }}
+      >
+        <span className="directoryNameCell" role="cell">
+          <strong>{source.label}</strong>
+        </span>
+        <span role="cell">{formatOwnershipSourceKind(source.kind)}</span>
+        <span role="cell">{formatOwnershipSourceScope(source.scope)}</span>
+        <span role="cell">{source.target}</span>
+        <span role="cell"><Badge tone={ownershipSourceStatusTone(source.status)}>{formatOwnershipSourceStatus(source.status)}</Badge></span>
+        <span role="cell">{formatSkillUpdatedAt(source.lastUpdated)}</span>
+        <button
+          className="chatSessionOpenButton"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            setSelectedSourceId(source.id);
+            setSelectedSourceDetailTab("overview");
+          }}
+          aria-label={`Manage ${source.label}`}
+          title="Manage source"
+        >
+          <ArrowRight size={16} />
+        </button>
+      </div>
+    );
   }
 
   return (
     <section className="content skillsView">
-      <header className="pageHeader">
-        <div>
-          <h1>Skills</h1>
-        </div>
-      </header>
-      <div className="explorerSearch compactSearch">
-        <Search size={16} />
-        <input value={query} placeholder="Search skills..." onChange={(event) => setQuery(event.target.value)} />
-      </div>
-      <div className="skillCatalog">
-        {filtered.slice(0, 40).map((skill) => (
-          <button key={skill.name} className={`skillCard ${selectedSkill === skill.name ? "selected" : ""}`} onClick={() => void runSkill(skill)}>
-            <div className="connectorTitle">
-              <strong>{skill.name}</strong>
-              <Badge tone={skill.source === "telnyx" ? "default" : skill.approvalRequired ? "warning" : "success"}>{skill.source ?? "link"}</Badge>
+      <div className="pageSectionShell">
+        <PageSectionSidebar
+          heading="Skills"
+          headingIcon={viewMeta.skills.icon}
+          groups={ownershipWorkspaceSectionGroups}
+          activeTab={tab}
+          onSelect={(nextTab) => {
+            setTab(nextTab);
+            setFiltersOpen(false);
+          }}
+          label="Skills sections"
+        />
+        <div className="pageSectionMain">
+          <header className="pageHeader">
+            <h1>Skills</h1>
+            <div className="headerActions">
+              <div className="publishMenuWrap" ref={newSkillMenuRef}>
+                <button className="button primary" type="button" onClick={() => setNewSkillMenuOpen((open) => !open)} aria-expanded={newSkillMenuOpen} aria-haspopup="menu">
+                  <Plus size={15} />
+                  New Skill
+                </button>
+                {newSkillMenuOpen && (
+                  <div className="publishMenu skillCreateMenu" role="menu" aria-label="Create or import skill">
+                    <div className="publishMenuHeader">
+                      <strong>Add a skill</strong>
+                      <small>Import SKILL.md files, link a source repo, or draft a new skill locally.</small>
+                    </div>
+                    <button type="button" role="menuitem" onClick={openSkillMarkdownPicker}>
+                      <FileText size={16} />
+                      <span>
+                        <strong>Upload SKILL.md</strong>
+                        <small>Add one or more Markdown skill files from this Mac.</small>
+                      </span>
+                    </button>
+                    <button type="button" role="menuitem" onClick={openNewSkillRepo}>
+                      <GithubIcon size={16} />
+                      <span>
+                        <strong>Link repo</strong>
+                        <small>Point Cloud Link at a GitHub repo or skills subdirectory.</small>
+                      </span>
+                    </button>
+                    <button type="button" role="menuitem" onClick={openNewSkillDirectory}>
+                      <FolderOpen size={16} />
+                      <span>
+                        <strong>Add directory</strong>
+                        <small>Use a local folder that contains skill files or related assets.</small>
+                      </span>
+                    </button>
+                    <button type="button" role="menuitem" onClick={createManualSkillDraft}>
+                      <Pencil size={16} />
+                      <span>
+                        <strong>Draft manually</strong>
+                        <small>Create a local draft skill entry and fill in details later.</small>
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-            <p>{skill.description}</p>
-            <small>{skill.team} - {skill.product ?? "workflow"} - {skill.language ?? "skill"}</small>
-          </button>
-        ))}
+          </header>
+          <div className={`wikiToolbar ${tab === "sources" ? "wikiToolbarWithActions" : ""}`}>
+            {tab !== "sources" && (
+              <button
+                className={`iconButton wikiFilterButton ${filtersOpen ? "selected" : ""}`}
+                aria-label={filtersOpen ? "Hide filters" : "Show filters"}
+                title={filtersOpen ? "Hide filters" : "Show filters"}
+                onClick={() => setFiltersOpen((open) => !open)}
+              >
+                <ListFilter size={16} />
+              </button>
+            )}
+            {tab === "sources" && <div className="toolbarSpacer" aria-hidden="true" />}
+            <label className="wikiSearchField">
+              <Search size={16} />
+              <input
+                value={query}
+                placeholder={tab === "sources" ? "Search linked sources..." : "Search skills..."}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+            {tab === "sources" ? (
+              <div className="headerActions compactHeaderActions" aria-label="Skills source actions">
+                <button className="button secondary" type="button" onClick={promptGithubSource}>
+                  <GithubIcon size={14} />
+                  Link GitHub Repo
+                </button>
+                <button className="button secondary" type="button" onClick={openDirectoryPicker}>
+                  <FolderOpen size={14} />
+                  Add Directory
+                </button>
+                <button className="button secondary" type="button" onClick={openUploadPicker}>
+                  <Upload size={14} />
+                  Upload
+                </button>
+                <TableRefreshButton onClick={refreshSkillsWorkspace} label="Refresh sources" />
+              </div>
+            ) : (
+              <TableRefreshButton onClick={refreshSkillsWorkspace} label="Refresh skills" />
+            )}
+            {filtersOpen && tab !== "sources" && (
+              <div className="wikiFilterPanel" role="group" aria-label="Skill filters">
+                {tab === "catalog" && (
+                  <>
+                    {(["all", "telnyx", "linked", "internal"] as const).map((option) => (
+                      <button
+                        key={option}
+                        className={catalogFilter === option ? "selected" : ""}
+                        type="button"
+                        onClick={() => {
+                          setCatalogFilter(option);
+                          setFiltersOpen(false);
+                        }}
+                      >
+                        {option === "all" ? "All" : option === "telnyx" ? "Telnyx" : option === "linked" ? "Linked" : "Internal"}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {visibleTeamOptions.map((option) => (
+                  <button
+                    key={option}
+                    className={teamFilter === option ? "selected" : ""}
+                    type="button"
+                    onClick={() => {
+                      setTeamFilter(option);
+                      setFiltersOpen(false);
+                    }}
+                  >
+                    {option}
+                  </button>
+                ))}
+                <button
+                  className={teamFilter === "all" ? "selected" : ""}
+                  type="button"
+                  onClick={() => {
+                    setTeamFilter("all");
+                    setFiltersOpen(false);
+                  }}
+                >
+                  All teams
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="wikiHubContent">
+            {tab === "sources" ? (
+              <div className="marketplaceView embeddedMarketplace">
+                <div className="chatSessionRows directoryTable ownershipSourceDirectoryTable" role="table" aria-label="Skill sources">
+                  <div className="chatResultRow directoryResultRow ownershipSourceResultRow chatResultRowHead" role="row">
+                    <span role="columnheader">Source</span>
+                    <span role="columnheader">Type</span>
+                    <span role="columnheader">Scope</span>
+                    <span role="columnheader">Target</span>
+                    <span role="columnheader">Status</span>
+                    <span role="columnheader">Last updated</span>
+                    <span role="columnheader" aria-label="Manage source" />
+                  </div>
+                  <div className="chatResultRows" role="rowgroup">
+                    {filteredSources.map(renderSourceRow)}
+                    {filteredSources.length === 0 && (
+                      <div className="tableEmptyState" role="row">
+                        <EmptyState title="No sources linked" body="Link a GitHub repo, add a directory, or upload a package to make more skills discoverable." icon={FolderOpen} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="marketplaceView embeddedMarketplace">
+                {tab === "catalog" && (
+                  <div className="catalogFilterChips" aria-label="Catalog filters">
+                    {(["all", "telnyx", "linked", "internal"] as const).map((option) => (
+                      <button
+                        key={option}
+                        className={catalogFilter === option ? "selected" : ""}
+                        type="button"
+                        onClick={() => setCatalogFilter(option)}
+                      >
+                        {option === "all" ? "All" : option === "telnyx" ? "Telnyx" : option === "linked" ? "Linked" : "Internal"}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="chatSessionRows directoryTable skillDirectoryTable" role="table" aria-label="Skills">
+                  <div className="chatResultRow directoryResultRow skillDirectoryResultRow chatResultRowHead" role="row">
+                    <SortableColumnHeader label="Skill" column="skill" activeColumn={skillSortColumn} direction={skillSortDirection} onSort={sortSkillsBy} />
+                    <SortableColumnHeader label="Owner" column="owner" activeColumn={skillSortColumn} direction={skillSortDirection} onSort={sortSkillsBy} />
+                    <span role="columnheader" aria-label="Open skill" />
+                  </div>
+                  <div className="chatResultRows" role="rowgroup">
+                    {visibleSkills.length > 0 ? (
+                      visibleSkills.map(renderSkillRow)
+                    ) : (
+                      <div className="tableEmptyState" role="row">
+                        <EmptyState
+                          title={tab === "personal" ? "No personal skills yet" : tab === "team" ? "No team skills found" : "No catalog skills found"}
+                          body={tab === "personal" ? "Installed, starred, and draft skills will appear here." : tab === "team" ? "Team-approved skills and shared internal kits will appear here." : "Try another search term or catalog filter."}
+                          icon={Zap}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            {result && <pre className="resultPreview">{result}</pre>}
+          </div>
+        </div>
       </div>
-      {result && <pre className="resultPreview">{result}</pre>}
+      <input
+        ref={directoryInputRef}
+        type="file"
+        multiple
+        onChange={handleDirectoryPicked}
+        style={{ display: "none" }}
+        {...({ webkitdirectory: "", directory: "" } as unknown as Record<string, string>)}
+      />
+      <input
+        ref={uploadInputRef}
+        type="file"
+        multiple
+        onChange={handleUploadPicked}
+        style={{ display: "none" }}
+      />
+      <input
+        ref={skillMarkdownInputRef}
+        type="file"
+        accept=".md,.markdown,text/markdown,text/plain"
+        multiple
+        onChange={(event) => void handleSkillMarkdownPicked(event)}
+        style={{ display: "none" }}
+      />
     </section>
   );
 }
@@ -10432,6 +11958,217 @@ function readInstalledAgentSkillKeys() {
   } catch {
     return [];
   }
+}
+
+function ownershipSourceStorageKey(surface: OwnershipSourceSurface) {
+  return `telnyx-link-${surface}-sources`;
+}
+
+function formatOwnershipSourceKind(kind: OwnershipSourceKind) {
+  if (kind === "github") return "GitHub";
+  if (kind === "directory") return "Directory";
+  if (kind === "draft") return "Draft";
+  return "Upload";
+}
+
+function formatOwnershipSourceScope(scope: OwnershipSourceScope) {
+  return scope === "team" ? "Team" : "Personal";
+}
+
+function formatOwnershipSourceStatus(status: OwnershipSourceStatus) {
+  if (status === "syncing") return "Syncing";
+  if (status === "needs_setup") return "Needs setup";
+  return "Ready";
+}
+
+function ownershipSourceStatusTone(status: OwnershipSourceStatus): "success" | "warning" | "default" {
+  if (status === "ready") return "success";
+  if (status === "needs_setup") return "warning";
+  return "default";
+}
+
+function normalizeOwnershipSourceItems(items: unknown, fallbackLabel: string) {
+  const normalized = Array.isArray(items)
+    ? items.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean)
+    : [];
+  return [...new Set(normalized)].slice(0, 24).length > 0
+    ? [...new Set(normalized)].slice(0, 24)
+    : [fallbackLabel];
+}
+
+function slugSegmentLabel(value: string) {
+  return value
+    .split(/[\/]/)
+    .filter(Boolean)
+    .pop()
+    ?.replace(/\.[^.]+$/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase())
+    || "Source";
+}
+
+function normalizeOwnershipSource(raw: unknown): OwnershipSourceSummary | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const candidate = raw as Partial<OwnershipSourceSummary>;
+  if (typeof candidate.id !== "string" || !candidate.id.trim()) return null;
+  if (typeof candidate.label !== "string" || !candidate.label.trim()) return null;
+  if (candidate.kind !== "github" && candidate.kind !== "directory" && candidate.kind !== "upload" && candidate.kind !== "draft") return null;
+  if (candidate.scope !== "personal" && candidate.scope !== "team") return null;
+  if (candidate.status !== "ready" && candidate.status !== "syncing" && candidate.status !== "needs_setup") return null;
+  if (typeof candidate.target !== "string") return null;
+  const items = normalizeOwnershipSourceItems(candidate.items, candidate.label);
+  return {
+    id: candidate.id,
+    label: candidate.label,
+    kind: candidate.kind,
+    scope: candidate.scope,
+    target: candidate.target,
+    status: candidate.status,
+    lastUpdated: typeof candidate.lastUpdated === "string" && candidate.lastUpdated ? candidate.lastUpdated : new Date().toISOString(),
+    itemCount: Math.max(0, Number(candidate.itemCount) || items.length),
+    items,
+    branch: typeof candidate.branch === "string" ? candidate.branch : undefined,
+    subdirectory: typeof candidate.subdirectory === "string" ? candidate.subdirectory : undefined,
+  };
+}
+
+function readOwnershipSources(surface: OwnershipSourceSurface) {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(ownershipSourceStorageKey(surface)) ?? "[]");
+    return Array.isArray(stored) ? stored.map(normalizeOwnershipSource).filter((item): item is OwnershipSourceSummary => Boolean(item)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function createGithubOwnershipSource(surface: OwnershipSourceSurface, input: {
+  repo: string;
+  branch: string;
+  subdirectory: string;
+  scope: OwnershipSourceScope;
+}) {
+  const repo = input.repo.trim().replace(/^https:\/\/github\.com\//i, "").replace(/\/+$/, "");
+  const cleanedBranch = input.branch.trim() || "main";
+  const cleanedSubdirectory = input.subdirectory.trim().replace(/^\/+|\/+$/g, "");
+  const baseLabel = slugSegmentLabel(cleanedSubdirectory || repo);
+  const label = cleanedSubdirectory ? `${baseLabel}` : slugSegmentLabel(repo);
+  const items = cleanedSubdirectory
+    ? [slugSegmentLabel(cleanedSubdirectory), slugSegmentLabel(repo)]
+    : [slugSegmentLabel(repo)];
+  return {
+    id: `${surface}:github:${rendererSlugify(`${repo}-${cleanedBranch}-${cleanedSubdirectory || "root"}`)}`,
+    label,
+    kind: "github" as const,
+    scope: input.scope,
+    target: repo,
+    status: "ready" as const,
+    lastUpdated: new Date().toISOString(),
+    itemCount: items.length,
+    items,
+    branch: cleanedBranch,
+    subdirectory: cleanedSubdirectory || undefined,
+  } satisfies OwnershipSourceSummary;
+}
+
+function createFileOwnershipSource(surface: OwnershipSourceSurface, kind: Extract<OwnershipSourceKind, "directory" | "upload">, files: File[], scope: OwnershipSourceScope) {
+  if (files.length === 0) return null;
+  const relativePaths = files.map((file) => {
+    const candidate = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+    return candidate && candidate.trim() ? candidate : file.name;
+  });
+  const topLevel = relativePaths[0]?.split("/")[0] || slugSegmentLabel(files[0]?.name || "Source");
+  const label = kind === "directory" ? topLevel : slugSegmentLabel(files[0]?.name || "Upload");
+  const itemNames = kind === "directory"
+    ? relativePaths
+      .map((value) => value.split("/").pop() || value)
+      .map((value) => value.replace(/\.[^.]+$/, ""))
+      .filter(Boolean)
+    : files.map((file) => file.name.replace(/\.[^.]+$/, "")).filter(Boolean);
+  const items = [...new Set(itemNames)].slice(0, 24);
+  const target = kind === "directory"
+    ? `~/${topLevel}`
+    : files.length === 1
+      ? files[0]!.name
+      : `${files.length} uploaded files`;
+  return {
+    id: `${surface}:${kind}:${rendererSlugify(`${label}-${target}-${Date.now()}`)}`,
+    label,
+    kind,
+    scope,
+    target,
+    status: "ready",
+    lastUpdated: new Date().toISOString(),
+    itemCount: items.length,
+    items: items.length > 0 ? items : [label],
+  } satisfies OwnershipSourceSummary;
+}
+
+function stripFrontmatterQuotes(value: string) {
+  return value.trim().replace(/^['"]|['"]$/g, "").trim();
+}
+
+function parseSkillMarkdownMetadata(markdown: string, fallbackName: string) {
+  const frontmatter = markdown.match(/^---\s*\n([\s\S]*?)\n---/);
+  const lines = frontmatter?.[1]?.split(/\r?\n/) ?? [];
+  const readField = (field: string) => {
+    const line = lines.find((candidate) => candidate.toLowerCase().startsWith(`${field}:`));
+    return line ? stripFrontmatterQuotes(line.slice(field.length + 1)) : "";
+  };
+  const heading = markdown.match(/^#\s+(.+)$/m)?.[1]?.trim() ?? "";
+  return {
+    name: readField("name") || heading || fallbackName,
+    description: readField("description") || "Imported Markdown skill.",
+  };
+}
+
+async function parseSkillMarkdownFile(file: File) {
+  const fallbackName = slugSegmentLabel(file.name);
+  try {
+    return parseSkillMarkdownMetadata(await file.text(), fallbackName);
+  } catch {
+    return { name: fallbackName, description: "Imported Markdown skill." };
+  }
+}
+
+function createMarkdownSkillOwnershipSource(
+  surface: OwnershipSourceSurface,
+  files: File[],
+  parsedSkills: Array<{ name: string; description: string }>,
+  scope: OwnershipSourceScope,
+) {
+  const label = parsedSkills.length === 1 ? parsedSkills[0]!.name : `${parsedSkills.length} imported skills`;
+  const items = parsedSkills.map((skill) => skill.name).filter(Boolean);
+  return {
+    id: `${surface}:upload:${rendererSlugify(`${label}-${files.map((file) => file.name).join("-")}-${Date.now()}`)}`,
+    label,
+    kind: "upload" as const,
+    scope,
+    target: files.length === 1 ? files[0]!.name : `${files.length} Markdown files`,
+    status: "ready" as const,
+    lastUpdated: new Date().toISOString(),
+    itemCount: items.length,
+    items: items.length > 0 ? items : [label],
+  } satisfies OwnershipSourceSummary;
+}
+
+function createManualSkillOwnershipSource(surface: OwnershipSourceSurface, input: {
+  name: string;
+  description: string;
+  scope: OwnershipSourceScope;
+}) {
+  const label = input.name.trim();
+  return {
+    id: `${surface}:draft:${rendererSlugify(`${label}-${Date.now()}`)}`,
+    label,
+    kind: "draft" as const,
+    scope: input.scope,
+    target: input.description.trim() || "Manual draft",
+    status: "ready" as const,
+    lastUpdated: new Date().toISOString(),
+    itemCount: 1,
+    items: [label],
+  } satisfies OwnershipSourceSummary;
 }
 
 const agentAppearanceStorageKey = "telnyx-link-agent-appearances";
@@ -10554,7 +12291,7 @@ function buildToolStudioMarkdown(draft: ToolStudioDraft) {
 function buildToolStudioManifest(draft: ToolStudioDraft): ToolStudioManifestInput {
   return {
     name: draft.name.trim() || "Untitled Tool",
-    description: draft.description.trim() || "Reusable Link tool created from a repeated bot workflow.",
+    description: draft.description.trim() || "Reusable Cloud Link tool created from a repeated bot workflow.",
     owner: draft.owner.trim() || "TBD",
     team: draft.team.trim() || "TBD",
     audience: draft.audience.trim() || "Telnyx employees",
@@ -10565,7 +12302,7 @@ function buildToolStudioManifest(draft: ToolStudioDraft): ToolStudioManifestInpu
     riskLevel: draft.riskLevel,
     customerSafe: draft.customerSafe,
     approvalRequired: draft.approvalRequired || draft.customerSafe || draft.riskLevel === "high" || draft.artifactType !== "skill",
-    sourceOfTruth: draft.sourceOfTruth.trim() || "Git-backed Link tool definition.",
+    sourceOfTruth: draft.sourceOfTruth.trim() || "Git-backed Cloud Link tool definition.",
     repeatedChecks: draft.repeatedChecks.trim() || "Run the included test fixture before sharing.",
     humanCheckpoints: draft.humanCheckpoints.trim() || "Human owner reviews public or destructive actions.",
     testFixture: draft.testFixture.trim() || "Use the latest real chat request as the fixture.",
@@ -10580,9 +12317,9 @@ function buildToolStudioManifest(draft: ToolStudioDraft): ToolStudioManifestInpu
 function buildToolStudioPrompt(draft: ToolStudioDraft, agentName?: string) {
   const manifest = buildToolStudioManifest(draft);
   return [
-    `Tool Studio session: work with ${agentName ?? "my bot"} to refine a review-ready Link tool.`,
+    `Tool Studio session: work with ${agentName ?? "my bot"} to refine a review-ready Cloud Link tool.`,
     "Ask concise follow-up questions only where the manifest is incomplete, then produce the final tool package, validation checklist, and test fixture.",
-    "Default output is a SKILL.md workflow. Only promote to MCP or Link app if the workflow needs executable code, API schemas, or a UI/runtime surface.",
+    "Default output is a SKILL.md workflow. Only promote to MCP or Cloud Link app if the workflow needs executable code, API schemas, or a UI/runtime surface.",
     "",
     "Tool manifest:",
     "```json",
@@ -10599,35 +12336,36 @@ function buildToolStudioPrompt(draft: ToolStudioDraft, agentName?: string) {
 function AgentsView({
   agents,
   connectors,
-  skills,
   refresh,
   setView,
   bookmarkedAgentIds,
   setBookmarkedAgentIds,
   activeAgent,
   setActiveAgent,
-  startSkillBuilderChat,
   openTerminal,
 }: {
   agents: AgentSummary[];
   connectors: ConnectorStatus[];
-  skills: SkillMetadata[];
   refresh: () => Promise<void>;
   setView: (view: ViewId) => void;
   bookmarkedAgentIds: string[];
   setBookmarkedAgentIds: (ids: string[] | ((current: string[]) => string[])) => void;
   activeAgent: ActiveAgentSelection | null;
   setActiveAgent: (agent: ActiveAgentSelection | null) => void;
-  startSkillBuilderChat: (prompt: string) => Promise<void>;
   openTerminal: () => void;
 }) {
-  type AgentViewTab = "personal" | "squads" | "telnyx" | "skills";
-  const [tab, setTab] = useState<"personal" | "squads" | "telnyx" | "skills">("personal");
-  const [sectionFilter, setSectionFilter] = useState<"all" | "you" | "team">("all");
+  type AgentViewTab = OwnershipWorkspaceTab;
+  type AgentDirectoryRow = {
+    id: string;
+    section: "personal" | "team" | "catalog";
+    category: string;
+    sourceGroup: "telnyx" | "internal" | "linked";
+    agent: HostedAgentSummary | AgentSummary;
+  };
+  const [tab, setTab] = useState<AgentViewTab>("personal");
   const [query, setQuery] = useState("");
   const [squadFilter, setSquadFilter] = useState("all");
-  const [botSkillTeamFilter, setBotSkillTeamFilter] = useState("all");
-  const [skillTeamFilter, setSkillTeamFilter] = useState("all");
+  const [catalogFilter, setCatalogFilter] = useState<"all" | "telnyx" | "linked" | "internal">("all");
   const [hostedAgentFilter, setHostedAgentFilter] = useState("all");
   const [agentSortColumn, setAgentSortColumn] = useState<"agent" | "owner">("agent");
   const [agentSortDirection, setAgentSortDirection] = useState<SortDirection>("asc");
@@ -10644,40 +12382,13 @@ function AgentsView({
   const [expandedAgentIds, setExpandedAgentIds] = useState<string[]>([]);
   const [selectedAgentDetailId, setSelectedAgentDetailId] = useState("");
   const [selectedAgentDetailTab, setSelectedAgentDetailTab] = useState<"overview" | "capabilities" | "settings">("overview");
-  const [expandedSquad, setExpandedSquad] = useState("");
-  const [expandedSkillNames, setExpandedSkillNames] = useState<string[]>([]);
-  const [skillMarkdownByName, setSkillMarkdownByName] = useState<Record<string, SkillMarkdownLoadState>>({});
-  const [botSkillResult, setBotSkillResult] = useState("");
   const [agentAppearances, setAgentAppearances] = useState<Record<string, AgentAppearance>>(() => readAgentAppearances());
   const [agentAppearanceOpenId, setAgentAppearanceOpenId] = useState("");
-  const [localSkillStatsById, setLocalSkillStatsById] = useState<Record<string, Partial<SkillMetadata>>>({});
-  const [createToolOpen, setCreateToolOpen] = useState(false);
-  const [toolStudioStatus, setToolStudioStatus] = useState("");
-  const [installedSkillKeys, setInstalledSkillKeys] = useState<string[]>(() => readInstalledAgentSkillKeys());
-  const [toolDraft, setToolDraft] = useState<ToolStudioDraft>({
-    name: "",
-    description: "",
-    owner: "",
-    team: "",
-    audience: "Telnyx employees",
-    artifactType: "skill",
-    riskLevel: "medium",
-    toolsRequired: "",
-    customerSafe: false,
-    approvalRequired: false,
-    whenToUse: "",
-    inputsNeeded: "",
-    sourceOfTruth: "",
-    workflowSteps: "",
-    repeatedChecks: "",
-    expectedOutput: "",
-    humanCheckpoints: "",
-    safetyNotes: "",
-    reviewers: "",
-    testFixture: "",
-    visibility: "squad",
-    version: "1.0.0",
-  });
+  const [sources, setSources] = useState<OwnershipSourceSummary[]>(() => readOwnershipSources("agents"));
+  const [selectedSourceId, setSelectedSourceId] = useState("");
+  const [selectedSourceDetailTab, setSelectedSourceDetailTab] = useState<"overview" | "actions" | "contents">("overview");
+  const directoryInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const isAcpReady = Boolean(acpAuth?.ready);
   const bookmarkedAgentIdSet = useMemo(() => new Set(bookmarkedAgentIds), [bookmarkedAgentIds]);
   const squads = useMemo(() => {
@@ -10685,54 +12396,6 @@ function AgentsView({
       left.localeCompare(right),
     );
   }, [agents]);
-  const tones: WikiKit["tone"][] = ["blue", "orange", "teal", "pink", "purple", "green"];
-  const squadKits = useMemo(() => {
-    const grouped = new Map<string, SkillMetadata[]>();
-    for (const skill of skills) {
-      const squad = skill.team || "Telnyx";
-      grouped.set(squad, [...(grouped.get(squad) ?? []), skill]);
-    }
-    return [...grouped.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([squad, squadSkills], index) => ({
-        id: squad,
-        name: squad,
-        mastered: squadSkills.filter((skill) => !skill.approvalRequired).length,
-        total: squadSkills.length,
-        tone: tones[index % tones.length],
-        skills: squadSkills.sort((left, right) => left.name.localeCompare(right.name)),
-      }));
-  }, [skills]);
-  const filteredSquadKits = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    return squadKits.map((kit) => {
-      const filteredSkills = term
-        ? kit.skills.filter((skill) => `${skill.name} ${skill.description} ${skill.team} ${skill.product ?? ""}`.toLowerCase().includes(term))
-        : kit.skills;
-      return { ...kit, skills: filteredSkills };
-    }).filter((kit) => (botSkillTeamFilter === "all" || kit.name === botSkillTeamFilter) && (kit.skills.length > 0 || kit.name.toLowerCase().includes(term)))
-      .sort((left, right) => left.name.localeCompare(right.name));
-  }, [botSkillTeamFilter, query, squadKits]);
-  const botSkillTeams = useMemo(() => {
-    return [...new Set(skills.map((skill) => skill.team).filter(Boolean))].sort((left, right) => left.localeCompare(right));
-  }, [skills]);
-  const userSquads = useMemo(() => {
-    const userSquadSet = new Set<string>();
-    const activeDirectoryAgent = activeAgent ? agents.find((agent) => agent.id === activeAgent.id) : undefined;
-    if (activeDirectoryAgent?.squad) userSquadSet.add(activeDirectoryAgent.squad);
-    for (const agent of agents) {
-      if (bookmarkedAgentIds.includes(agent.id) && agent.squad) userSquadSet.add(agent.squad);
-    }
-    if (activeAgent) {
-      for (const key of installedSkillKeys) {
-        if (!key.startsWith(`${activeAgent.id}:`)) continue;
-        const skillName = key.slice(activeAgent.id.length + 1);
-        const skill = skills.find((item) => item.name === skillName);
-        if (skill?.team) userSquadSet.add(skill.team);
-      }
-    }
-    return [...userSquadSet].sort((left, right) => left.localeCompare(right));
-  }, [activeAgent, agents, bookmarkedAgentIds, installedSkillKeys, skills]);
   const filteredAgents = useMemo(() => {
     const term = query.trim().toLowerCase();
     const results = agents.filter((agent) => {
@@ -10752,14 +12415,6 @@ function AgentsView({
     });
     return sortAgents(results, "az");
   }, [agents, query, squadFilter]);
-  const squadAgentGroups = useMemo(() => {
-    const grouped = new Map<string, AgentSummary[]>();
-    for (const agent of filteredAgents) {
-      const squad = agent.squad || formatSourceLabel(agent.source);
-      grouped.set(squad, [...(grouped.get(squad) ?? []), agent]);
-    }
-    return [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right));
-  }, [filteredAgents]);
   const hostedAgentStatuses = useMemo(() => {
     return [...new Set([...hostedAgents, ...agents].map((agent) => agent.status).filter(Boolean))].sort((left, right) => left.localeCompare(right));
   }, [agents, hostedAgents]);
@@ -10772,72 +12427,100 @@ function AgentsView({
     });
     return sortHostedAgents(results, "az");
   }, [hostedAgentFilter, hostedAgents, query]);
-  const agentDirectorySections = useMemo(() => {
-    const grouped = new Map<"you" | "team", Array<{ id: string; section: "you" | "team"; category: string; agent: HostedAgentSummary | AgentSummary }>>([
-      ["you", []],
-      ["team", []],
-    ]);
-    if (sectionFilter === "all" || sectionFilter === "you") {
-      for (const agent of filteredHostedAgents) {
-        grouped.get("you")?.push({ id: `hosted:${agent.id}`, section: "you", category: "You", agent });
-      }
-      for (const agent of filteredAgents) {
-        if (!bookmarkedAgentIdSet.has(agent.id)) continue;
-        grouped.get("you")?.push({ id: `saved:${agent.id}`, section: "you", category: agent.squad || formatSourceLabel(agent.source), agent });
-      }
-    }
-    if (sectionFilter === "all" || sectionFilter === "team") {
-      for (const agent of filteredAgents) {
-        grouped.get("team")?.push({ id: `directory:${agent.id}`, section: "team", category: agent.squad || formatSourceLabel(agent.source), agent });
-      }
-    }
-    const sortRows = (rows: Array<{ id: string; section: "you" | "team"; category: string; agent: HostedAgentSummary | AgentSummary }>) =>
-      [...rows].sort((left, right) => {
-        const leftValue = agentSortColumn === "owner" ? left.category : left.agent.displayName;
-        const rightValue = agentSortColumn === "owner" ? right.category : right.agent.displayName;
-        const primary = leftValue.localeCompare(rightValue, undefined, { sensitivity: "base" });
-        const fallback = left.agent.displayName.localeCompare(right.agent.displayName, undefined, { sensitivity: "base" });
-        const result = primary || fallback;
-        return agentSortDirection === "asc" ? result : -result;
-      });
-    return [
-      { id: "you" as const, title: "You", rows: sortRows(grouped.get("you") ?? []) },
-      { id: "team" as const, title: "Team", rows: sortRows(grouped.get("team") ?? []) },
-    ].filter((section) => sectionFilter === "all" || section.id === sectionFilter);
-  }, [agentSortColumn, agentSortDirection, bookmarkedAgentIdSet, filteredAgents, filteredHostedAgents, sectionFilter]);
-  const agentDirectoryRows = useMemo(() => agentDirectorySections.flatMap((section) => section.rows), [agentDirectorySections]);
-  const installedSkillRows = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    const rows = installedSkillKeys.map((key) => {
-      const [agentId, ...skillNameParts] = key.split(":");
-      const skillName = skillNameParts.join(":");
-      const skill = skills.find((item) => item.name === skillName);
-      const agent = hostedAgents.find((item) => item.id === agentId) ?? agents.find((item) => item.id === agentId);
-      return {
-        key,
-        agentId,
-        skillName,
-        skill,
-        agentName: agent?.displayName ?? activeAgent?.displayName ?? "Agent",
-        team: skill?.team ?? "Unassigned",
-        description: skill?.description ?? "Installed from Docs.",
-      };
+  const linkedSourceAgents = useMemo(() => {
+    return sources.flatMap((source) =>
+      source.items.map((item, index) => ({
+        id: `linked-agent:${source.id}:${index}`,
+        name: rendererSlugify(item),
+        displayName: source.items.length > 1 ? `${item} (${source.label})` : item,
+        description: `${formatOwnershipSourceKind(source.kind)} source linked from ${source.target}.`,
+        status: source.status === "needs_setup" ? "needs setup" : "available",
+        type: source.kind === "github" ? "github-source" : source.kind === "directory" ? "directory-source" : "upload-source",
+        capabilities: ["source linked"],
+        visibility: source.scope === "team" ? "internal" : "private",
+        source: "self-hosted" as const,
+        squad: source.scope === "team" ? "Linked Team" : "Linked Personal",
+        audience: source.scope === "team" ? "Team workspace" : "Personal workspace",
+        origin: source.target,
+        updatedAt: source.lastUpdated,
+      }) satisfies AgentSummary),
+    );
+  }, [sources]);
+  const isTelnyxCuratedAgent = (agent: HostedAgentSummary | AgentSummary) => {
+    if ("source" in agent && agent.source === "aida") return true;
+    return /telnyx|aida/i.test(`${agent.displayName} ${"squad" in agent ? agent.squad ?? "" : ""}`);
+  };
+  const sortAgentRows = (rows: AgentDirectoryRow[]) =>
+    [...rows].sort((left, right) => {
+      const leftValue = agentSortColumn === "owner" ? left.category : left.agent.displayName;
+      const rightValue = agentSortColumn === "owner" ? right.category : right.agent.displayName;
+      const primary = leftValue.localeCompare(rightValue, undefined, { sensitivity: "base" });
+      const fallback = left.agent.displayName.localeCompare(right.agent.displayName, undefined, { sensitivity: "base" });
+      const result = primary || fallback;
+      return agentSortDirection === "asc" ? result : -result;
     });
-    return rows
-      .filter((row) => skillTeamFilter === "all" || row.team === skillTeamFilter)
-      .filter((row) => !term || `${row.skillName} ${row.description} ${row.team} ${row.agentName}`.toLowerCase().includes(term))
-      .sort((left, right) => left.skillName.localeCompare(right.skillName));
-  }, [activeAgent?.displayName, agents, hostedAgents, installedSkillKeys, query, skillTeamFilter, skills]);
-  const installedSkillTeams = useMemo(() => {
-    return [...new Set(installedSkillRows.map((row) => row.team).filter(Boolean))].sort((left, right) => left.localeCompare(right));
-  }, [installedSkillRows]);
-  const toolStudioManifest = buildToolStudioManifest(toolDraft);
-  const toolStudioPrompt = buildToolStudioPrompt(toolDraft, activeAgent?.displayName);
+  const personalAgentRows = useMemo(() => {
+    const rows: AgentDirectoryRow[] = [];
+    for (const agent of filteredHostedAgents) {
+      rows.push({ id: `hosted:${agent.id}`, section: "personal", category: "Personal", sourceGroup: "internal", agent });
+    }
+    for (const agent of filteredAgents) {
+      if (!bookmarkedAgentIdSet.has(agent.id)) continue;
+      rows.push({ id: `saved:${agent.id}`, section: "personal", category: agent.squad || formatSourceLabel(agent.source), sourceGroup: isTelnyxCuratedAgent(agent) ? "telnyx" : "internal", agent });
+    }
+    for (const agent of linkedSourceAgents.filter((item) => item.visibility === "private")) {
+      rows.push({ id: `linked:${agent.id}`, section: "personal", category: "Linked Personal", sourceGroup: "linked", agent });
+    }
+    return sortAgentRows(rows);
+  }, [bookmarkedAgentIdSet, filteredAgents, filteredHostedAgents, linkedSourceAgents]);
+  const teamAgentRows = useMemo(() => {
+    const rows: AgentDirectoryRow[] = [];
+    for (const agent of filteredAgents) {
+      if (isTelnyxCuratedAgent(agent)) continue;
+      rows.push({ id: `directory:${agent.id}`, section: "team", category: agent.squad || formatSourceLabel(agent.source), sourceGroup: "internal", agent });
+    }
+    for (const agent of linkedSourceAgents.filter((item) => item.visibility === "internal")) {
+      rows.push({ id: `linked:${agent.id}`, section: "team", category: "Linked Team", sourceGroup: "linked", agent });
+    }
+    return sortAgentRows(rows);
+  }, [filteredAgents, linkedSourceAgents]);
+  const catalogAgentRows = useMemo(() => {
+    const baseRows: AgentDirectoryRow[] = [
+      ...filteredAgents.map((agent) => ({
+        id: `catalog:${agent.id}`,
+        section: "catalog" as const,
+        category: agent.squad || formatSourceLabel(agent.source),
+        sourceGroup: isTelnyxCuratedAgent(agent) ? "telnyx" as const : "internal" as const,
+        agent,
+      })),
+      ...linkedSourceAgents.map((agent) => ({
+        id: `catalog-linked:${agent.id}`,
+        section: "catalog" as const,
+        category: agent.squad || "Linked source",
+        sourceGroup: "linked" as const,
+        agent,
+      })),
+    ];
+    const filteredRows = baseRows.filter((row) => catalogFilter === "all" || row.sourceGroup === catalogFilter);
+    return sortAgentRows(filteredRows);
+  }, [catalogFilter, filteredAgents, linkedSourceAgents]);
+  const visibleAgentRows = tab === "personal" ? personalAgentRows : tab === "team" ? teamAgentRows : tab === "catalog" ? catalogAgentRows : [];
+  const filteredSources = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return sources
+      .filter((source) => !term || `${source.label} ${source.target} ${source.kind} ${source.scope}`.toLowerCase().includes(term))
+      .sort((left, right) => left.label.localeCompare(right.label));
+  }, [query, sources]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(agentAppearanceStorageKey, JSON.stringify(agentAppearances));
   }, [agentAppearances]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(ownershipSourceStorageKey("agents"), JSON.stringify(sources));
+  }, [sources]);
 
   function setAgentEmoji(agentId: string, emoji: string) {
     setAgentAppearances((current) => ({ ...current, [agentId]: { kind: "emoji", value: emoji } }));
@@ -10904,12 +12587,6 @@ function AgentsView({
     void refreshAgentControlPlane();
   }, []);
 
-  useEffect(() => {
-    setExpandedSquad("");
-    setExpandedSkillNames([]);
-    setBotSkillResult("");
-  }, []);
-
   async function signInAgentControlPlane() {
     setAcpBusy(true);
     setAgentError("");
@@ -10967,212 +12644,73 @@ function AgentsView({
     setAgentSortColumn(column);
   }
 
-  function toggleSquadKit(kitId: string) {
-    const kit = filteredSquadKits.find((item) => item.id === kitId);
-    if (expandedSquad !== kitId) {
-      for (const skill of kit?.skills ?? []) void loadBotSkillMarkdown(skill.name);
+  function promptGithubSource() {
+    const repo = window.prompt("GitHub repo URL or owner/repo");
+    if (!repo?.trim()) return;
+    const branch = window.prompt("Branch", "main") ?? "main";
+    const subdirectory = window.prompt("Subdirectory", "agents") ?? "agents";
+    const scopeInput = (window.prompt("Scope: personal or team", "team") ?? "team").trim().toLowerCase();
+    const scope: OwnershipSourceScope = scopeInput === "personal" ? "personal" : "team";
+    const nextSource = createGithubOwnershipSource("agents", { repo, branch, subdirectory, scope });
+    setSources((current) => [nextSource, ...current.filter((source) => source.id !== nextSource.id)]);
+    setTab(scope === "team" ? "team" : "catalog");
+    setAgentMessageStatus(`${nextSource.label} linked from GitHub.`);
+  }
+
+  function openDirectoryPicker() {
+    directoryInputRef.current?.click();
+  }
+
+  function openUploadPicker() {
+    uploadInputRef.current?.click();
+  }
+
+  function handleDirectoryPicked(event: ChangeEvent<HTMLInputElement>) {
+    const nextFiles = Array.from(event.currentTarget.files ?? []);
+    const scopeInput = (window.prompt("Scope: personal or team", "team") ?? "team").trim().toLowerCase();
+    const scope: OwnershipSourceScope = scopeInput === "personal" ? "personal" : "team";
+    const nextSource = createFileOwnershipSource("agents", "directory", nextFiles, scope);
+    if (nextSource) {
+      setSources((current) => [nextSource, ...current.filter((source) => source.id !== nextSource.id)]);
+      setTab(scope === "team" ? "team" : "catalog");
+      setAgentMessageStatus(`${nextSource.label} directory added.`);
     }
-    setExpandedSquad((current) => current === kitId ? "" : kitId);
-    setBotSkillResult("");
+    event.currentTarget.value = "";
   }
 
-  function toggleBotSkillDetails(skillName: string) {
-    if (!expandedSkillNames.includes(skillName)) void loadBotSkillMarkdown(skillName);
-    setExpandedSkillNames((current) =>
-      current.includes(skillName) ? current.filter((item) => item !== skillName) : [...current, skillName],
-    );
-  }
-
-  async function loadBotSkillMarkdown(skillName: string) {
-    const current = skillMarkdownByName[skillName];
-    if (current?.status === "loading" || current?.status === "ready") return;
-    setSkillMarkdownByName((items) => ({ ...items, [skillName]: { status: "loading" } }));
-    try {
-      const markdown = await linkApi.getSkillMarkdown(skillName);
-      setSkillMarkdownByName((items) => ({ ...items, [skillName]: { status: "ready", result: markdown } }));
-    } catch (error) {
-      setSkillMarkdownByName((items) => ({
-        ...items,
-        [skillName]: { status: "error", message: error instanceof Error ? error.message : "Unable to load SKILL.md." },
-      }));
+  function handleUploadPicked(event: ChangeEvent<HTMLInputElement>) {
+    const nextFiles = Array.from(event.currentTarget.files ?? []);
+    const scopeInput = (window.prompt("Scope: personal or team", "personal") ?? "personal").trim().toLowerCase();
+    const scope: OwnershipSourceScope = scopeInput === "team" ? "team" : "personal";
+    const nextSource = createFileOwnershipSource("agents", "upload", nextFiles, scope);
+    if (nextSource) {
+      setSources((current) => [nextSource, ...current.filter((source) => source.id !== nextSource.id)]);
+      setTab(scope === "team" ? "team" : "catalog");
+      setAgentMessageStatus(`${nextSource.label} uploaded.`);
     }
+    event.currentTarget.value = "";
   }
 
-  function skillWithLocalStats(skill: SkillMetadata): SkillMetadata {
-    const skillId = skill.skillId ?? rendererSkillRegistryId(skill);
-    return {
-      ...skill,
-      ...(localSkillStatsById[skillId] ?? {}),
-      skillId,
-    };
+  function refreshSource(sourceId: string) {
+    setSources((current) => current.map((source) => source.id === sourceId ? { ...source, lastUpdated: new Date().toISOString(), status: "ready" } : source));
+    setAgentMessageStatus("Source refreshed.");
   }
 
-  function updateSkillStats(stats: {
-    skillId: string;
-    starCount: number;
-    installCount: number;
-    downloadCount: number;
-    runCount: number;
-    viewCount: number;
-    starredByActor: boolean;
-    installedByActor: boolean;
-    updatedAt: string;
-  }) {
-    setLocalSkillStatsById((current) => ({
-      ...current,
-      [stats.skillId]: {
-        skillId: stats.skillId,
-        starCount: stats.starCount,
-        installCount: stats.installCount,
-        downloadCount: stats.downloadCount,
-        runCount: stats.runCount,
-        viewCount: stats.viewCount,
-        starredByActor: stats.starredByActor,
-        registryUpdatedAt: stats.updatedAt,
-      },
-    }));
+  function removeSource(sourceId: string) {
+    setSources((current) => current.filter((source) => source.id !== sourceId));
+    if (selectedSourceId === sourceId) setSelectedSourceId("");
+    setAgentMessageStatus("Source removed.");
   }
 
-  async function toggleSkillStar(skill: SkillMetadata) {
-    const trackedSkill = skillWithLocalStats(skill);
-    const eventType = trackedSkill.starredByActor ? "unstar" : "star";
-    const stats = await linkApi.recordSkillRegistryEvent({
-      skillId: trackedSkill.skillId,
-      skillName: trackedSkill.name,
-      source: trackedSkill.source,
-      eventType,
-    });
-    updateSkillStats(stats);
-    setBotSkillResult(eventType === "star" ? `${trackedSkill.name} starred.` : `${trackedSkill.name} unstarred.`);
+  function toggleSourceScope(sourceId: string) {
+    setSources((current) => current.map((source) => source.id === sourceId ? {
+      ...source,
+      scope: source.scope === "team" ? "personal" : "team",
+      lastUpdated: new Date().toISOString(),
+    } : source));
+    setAgentMessageStatus("Source scope updated.");
   }
 
-  async function installSkill(skill: SkillMetadata) {
-    const trackedSkill = skillWithLocalStats(skill);
-    if (!activeAgent) {
-      setBotSkillResult("Choose an active agent on Agents before installing skills.");
-      setSectionFilter("you");
-      return;
-    }
-    const installKey = `${activeAgent.id}:${trackedSkill.name}`;
-    setInstalledSkillKeys((current) => current.includes(installKey) ? current : [...current, installKey]);
-    const stats = await linkApi.recordSkillRegistryEvent({
-      skillId: trackedSkill.skillId,
-      skillName: trackedSkill.name,
-      source: trackedSkill.source,
-      eventType: "install",
-    });
-    updateSkillStats(stats);
-    setBotSkillResult(`${trackedSkill.name} installed on ${activeAgent.displayName}.`);
-  }
-
-  function renderBotSkillButton(skill: SkillMetadata) {
-    const trackedSkill = skillWithLocalStats(skill);
-    const installed = activeAgent ? installedSkillKeys.includes(`${activeAgent.id}:${trackedSkill.name}`) : false;
-    const expanded = expandedSkillNames.includes(trackedSkill.name);
-    const skillMarkdown = skillMarkdownByName[trackedSkill.name];
-    const downloadCount = trackedSkill.downloadCount ?? trackedSkill.installCount ?? 0;
-    return (
-      <article key={trackedSkill.name} className={`agentCard skillResultRow ${expanded ? "expanded" : ""}`}>
-        <div className="connectorTitle">
-          <span className="agentTitleText">
-            <strong>{trackedSkill.name}</strong>
-          </span>
-          <div className="agentCardActions">
-            <button
-              className={`iconButton bookmarkButton skillInstallIconButton ${trackedSkill.starredByActor ? "selected" : ""}`}
-              onClick={() => void toggleSkillStar(trackedSkill)}
-              type="button"
-              title={trackedSkill.starredByActor ? "Unstar skill" : "Star skill"}
-              aria-label={trackedSkill.starredByActor ? `Unstar ${trackedSkill.name}` : `Star ${trackedSkill.name}`}
-            >
-              <Star size={15} fill={trackedSkill.starredByActor ? "currentColor" : "none"} />
-            </button>
-            <button
-              className={`iconButton bookmarkButton skillInstallIconButton ${installed ? "selected" : ""}`}
-              onClick={() => void installSkill(trackedSkill)}
-              type="button"
-              title={installed ? "Skill installed" : "Install skill"}
-              aria-label={installed ? `${trackedSkill.name} installed` : `Install ${trackedSkill.name}`}
-            >
-              <Plus size={15} />
-            </button>
-            <button
-              className="iconButton agentDetailsButton"
-              onClick={() => toggleBotSkillDetails(trackedSkill.name)}
-              type="button"
-              title={expanded ? "Hide skill details" : "Show skill details"}
-              aria-label={expanded ? `Hide ${trackedSkill.name} details` : `Show ${trackedSkill.name} details`}
-              aria-expanded={expanded}
-            >
-              <ChevronDown size={16} />
-            </button>
-          </div>
-        </div>
-        <p>{trackedSkill.description}</p>
-        <div className="skillMarketplaceMeta" aria-label={`${trackedSkill.name} marketplace stats`}>
-          <button className="skillCategoryLink" type="button" onClick={() => setBotSkillTeamFilter(trackedSkill.team)}>
-            {trackedSkill.team}
-          </button>
-          <span><Star size={14} />{formatCompactCount(trackedSkill.starCount)}</span>
-          <span><Download size={14} />{formatCompactCount(downloadCount)}</span>
-        </div>
-        {expanded && (
-          <div className="agentDetailsPanel">
-            <div className="tagList">
-              <span>{trackedSkill.product ?? "workflow"}</span>
-              <span>{trackedSkill.language ?? "skill"}</span>
-              {trackedSkill.source && <span>{trackedSkill.source}</span>}
-              <span>{trackedSkill.approvalRequired ? "approval gated" : "ready"}</span>
-              {installed && <span>installed</span>}
-            </div>
-            <div className="skillMarkdownPanel">
-              <div className="skillMarkdownHeader">
-                <span><FileText size={14} />SKILL.md</span>
-                {skillMarkdown?.status === "ready" && (
-                  <a href={skillMarkdown.result.sourceUrl} target="_blank" rel="noreferrer">
-                    <ExternalLink size={13} />
-                    GitHub
-                  </a>
-                )}
-              </div>
-              {skillMarkdown?.status === "loading" && <p className="skillMarkdownStatus">Loading SKILL.md...</p>}
-              {skillMarkdown?.status === "error" && <p className="skillMarkdownStatus error">{skillMarkdown.message}</p>}
-              {skillMarkdown?.status === "ready" && <pre>{skillMarkdown.result.markdown}</pre>}
-            </div>
-          </div>
-        )}
-      </article>
-    );
-  }
-
-  function updateToolDraft<K extends keyof ToolStudioDraft>(key: K, value: ToolStudioDraft[K]) {
-    setToolDraft((current) => ({ ...current, [key]: value }));
-  }
-
-  async function publishToolStudioDraft() {
-    setToolStudioStatus("Publishing tool to the Link catalog...");
-    try {
-      const published = await linkApi.publishToolManifest(toolStudioManifest);
-      setToolStudioStatus(`${published.name} published to Tool Studio as ${published.artifactType.replace("_", " ")}.`);
-      await refresh();
-    } catch (err) {
-      setToolStudioStatus(err instanceof Error ? err.message : "Unable to publish tool.");
-    }
-  }
-
-  async function refineToolInChat() {
-    setToolStudioStatus("");
-    await startSkillBuilderChat(toolStudioPrompt);
-    setToolStudioStatus("Opened Tool Studio session in the chat panel.");
-  }
-
-  const agentSectionHeading = {
-    personal: ["Personal", Users],
-    squads: ["Squads", Bot],
-    telnyx: ["Telnyx", Store],
-    skills: ["Skills", Zap],
-  } satisfies Record<AgentViewTab, [string, AppIcon]>;
-  const [agentHeadingTitle] = agentSectionHeading[tab];
   const agentHeaderAction = agentSetupOpen ? (
     <button className="button secondary" type="button" onClick={() => setAgentSetupOpen(false)}>
       <ArrowLeft size={15} />
@@ -11183,14 +12721,9 @@ function AgentsView({
       <Plus size={15} />
       New Agent
     </button>
-  ) : tab === "skills" ? (
-    <button className="button primary" onClick={() => setCreateToolOpen((open) => !open)}>
-      <Plus size={15} />
-      Create Skill
-    </button>
   ) : null;
 
-  function renderAgentDirectoryRow(row: (typeof agentDirectoryRows)[number]) {
+  function renderAgentDirectoryRow(row: AgentDirectoryRow) {
     const agent = row.agent;
     return (
       <div
@@ -11228,7 +12761,7 @@ function AgentsView({
 
   function renderAgentDirectoryTable() {
     return (
-      <section className={`agentDirectorySection ${agentDirectoryRows.length === 0 ? "empty" : ""}`} aria-label="Agents">
+      <section className={`agentDirectorySection ${visibleAgentRows.length === 0 ? "empty" : ""}`} aria-label="Agents">
         <div className="chatSessionRows directoryTable agentDirectoryTable" role="table" aria-label="Agents">
           <div className="chatResultRow directoryResultRow agentDirectoryResultRow chatResultRowHead" role="row">
             <SortableColumnHeader label="Agent" column="agent" activeColumn={agentSortColumn} direction={agentSortDirection} onSort={sortAgentsBy} />
@@ -11236,8 +12769,8 @@ function AgentsView({
             <span role="columnheader" aria-label="Open agent" />
           </div>
           <div className="chatResultRows" role="rowgroup">
-            {agentDirectoryRows.map(renderAgentDirectoryRow)}
-            {agentDirectoryRows.length === 0 && (
+            {visibleAgentRows.map(renderAgentDirectoryRow)}
+            {visibleAgentRows.length === 0 && (
               <div className="tableEmptyState" role="row">
                 <EmptyState title="No agents found" body="Try another search term or filter." icon={Bot} />
               </div>
@@ -11249,13 +12782,90 @@ function AgentsView({
   }
 
   const selectedAgentRow = selectedAgentDetailId
-    ? agentDirectoryRows.find((row) => row.id === selectedAgentDetailId)
+    ? [...personalAgentRows, ...teamAgentRows, ...catalogAgentRows].find((row) => row.id === selectedAgentDetailId)
     : undefined;
   const selectedAgentDetail = selectedAgentRow?.agent;
   const selectedAgentCapabilities = selectedAgentDetail && "capabilities" in selectedAgentDetail ? selectedAgentDetail.capabilities : [];
   const selectedAgentSource = selectedAgentDetail && "source" in selectedAgentDetail ? selectedAgentDetail.source : "agent-control-plane";
   const selectedAgentVisibility = selectedAgentDetail && "visibility" in selectedAgentDetail ? selectedAgentDetail.visibility : undefined;
   const selectedAgentRequiresAuth = Boolean(selectedAgentDetail && "requiresAuthentication" in selectedAgentDetail && selectedAgentDetail.requiresAuthentication);
+  const selectedSource = selectedSourceId ? sources.find((source) => source.id === selectedSourceId) : undefined;
+
+  if (selectedSource) {
+    return (
+      <section className="content agentsView">
+        <div className="pageSectionShell pageSectionShellSingle">
+          <div className="pageSectionMain">
+            <div className="marketplaceView embeddedMarketplace directoryDetailView embeddedDirectoryDetailView">
+              <header className="directoryEmbeddedDetailHeader">
+                <button className="iconButton chatDetailBackButton" type="button" onClick={() => setSelectedSourceId("")} aria-label="Back to agent sources">
+                  <ArrowLeft size={17} />
+                </button>
+                <div>
+                  <span>Agents / Sources</span>
+                  <h2>{selectedSource.label}</h2>
+                  <p>{selectedSource.target}</p>
+                </div>
+              </header>
+              <section className="chatDetailSurface">
+                <div className="chatReviewTabs directoryDetailTabs" role="tablist" aria-label="Source details">
+                  {[
+                    ["overview", "Overview"],
+                    ["actions", "Actions"],
+                    ["contents", "Contents"],
+                  ].map(([id, label]) => (
+                    <button
+                      key={id}
+                      className={selectedSourceDetailTab === id ? "selected" : ""}
+                      type="button"
+                      onClick={() => setSelectedSourceDetailTab(id as typeof selectedSourceDetailTab)}
+                      role="tab"
+                      aria-selected={selectedSourceDetailTab === id}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {selectedSourceDetailTab === "overview" && (
+                  <div className="chatResultDetails directoryDetailPanel">
+                    <div><strong>Type</strong><span>{formatOwnershipSourceKind(selectedSource.kind)}</span></div>
+                    <div><strong>Scope</strong><span>{formatOwnershipSourceScope(selectedSource.scope)}</span></div>
+                    <div><strong>Status</strong><span>{formatOwnershipSourceStatus(selectedSource.status)}</span></div>
+                    <div><strong>Target</strong><span>{selectedSource.target}</span></div>
+                    <div><strong>Last updated</strong><span>{formatSkillUpdatedAt(selectedSource.lastUpdated)}</span></div>
+                    <div><strong>Item count</strong><span>{selectedSource.itemCount}</span></div>
+                  </div>
+                )}
+                {selectedSourceDetailTab === "actions" && (
+                  <div className="directoryDetailPanel directoryActionPanel">
+                    <button className="button secondary" type="button" onClick={() => refreshSource(selectedSource.id)}>
+                      <RefreshCw size={14} />
+                      Refresh source
+                    </button>
+                    <button className="button secondary" type="button" onClick={() => toggleSourceScope(selectedSource.id)}>
+                      <Users size={14} />
+                      Move to {selectedSource.scope === "team" ? "Personal" : "Team"}
+                    </button>
+                    <button className="button ghost" type="button" onClick={() => removeSource(selectedSource.id)}>
+                      <Trash2 size={14} />
+                      Remove source
+                    </button>
+                  </div>
+                )}
+                {selectedSourceDetailTab === "contents" && (
+                  <div className="directoryDetailPanel">
+                    <div className="tagList">
+                      {selectedSource.items.map((item) => <span key={item}>{item}</span>)}
+                    </div>
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (selectedAgentRow && selectedAgentDetail) {
     return (
@@ -11265,7 +12875,7 @@ function AgentsView({
             <button className="iconButton chatDetailBackButton" type="button" onClick={() => setSelectedAgentDetailId("")} aria-label="Back to agents">
               <ArrowLeft size={17} />
             </button>
-            <span>Agents / {selectedAgentRow.section === "you" ? "You" : "Team"}</span>
+            <span>Agents / {selectedAgentRow.section === "personal" ? "Personal" : selectedAgentRow.section === "team" ? "Team" : "Catalog"}</span>
             <h1>{selectedAgentDetail.displayName}</h1>
             <p>{selectedAgentDetail.description || "No description saved."}</p>
           </div>
@@ -11403,15 +13013,13 @@ function AgentsView({
     <section className="content agentsView">
       <div className="pageSectionShell">
         <PageSectionSidebar
-          tabs={[
-            ["personal", "Personal", Users],
-            ["squads", "Squads", Bot],
-            ["telnyx", "Telnyx", Store],
-          ] as const}
-          activeTab={tab === "skills" ? "personal" : tab}
+          heading="Agents"
+          headingIcon={viewMeta.agents.icon}
+          groups={ownershipWorkspaceSectionGroups}
+          activeTab={tab}
           onSelect={(nextTab) => {
             setTab(nextTab);
-            setCreateToolOpen(false);
+            setFiltersOpen(false);
           }}
           label="Agent sections"
         />
@@ -11420,442 +13028,211 @@ function AgentsView({
             <h1>{agentSetupOpen ? "Agent Setup" : "Agents"}</h1>
             {agentHeaderAction}
           </header>
-      {agentSetupOpen ? (
-        <AgentControlPlaneSetupPanel connectors={connectors} refresh={refresh} openTerminal={openTerminal} />
-      ) : (
-      <>
-      {!(tab === "skills" && createToolOpen) && (
-      <div className="agentControls">
-        <button
-          className={`iconButton agentFilterButton ${filtersOpen ? "selected" : ""}`}
-          aria-label={filtersOpen ? "Hide filters" : "Show filters"}
-          title={filtersOpen ? "Hide filters" : "Show filters"}
-          onClick={() => setFiltersOpen((open) => !open)}
-        >
-          <ListFilter size={16} />
-        </button>
-        <div className="explorerSearch compactSearch">
-          <Search size={16} />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search agents"
-          />
-        </div>
-        <TableRefreshButton onClick={refreshAgentsThenAll} disabled={acpBusy} label="Refresh agents" />
-      </div>
-      )}
-      {filtersOpen && !(tab === "skills" && createToolOpen) && (
-        <div className="agentFilterPanel">
-          {tab !== "skills" ? (
-            <>
-              <label className="agentFilter">
-                <span>Section</span>
-                <select value={sectionFilter} onChange={(event) => setSectionFilter(event.target.value as typeof sectionFilter)}>
-                  <option value="all">All agents</option>
-                  <option value="you">You</option>
-                  <option value="team">Team</option>
-                </select>
-              </label>
-              <label className="agentFilter">
-                <span>Status</span>
-                <select value={hostedAgentFilter} onChange={(event) => setHostedAgentFilter(event.target.value)}>
-                  <option value="all">All statuses</option>
-                  {hostedAgentStatuses.map((status) => (
-                    <option key={status} value={status}>{formatStatusLabel(status)}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="agentFilter">
-                <span>Squad</span>
-                <select value={squadFilter} onChange={(event) => setSquadFilter(event.target.value)}>
-                  <option value="all">All squads</option>
-                  {squads.map((squad) => (
-                    <option key={squad} value={squad}>{squad}</option>
-                  ))}
-                </select>
-              </label>
-            </>
+          {agentSetupOpen ? (
+            <AgentControlPlaneSetupPanel connectors={connectors} refresh={refresh} openTerminal={openTerminal} />
           ) : (
             <>
-              <label className="agentFilter">
-                <span>My skill team</span>
-                <select value={skillTeamFilter} onChange={(event) => setSkillTeamFilter(event.target.value)}>
-                  <option value="all">All teams</option>
-                  {installedSkillTeams.map((team) => (
-                    <option key={team} value={team}>{team}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="agentFilter">
-                <span>Skill team</span>
-                <select value={botSkillTeamFilter} onChange={(event) => setBotSkillTeamFilter(event.target.value)}>
-                  <option value="all">All teams</option>
-                  {botSkillTeams.map((team) => (
-                    <option key={team} value={team}>{team}</option>
-                  ))}
-                </select>
-              </label>
-            </>
-          )}
-        </div>
-      )}
-      {tab === "skills" ? (
-        <div className="botSkillsPanel">
-          {createToolOpen ? (
-            <form className="skillBuilderForm" onSubmit={(event) => {
-              event.preventDefault();
-              void publishToolStudioDraft();
-            }}>
-              <section className="skillBuilderSurvey" aria-label="Tool Studio survey">
-                <label>
-                  <span>Skill name</span>
-                  <input value={toolDraft.name} onChange={(event) => updateToolDraft("name", event.target.value)} placeholder="Account Briefing" />
-                </label>
-                <label>
-                  <span>Description</span>
-                  <input value={toolDraft.description} onChange={(event) => updateToolDraft("description", event.target.value)} placeholder="Create a concise account briefing from internal context." />
-                </label>
-                <label>
-                  <span>Owner</span>
-                  <input value={toolDraft.owner} onChange={(event) => updateToolDraft("owner", event.target.value)} placeholder="GTM" />
-                </label>
-                <label>
-                  <span>Team</span>
-                  <input value={toolDraft.team} onChange={(event) => updateToolDraft("team", event.target.value)} placeholder="Sales" />
-                </label>
-                <label>
-                  <span>Audience</span>
-                  <input value={toolDraft.audience} onChange={(event) => updateToolDraft("audience", event.target.value)} placeholder="Sales, Support, NOC" />
-                </label>
-                <label>
-                  <span>Artifact</span>
-                  <select value={toolDraft.artifactType} onChange={(event) => updateToolDraft("artifactType", event.target.value as ToolArtifactType)}>
-                    <option value="skill">SKILL.md workflow</option>
-                    <option value="mcp_tool">Plugin tool</option>
-                    <option value="link_app">Link app</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Risk</span>
-                  <select value={toolDraft.riskLevel} onChange={(event) => updateToolDraft("riskLevel", event.target.value as ToolStudioDraft["riskLevel"])}>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Tools</span>
-                  <input value={toolDraft.toolsRequired} onChange={(event) => updateToolDraft("toolsRequired", event.target.value)} placeholder="salesforce.account_lookup, guru.search" />
-                </label>
-                <label className="skillBuilderToggle">
-                  <input type="checkbox" checked={toolDraft.customerSafe} onChange={(event) => updateToolDraft("customerSafe", event.target.checked)} />
-                  <span>Customer safe</span>
-                </label>
-                <label className="skillBuilderToggle">
-                  <input type="checkbox" checked={toolStudioManifest.approvalRequired} onChange={(event) => updateToolDraft("approvalRequired", event.target.checked)} />
-                  <span>Approval required</span>
-                </label>
-                <label>
-                  <span>Visibility</span>
-                  <select value={toolDraft.visibility} onChange={(event) => updateToolDraft("visibility", event.target.value as ToolStudioDraft["visibility"])}>
-                    <option value="private">Private</option>
-                    <option value="squad">Squad</option>
-                    <option value="internal">Internal</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Version</span>
-                  <input value={toolDraft.version} onChange={(event) => updateToolDraft("version", event.target.value)} placeholder="1.0.0" />
-                </label>
-                <label className="wide">
-                  <span>When to use it</span>
-                  <textarea value={toolDraft.whenToUse} onChange={(event) => updateToolDraft("whenToUse", event.target.value)} placeholder="Use when a rep needs a pre-call account summary." />
-                </label>
-                <label className="wide">
-                  <span>Inputs needed</span>
-                  <textarea value={toolDraft.inputsNeeded} onChange={(event) => updateToolDraft("inputsNeeded", event.target.value)} placeholder="Account name, CRM URL, meeting date, target persona." />
-                </label>
-                <label className="wide">
-                  <span>Source of truth</span>
-                  <textarea value={toolDraft.sourceOfTruth} onChange={(event) => updateToolDraft("sourceOfTruth", event.target.value)} placeholder="Salesforce wins for account fields; Guru wins for playbooks; Slack is supporting context only." />
-                </label>
-                <label className="wide">
-                  <span>Workflow steps</span>
-                  <textarea value={toolDraft.workflowSteps} onChange={(event) => updateToolDraft("workflowSteps", event.target.value)} placeholder="1. Look up account. 2. Pull recent notes. 3. Summarize risks and next steps." />
-                </label>
-                <label className="wide">
-                  <span>Repeated checks</span>
-                  <textarea value={toolDraft.repeatedChecks} onChange={(event) => updateToolDraft("repeatedChecks", event.target.value)} placeholder="Confirm stale sources, missing inputs, and approval gates before final output." />
-                </label>
-                <label className="wide">
-                  <span>Expected output</span>
-                  <textarea value={toolDraft.expectedOutput} onChange={(event) => updateToolDraft("expectedOutput", event.target.value)} placeholder="A brief with context, current state, risks, talking points, and next actions." />
-                </label>
-                <label className="wide">
-                  <span>Human checkpoints</span>
-                  <textarea value={toolDraft.humanCheckpoints} onChange={(event) => updateToolDraft("humanCheckpoints", event.target.value)} placeholder="Ask before customer-facing messages, write actions, pricing claims, or destructive edits." />
-                </label>
-                <label className="wide">
-                  <span>Safety notes</span>
-                  <textarea value={toolDraft.safetyNotes} onChange={(event) => updateToolDraft("safetyNotes", event.target.value)} placeholder="Do not expose internal notes externally. Ask before customer-facing use." />
-                </label>
-                <label className="wide">
-                  <span>Reviewers</span>
-                  <textarea value={toolDraft.reviewers} onChange={(event) => updateToolDraft("reviewers", event.target.value)} placeholder="sales.squad, support.squad" />
-                </label>
-                <label className="wide">
-                  <span>Test fixture</span>
-                  <textarea value={toolDraft.testFixture} onChange={(event) => updateToolDraft("testFixture", event.target.value)} placeholder="Paste the most recent real request or expected input/output example." />
-                </label>
-              </section>
-              <section className="skillBuilderPreview" aria-label="Generated Tool Studio package">
-                <div className="skillBuilderPreviewHeader">
-                  <strong>Generated package</strong>
-                  <button className="button primary" type="submit">
-                    <Upload size={15} />
-                    Publish Skill
+              <div className={`agentControls ${tab === "sources" ? "agentControlsWithActions" : ""}`}>
+                {tab !== "sources" && (
+                  <button
+                    className={`iconButton agentFilterButton ${filtersOpen ? "selected" : ""}`}
+                    aria-label={filtersOpen ? "Hide filters" : "Show filters"}
+                    title={filtersOpen ? "Hide filters" : "Show filters"}
+                    onClick={() => setFiltersOpen((open) => !open)}
+                  >
+                    <ListFilter size={16} />
                   </button>
-                  <button className="button secondary" type="button" onClick={() => void refineToolInChat()}>
-                    <Send size={15} />
-                    Refine in Chat
-                  </button>
+                )}
+                {tab === "sources" && <div className="toolbarSpacer" aria-hidden="true" />}
+                <div className="explorerSearch compactSearch">
+                  <Search size={16} />
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={tab === "sources" ? "Search linked sources..." : "Search agents"}
+                  />
                 </div>
-                <div className="toolStudioChecklist">
-                  {toolStudioManifest.checklist.map((item) => (
-                    <span key={item}><SquareCheck size={14} />{item}</span>
-                  ))}
-                </div>
-                <pre>{JSON.stringify({ ...toolStudioManifest, skillMarkdown: "See generated SKILL.md below." }, null, 2)}</pre>
-                <pre>{toolStudioManifest.skillMarkdown}</pre>
-                {toolStudioStatus && <div className="infoBanner">{toolStudioStatus}</div>}
-              </section>
-            </form>
-          ) : (
-            <>
-              <section className="wikiSection" aria-label="My Skills">
-                <div className="mySkillsList">
-                  {installedSkillRows.map((row) => (
-                    <article className="mySkillRow" key={row.key}>
-                      <div className="skillIcon"><Zap size={16} /></div>
-                      <div>
-                        <strong>{row.skillName}</strong>
-                        <p>{row.description}</p>
-                        <small>{row.team} - {row.agentName}</small>
-                      </div>
-                      <Badge tone="success">Installed</Badge>
-                    </article>
-                  ))}
-                </div>
-                {installedSkillRows.length === 0 && <div className="appEmptyPanel">No skills installed yet.</div>}
-              </section>
-              <section className="wikiSection" aria-label="Active agent teams">
-                <div className="userSquadsPanel">
-                  <span className="userSquadsSummary">Active agent teams</span>
-                  <div className="userSquadChips">
-                    {userSquads.length > 0 ? userSquads.map((squad) => <span key={squad}>{squad}</span>) : <em>No teams found for the active agent</em>}
+                {tab === "sources" ? (
+                  <div className="headerActions compactHeaderActions" aria-label="Agent source actions">
+                    <button className="button secondary" type="button" onClick={promptGithubSource}>
+                      <GithubIcon size={14} />
+                      Link GitHub Repo
+                    </button>
+                    <button className="button secondary" type="button" onClick={openDirectoryPicker}>
+                      <FolderOpen size={14} />
+                      Add Directory
+                    </button>
+                    <button className="button secondary" type="button" onClick={openUploadPicker}>
+                      <Upload size={14} />
+                      Upload
+                    </button>
+                    <TableRefreshButton onClick={refreshAgentsThenAll} disabled={acpBusy} label="Refresh sources" />
                   </div>
-                </div>
-              </section>
-              <section className="wikiSection" aria-label="Skills">
-                <div className="squadKitColumns">
-                  {filteredSquadKits.map((kit) => {
-                    const expanded = expandedSquad === kit.id;
-                    return (
-                      <section className={`squadKitColumn wiki-${kit.tone} ${expanded ? "expanded" : ""}`} key={kit.id}>
-                        <button className="squadKitHeader" onClick={() => toggleSquadKit(kit.id)} aria-expanded={expanded}>
-                          <span>
-                            <strong>{kit.name}</strong>
-                            <small>{kit.mastered}/{kit.total}</small>
-                          </span>
-                          <ChevronDown size={16} />
+                ) : (
+                  <TableRefreshButton onClick={refreshAgentsThenAll} disabled={acpBusy} label="Refresh agents" />
+                )}
+                {filtersOpen && tab !== "sources" && (
+                  <div className="agentFilterPanel">
+                    {tab === "catalog" && (
+                      <label className="agentFilter">
+                        <span>Catalog</span>
+                        <select value={catalogFilter} onChange={(event) => setCatalogFilter(event.target.value as typeof catalogFilter)}>
+                          <option value="all">All</option>
+                          <option value="telnyx">Telnyx</option>
+                          <option value="internal">Internal</option>
+                          <option value="linked">Linked</option>
+                        </select>
+                      </label>
+                    )}
+                    <label className="agentFilter">
+                      <span>Status</span>
+                      <select value={hostedAgentFilter} onChange={(event) => setHostedAgentFilter(event.target.value)}>
+                        <option value="all">All statuses</option>
+                        {hostedAgentStatuses.map((status) => (
+                          <option key={status} value={status}>{formatStatusLabel(status)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="agentFilter">
+                      <span>Squad</span>
+                      <select value={squadFilter} onChange={(event) => setSquadFilter(event.target.value)}>
+                        <option value="all">All squads</option>
+                        {squads.map((squad) => (
+                          <option key={squad} value={squad}>{squad}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
+              </div>
+              <div className="wikiHubContent">
+                {tab !== "sources" && tab === "catalog" && (
+                  <div className="catalogFilterChips agentDirectoryTabs designTabs" aria-label="Catalog filters">
+                    {([
+                      { id: "all", label: "All", icon: SlidersHorizontal },
+                      { id: "telnyx", label: "Telnyx", icon: Cloud },
+                      { id: "internal", label: "Internal", icon: Building2 },
+                      { id: "linked", label: "Linked", icon: Link2 },
+                    ] as const).map((option) => {
+                      const Icon = option.icon;
+                      return (
+                        <button key={option.id} className={catalogFilter === option.id ? "selected" : ""} type="button" onClick={() => setCatalogFilter(option.id)}>
+                          <Icon size={14} />
+                          <span>{option.label}</span>
                         </button>
-                        {expanded && (
-                          <div className="squadKitSkillList">
-                            {kit.skills.map(renderBotSkillButton)}
+                      );
+                    })}
+                  </div>
+                )}
+                {tab === "sources" ? (
+                  <div className="marketplaceView embeddedMarketplace">
+                    <div className="chatSessionRows directoryTable ownershipSourceDirectoryTable" role="table" aria-label="Agent sources">
+                      <div className="chatResultRow directoryResultRow ownershipSourceResultRow chatResultRowHead" role="row">
+                        <span role="columnheader">Source</span>
+                        <span role="columnheader">Type</span>
+                        <span role="columnheader">Scope</span>
+                        <span role="columnheader">Target</span>
+                        <span role="columnheader">Status</span>
+                        <span role="columnheader">Last updated</span>
+                        <span role="columnheader" aria-label="Manage source" />
+                      </div>
+                      <div className="chatResultRows" role="rowgroup">
+                        {filteredSources.map((source) => (
+                          <div
+                            key={source.id}
+                            className="chatResultRow directoryResultRow ownershipSourceResultRow"
+                            role="row"
+                            tabIndex={0}
+                            onClick={() => {
+                              setSelectedSourceId(source.id);
+                              setSelectedSourceDetailTab("overview");
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setSelectedSourceId(source.id);
+                                setSelectedSourceDetailTab("overview");
+                              }
+                            }}
+                          >
+                            <span className="directoryNameCell" role="cell">
+                              <strong>{source.label}</strong>
+                            </span>
+                            <span role="cell">{formatOwnershipSourceKind(source.kind)}</span>
+                            <span role="cell">{formatOwnershipSourceScope(source.scope)}</span>
+                            <span role="cell">{source.target}</span>
+                            <span role="cell"><Badge tone={ownershipSourceStatusTone(source.status)}>{formatOwnershipSourceStatus(source.status)}</Badge></span>
+                            <span role="cell">{formatSkillUpdatedAt(source.lastUpdated)}</span>
+                            <button
+                              className="chatSessionOpenButton"
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSelectedSourceId(source.id);
+                                setSelectedSourceDetailTab("overview");
+                              }}
+                              aria-label={`Manage ${source.label}`}
+                              title="Manage source"
+                            >
+                              <ArrowRight size={16} />
+                            </button>
+                          </div>
+                        ))}
+                        {filteredSources.length === 0 && (
+                          <div className="tableEmptyState" role="row">
+                            <EmptyState title="No sources linked" body="Link a GitHub repo, add a directory, or upload an agent package to make more agents discoverable." icon={FolderOpen} />
                           </div>
                         )}
-                      </section>
-                    );
-                  })}
-                </div>
-              </section>
-              {filteredSquadKits.length === 0 && <EmptyState title="No skills found" body="Try another search term." icon={Bot} />}
-              {botSkillResult && <pre className="resultPreview">{botSkillResult}</pre>}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <section className="wikiSection agentDirectoryList" aria-label="Agents">
+                    {agentError && agentLoadRecoverable ? (
+                      <div className="agentRecoveryBanner" role="status">
+                        <div>
+                          <strong>Agent Control Plane is unavailable</strong>
+                          <p>{agentError}</p>
+                        </div>
+                        <div className="agentRecoveryActions">
+                          <button className="button secondary" type="button" onClick={() => void refreshAgentControlPlane()} disabled={acpBusy}>
+                            <RefreshCw size={14} />
+                            Retry
+                          </button>
+                          <button className="button secondary" type="button" onClick={() => void signInAgentControlPlane()} disabled={acpBusy}>
+                            Sign in
+                          </button>
+                          <button className="button primary" type="button" onClick={() => void openAddAgentFlow()} disabled={acpBusy}>
+                            <Plus size={14} />
+                            New Agent
+                          </button>
+                        </div>
+                      </div>
+                    ) : agentError ? <div className="errorBanner">{agentError}</div> : null}
+                    {renderAgentDirectoryTable()}
+                  </section>
+                )}
+                {agentMessageStatus && <div className="infoBanner">{agentMessageStatus}</div>}
+              </div>
             </>
           )}
         </div>
-      ) : (
-        <>
-        {tab === "personal" && (
-        <section className="wikiSection agentDirectoryList" aria-label="Agents">
-          {agentError && agentLoadRecoverable ? (
-            <div className="agentRecoveryBanner" role="status">
-              <div>
-                <strong>Agent Control Plane is unavailable</strong>
-                <p>{agentError}</p>
-              </div>
-              <div className="agentRecoveryActions">
-                <button className="button secondary" type="button" onClick={() => void refreshAgentControlPlane()} disabled={acpBusy}>
-                  <RefreshCw size={14} />
-                  Retry
-                </button>
-                <button className="button secondary" type="button" onClick={() => void signInAgentControlPlane()} disabled={acpBusy}>
-                  Sign in
-                </button>
-                <button className="button primary" type="button" onClick={() => void openAddAgentFlow()} disabled={acpBusy}>
-                  <Plus size={14} />
-                  New Agent
-                </button>
-              </div>
-            </div>
-          ) : agentError ? <div className="errorBanner">{agentError}</div> : null}
-          {renderAgentDirectoryTable()}
-        </section>
-        )}
-        {tab === "squads" && (
-        <section className="wikiSection agentDirectoryList" aria-label="Squad Agents">
-          {squadAgentGroups.map(([squad, rows]) => (
-            <section className="squadKitColumn expanded" key={squad}>
-              <div className="squadKitHeader">
-                <span>
-                  <strong>{squad}</strong>
-                  <small>{rows.length} {rows.length === 1 ? "agent" : "agents"}</small>
-                </span>
-              </div>
-              <div className="agentGrid">
-                {rows.map((agent) => {
-                  const expanded = expandedAgentIds.includes(agent.id);
-                  return (
-                    <article className={`agentCard ${expanded ? "expanded" : ""}`} key={agent.id}>
-                      <div>
-                        <div className="connectorTitle">
-                          <span className="agentTitleText">
-                            <strong>{agent.displayName}</strong>
-                            <span className="agentSquadBadge">{agentSquadLabel(agent)}</span>
-                          </span>
-                          <div className="agentCardActions">
-                            <button
-                              className={`iconButton bookmarkButton ${bookmarkedAgentIdSet.has(agent.id) ? "selected" : ""}`}
-                              onClick={() => toggleBookmark(agent.id)}
-                              title={bookmarkedAgentIdSet.has(agent.id) ? "Remove saved agent" : "Save agent"}
-                              aria-label={bookmarkedAgentIdSet.has(agent.id) ? `Remove ${agent.displayName} from saved agents` : `Save ${agent.displayName}`}
-                            >
-                              <Star size={15} />
-                            </button>
-                            <button
-                              className="iconButton agentDetailsButton"
-                              onClick={() => toggleAgentDetails(agent.id)}
-                              title={expanded ? "Hide agent details" : "Show agent details"}
-                              aria-label={expanded ? `Hide ${agent.displayName} details` : `Show ${agent.displayName} details`}
-                              aria-expanded={expanded}
-                            >
-                              <ChevronDown size={16} />
-                            </button>
-                          </div>
-                        </div>
-                        <p>{agent.description}</p>
-                      </div>
-                      {expanded && (
-                        <div className="agentDetailsPanel">
-                          <div className="tagList">
-                            <span>{agentTypeLabel(agent)}</span>
-                            <span>{formatVisibilityLabel(agent.visibility)}</span>
-                            {agent.source && <span>{formatSourceLabel(agent.source)}</span>}
-                            {agent.squad && <span>{agent.squad}</span>}
-                            {agent.capabilities.map((capability) => <span key={capability}>{capability}</span>)}
-                            {agent.requiresAuthentication && <span>requires auth</span>}
-                          </div>
-                        </div>
-                      )}
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-          {squadAgentGroups.length === 0 && <EmptyState title="No squad agents found" body="Try a different search term or squad filter." icon={Bot} />}
-        </section>
-        )}
-        {tab === "telnyx" && (
-      <section className="wikiSection agentDirectoryList" aria-label="Agents">
-      <div className="agentGrid">
-        {filteredAgents.map((agent) => {
-          const expanded = expandedAgentIds.includes(agent.id);
-          return (
-          <article className={`agentCard ${expanded ? "expanded" : ""}`} key={agent.id}>
-            <div>
-              <div className="connectorTitle">
-                <span className="agentTitleText">
-                  <strong>{agent.displayName}</strong>
-                  <span className="agentSquadBadge">{agentSquadLabel(agent)}</span>
-                </span>
-                <div className="agentCardActions">
-                  <button
-                    className={`iconButton bookmarkButton ${bookmarkedAgentIdSet.has(agent.id) ? "selected" : ""}`}
-                    onClick={() => toggleBookmark(agent.id)}
-                    title={bookmarkedAgentIdSet.has(agent.id) ? "Remove saved agent" : "Save agent"}
-                    aria-label={bookmarkedAgentIdSet.has(agent.id) ? `Remove ${agent.displayName} from saved agents` : `Save ${agent.displayName}`}
-                  >
-                    <Star size={15} />
-                  </button>
-                  <button
-                    className="iconButton agentDetailsButton"
-                    onClick={() => toggleAgentDetails(agent.id)}
-                    title={expanded ? "Hide agent details" : "Show agent details"}
-                    aria-label={expanded ? `Hide ${agent.displayName} details` : `Show ${agent.displayName} details`}
-                    aria-expanded={expanded}
-                  >
-                    <ChevronDown size={16} />
-                  </button>
-                </div>
-              </div>
-              <p>{agent.description}</p>
-            </div>
-            {expanded && (
-              <div className="agentDetailsPanel">
-                <div className="tagList">
-                  <span>{agentTypeLabel(agent)}</span>
-                  <span>{formatVisibilityLabel(agent.visibility)}</span>
-                  {agent.source && <span>{formatSourceLabel(agent.source)}</span>}
-                  {agent.squad && <span>{agent.squad}</span>}
-                  {agent.capabilities.map((capability) => <span key={capability}>{capability}</span>)}
-                  {agent.requiresAuthentication && <span>requires auth</span>}
-                </div>
-              </div>
-            )}
-            {expanded && (agent.source === "slack" || agent.type === "slack") && (
-              <div className="agentMessageBox">
-                <textarea
-                  value={agentDrafts[agent.id] ?? ""}
-                  onChange={(event) => setAgentDrafts((current) => ({ ...current, [agent.id]: event.target.value }))}
-                  onKeyDown={(event) => {
-                    if (shouldSubmitComposer(event)) {
-                      event.preventDefault();
-                      void sendAgent(agent);
-                    }
-                  }}
-                  placeholder={`Message ${agent.displayName}`}
-                />
-                <button className="button secondary" onClick={() => void sendAgent(agent)} disabled={sendingAgentId === agent.id || !agentDrafts[agent.id]?.trim()}>
-                  {sendingAgentId === agent.id ? "Sending" : "Send"}
-                </button>
-              </div>
-            )}
-          </article>
-        );
-        })}
       </div>
-      {agentMessageStatus && <div className="infoBanner">{agentMessageStatus}</div>}
-      {filteredAgents.length === 0 && <EmptyState title="No agents found" body="Try a different search term or squad filter." icon={Bot} />}
-      </section>
-        )}
-        </>
-      )}
-      </>
-      )}
-        </div>
-      </div>
+      <input
+        ref={directoryInputRef}
+        type="file"
+        multiple
+        onChange={handleDirectoryPicked}
+        style={{ display: "none" }}
+        {...({ webkitdirectory: "", directory: "" } as unknown as Record<string, string>)}
+      />
+      <input
+        ref={uploadInputRef}
+        type="file"
+        multiple
+        onChange={handleUploadPicked}
+        style={{ display: "none" }}
+      />
     </section>
   );
 }
@@ -12762,6 +14139,14 @@ function WorkboardView({
         </div>
       </header>
 
+      <div className="phoneSetupAlert serviceSetupAlert taskboxIntroAlert" role="status">
+        <span className="serviceSetupAlertIcon" aria-hidden="true"><Users size={18} /></span>
+        <div>
+          <strong>Human-in-the-loop tasks</strong>
+          <p>Track your own tasks here, or delegate scoped work to an agent when you want follow-through.</p>
+        </div>
+      </div>
+
       {error && <div className="errorBanner">{error}</div>}
       {snapshot?.message && <div className="assistantNotice workboardSyncNotice">{snapshot.message}</div>}
 
@@ -13097,11 +14482,11 @@ function WorkboardView({
 
 const baseLinkTrainingSessionEvent: GoogleCalendarEvent = {
   id: "link-training-session",
-  title: "Schedule Link training session with Pete",
+  title: "Schedule Cloud Link training session with Pete",
   time: "Tomorrow, Pick a time",
   attendees: "Pete",
   meetUrl: "https://calendar.app.google/ZW9BiqTwGaH4K62y8",
-  notes: "Pick a time with Pete to walk through Link setup, Google Workspace access, phone workflows, and assistant configuration.",
+  notes: "Pick a time with Pete to walk through Cloud Link setup, Google Workspace access, phone workflows, and assistant configuration.",
   transcript: "",
   status: "upcoming",
 };
@@ -13217,11 +14602,13 @@ function CalendarView({
   connectors,
   linkedPhoneNumber,
   setView,
+  openSettingsTab,
   refresh,
 }: {
   connectors: ConnectorStatus[];
   linkedPhoneNumber: string;
   setView: (view: ViewId) => void;
+  openSettingsTab: (tab: SettingsTab) => void;
   refresh: () => Promise<void>;
 }) {
   const [query, setQuery] = useState("");
@@ -13435,7 +14822,7 @@ function CalendarView({
 
   function openEventDetail(event: GoogleCalendarEvent) {
     setSelectedEventId(event.id);
-    setActionStatus(event.id === linkTrainingSessionEvent.id ? "Selected Link training scheduler." : `Selected ${event.title}.`);
+    setActionStatus(event.id === linkTrainingSessionEvent.id ? "Selected Cloud Link training scheduler." : `Selected ${event.title}.`);
   }
 
   function joinCalendarEvent(event: GoogleCalendarEvent) {
@@ -13445,7 +14832,7 @@ function CalendarView({
       setActionStatus("No meeting link is saved for this event.");
       return;
     }
-    setActionStatus(event.id === linkTrainingSessionEvent.id ? "Opening Link training scheduler." : `Opening ${event.title} meeting link.`);
+    setActionStatus(event.id === linkTrainingSessionEvent.id ? "Opening Cloud Link training scheduler." : `Opening ${event.title} meeting link.`);
     window.open(joinUrl, "_blank");
   }
 
@@ -13710,7 +15097,7 @@ function CalendarView({
             if (calendarReady) {
               window.open("https://calendar.google.com/calendar/u/0/r/eventedit", "_blank");
             } else {
-              setView("settings");
+              openSettingsTab("auth");
             }
           }}
         >
@@ -13720,15 +15107,13 @@ function CalendarView({
       </header>
 
       {!calendarReady && (
-        <section className="phoneSetupAlert calendarSetupAlert">
-          <div>
-            <strong>Connect Google Workspace to show calendar events.</strong>
-            <p>Link verifies Google Calendar and Contacts access, then loads events so you can open meetings or start calls from events with phone numbers.</p>
-          </div>
-          <button className="runtimeSettingsButton" onClick={() => setView("settings")}>
-            Connect Google Workspace
-          </button>
-        </section>
+        <ServiceSetupAlert
+          title="Connect Google Workspace to show calendar events."
+          body="Cloud Link verifies Google Calendar and Contacts access, then loads events so you can open meetings or start calls from events with phone numbers."
+          actionLabel="Connect Google Workspace"
+          icon={CalendarDays}
+          onAction={() => openSettingsTab("auth")}
+        />
       )}
 
       <div className="chatSearchRow calendarControls">
@@ -13804,7 +15189,7 @@ function CalendarView({
             <div className="chatResultRow directoryResultRow calendarResultRow chatResultRowHead" role="row">
               <span className="calendarEventHeaderCell" role="columnheader">Event</span>
               <span className="calendarWhenHeaderCell" role="columnheader">When</span>
-              <span className="calendarJoinHeaderCell" role="columnheader">Join</span>
+              <span className="calendarJoinHeaderCell" role="columnheader">Cloud Link</span>
               <span role="columnheader" aria-label="Open event" />
             </div>
             <div className="chatResultRows" role="rowgroup">
@@ -13827,7 +15212,7 @@ function CalendarView({
                       ? "Try another search term or filter."
                       : calendarEvents.length > 0
                         ? `${calendarEvents.length} calendar events loaded, but none are upcoming after filtering.`
-                        : "Google Calendar is connected, but Link did not receive any events from your primary calendar for the next 180 days. Refresh or reconnect Google Workspace from Settings > Services if this looks wrong.")}
+                        : "Google Calendar is connected, but Cloud Link did not receive any events from your primary calendar for the next 180 days. Refresh or reconnect Google Workspace from Settings > Plugins if this looks wrong.")}
                     icon={CalendarDays}
                   />
                 </div>
@@ -14013,7 +15398,8 @@ function PhoneView({
   tab,
   setTab,
   refresh,
-  startManagedSkillSetupChat,
+  activeDialerConfig,
+  setActiveDialerConfig,
   openSettingsTab,
   startEmailDraftChat = async () => {},
   emailDraftAgentReady = false,
@@ -14031,7 +15417,8 @@ function PhoneView({
   tab: PhoneViewTab;
   setTab: (tab: PhoneViewTab) => void;
   refresh: () => Promise<void>;
-  startManagedSkillSetupChat: (skill: { label: string; query: string; connectorName: string }) => Promise<void>;
+  activeDialerConfig: DialerConfig;
+  setActiveDialerConfig: (config: DialerConfig) => void;
   openSettingsTab?: (tab: SettingsTab) => void;
   startEmailDraftChat?: (prompt: string) => Promise<void>;
   emailDraftAgentReady?: boolean;
@@ -14042,6 +15429,7 @@ function PhoneView({
   headerParent?: string;
   embedded?: boolean;
 }) {
+  const [dialerBuilderActions, setDialerBuilderActions] = useState<ReactNode>(null);
   const [telnyxCredentialReady, setTelnyxCredentialReady] = useState(false);
   const [phoneAssistants, setPhoneAssistants] = useState<PhoneAssistantOption[]>([]);
   const [assistantQuery, setAssistantQuery] = useState("");
@@ -14072,6 +15460,26 @@ function PhoneView({
   const [contactSource, setContactSource] = useState("all");
   const [contactFiltersOpen, setContactFiltersOpen] = useState(false);
   const [expandedContactId, setExpandedContactId] = useState("");
+  const [creatingLocalContact, setCreatingLocalContact] = useState(false);
+  const [localContactDraft, setLocalContactDraft] = useState<LocalPhoneContactDraft>(() => emptyLocalPhoneContactDraft());
+  const [localPhoneContacts, setLocalPhoneContacts] = useState<LocalPhoneContact[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(localPhoneContactsStorageKey) ?? "[]");
+      return Array.isArray(stored)
+        ? stored.filter((contact): contact is LocalPhoneContact => Boolean(
+          contact
+          && typeof contact.id === "string"
+          && typeof contact.name === "string"
+          && typeof contact.role === "string"
+          && typeof contact.phone === "string"
+          && typeof contact.detail === "string",
+        )).map((contact) => ({ ...contact, source: "local", connected: true }))
+        : [];
+    } catch {
+      return [];
+    }
+  });
   const [googleContacts, setGoogleContacts] = useState<GoogleContact[]>([]);
   const [loadingGoogleContacts, setLoadingGoogleContacts] = useState(false);
   const [googleContactsError, setGoogleContactsError] = useState("");
@@ -14101,18 +15509,10 @@ function PhoneView({
   const [inboxGrammarReview, setInboxGrammarReview] = useState<HarperReviewResult | null>(null);
   const [inboxGrammarBusyAction, setInboxGrammarBusyAction] = useState("");
   const [inboxLatestSenderByThreadId, setInboxLatestSenderByThreadId] = useState<Record<string, string>>({});
-  const [dismissedContactSkillIds, setDismissedContactSkillIds] = useState<string[]>(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      const stored = JSON.parse(window.localStorage.getItem("telnyx-link-dismissed-contact-skill-prompts") ?? "[]");
-      return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === "string") : [];
-    } catch {
-      return [];
-    }
-  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const contactSources = [
+    { id: "local", label: "Local", connectorIds: [] },
     { id: "telnyx", label: "Telnyx", connectorIds: ["telnyx"] },
     { id: "google", label: "Google", connectorIds: ["google", "google-drive", "google-calendar", "google-workspace"] },
     { id: "salesforce", label: "Salesforce", connectorIds: ["salesforce"] },
@@ -14131,11 +15531,6 @@ function PhoneView({
   const googleContactsReady = connectors.some((connector) => ["google-drive", "google-calendar"].includes(connector.id) && (connector.status === "connected" || connector.status === "signed_in"));
   const inboxReady = inboxConnectedOverride || connectors.some((connector) => connector.id === "google-inbox" && (connector.status === "connected" || connector.status === "signed_in"));
   const telnyxApiReady = telnyxCredentialReady || telnyxConnectorReady;
-  const visibleContactSkillLinks = contactManagedSkillLinks.filter((link) =>
-    !dismissedContactSkillIds.includes(link.id) &&
-    !link.connectorIds.some((connectorId) => connectedContactSourceIds.has(connectorId)),
-  );
-  const addContactSkillLink = visibleContactSkillLinks[0] ?? contactManagedSkillLinks[0];
   const contactPluginReady = googleContactsReady || contactManagedSkillLinks.some((link) => link.connectorIds.some((connectorId) => connectedContactSourceIds.has(connectorId)));
   const selectedContactSource = contactSources.find((source) => source.id === contactSource);
   const contactSourceMatches = (sourceId: string, selectedSourceId: string) => {
@@ -14145,7 +15540,7 @@ function PhoneView({
   };
   const linkBotAssistant = phoneAssistants.find((assistant) => /(^|\s)link(\s|$)/i.test(assistant.name)) ?? phoneAssistants[0];
   const callAgentOptions = [
-    { id: "link", label: "Link" },
+    { id: "link", label: "Cloud Link" },
     ...phoneAssistants.map((assistant) => ({ id: assistant.id, label: assistant.name })),
   ];
   const assistantStatusOptions = useMemo(() => {
@@ -14250,11 +15645,11 @@ function PhoneView({
   const telnyxBotContacts = [
     {
       id: "telnyx-link-bot",
-      name: "Link Bot",
+      name: "Cloud Link Bot",
       role: "Telnyx bot",
       phone: linkBotAssistant?.phoneNumber ?? "",
       source: "telnyx",
-      detail: linkBotAssistant ? `${linkBotAssistant.name} from Telnyx Voice AI.` : "Default Link bot contact. Connect a Telnyx Voice AI assistant with a phone number to call it.",
+      detail: linkBotAssistant ? `${linkBotAssistant.name} from Telnyx Voice AI.` : "Default Cloud Link bot contact. Connect a Telnyx Voice AI assistant with a phone number to call it.",
       connected: Boolean(telnyxApiReady && linkBotAssistant?.phoneNumber),
     },
     ...phoneAssistants
@@ -14277,7 +15672,7 @@ function PhoneView({
     source: string;
     detail: string;
     connected?: boolean;
-  }[] = [...telnyxBotContacts, ...googleContacts];
+  }[] = [...localPhoneContacts, ...telnyxBotContacts, ...googleContacts];
   const filteredContacts = contactDirectory
     .filter((contact) => {
       const matchesQuery = `${contact.name} ${contact.role} ${contact.phone} ${contact.detail}`.toLowerCase().includes(contactQuery.toLowerCase());
@@ -14288,6 +15683,37 @@ function PhoneView({
       return left.source.localeCompare(right.source, undefined, { sensitivity: "base" })
         || left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
     });
+
+  function openNewLocalContactForm() {
+    setCreatingLocalContact(true);
+    setExpandedContactId("");
+    setLocalContactDraft(emptyLocalPhoneContactDraft());
+    setContactSource("all");
+  }
+
+  function updateLocalContactDraft<K extends keyof LocalPhoneContactDraft>(key: K, value: LocalPhoneContactDraft[K]) {
+    setLocalContactDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function createLocalPhoneContact() {
+    const name = localContactDraft.name.trim();
+    const phone = localContactDraft.phone.trim();
+    if (!name || !phone) return;
+    const nextContact: LocalPhoneContact = {
+      id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `local-contact-${Date.now()}`,
+      name,
+      role: localContactDraft.role.trim() || "Local contact",
+      phone,
+      detail: localContactDraft.detail.trim() || "Created locally in Cloud Link.",
+      source: "local",
+      connected: true,
+    };
+    setLocalPhoneContacts((current) => [nextContact, ...current]);
+    setCreatingLocalContact(false);
+    setLocalContactDraft(emptyLocalPhoneContactDraft());
+    setExpandedContactId(nextContact.id);
+    setDialNumber(phone);
+  }
 
   async function refreshCredentialStatus() {
     const groups = await linkApi.listCredentials();
@@ -14379,8 +15805,8 @@ function PhoneView({
   }, [tab]);
 
   useEffect(() => {
-    window.localStorage.setItem("telnyx-link-dismissed-contact-skill-prompts", JSON.stringify(dismissedContactSkillIds));
-  }, [dismissedContactSkillIds]);
+    window.localStorage.setItem(localPhoneContactsStorageKey, JSON.stringify(localPhoneContacts));
+  }, [localPhoneContacts]);
 
   async function refreshGoogleContacts() {
     if (!googleContactsReady) {
@@ -14628,7 +16054,7 @@ function PhoneView({
       setCreatingNewInboxDraft(false);
       setSelectedInboxThreadId("");
       setSelectedInboxThread(null);
-      setInboxStatus("Google Inbox connected. Link can read threads and save drafts. Sending happens in Gmail.");
+      setInboxStatus("Google Inbox connected. Cloud Link can read threads and save drafts. Sending happens in Gmail.");
     } catch (err) {
       setInboxError(err instanceof Error ? err.message : "Unable to connect Google Inbox.");
       setInboxStatus("");
@@ -14752,7 +16178,7 @@ function PhoneView({
       }
       setDraftingWithAgent(true);
       setInboxError("");
-      setInboxStatus("Asking Link to draft a new email...");
+      setInboxStatus("Asking Cloud Link to draft a new email...");
       try {
         const session = await linkApi.sendChatMessage({
           workspaceId: "workspace-link",
@@ -14767,7 +16193,7 @@ function PhoneView({
         setInboxDraftBody(draft);
         setInboxStatus(draft ? "Draft copied below. Review it, then save it to Gmail when ready." : "The agent returned no draft text.");
       } catch (err) {
-        setInboxError(err instanceof Error ? err.message : "Unable to draft a new email with Link.");
+      setInboxError(err instanceof Error ? err.message : "Unable to draft a new email with Cloud Link.");
         setInboxStatus("");
       } finally {
         setDraftingWithAgent(false);
@@ -14781,7 +16207,7 @@ function PhoneView({
     }
     setDraftingWithAgent(true);
     setInboxError("");
-    setInboxStatus("Asking Link to draft a reply...");
+    setInboxStatus("Asking Cloud Link to draft a reply...");
     try {
       const session = await linkApi.sendChatMessage({
         workspaceId: "workspace-link",
@@ -14796,7 +16222,7 @@ function PhoneView({
       setInboxDraftBody(draft);
       setInboxStatus(draft ? "Draft copied below. Review it, then save it to Gmail when ready." : "The agent returned no draft text.");
     } catch (err) {
-      const detail = err instanceof Error ? err.message : "Unable to draft a reply with Link.";
+      const detail = err instanceof Error ? err.message : "Unable to draft a reply with Cloud Link.";
       if (/no agent runtime returned a response|no agent control plane agent id was selected|local litellm is not installed/i.test(detail)) {
         try {
           await startEmailDraftChat(buildInboxDraftPrompt(thread));
@@ -15032,7 +16458,7 @@ function PhoneView({
       .map((message) => message.messageId || message.id)
       .filter(Boolean);
     if (messageIds.length === 0) {
-      setInboxStatus("This thread does not expose Gmail message ids, so Link cannot change its read state.");
+      setInboxStatus("This thread does not expose Gmail message ids, so Cloud Link cannot change its read state.");
       return;
     }
     setLoadingInbox(true);
@@ -15066,7 +16492,7 @@ function PhoneView({
       });
       setInboxStatus(unread
         ? "Thread marked unread. It will remain in the unread inbox list."
-        : "Thread marked read. Link removed it from the unread inbox list.");
+        : "Thread marked read. Cloud Link removed it from the unread inbox list.");
     } catch (err) {
       setInboxError(err instanceof Error ? err.message : "Unable to change Gmail read state.");
       setInboxStatus("");
@@ -15168,13 +16594,14 @@ function PhoneView({
   const phoneSectionHeading = {
     calls: ["Calls", Phone],
     contacts: ["Contacts", Users],
-    assistants: ["Assistants", Bot],
+    assistants: ["Voice AI", Bot],
+    dialer: ["Dialpad", Grid3X3],
     inbox: ["Inbox", Inbox],
     numbers: ["Numbers", PhoneCall],
   } satisfies Record<PhoneViewTab, [string, AppIcon]>;
   const [phoneHeadingTitle] = phoneSectionHeading[tab];
   const showSectionSidebar = !standaloneInbox && !hideSectionSidebar;
-  const sectionParent = headerParent ?? (standaloneInbox ? "Link" : "Calls");
+  const sectionParent = headerParent ?? "";
   const phoneHeaderAction = tab === "calls" ? (
     <button className="button primary" type="button" onClick={() => openNewCall()}>
       <Plus size={15} />
@@ -15200,9 +16627,6 @@ function PhoneView({
     <div className="headerActions contactHeaderActions">
       {!contactPluginReady && (
         <>
-          <button className="button secondary" type="button" onClick={() => openSettingsTab?.("auth") ?? setView("settings")}>
-            Services
-          </button>
           <button className="button secondary" type="button" onClick={() => openSettingsTab?.("plugins") ?? setView("settings")}>
             Plugins
           </button>
@@ -15211,12 +16635,17 @@ function PhoneView({
       <button
         className="button primary contactAddButton"
         type="button"
-        onClick={() => void startManagedSkillSetupChat(addContactSkillLink)}
+        onClick={openNewLocalContactForm}
       >
         <Plus size={15} />
-        Add Contact
+        New Contact
       </button>
     </div>
+  ) : tab === "dialer" ? dialerBuilderActions : tab === "assistants" ? (
+    <button className="button primary" type="button" onClick={() => window.open("https://portal.telnyx.com/#/app/voice-ai/assistants", "_blank")}>
+      <Plus size={15} />
+      New Assistant
+    </button>
   ) : null;
 
   return (
@@ -15224,19 +16653,37 @@ function PhoneView({
       <div className={`pageSectionShell ${!showSectionSidebar ? "pageSectionShellSingle" : ""}`}>
         {showSectionSidebar && (
           <PageSectionSidebar
-            tabs={[
-              ["calls", "Calls", Phone],
-              ["contacts", "Contacts", Users],
-              ["assistants", "Assistants", Bot],
-              ["numbers", "Numbers", PhoneCall],
-            ] as const}
+            heading="PHONE"
+            headingIcon={Phone}
+            groups={phoneSectionGroups}
             activeTab={tab}
             onSelect={setTab}
             label="Phone sections"
+            resizable={false}
           />
         )}
         <div className="pageSectionMain">
           {!hideHeader && !(tab === "calls" && selectedCallDetail) && !(tab === "numbers" && selectedNumberDetail) && <PageSectionHeader parent={sectionParent} title={phoneHeadingTitle} action={phoneHeaderAction} />}
+
+          {tab === "calls" && !selectedCallDetail && !telnyxApiReady && (
+            <ServiceSetupAlert
+              title="Add your Telnyx API Key to show call history."
+              body="Calls, recordings, transcripts, and Voice AI call records load from your Telnyx account."
+              actionLabel="Add Telnyx API Key"
+              icon={PhoneCall}
+              onAction={() => openSettingsTab?.("auth") ?? setView("settings")}
+            />
+          )}
+
+          {tab === "assistants" && !telnyxApiReady && (
+            <ServiceSetupAlert
+              title="Add your Telnyx API Key to show Voice AI assistants."
+              body="Cloud Link uses the Telnyx API to list assistants, phone assignments, and voice-call readiness."
+              actionLabel="Add Telnyx API Key"
+              icon={Bot}
+              onAction={() => openSettingsTab?.("auth") ?? setView("settings")}
+            />
+          )}
 
       {tab === "inbox" && showInboxDraftDetail && (
         <section className="phoneInboxTable phoneContentTable phoneInboxDetailScreen" aria-label="Selected inbox thread">
@@ -15465,21 +16912,13 @@ function PhoneView({
       {tab === "inbox" && !showInboxDraftDetail && (
         <section className="phoneInboxTable phoneContentTable" aria-label="Google Inbox">
           {!inboxReady && (
-            <div className="phoneSetupAlert inboxSetupAlert">
-              <div>
-                <strong>Connect Google Inbox to read threads and save Gmail drafts.</strong>
-                <p>Link uses gog with an app-level no-send guard. Drafts are saved to Gmail Drafts, and sending happens only in Gmail.</p>
-              </div>
-              <button
-                className="runtimeSettingsButton"
-                type="button"
-                onClick={() => void connectGoogleInbox()}
-                disabled={loadingInbox}
-              >
-                <Mail size={14} />
-                {loadingInbox ? "Connecting..." : "Connect Inbox"}
-              </button>
-            </div>
+            <ServiceSetupAlert
+              title="Connect Google Inbox to read threads and save Gmail drafts."
+              body="Cloud Link uses gog with an app-level no-send guard. Drafts are saved to Gmail Drafts, and sending happens only in Gmail."
+              actionLabel={loadingInbox ? "Connecting..." : "Connect Inbox"}
+              icon={Mail}
+              onAction={() => void connectGoogleInbox()}
+            />
           )}
 
           <header className="phoneInboxToolbar">
@@ -15701,7 +17140,6 @@ function PhoneView({
                     <div className="chatResultRow directoryResultRow phoneAssistantDirectoryResultRow" role="row" key={assistant.id}>
                       <span className="directoryNameCell" role="cell">
                         <strong>{assistant.name}</strong>
-                        <small>{assistant.id}</small>
                       </span>
                       <span role="cell">{assistant.phoneNumber || "No phone number"}</span>
                       <span role="cell"><Badge tone={assistant.phoneNumber ? "success" : "warning"}>{assistant.status || "Available"}</Badge></span>
@@ -15723,7 +17161,7 @@ function PhoneView({
                   ))}
                   {filteredPhoneAssistants.length === 0 && (
                     <div className="phoneNumberEmpty">
-                      {telnyxApiReady ? "No Telnyx Voice AI assistants match this search." : "Add a Telnyx API key to load your assistants."}
+                      {telnyxApiReady ? "No Telnyx Voice AI assistants match this search." : "Add a Telnyx API Key to load your assistants."}
                     </div>
                   )}
                 </div>
@@ -15775,6 +17213,72 @@ function PhoneView({
               </label>
             </div>
           )}
+          {creatingLocalContact && (
+            <section className="phoneContactComposer" aria-label="New contact">
+              <div className="phoneContactComposerHeader">
+                <div>
+                  <h3>New contact</h3>
+                  <p>Create a local contact that stays on this Mac and is immediately available in Dialpad.</p>
+                </div>
+                <Badge tone="default">Local</Badge>
+              </div>
+              <div className="phoneContactComposerFields">
+                <label className="componentField">
+                  <span>Name</span>
+                  <input
+                    value={localContactDraft.name}
+                    onChange={(event) => updateLocalContactDraft("name", event.target.value)}
+                    placeholder="Jane Smith"
+                  />
+                </label>
+                <label className="componentField">
+                  <span>Phone</span>
+                  <input
+                    value={localContactDraft.phone}
+                    onChange={(event) => updateLocalContactDraft("phone", event.target.value)}
+                    placeholder="+1 415 555 0100"
+                  />
+                </label>
+                <label className="componentField">
+                  <span>Role</span>
+                  <input
+                    value={localContactDraft.role}
+                    onChange={(event) => updateLocalContactDraft("role", event.target.value)}
+                    placeholder="Customer, prospect, teammate"
+                  />
+                </label>
+                <label className="componentField">
+                  <span>Notes</span>
+                  <input
+                    value={localContactDraft.detail}
+                    onChange={(event) => updateLocalContactDraft("detail", event.target.value)}
+                    placeholder="Optional context for this contact"
+                  />
+                </label>
+              </div>
+              <div className="phoneContactComposerActions">
+                <button
+                  className="button primary"
+                  type="button"
+                  onClick={createLocalPhoneContact}
+                  disabled={!localContactDraft.name.trim() || !localContactDraft.phone.trim()}
+                >
+                  <Plus size={15} />
+                  Add contact
+                </button>
+                <button
+                  className="button secondary"
+                  type="button"
+                  onClick={() => {
+                    setCreatingLocalContact(false);
+                    setLocalContactDraft(emptyLocalPhoneContactDraft());
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </section>
+          )}
           <section className="phoneContactTable phoneContentTable" aria-label="Connected contacts">
           <div className="contactResults phoneContactRows" role="table" aria-label="Connected contacts">
             <div className="phoneContactRow phoneContactRowHead" role="row">
@@ -15785,7 +17289,11 @@ function PhoneView({
             </div>
             {filteredContacts.map((contact) => {
               const source = contactSources.find((item) => item.id === contact.source || item.connectorIds.includes(contact.source));
-              const connected = contact.connected ?? (connectedContactSourceIds.has(contact.source) || Boolean(source?.connectorIds.some((connectorId) => connectedContactSourceIds.has(connectorId))));
+              const connected = contact.connected ?? (
+                contact.source === "local"
+                || connectedContactSourceIds.has(contact.source)
+                || Boolean(source?.connectorIds.some((connectorId) => connectedContactSourceIds.has(connectorId)))
+              );
               const callable = connected && Boolean(contact.phone);
               const expanded = expandedContactId === contact.id;
               const selected = dialNumber === contact.phone;
@@ -15795,10 +17303,9 @@ function PhoneView({
                     className="contactResultMain"
                     title={connected ? `Show ${contact.name}` : `Connect ${source?.label ?? contact.source} first`}
                     role="row"
-                  >
+                    >
                     <span role="cell">
                       <strong>{contact.name}</strong>
-                      <small>{contact.role}</small>
                     </span>
                     <span role="cell">{contact.phone || "No callable number"}</span>
                     <span role="cell">{source?.label ?? contact.source}</span>
@@ -15852,6 +17359,18 @@ function PhoneView({
           </div>
         </section>
         </>
+      )}
+
+      {tab === "dialer" && (
+        <section className="phoneDialerBuilder phoneContentTable" aria-label="Dialpad settings">
+          <Suspense fallback={<div className="softphoneLazyFallback" aria-busy="true">Loading Dialpad builder</div>}>
+            <DialerBuilder
+              activeConfig={activeDialerConfig}
+              onActiveConfigChange={setActiveDialerConfig}
+              renderActions={setDialerBuilderActions}
+            />
+          </Suspense>
+        </section>
       )}
 
       {tab === "calls" && (
@@ -16203,16 +17722,13 @@ function PhoneView({
         ) : (
           <>
             {!telnyxApiReady && (
-              <div className="phoneSetupAlert">
-                <div>
-                  <strong>Add your Telnyx API key to show your account numbers.</strong>
-                  <p>Add your Telnyx API key in Settings. Link uses your key to load active numbers from your Telnyx account so you can choose which number should work inside the app.</p>
-                </div>
-                <button className="runtimeSettingsButton" type="button" onClick={() => setView("settings")}>
-                  <Settings size={14} />
-                  Add Telnyx API key
-                </button>
-              </div>
+              <ServiceSetupAlert
+                title="Add your Telnyx API Key to show your account numbers."
+                body="Cloud Link uses your key to load active numbers from your Telnyx account so you can choose which number should work inside the app."
+                actionLabel="Add Telnyx API Key"
+                icon={PhoneCall}
+                onAction={() => openSettingsTab?.("auth") ?? setView("settings")}
+              />
             )}
             <div className="chatSearchRow phoneNumberSearchRow">
               <button
@@ -16283,7 +17799,7 @@ function PhoneView({
                   <div className="tableEmptyState" role="row">
                     <EmptyState
                       title={busy ? "Loading numbers..." : numberQuery.trim() || numberTypeFilter !== "all" ? "No numbers found" : "No active numbers"}
-                      body={busy ? "Pulling active phone numbers from the connected Telnyx account." : numberQuery.trim() || numberTypeFilter !== "all" ? "Try another search term or filter." : telnyxApiReady ? "No active Telnyx numbers were returned for this account." : "Add a Telnyx API key to load your account numbers."}
+                      body={busy ? "Pulling active phone numbers from the connected Telnyx account." : numberQuery.trim() || numberTypeFilter !== "all" ? "Try another search term or filter." : telnyxApiReady ? "No active Telnyx numbers were returned for this account." : "Add a Telnyx API Key to load your account numbers."}
                       icon={PhoneCall}
                     />
                   </div>
@@ -16434,7 +17950,7 @@ function ConnectionsView({
             <div className="toolPermissionHeader">
               <div>
                 <h3>Tool permissions</h3>
-                <p>Choose when Link agents are allowed to use these tools.</p>
+                <p>Choose when Cloud Link agents are allowed to use these tools.</p>
               </div>
             </div>
             <ToolGroup title="Read-only tools" tools={grouped.read} />
@@ -16504,7 +18020,7 @@ function ToolGroup({ title, tools }: { title: string; tools: ToolMetadata[] }) {
 
 type ArchiveTabId = "documents" | "memories" | "entities" | "prompt" | "settings";
 
-const defaultArchiveQuery = "What did we decide about Link improvement requests?";
+const defaultArchiveQuery = "What did we decide about Cloud Link improvement requests?";
 
 function MemoryView({ banks, openMemory }: { banks: MemoryBank[]; openMemory: () => void }) {
   return (
@@ -16728,7 +18244,7 @@ function ArchiveTabs({
           <div className="memorySectionHeader">
             <div>
               <h2>Documents</h2>
-              <p>Upload files or add text. Link ingests them into the archive and derives reusable entries.</p>
+              <p>Upload files or add text. Cloud Link ingests them into the archive and derives reusable entries.</p>
             </div>
             <div className="headerActions">
               <button className="button secondary"><Upload size={15} />Upload files</button>
@@ -16871,7 +18387,7 @@ function ArchiveTabs({
 
           {promptMode === "retain" && (
             <section className="memoryPromptCard">
-              <p>Retain stores raw text as memories. Link extracts facts from the content and consolidates them into the archive.</p>
+              <p>Retain stores raw text as memories. Cloud Link extracts facts from the content and consolidates them into the archive.</p>
               <label className="memorySettingsField">
                 <span>Content</span>
                 <textarea
@@ -17119,6 +18635,7 @@ function WikiView({
   skillSearchRequest,
   shareExplorerResultToAgent,
   setView,
+  openSettingsTab,
   renderEmbeddedSettingsTab,
   openNewAppChatSession,
   onEdgePreviewReady,
@@ -17138,6 +18655,7 @@ function WikiView({
   skillSearchRequest: string;
   shareExplorerResultToAgent: (result: ExplorerResult) => Promise<void>;
   setView: (view: ViewId) => void;
+  openSettingsTab: (tab: SettingsTab) => void;
   renderEmbeddedSettingsTab: (tab: Extract<ToolsWorkspaceTab, "domains" | "vpn">) => ReactNode;
   openNewAppChatSession: () => void;
   onEdgePreviewReady: (preview: EdgePreviewSurface) => void;
@@ -17153,11 +18671,12 @@ function WikiView({
         ["personal", "Personal", Users],
         ["company", "Company", Building2],
         ["domains", "Domains", Globe],
-        ["vpn", "VPN", ShieldCheck],
+        ["vpn", "Access", ShieldCheck],
       ],
     },
   ] as const satisfies readonly PageSectionTabGroup<ToolsWorkspaceTab>[];
   const [query, setQuery] = useState(skillSearchRequest);
+  const [wikiAskQuestion, setWikiAskQuestion] = useState("");
   const keepQueryForTabReset = useRef(Boolean(skillSearchRequest.trim()));
   const [filter, setFilter] = useState("all");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -17178,6 +18697,10 @@ function WikiView({
   const [wikiRefreshing, setWikiRefreshing] = useState(false);
   const [wikiRefreshKey, setWikiRefreshKey] = useState(0);
   const [wikiDocumentationSources, setWikiDocumentationSources] = useState<WikiDocumentationSource[]>([]);
+  const [wikiNewSourceMode, setWikiNewSourceMode] = useState<WikiNewSourceMode>("repo");
+  const [wikiSourceDraft, setWikiSourceDraft] = useState<WikiSourceDraft>(() => emptyWikiSourceDraft("github"));
+  const [wikiSourceBusy, setWikiSourceBusy] = useState("");
+  const [wikiSourceStatus, setWikiSourceStatus] = useState("");
   const [wikiWorkspaceDocs, setWikiWorkspaceDocs] = useState<WikiWorkspaceDoc[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -17201,6 +18724,10 @@ function WikiView({
   const [wikiWorkspaceSubmitStatus, setWikiWorkspaceSubmitStatus] = useState("");
   const [wikiWorkspaceSubmitError, setWikiWorkspaceSubmitError] = useState(false);
   const [wikiWorkspaceSubmitResult, setWikiWorkspaceSubmitResult] = useState<WikiWorkspaceDocSubmissionResult | null>(null);
+  const [wikiPersonalWikiStatus, setWikiPersonalWikiStatus] = useState("");
+  const [wikiPersonalWikiExportBusy, setWikiPersonalWikiExportBusy] = useState(false);
+  const [wikiSourceEditorOpen, setWikiSourceEditorOpen] = useState(false);
+  const [selectedWikiManageSourceId, setSelectedWikiManageSourceId] = useState("");
   const wikiWorkspaceRichEditorRef = useRef<HTMLDivElement | null>(null);
   const wikiWorkspaceMarkdownEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const wikiWorkspaceEditorMenuRef = useRef<HTMLDivElement | null>(null);
@@ -17270,11 +18797,20 @@ function WikiView({
 	  }, [filter, localDraftApps, query]);
   const publisherReachable = publisherReadiness?.reachable !== false;
   const activeWikiWorkspaceMeta = activeWikiWorkspaceTab ? wikiWorkspaceTabMeta(activeWikiWorkspaceTab) : null;
+  const wikiSourceQuery = query.trim().toLowerCase();
+  const managedWikiSources = useMemo(() => [...wikiDocumentationSources].sort((left, right) => {
+    const telnyxCompare = Number(right.configuredBy === "telnyx") - Number(left.configuredBy === "telnyx");
+    if (telnyxCompare !== 0) return telnyxCompare;
+    return left.label.localeCompare(right.label, undefined, { sensitivity: "base" });
+  }), [wikiDocumentationSources]);
+  const filteredManagedWikiSources = useMemo(() => managedWikiSources.filter((source) => {
+    return !wikiSourceQuery || `${source.label} ${source.description} ${source.target} ${source.type} ${source.status}`.toLowerCase().includes(wikiSourceQuery);
+  }), [managedWikiSources, wikiSourceQuery]);
   const tabFilterOptions = useMemo(() => {
     if (activePage === "apps" && toolsWorkspaceTab === "company") return ["all", "submitted", "preview", "approved", "deployed", "rejected", "web", "mcp_app", "vpn", "low", "medium", "high"];
     if (activePage === "apps" && toolsWorkspaceTab === "personal") return ["all", "preview", "web"];
     if (activePage === "skills") return ["all", ...new Set(skills.map((skill) => skill.team).filter(Boolean))];
-    if (activeWikiWorkspaceTab === "workspace-docs") return ["all", "manual", "transcript", "meeting", "agent"];
+    if (activeWikiWorkspaceTab === "workspace-docs" || activeWikiWorkspaceTab === "workspace-personal-wiki") return ["all", "manual", "transcript", "meeting", "agent"];
     return ["all"];
   }, [activePage, activeWikiWorkspaceTab, skills, toolsWorkspaceTab]);
   const activeDirectoryAgent = activeAgent ? agents.find((agent) => agent.id === activeAgent.id) : undefined;
@@ -17285,22 +18821,19 @@ function WikiView({
       .map(wikiConfigFromDocumentationSource);
     return configuredTabs.length ? configuredTabs : wikiSourceTabs;
   }, [wikiDocumentationSources]);
-  const activeWikiSourceTab = wikiNavigationTabs.find((source) => source.id === activeWikiSource) ?? wikiNavigationTabs[0]!;
+  const activeWikiSourceTab = wikiNavigationTabs.find((source) => source.id === activeWikiSource) ?? wikiNavigationTabs[0] ?? wikiSourceTabs[0]!;
+  const showWikiSourceSearchMode = activePage === "wiki" && !activeWikiWorkspaceTab;
   const wikiSearchPlaceholder = activeWikiWorkspaceTab === "workspace-docs"
-    ? "Search docs..."
+    ? "Search drafts..."
+    : activeWikiWorkspaceTab === "workspace-personal-wiki"
+      ? "Search personal wiki..."
     : activeWikiWorkspaceTab === "workspace-transcripts"
       ? "Search transcripts..."
       : activeWikiWorkspaceTab === "workspace-meetings"
         ? "Search meetings..."
-        : activeWikiSourceTab.externalSource === "support"
-    ? `Search ${activeWikiSourceTab.label}...`
-    : activeWikiSourceTab.externalSource === "developers"
-      ? `Search ${activeWikiSourceTab.label}...`
-      : activeWikiSourceTab.externalSource === "pylon"
-        ? `Search ${activeWikiSourceTab.label}...`
-        : activeWikiSourceTab.externalSource === "custom"
-          ? `Search ${activeWikiSourceTab.label}...`
-          : `Search ${activeWikiSourceTab.label}...`;
+        : activeWikiWorkspaceTab === "workspace-manage"
+          ? "Search sources..."
+        : `Keyword search ${activeWikiSourceTab.label}...`;
   const searchPlaceholder = activePage === "apps"
         ? toolsWorkspaceTab === "company"
           ? "Search company tools..."
@@ -17308,7 +18841,7 @@ function WikiView({
             ? "Search personal tools..."
             : toolsWorkspaceTab === "domains"
               ? "Search domains..."
-              : "Search VPN..."
+              : "Search access..."
         : activePage === "skills"
           ? "Search skills..."
         : wikiSearchPlaceholder;
@@ -17344,6 +18877,10 @@ function WikiView({
     void refreshWikiDocumentationSources();
   }, []);
 
+  function updateWikiSourceDraft<K extends keyof WikiSourceDraft>(key: K, value: WikiSourceDraft[K]) {
+    setWikiSourceDraft((current) => ({ ...current, [key]: value }));
+  }
+
   async function refreshWikiWorkspaceData() {
     setWikiWorkspaceLoading(true);
     try {
@@ -17374,15 +18911,7 @@ function WikiView({
 
   useEffect(() => {
     if (activeWikiWorkspaceTab !== "workspace-docs") return;
-    if (wikiWorkspaceDocs.length === 0) {
-      const blankDoc = createBlankWikiWorkspaceDoc();
-      setWikiWorkspaceDocs([blankDoc]);
-      setSelectedWikiWorkspaceDocId(blankDoc.id);
-      return;
-    }
-    if (!selectedWikiWorkspaceDocId || !wikiWorkspaceDocs.some((doc) => doc.id === selectedWikiWorkspaceDocId)) {
-      setSelectedWikiWorkspaceDocId(wikiWorkspaceDocs[0]?.id ?? "");
-    }
+    if (selectedWikiWorkspaceDocId && !wikiWorkspaceDocs.some((doc) => doc.id === selectedWikiWorkspaceDocId)) setSelectedWikiWorkspaceDocId("");
   }, [activeWikiWorkspaceTab, wikiWorkspaceDocs, selectedWikiWorkspaceDocId]);
 
   useEffect(() => {
@@ -17415,9 +18944,9 @@ function WikiView({
     setSelectedAppDetailId("");
   }, [tab]);
 
-  const selectedWikiWorkspaceDoc = wikiWorkspaceDocs.find((doc) => doc.id === selectedWikiWorkspaceDocId) ?? wikiWorkspaceDocs[0] ?? null;
+  const selectedWikiWorkspaceDoc = wikiWorkspaceDocs.find((doc) => doc.id === selectedWikiWorkspaceDocId) ?? null;
   const wikiWorkspaceSubmissionSources = useMemo<WikiWorkspaceSubmissionSource[]>(() => {
-    const connectedConnectorIds = new Set(connectors.filter((connector) => connector.status === "connected").map((connector) => connector.id));
+    const connectedConnectorIds = new Set(connectors.filter((connector) => connector.status === "connected" || connector.status === "signed_in").map((connector) => connector.id));
     const sources: WikiWorkspaceSubmissionSource[] = [];
     for (const source of wikiDocumentationSources) {
       if (!source.enabled) continue;
@@ -17605,6 +19134,9 @@ function WikiView({
         ];
         await Promise.all(cachedSkillNames.map((skillName) => loadSkillMarkdown(skillName, true)));
         setResult(cachedSkillNames.length ? "Skills and cached skill details refreshed." : "Skills refreshed.");
+      } else if (activeWikiWorkspaceTab === "workspace-manage") {
+        await refreshWikiDocumentationSources();
+        setResult("Sources refreshed.");
       } else if (activeWikiWorkspaceTab) {
         await refreshWikiWorkspaceData();
         setResult(`${activeWikiWorkspaceMeta?.label ?? "Docs"} refreshed.`);
@@ -17625,6 +19157,45 @@ function WikiView({
     setWikiWorkspaceSubmitStatus("");
     setWikiWorkspaceSubmitError(false);
     setWikiWorkspaceSubmitResult(null);
+  }
+
+  function setWikiSourceDraftMode(mode: WikiNewSourceMode) {
+    setWikiNewSourceMode(mode);
+    if (mode === "repo") {
+      setWikiSourceDraft((current) => ({
+        ...emptyWikiSourceDraft("github"),
+        id: current.id,
+        label: current.label,
+        target: current.target,
+        description: current.description,
+        iconName: current.iconName || "github",
+        branch: current.branch || "main",
+        path: current.path || "docs",
+        enabled: current.enabled,
+      }));
+      return;
+    }
+    if (mode === "bundle") {
+      setWikiSourceDraft((current) => ({
+        ...emptyWikiSourceDraft("okf"),
+        id: current.id,
+        label: current.label,
+        target: current.target,
+        description: current.description,
+        iconName: current.iconName || "folder",
+        enabled: current.enabled,
+      }));
+      return;
+    }
+    setWikiSourceDraft((current) => ({
+      ...emptyWikiSourceDraft("mcp"),
+      id: current.id,
+      label: current.label,
+      target: current.target,
+      description: current.description,
+      iconName: current.iconName || "plug",
+      enabled: current.enabled,
+    }));
   }
 
   function setWikiWorkspaceDocFormat(doc: WikiWorkspaceDoc, format: WikiWorkspaceDocFormat) {
@@ -17767,13 +19338,7 @@ function WikiView({
     const remainingDocs = wikiWorkspaceDocs.filter((doc) => doc.id !== docId);
     setWikiWorkspaceDocs(remainingDocs);
     setWikiWorkspaceReview(null);
-    if (remainingDocs.length === 0) {
-      const blankDoc = createBlankWikiWorkspaceDoc();
-      setWikiWorkspaceDocs([blankDoc]);
-      setSelectedWikiWorkspaceDocId(blankDoc.id);
-      return;
-    }
-    if (selectedWikiWorkspaceDocId === docId) setSelectedWikiWorkspaceDocId(remainingDocs[0]?.id ?? "");
+    if (selectedWikiWorkspaceDocId === docId) setSelectedWikiWorkspaceDocId("");
   }
 
   function openTranscriptWorkspaceDoc(session: ScribesSession) {
@@ -17845,6 +19410,124 @@ function WikiView({
       setWikiWorkspaceSubmitStatus(error instanceof Error ? error.message : "This doc could not be submitted for review.");
     } finally {
       setWikiWorkspaceSubmitBusy(false);
+    }
+  }
+
+  async function saveWikiDocsSourceFromWorkspace() {
+    setWikiSourceBusy("save");
+    setWikiSourceStatus("");
+    try {
+      const metadata: Record<string, unknown> = {
+        icon: wikiSourceDraft.iconName,
+        sourceMode: wikiNewSourceMode,
+      };
+      if (wikiSourceDraft.type === "github" && wikiSourceDraft.branch.trim()) metadata.branch = wikiSourceDraft.branch.trim();
+      if (wikiSourceDraft.type === "github" && wikiSourceDraft.path.trim()) metadata.path = wikiSourceDraft.path.trim();
+      if (wikiNewSourceMode === "api") metadata.connection = "api";
+      const sources = await linkApi.saveWikiSource({
+        ...(wikiSourceDraft.id ? { id: wikiSourceDraft.id } : {}),
+        label: wikiSourceDraft.label.trim(),
+        type: wikiSourceDraft.type,
+        target: wikiSourceDraft.target.trim(),
+        description: wikiSourceDraft.description.trim(),
+        enabled: wikiSourceDraft.enabled,
+        metadata,
+      });
+      setWikiDocumentationSources(sources);
+      const savedSource = [...sources].reverse().find((source) => source.label === wikiSourceDraft.label.trim() && source.target === wikiSourceDraft.target.trim()) ?? sources[sources.length - 1];
+      setWikiSourceStatus(wikiSourceDraft.id ? "Docs source updated." : "Docs source added.");
+      setWikiSourceDraft(emptyWikiSourceDraft(wikiSourceDraft.type));
+      setWikiSourceEditorOpen(false);
+      setWikiNewSourceMode("repo");
+      if (savedSource) setSelectedWikiManageSourceId(savedSource.id);
+      setTab("workspace-manage");
+    } catch (error) {
+      setWikiSourceStatus(error instanceof Error ? error.message : "Docs source could not be saved.");
+    } finally {
+      setWikiSourceBusy("");
+    }
+  }
+
+  async function deleteWikiDocsSourceFromWorkspace(source: WikiDocumentationSource) {
+    setWikiSourceBusy(source.id);
+    setWikiSourceStatus("");
+    try {
+      const sources = await linkApi.deleteWikiSource(source.id);
+      setWikiDocumentationSources(sources);
+      if (selectedWikiManageSourceId === source.id) setSelectedWikiManageSourceId("");
+      if (wikiSourceDraft.id === source.id) {
+        setWikiSourceDraft(emptyWikiSourceDraft(source.type === "mcp" || source.type === "okf" ? source.type : "github"));
+        setWikiSourceEditorOpen(false);
+      }
+      setWikiSourceStatus(source.configuredBy === "telnyx" ? `${source.label} hidden from Docs.` : `${source.label} removed.`);
+    } catch (error) {
+      setWikiSourceStatus(error instanceof Error ? error.message : "Docs source could not be removed.");
+    } finally {
+      setWikiSourceBusy("");
+    }
+  }
+
+  async function toggleWikiDocsSourceEnabled(source: WikiDocumentationSource) {
+    setWikiSourceBusy(source.id);
+    setWikiSourceStatus("");
+    try {
+      const nextDraft = { ...wikiSourceDraftFromSource(source), enabled: !source.enabled };
+      const sources = await linkApi.saveWikiSource(wikiSourceInputFromDraft(nextDraft));
+      setWikiDocumentationSources(sources);
+      setWikiSourceStatus(`${source.label} ${source.enabled ? "disabled" : "enabled"}.`);
+      if (selectedWikiManageSourceId === source.id) {
+        const updatedSource = sources.find((item) => item.id === source.id);
+        if (updatedSource && wikiSourceDraft.id === source.id) {
+          setWikiSourceDraft(wikiSourceDraftFromSource(updatedSource));
+        }
+      }
+    } catch (error) {
+      setWikiSourceStatus(error instanceof Error ? error.message : "Docs source could not be updated.");
+    } finally {
+      setWikiSourceBusy("");
+    }
+  }
+
+  function openNewWikiSourceFlow(mode: WikiNewSourceMode = "repo") {
+    setWikiNewSourceMode(mode);
+    setWikiSourceDraft(emptyWikiSourceDraft(mode === "repo" ? "github" : mode === "mcp" ? "mcp" : mode === "bundle" ? "okf" : "mcp"));
+    setSelectedWikiManageSourceId("");
+    setWikiSourceStatus("");
+    setWikiSourceEditorOpen(true);
+    setTab("workspace-manage");
+  }
+
+  async function exportPersonalWikiBundle() {
+    const exportableDocs = wikiWorkspaceDocs
+      .map((doc) => ({
+        id: doc.id,
+        title: wikiWorkspaceDocSubmissionTitle(doc),
+        content: wikiWorkspaceDocMarkdownForSubmission(doc),
+        source: doc.source,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+      }))
+      .filter((doc) => doc.content);
+    if (exportableDocs.length === 0) {
+      setWikiPersonalWikiStatus("Add at least one draft with content before exporting agent context.");
+      return;
+    }
+    setWikiPersonalWikiExportBusy(true);
+    setWikiPersonalWikiStatus("");
+    try {
+      const result = await linkApi.exportPersonalWiki({
+        title: "Telnyx Cloud Link Agent Context",
+        docs: exportableDocs,
+      });
+      if (!result) {
+        setWikiPersonalWikiStatus("Agent context export canceled.");
+        return;
+      }
+      setWikiPersonalWikiStatus(`Exported ${result.documentCount} context item${result.documentCount === 1 ? "" : "s"} to ${result.bundleName}.`);
+    } catch (error) {
+      setWikiPersonalWikiStatus(error instanceof Error ? error.message : "Agent context export failed.");
+    } finally {
+      setWikiPersonalWikiExportBusy(false);
     }
   }
 
@@ -18114,7 +19797,7 @@ function WikiView({
       riskLevel: trackedSkill.riskLevel ?? "medium",
       customerSafe: Boolean(trackedSkill.customerSafe),
       approvalRequired: Boolean(trackedSkill.approvalRequired),
-      sourceOfTruth: trackedSkill.sourceOfTruth || trackedSkill.source || "Local Link skill",
+      sourceOfTruth: trackedSkill.sourceOfTruth || trackedSkill.source || "Local Cloud Link skill",
       repeatedChecks: trackedSkill.repeatedChecks || "Run the included local skill fixture before publishing.",
       humanCheckpoints: trackedSkill.humanCheckpoints || "Human owner reviews external or destructive actions.",
       testFixture: trackedSkill.testFixture || "Use the current chat request as a fixture.",
@@ -18280,7 +19963,7 @@ function WikiView({
 	    try {
       const appInput = publishInputFromDraft();
       if (publishDraft.deploymentTarget === "telnyx-byo-cloud") {
-        setResult("Import the app as a local draft, then use Deploy to Telnyx Cloud from the Personal app row.");
+        setResult("Import the app as a local draft, then use Publish to Link Cloud from the Personal app row.");
         return;
       }
 	      const deployment = await linkApi.deployArtifact({
@@ -18345,9 +20028,15 @@ function WikiView({
 	    }
 	  }
 
-  async function deployLocalDraftApp(app: LinkLocalEdgeDraftApp, target: ArtifactDeploymentTarget) {
+  function linkCloudPublishTargetFromSettings(): ArtifactDeploymentTarget {
+    return publishDraft.deploymentTarget === "telnyx-byo-cloud" ? "telnyx-byo-cloud" : "telnyx-managed";
+  }
+
+  async function publishLocalDraftAppToLinkCloud(app: LinkLocalEdgeDraftApp) {
+    const target = linkCloudPublishTargetFromSettings();
     setAppActionBusyId(app.id);
     setDeploymentBusyId(`app:${app.id}:${target}`);
+    setResult("Publishing app to Link Cloud...");
     try {
       const deployment = await linkApi.deployArtifact({
         artifactKind: "app",
@@ -18371,13 +20060,15 @@ function WikiView({
           directory: app.directory,
           replaceExisting: true,
         },
-        secretsRequired: target === "telnyx-byo-cloud" ? ["TELNYX_API_KEY or TELNYX_AUTH_REV2", "telnyx-edge CLI auth"] : [],
+        secretsRequired: target === "telnyx-byo-cloud"
+          ? ["TELNYX_API_KEY or TELNYX_AUTH_REV2", "telnyx-edge CLI auth"]
+          : ["TELNYX_AUTH_REV2 or TELNYX_API_KEY"],
       });
       await refreshPublishedApps();
       await refreshArtifactDeployments();
       setResult(formatArtifactDeploymentResult(deployment));
     } catch (err) {
-      setResult(err instanceof Error ? err.message : "Unable to deploy local app.");
+      setResult(err instanceof Error ? err.message : "Unable to publish local app.");
     } finally {
       setAppActionBusyId("");
       setDeploymentBusyId("");
@@ -18461,7 +20152,7 @@ function WikiView({
     try {
       const response = await linkApi.deprecatePublishedApp({
         appId: app.id,
-        notes: "Deprecated from Link Desktop.",
+        notes: "Deprecated from Telnyx Cloud Link Desktop.",
       });
       await refreshPublishedApps();
       setResult(formatPublisherResult(response));
@@ -18474,6 +20165,8 @@ function WikiView({
 
   function renderPublishAppPanel() {
     if (!publishAppOpen) return null;
+    const cloudPublishTarget = publishDraft.deploymentTarget === "telnyx-managed" || publishDraft.deploymentTarget === "telnyx-byo-cloud";
+    const publisherReady = Boolean(publisherReadiness?.ready);
     return (
       <section className="publisherPanel" aria-label="Publish app">
         <div className="publisherPanelHeader">
@@ -18495,6 +20188,17 @@ function WikiView({
               <option value="telnyx-byo-cloud">Telnyx BYO Cloud</option>
             </select>
           </label>
+          {cloudPublishTarget && !publisherReady && (
+            <div className="publisherWideField">
+              <ServiceSetupAlert
+                title="Configure the publisher before submitting to Cloud Link."
+                body="Cloud publishing needs the managed publisher service and Telnyx credentials before this app can leave your Mac."
+                actionLabel="Open Telnyx"
+                icon={Upload}
+                onAction={() => openSettingsTab("auth")}
+              />
+            </div>
+          )}
           <label>
             <span>Name</span>
             <input value={publishDraft.name} onChange={(event) => updatePublishDraft("name", event.target.value)} placeholder="Internal app name" />
@@ -18587,7 +20291,18 @@ function WikiView({
 	    const ready = publisherReadiness.ready;
     const reachable = publisherReadiness.reachable;
     const failedChecks = publisherReadiness.checks.filter((check) => !check.ok);
-    const title = ready ? "Publisher ready" : reachable ? "Publisher not ready" : "Publisher unavailable";
+    const publisherUrlMissing = !publisherReadiness.serviceUrl || failedChecks.some((check) => /publisher url/i.test(check.name));
+    const title = ready ? "Publisher ready" : publisherUrlMissing ? "Connect App Publisher" : reachable ? "Publisher not ready" : "Publisher unavailable";
+    const body = ready
+      ? "Apps can be submitted to the publisher."
+      : publisherUrlMissing
+      ? "Connect a domain or add a cloud.link subdomain before publishing apps."
+      : !publisherReadiness.authConfigured
+      ? "Sign in or add a Telnyx API Key before publishing apps."
+      : publisherReadiness.message;
+    const detail = !ready && !publisherUrlMissing && failedChecks.length > 0
+      ? failedChecks.map((check) => check.name).join(", ")
+      : "";
     return (
       <section className={`publisherStatus ${ready ? "ready" : reachable ? "warning" : "danger"}`} aria-label="Publisher status">
         <div className="publisherStatusIcon">
@@ -18595,10 +20310,8 @@ function WikiView({
         </div>
         <div className="publisherStatusBody">
           <strong>{title}</strong>
-          <span>{publisherReadiness.message}</span>
-          {failedChecks.length > 0 && (
-            <small>{failedChecks.map((check) => `${check.name}: ${check.detail || "not ready"}`).join(" | ")}</small>
-          )}
+          <span>{body}</span>
+          {detail && <small>Needs attention: {detail}</small>}
         </div>
         <button className="button ghost" onClick={() => void refreshPublishedApps()} disabled={publishBusy || Boolean(appActionBusyId)}>
           <RefreshCw size={14} />
@@ -18698,6 +20411,7 @@ function WikiView({
     return (
       <div className={`marketplaceView embeddedMarketplace appDirectoryList ${filteredLocalDraftApps.length >= 4 ? "scrolling" : ""}`}>
         {renderPublishAppPanel()}
+        {renderPublisherReadiness()}
         <section className={personalAppDirectoryClass} aria-label="Personal tools">
           <div className="appDirectorySectionHeader">
             <h2>Personal</h2>
@@ -18733,6 +20447,7 @@ function WikiView({
 
     return (
       <div className={`marketplaceView embeddedMarketplace appDirectoryList ${filteredApps.length >= 4 ? "scrolling" : ""}`}>
+        {renderPublisherReadiness()}
         <section className={companyAppDirectoryClass} aria-label="Company tools">
           <div className="appDirectorySectionHeader">
             <h2>Company</h2>
@@ -18788,6 +20503,7 @@ function WikiView({
       const selectedDeployment = selectedArtifactId
         ? deploymentForArtifact("app", selectedArtifactId) ?? (selectedPublishedApp ? deploymentForArtifact("app", appArtifactIdFromSlug(selectedPublishedApp.slug)) : undefined)
         : undefined;
+      const localPublishTarget = selectedLocalApp ? linkCloudPublishTargetFromSettings() : undefined;
       return (
         <div className="marketplaceView embeddedMarketplace directoryDetailView embeddedDirectoryDetailView">
           <header className="directoryEmbeddedDetailHeader withActions">
@@ -18806,13 +20522,9 @@ function WikiView({
                     <MonitorPlay size={14} />
                     Preview
                   </button>
-                  <button className="button secondary" onClick={() => void deployLocalDraftApp(selectedLocalApp, "local-only")} disabled={appActionBusyId === selectedLocalApp.id || deploymentBusyId === `app:${selectedLocalApp.id}:local-only`}>
-                    <Save size={14} />
-                    Keep Local
-                  </button>
-                  <button className="button secondary" onClick={() => void deployLocalDraftApp(selectedLocalApp, "telnyx-byo-cloud")} disabled={appActionBusyId === selectedLocalApp.id || deploymentBusyId === `app:${selectedLocalApp.id}:telnyx-byo-cloud`}>
+                  <button className="button secondary" onClick={() => void publishLocalDraftAppToLinkCloud(selectedLocalApp)} disabled={appActionBusyId === selectedLocalApp.id || deploymentBusyId === `app:${selectedLocalApp.id}:${localPublishTarget}`}>
                     <Upload size={14} />
-                    Deploy Cloud
+                    Publish to Link Cloud
                   </button>
                   <button className="button ghost" onClick={() => void deleteLocalDraftApp(selectedLocalApp)} disabled={appActionBusyId === selectedLocalApp.id}>
                     <Trash2 size={14} />
@@ -19057,32 +20769,357 @@ function WikiView({
     );
   }
 
-  function renderDocsSourceTab(source: WikiSourceConfig) {
-    const externalSource = source.externalSource;
-    if (externalSource === "support") {
-      return <HelpCenterConsole question={query} setQuestion={setQuery} refreshKey={wikiRefreshKey} />;
+  function renderWikiManageWorkspaceTab() {
+    const sourceModeOptions: Array<{
+      id: WikiNewSourceMode;
+      label: string;
+      icon: AppIcon;
+      summary: string;
+      hint: string;
+    }> = [
+      { id: "repo", label: "Repository", icon: GithubIcon, summary: "Index docs from a Git repo or docs directory.", hint: "Best for internal runbooks, specs, and markdown docs." },
+      { id: "mcp", label: "MCP", icon: Plug, summary: "Connect an MCP endpoint that can return searchable docs.", hint: "Best for approved internal knowledge services." },
+      { id: "api", label: "API", icon: Globe, summary: "Point Cloud Link at a docs API or HTTP search endpoint.", hint: "Uses the MCP/API-style source path for external search services." },
+      { id: "bundle", label: "Bundle", icon: FolderOpen, summary: "Import an OKF bundle or packaged knowledge export.", hint: "Best for zipped exports or portable docs snapshots." },
+    ];
+    const targetLabel = wikiNewSourceMode === "repo"
+      ? "Repository"
+      : wikiNewSourceMode === "bundle"
+        ? "Bundle path"
+        : wikiNewSourceMode === "api"
+          ? "API endpoint"
+          : "MCP endpoint";
+    const targetPlaceholder = wikiNewSourceMode === "repo"
+      ? "team/repo or https://github.com/team/repo"
+      : wikiNewSourceMode === "bundle"
+        ? "/path/to/knowledge.okf.zip"
+        : wikiNewSourceMode === "api"
+          ? "https://docs.internal.example/search"
+          : "https://mcp.internal.example";
+    const selectedWikiManageSource = managedWikiSources.find((source) => source.id === selectedWikiManageSourceId) ?? null;
+
+    function resetWikiSourceForm() {
+      setWikiNewSourceMode("repo");
+      setWikiSourceDraft(emptyWikiSourceDraft("github"));
+      setWikiSourceStatus("");
+    }
+
+    function editWikiSource(source: WikiDocumentationSource) {
+      const sourceMode = source.metadata?.sourceMode === "api"
+        ? "api"
+        : source.type === "github"
+          ? "repo"
+          : source.type === "okf"
+            ? "bundle"
+            : "mcp";
+      setWikiNewSourceMode(sourceMode);
+      setWikiSourceDraft(wikiSourceDraftFromSource(source));
+      setSelectedWikiManageSourceId(source.id);
+      setWikiSourceStatus("");
+      setWikiSourceEditorOpen(true);
+    }
+
+    function renderWikiManageSourceDetail(source: WikiDocumentationSource) {
+      const connected = source.status === "connected";
+      const busy = wikiSourceBusy === source.id;
+      return (
+        <div className="wikiSourceExpandedDetail" role="row">
+          <section className="chatDetailSurface" aria-label={`${source.label} source details`}>
+            <header className="settingsAuthExpandedHeader">
+              <div>
+                <strong>{source.label}</strong>
+                <p>{source.description || "No description saved."}</p>
+              </div>
+              <Badge tone={source.enabled ? (connected ? "success" : "warning") : "default"}>
+                {source.enabled ? source.status.replace("_", " ") : "Disabled"}
+              </Badge>
+            </header>
+            <div className="chatResultDetails directoryDetailPanel">
+              <div>
+                <strong>Connection</strong>
+                <span>{wikiSourceConnectionType(source.type)}</span>
+              </div>
+              <div>
+                <strong>Source type</strong>
+                <span>{wikiSourceTypeDisplay(source.type)}</span>
+              </div>
+              <div>
+                <strong>Target</strong>
+                <span>{source.target}</span>
+              </div>
+              <div>
+                <strong>Owner</strong>
+                <span>{source.configuredBy === "telnyx" ? "Telnyx" : "You"}</span>
+              </div>
+            </div>
+            <div className="directoryDetailPanel wikiSourceDetailActions">
+              <button className="button secondary" type="button" onClick={() => void toggleWikiDocsSourceEnabled(source)} disabled={busy}>
+                {source.enabled ? <EyeOff size={15} /> : <Eye size={15} />}
+                {busy ? "Saving..." : source.enabled ? "Disable source" : "Enable source"}
+              </button>
+              <button className="button secondary" type="button" onClick={() => editWikiSource(source)} disabled={busy}>
+                <Pencil size={15} />
+                Edit source
+              </button>
+              <button className="button ghost" type="button" onClick={() => void deleteWikiDocsSourceFromWorkspace(source)} disabled={busy}>
+                <Trash2 size={15} />
+                {source.configuredBy === "telnyx" ? "Hide source" : "Delete source"}
+              </button>
+            </div>
+          </section>
+        </div>
+      );
     }
 
     return (
-      <ExplorerView
-        embedded
-        externalQuery={query}
-        externalSource={externalSource}
-        externalSort="az"
-        refreshKey={wikiRefreshKey}
-        hideSearch
-        docSourcesOnly
-        onShareResult={shareExplorerResultToAgent}
-      />
+      <div className="wikiSettingsPanel wikiManagePage">
+        {wikiSourceStatus && <p className="wikiSourceStatus">{wikiSourceStatus}</p>}
+
+        {wikiSourceEditorOpen && (
+          <section className="accessCard wikiSourceEditor" aria-label="Add or update Docs source">
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveWikiDocsSourceFromWorkspace();
+              }}
+            >
+              <div className="wikiSourceEditorHeader">
+                <div>
+                  <h3>{wikiSourceDraft.id ? "Edit source" : "New source"}</h3>
+                  <p>Save this source to make it searchable in Docs and available from the Sources list.</p>
+                </div>
+                <button
+                  className="button ghost"
+                  type="button"
+                  onClick={() => {
+                    resetWikiSourceForm();
+                    setWikiSourceEditorOpen(false);
+                  }}
+                >
+                  <X size={14} />
+                  Cancel
+                </button>
+              </div>
+              <div className="wikiAddSourceModeGrid">
+                {sourceModeOptions.map((option) => {
+                  const Icon = option.icon;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={`wikiAddSourceModeCard ${wikiNewSourceMode === option.id ? "selected" : ""}`}
+                      onClick={() => setWikiSourceDraftMode(option.id)}
+                    >
+                      <span className="wikiAddSourceModeIcon"><Icon size={18} /></span>
+                      <strong>{option.label}</strong>
+                      <small>{option.summary}</small>
+                      <em>{option.hint}</em>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="wikiSourceFormGrid">
+                <label className="wikiSourceField">
+                  <span>Name</span>
+                  <input value={wikiSourceDraft.label} onChange={(event) => updateWikiSourceDraft("label", event.target.value)} placeholder="Support runbooks" />
+                </label>
+                <div className="wikiSourceField wikiIconPickerField">
+                  <span>Icon</span>
+                  <div className="wikiIconPicker" role="radiogroup" aria-label="Docs source icon">
+                    {wikiIconOptions.map((option) => {
+                      const Icon = option.icon;
+                      return (
+                        <button
+                          key={option.id}
+                          className={wikiSourceDraft.iconName === option.id ? "selected" : ""}
+                          type="button"
+                          title={option.label}
+                          aria-label={option.label}
+                          aria-checked={wikiSourceDraft.iconName === option.id}
+                          role="radio"
+                          onClick={() => updateWikiSourceDraft("iconName", option.id)}
+                        >
+                          <Icon size={15} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <label className="wikiSourceField">
+                  <span>{targetLabel}</span>
+                  <input value={wikiSourceDraft.target} onChange={(event) => updateWikiSourceDraft("target", event.target.value)} placeholder={targetPlaceholder} />
+                </label>
+                {wikiSourceDraft.type === "github" && (
+                  <>
+                    <label className="wikiSourceField">
+                      <span>Branch</span>
+                      <input value={wikiSourceDraft.branch} onChange={(event) => updateWikiSourceDraft("branch", event.target.value)} placeholder="main" />
+                    </label>
+                    <label className="wikiSourceField">
+                      <span>Docs path</span>
+                      <input value={wikiSourceDraft.path} onChange={(event) => updateWikiSourceDraft("path", event.target.value)} placeholder="docs" />
+                    </label>
+                  </>
+                )}
+                <label className="wikiSourceField wide">
+                  <span>Description</span>
+                  <input value={wikiSourceDraft.description} onChange={(event) => updateWikiSourceDraft("description", event.target.value)} placeholder="Internal docs indexed for keyword search in Docs." />
+                </label>
+                <div className="wikiSourceFormActions">
+                  <button
+                    className={`settingsToggle ${wikiSourceDraft.enabled ? "selected" : ""}`}
+                    type="button"
+                    aria-label={wikiSourceDraft.enabled ? "Disable source" : "Enable source"}
+                    onClick={() => updateWikiSourceDraft("enabled", !wikiSourceDraft.enabled)}
+                  >
+                    <span>{wikiSourceDraft.enabled ? "Enabled" : "Disabled"}</span>
+                    <i />
+                  </button>
+                  <button
+                    className="button primary"
+                    type="submit"
+                    disabled={wikiSourceBusy === "save" || !wikiSourceDraft.label.trim() || !wikiSourceDraft.target.trim()}
+                  >
+                    <Save size={14} />
+                    {wikiSourceBusy === "save" ? "Saving..." : "Save Source"}
+                  </button>
+                  <button className="button secondary" type="button" disabled={wikiSourceBusy === "save"} onClick={resetWikiSourceForm}>
+                    Reset
+                  </button>
+                </div>
+              </div>
+            </form>
+          </section>
+        )}
+
+        <section className="wikiSourceTableSection" aria-label="Manage Docs sources">
+          <div className="chatSessionRows directoryTable wikiSourceTable" role="table" aria-label="Manage Docs sources">
+            <div className="chatResultRow directoryResultRow wikiSourceRow chatResultRowHead" role="row">
+              <span role="columnheader">Source</span>
+              <span role="columnheader">Type</span>
+              <span role="columnheader">Status</span>
+              <span role="columnheader" aria-label="Open source details" />
+            </div>
+            <div className="chatResultRows" role="rowgroup">
+              {filteredManagedWikiSources.map((source) => {
+                const expanded = selectedWikiManageSource?.id === source.id;
+                return (
+                  <Fragment key={source.id}>
+                    <div className={`chatResultRow directoryResultRow wikiSourceRow ${expanded ? "expanded" : ""}`} role="row">
+                      <span className="directoryNameCell wikiSourceNameCell" role="cell">
+                        {(() => {
+                          const SourceIcon = wikiIconForName(wikiSourceIconName(source));
+                          return <SourceIcon size={17} />;
+                        })()}
+                        <span>
+                          <strong>{source.label}</strong>
+                          <small>{source.description || source.target}</small>
+                        </span>
+                      </span>
+                      <span role="cell">{wikiSourceTypeDisplay(source.type)}</span>
+                      <span role="cell">
+                        <Badge tone={source.enabled ? (source.status === "connected" ? "success" : "warning") : "default"}>
+                          {source.enabled ? source.status.replace("_", " ") : "Disabled"}
+                        </Badge>
+                      </span>
+                      <span className="directoryRowActions wikiSourceRowActions" role="cell">
+                        <button
+                          className="chatSessionOpenButton"
+                          type="button"
+                          aria-label={`${expanded ? "Close" : "Open"} ${source.label}`}
+                          aria-expanded={expanded}
+                          onClick={() => setSelectedWikiManageSourceId(expanded ? "" : source.id)}
+                        >
+                          {expanded ? <ChevronDown size={18} /> : <ArrowRight size={18} />}
+                        </button>
+                      </span>
+                    </div>
+                    {expanded && renderWikiManageSourceDetail(source)}
+                  </Fragment>
+                );
+              })}
+              {filteredManagedWikiSources.length === 0 && (
+                <div className="tableEmptyState" role="row">
+                  <EmptyState
+                    title={managedWikiSources.length === 0 ? "No sources yet" : "No sources found"}
+                    body={managedWikiSources.length === 0 ? "Use New Source to connect a docs repository, MCP endpoint, API search source, or bundle." : "Try another search term."}
+                    icon={Settings}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
     );
+  }
+
+  function renderDocsSourceTab(source: WikiSourceConfig) {
+    return <HelpCenterConsole source={source} question={wikiAskQuestion} setQuestion={setWikiAskQuestion} refreshKey={wikiRefreshKey} />;
   }
 
   function renderWikiDocsWorkspaceTab() {
     if (!selectedWikiWorkspaceDoc) {
       return (
-        <div className="wikiWorkspaceEmpty">
-          <EmptyState title="No docs yet" body="Create a doc, or turn a transcript or meeting into a working draft." icon={FileText} />
-        </div>
+        <section className="wikiWorkspaceDraftsLanding" aria-label="Compose drafts">
+          <div className="wikiWorkspaceDirectoryHeader">
+            <div>
+              <strong>Drafts and docs</strong>
+              <span>{visibleWikiWorkspaceDocs.length} shown · {wikiWorkspaceDocs.length} saved</span>
+            </div>
+          </div>
+          <div className={`chatSessionRows directoryTable wikiWorkspaceDraftTable${visibleWikiWorkspaceDocs.length === 0 ? " empty" : ""}`} role="table" aria-label="Saved drafts and docs">
+            <div className="chatResultRow directoryResultRow wikiWorkspaceDraftRow chatResultRowHead" role="row">
+              <span role="columnheader">Document</span>
+              <span role="columnheader">Updated</span>
+              <span role="columnheader" aria-label="Open draft" />
+            </div>
+            <div className="chatResultRows" role="rowgroup">
+              {visibleWikiWorkspaceDocs.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="chatResultRow directoryResultRow wikiWorkspaceDraftRow"
+                  role="row"
+                  tabIndex={0}
+                  onClick={() => setSelectedWikiWorkspaceDocId(doc.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedWikiWorkspaceDocId(doc.id);
+                    }
+                  }}
+                >
+                  <span className="directoryNameCell" role="cell">
+                    <strong>{doc.title || "Untitled doc"}</strong>
+                  </span>
+                  <span role="cell">{compactRelativeTime(doc.updatedAt)}</span>
+                  <span className="directoryRowActions" role="cell">
+                    <button
+                      className="chatSessionOpenButton"
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedWikiWorkspaceDocId(doc.id);
+                      }}
+                      aria-label={`Open ${doc.title || "Untitled doc"}`}
+                    >
+                      <ArrowRight size={16} />
+                    </button>
+                  </span>
+                </div>
+              ))}
+              {visibleWikiWorkspaceDocs.length === 0 && (
+                <div className="tableEmptyState" role="row">
+                  <EmptyState
+                    title={wikiWorkspaceDocs.length === 0 ? "No drafts yet" : "No drafts found"}
+                    body={wikiWorkspaceDocs.length === 0 ? "Create a draft from the Compose header, or turn a transcript or meeting into a working draft." : "Try another search term or filter."}
+                    icon={FileText}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
       );
     }
 
@@ -19095,41 +21132,29 @@ function WikiView({
     const wikiWorkspaceDocReadyToSubmit = Boolean(wikiWorkspaceDocMarkdownForSubmission(selectedWikiWorkspaceDoc));
     const wikiWorkspaceSubmitSource = selectedWikiWorkspaceSubmissionSource;
     return (
-      <div className="wikiWorkspaceShell wikiWorkspaceDocsShell">
-        <aside className="wikiWorkspaceDirectory">
-          <div className="wikiWorkspaceDirectoryHeader">
-            <div>
-              <strong>Your docs</strong>
-              <span>{visibleWikiWorkspaceDocs.length} saved</span>
-            </div>
-            <button className="button primary" type="button" onClick={() => createWikiWorkspaceDoc()}>
-              <Plus size={14} />
-              New doc
-            </button>
-          </div>
-          <div className="wikiWorkspaceDirectoryList" role="list" aria-label="Saved docs">
-            {visibleWikiWorkspaceDocs.map((doc) => (
-              <button
-                key={doc.id}
-                type="button"
-                className={`wikiWorkspaceDirectoryItem ${selectedWikiWorkspaceDoc.id === doc.id ? "selected" : ""}`}
-                onClick={() => setSelectedWikiWorkspaceDocId(doc.id)}
-              >
-                <strong>{doc.title || "Untitled doc"}</strong>
-                <span>{wikiWorkspaceDocSourceLabel(doc.source)} · {compactRelativeTime(doc.updatedAt)}</span>
-                <small>{wikiWorkspaceDocWordCount(doc)} words</small>
-              </button>
-            ))}
-          </div>
-        </aside>
+      <div className="wikiWorkspaceShell wikiWorkspaceDocsShell wikiWorkspaceEditorMode">
         <section className="wikiWorkspaceEditorSurface">
+          {wikiWorkspaceSubmissionSources.length === 0 && (
+            <ServiceSetupAlert
+              title="Connect GitHub or Pylon to submit drafts."
+              body="Drafts stay local until a review destination is connected. Connect GitHub for draft PRs or Pylon for review issues."
+              actionLabel="Open Plugins"
+              icon={Send}
+              onAction={() => openSettingsTab("plugins")}
+            />
+          )}
           <div className="wikiWorkspaceEditorHeader">
             <div className="wikiWorkspaceEditorMeta">
               <Badge tone="default">{wikiWorkspaceDocSourceLabel(selectedWikiWorkspaceDoc.source)}</Badge>
+              <span>{selectedWikiWorkspaceDoc.format === "rich-text" ? "Rich text" : "Markdown"}</span>
               <span>{wikiWorkspaceDocWordCount(selectedWikiWorkspaceDoc)} words</span>
               <span>{compactRelativeTime(selectedWikiWorkspaceDoc.updatedAt)}</span>
             </div>
             <div className="wikiWorkspaceEditorTopRow">
+              <button className="button ghost" type="button" onClick={() => setSelectedWikiWorkspaceDocId("")}>
+                <ArrowLeft size={14} />
+                Drafts
+              </button>
               <div className="directoryRowActions wikiWorkspacePrimaryActions">
                 <button
                   className="button secondary"
@@ -19442,6 +21467,102 @@ function WikiView({
     );
   }
 
+  function renderWikiPersonalWorkspaceTab() {
+    const totalWords = wikiWorkspaceDocs.reduce((sum, doc) => sum + wikiWorkspaceDocWordCount(doc), 0);
+    const exportableCount = wikiWorkspaceDocs.filter((doc) => Boolean(wikiWorkspaceDocMarkdownForSubmission(doc))).length;
+    const latestUpdate = visibleWikiWorkspaceDocs[0]?.updatedAt;
+
+    return (
+      <div className="wikiPersonalWikiPage">
+        <section className="accessCard wikiPersonalWikiOverview">
+          <div className="accessCardHeader">
+            <div className="accessCardTitle">
+              <span className="accessIcon"><BookOpen size={18} /></span>
+              <div>
+                <h3>Portable agent context</h3>
+                <p>Bundle drafts, transcripts, and meeting notes into portable Markdown context for agent handoffs, compatible with AGENTS.md and llms.txt-style workflows.</p>
+              </div>
+            </div>
+            <div className="directoryRowActions">
+              <button className="button secondary" type="button" onClick={() => setTab("workspace-manage")}>
+                <Settings size={14} />
+                Manage Sources
+              </button>
+            </div>
+          </div>
+          {wikiPersonalWikiStatus && <p className="wikiSourceStatus">{wikiPersonalWikiStatus}</p>}
+          <div className="wikiPersonalWikiStats">
+            <div className="appSummaryCard">
+              <span>Context items</span>
+              <strong>{formatCompactCount(wikiWorkspaceDocs.length)}</strong>
+              <small>{formatCompactCount(exportableCount)} ready to export</small>
+            </div>
+            <div className="appSummaryCard">
+              <span>Words</span>
+              <strong>{formatCompactCount(totalWords)}</strong>
+              <small>Across saved drafts</small>
+            </div>
+            <div className="appSummaryCard">
+              <span>Updated</span>
+              <strong>{latestUpdate ? compactRelativeTime(latestUpdate) : "Never"}</strong>
+              <small>Latest context change</small>
+            </div>
+          </div>
+        </section>
+
+        <DirectoryTable
+          ariaLabel="Agent context items"
+          className="wikiPersonalWikiTable"
+          rowClassName="wikiPersonalWikiRow"
+          columns={[
+            <span role="columnheader" key="title">Context</span>,
+            <span role="columnheader" key="source">Origin</span>,
+            <span role="columnheader" key="status">State</span>,
+            <span role="columnheader" aria-label="Open context item" key="open" />,
+          ]}
+        >
+          {visibleWikiWorkspaceDocs.length > 0 ? visibleWikiWorkspaceDocs.map((doc) => {
+            const exportReady = Boolean(wikiWorkspaceDocMarkdownForSubmission(doc));
+            return (
+              <div className="chatResultRow directoryResultRow wikiPersonalWikiRow" role="row" key={doc.id}>
+                <span className="directoryNameCell wikiPersonalWikiNameCell" role="cell">
+                  <FileText size={17} />
+                  <span>
+                    <strong>{doc.title || "Untitled doc"}</strong>
+                    <small>{wikiWorkspaceDocWordCount(doc)} words · updated {compactRelativeTime(doc.updatedAt)}</small>
+                  </span>
+                </span>
+                <span role="cell">
+                  <Badge tone="default">{wikiWorkspaceDocSourceLabel(doc.source)}</Badge>
+                </span>
+                <span role="cell">
+                  <Badge tone={exportReady ? "success" : "warning"}>{exportReady ? "Ready" : "Needs content"}</Badge>
+                </span>
+                <span className="directoryRowActions" role="cell">
+                  <button
+                    className="chatSessionOpenButton"
+                    type="button"
+                    aria-label={`Open ${doc.title || "Untitled doc"}`}
+                    onClick={() => {
+                      setSelectedWikiWorkspaceDocId(doc.id);
+                      setTab("workspace-docs");
+                    }}
+                  >
+                    <ArrowRight size={18} />
+                  </button>
+                </span>
+              </div>
+            );
+          }) : (
+            <div className="tableEmptyState" role="row">
+              <EmptyState title="No agent context yet" body="Create a draft, transcript note, or meeting note to start building portable context." icon={BookOpen} />
+            </div>
+          )}
+        </DirectoryTable>
+      </div>
+    );
+  }
+
   function renderWikiTranscriptsWorkspaceTab() {
     return (
       <div className="wikiWorkspaceRecords" aria-label="Transcript workspace">
@@ -19518,10 +21639,14 @@ function WikiView({
       <div className="wikiView embeddedWikiView">
         {activeWikiWorkspaceTab === "workspace-docs"
           ? renderWikiDocsWorkspaceTab()
+          : activeWikiWorkspaceTab === "workspace-personal-wiki"
+            ? renderWikiPersonalWorkspaceTab()
           : activeWikiWorkspaceTab === "workspace-transcripts"
             ? renderWikiTranscriptsWorkspaceTab()
             : activeWikiWorkspaceTab === "workspace-meetings"
               ? renderWikiMeetingsWorkspaceTab()
+              : activeWikiWorkspaceTab === "workspace-manage"
+                ? renderWikiManageWorkspaceTab()
               : renderDocsSourceTab(activeWikiSourceTab)}
       </div>
     );
@@ -19532,12 +21657,17 @@ function WikiView({
     skills: renderSkillsTab,
     wiki: renderWikiTab,
   }[activePage];
+  const activeToolsWorkspaceMeta = toolsSectionGroups
+    .flatMap((group) => group.tabs)
+    .find(([id]) => id === toolsWorkspaceTab) ?? toolsSectionGroups[0]?.tabs[0];
   const wikiSectionMeta = {
     apps: ["Tools", Grid2X2Plus],
     skills: ["Skills", Zap],
-    wiki: ["Docs", BookOpen],
+    wiki: ["Compose", BookOpen],
   } satisfies Record<WikiPage, [string, AppIcon]>;
-  const [wikiHeadingTitle] = wikiSectionMeta[activePage];
+  const [wikiHeadingTitle] = activePage === "apps"
+    ? [activeToolsWorkspaceMeta?.[1] ?? "Tools", Grid2X2Plus]
+    : wikiSectionMeta[activePage];
   const wikiRefreshLabel = activePage === "apps"
     ? toolsWorkspaceTab === "company"
       ? "Refresh company tools"
@@ -19547,9 +21677,20 @@ function WikiView({
       : activeWikiWorkspaceMeta
         ? `Refresh ${activeWikiWorkspaceMeta.label}`
         : `Refresh ${activeWikiSourceTab.label}`;
-  const headerActionsLabel = activePage === "apps" ? "Tools actions" : activePage === "skills" ? "Skills actions" : "Docs actions";
+  const headerActionsLabel = activePage === "apps" ? "Tools actions" : activePage === "skills" ? "Skills actions" : "Compose actions";
+  const activeWikiSourceOpenUrl = "emptyActionUrl" in activeWikiSourceTab ? activeWikiSourceTab.emptyActionUrl : undefined;
+  const activeWikiSourceOpenLabel = "emptyActionLabel" in activeWikiSourceTab ? activeWikiSourceTab.emptyActionLabel : undefined;
   const wikiHeaderAction = (
     <div className="headerActions wikiHeaderActions" aria-label={headerActionsLabel}>
+      {activePage === "wiki" && !activeWikiWorkspaceTab && activeWikiSourceOpenUrl && (
+        <a className="button secondary" href={activeWikiSourceOpenUrl} target="_blank" rel="noreferrer">
+          <ExternalLink size={15} />
+          {activeWikiSourceOpenLabel ?? `Open ${activeWikiSourceTab.label}`}
+        </a>
+      )}
+      {activePage === "wiki" && !activeWikiWorkspaceTab && (
+        <TableRefreshButton onClick={refreshActiveWikiPage} busy={wikiRefreshing} label={wikiRefreshLabel} />
+      )}
       {activePage === "apps" && toolsWorkspaceTab === "personal" && (
         <button className="button secondary" type="button" onClick={() => void importLocalDraftApp()} disabled={localDraftBusy || wikiRefreshing}>
           <Upload size={15} />
@@ -19565,7 +21706,13 @@ function WikiView({
       {activePage === "wiki" && activeWikiWorkspaceTab === "workspace-docs" && (
         <button className="button primary" type="button" onClick={() => createWikiWorkspaceDoc()}>
           <Plus size={15} />
-          New Doc
+          New Draft
+        </button>
+      )}
+      {activePage === "wiki" && activeWikiWorkspaceTab === "workspace-personal-wiki" && (
+        <button className="button primary" type="button" onClick={() => void exportPersonalWikiBundle()} disabled={wikiPersonalWikiExportBusy}>
+          <Download size={15} />
+          {wikiPersonalWikiExportBusy ? "Exporting..." : "Export Context"}
         </button>
       )}
       {activePage === "wiki" && activeWikiWorkspaceTab === "workspace-transcripts" && (
@@ -19580,10 +21727,16 @@ function WikiView({
           Open Calendar
         </button>
       )}
+      {activePage === "wiki" && activeWikiWorkspaceTab === "workspace-manage" && (
+        <button className="button primary" type="button" onClick={() => openNewWikiSourceFlow()}>
+          <Plus size={15} />
+          New Source
+        </button>
+      )}
     </div>
   );
 
-  if (!wikiState) return <EmptyState title="No Docs state" body="Training data will appear when the local Link state loads." />;
+  if (!wikiState) return <EmptyState title="No Compose state" body="Training data will appear when the local Cloud Link state loads." />;
 
   const showDirectoryChrome = !(
     (activePage === "skills" && selectedSkillDetailName)
@@ -19600,7 +21753,7 @@ function WikiView({
       <div className={`pageSectionShell ${activePage === "wiki" || activePage === "apps" ? "" : "pageSectionShellSingle"}`}>
         {activePage === "wiki" && (
           <PageSectionSidebar
-            heading="Docs"
+            heading="Compose"
             headingIcon={viewMeta.wiki.icon}
             groups={[
               {
@@ -19613,8 +21766,11 @@ function WikiView({
               },
             ]}
             activeTab={tab}
-            onSelect={setTab}
-            label="Docs sections"
+            onSelect={(nextTab) => {
+              if (nextTab === "workspace-docs") setSelectedWikiWorkspaceDocId("");
+              setTab(nextTab);
+            }}
+            label="Compose sections"
           />
         )}
         {activePage === "apps" && (
@@ -19629,7 +21785,7 @@ function WikiView({
         )}
         <div className="pageSectionMain">
           {activePage === "wiki" ? (
-            <PageSectionHeader parent="Link" title={activeWikiWorkspaceMeta?.title ?? activeWikiSourceTab.title} action={wikiHeaderAction} />
+            <PageSectionHeader parent="" title={activeWikiWorkspaceMeta?.title ?? activeWikiSourceTab.title} action={wikiHeaderAction} />
           ) : showDirectoryChrome ? (
             <header className="pageHeader">
               <h1>{wikiHeadingTitle}</h1>
@@ -19637,21 +21793,48 @@ function WikiView({
             </header>
           ) : null}
       {showWikiToolbar && (
-      <div className="wikiToolbar">
-        <button
-          className={`iconButton wikiFilterButton ${filter !== "all" || filterOpen ? "selected" : ""}`}
-          aria-label={filterOpen ? "Hide filters" : "Show filters"}
-          title={filterOpen ? "Hide filters" : "Show filters"}
-          onClick={() => setFilterOpen((open) => !open)}
-          disabled={tabFilterOptions.length <= 1}
-        >
-          <ListFilter size={16} />
-        </button>
-        <label className="wikiSearchField">
-          <Search size={16} />
-          <input value={query} placeholder={searchPlaceholder} onChange={(event) => setQuery(event.target.value)} />
-        </label>
-        {filterOpen && (
+      <div className={`wikiToolbar ${showWikiSourceSearchMode ? "wikiSourceSearchToolbar" : ""}`}>
+        {showWikiSourceSearchMode ? (
+          <div className="wikiSearchField wikiSearchFieldStacked" role="search">
+            <span className="wikiSearchFieldLabel">Search</span>
+            <span className="wikiSearchInputLine">
+              <textarea
+                value={query}
+                aria-label={`Search ${activeWikiSourceTab.label}`}
+                placeholder={searchPlaceholder}
+                rows={3}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" || event.shiftKey) return;
+                  event.preventDefault();
+                  void refreshActiveWikiPage();
+                }}
+              />
+            </span>
+            <div className="wikiSearchActions">
+              <button className="button primary" type="button" onClick={() => void refreshActiveWikiPage()} disabled={wikiRefreshing}>
+                {wikiRefreshing ? "Searching" : "Search"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <button
+              className={`iconButton wikiFilterButton ${filter !== "all" || filterOpen ? "selected" : ""}`}
+              aria-label={filterOpen ? "Hide filters" : "Show filters"}
+              title={filterOpen ? "Hide filters" : "Show filters"}
+              onClick={() => setFilterOpen((open) => !open)}
+              disabled={tabFilterOptions.length <= 1}
+            >
+              <ListFilter size={16} />
+            </button>
+            <label className="wikiSearchField">
+              <Search size={16} />
+              <input value={query} placeholder={searchPlaceholder} onChange={(event) => setQuery(event.target.value)} />
+            </label>
+          </>
+        )}
+        {!showWikiSourceSearchMode && filterOpen && (
           <div className="wikiFilterPanel" role="group" aria-label="Wiki filters">
             {tabFilterOptions.map((option) => (
               <button
@@ -19668,7 +21851,7 @@ function WikiView({
             ))}
           </div>
         )}
-        <TableRefreshButton onClick={refreshActiveWikiPage} busy={wikiRefreshing} label={wikiRefreshLabel} />
+        {!showWikiSourceSearchMode && <TableRefreshButton onClick={refreshActiveWikiPage} busy={wikiRefreshing} label={wikiRefreshLabel} />}
       </div>
       )}
       <div className="wikiHubContent">
@@ -19724,6 +21907,83 @@ function wikiSourceInputFromDraft(draft: WikiSourceDraft): WikiDocumentationSour
   };
 }
 
+function emptyCustomMcpDraft(): CustomMcpDraft {
+  return {
+    id: "",
+    name: "",
+    url: "",
+    description: "",
+    bearerToken: "",
+    clearBearerToken: false,
+    enabled: true,
+  };
+}
+
+function customMcpDraftFromServer(server: CustomMcpServer): CustomMcpDraft {
+  return {
+    id: server.id,
+    name: server.name,
+    url: server.url,
+    description: server.description,
+    bearerToken: "",
+    clearBearerToken: false,
+    enabled: server.enabled,
+  };
+}
+
+function customMcpInputFromDraft(draft: CustomMcpDraft): CustomMcpServerInput {
+  return {
+    ...(draft.id ? { id: draft.id } : {}),
+    name: draft.name.trim(),
+    url: draft.url.trim(),
+    description: draft.description.trim(),
+    enabled: draft.enabled,
+    ...(draft.bearerToken.trim() ? { bearerToken: draft.bearerToken.trim() } : {}),
+    ...(draft.clearBearerToken ? { clearBearerToken: true } : {}),
+  };
+}
+
+function customMcpServerIdFromConnectorId(connectorId: string) {
+  return connectorId.startsWith("custom-mcp-") ? connectorId.slice("custom-mcp-".length) : "";
+}
+
+function emptyEmployeePluginDraft(): EmployeePluginDraft {
+  return {
+    id: "",
+    name: "",
+    description: "",
+    audience: "Employees",
+    toolPack: "Employee tools",
+    enabled: true,
+  };
+}
+
+function employeePluginDraftFromPlugin(plugin: EmployeePlugin): EmployeePluginDraft {
+  return {
+    id: plugin.id,
+    name: plugin.name,
+    description: plugin.description,
+    audience: plugin.audience,
+    toolPack: plugin.toolPack,
+    enabled: plugin.enabled,
+  };
+}
+
+function employeePluginInputFromDraft(draft: EmployeePluginDraft): EmployeePluginInput {
+  return {
+    ...(draft.id ? { id: draft.id } : {}),
+    name: draft.name.trim(),
+    description: draft.description.trim(),
+    audience: draft.audience.trim(),
+    toolPack: draft.toolPack.trim(),
+    enabled: draft.enabled,
+  };
+}
+
+function employeePluginIdFromConnectorId(connectorId: string) {
+  return connectorId.startsWith("employee-plugin-") ? connectorId.slice("employee-plugin-".length) : "";
+}
+
 function wikiSourceTypeDisplay(type: WikiDocumentationSourceType) {
   if (type === "github") return "GitHub";
   if (type === "mcp") return "MCP";
@@ -19743,15 +22003,38 @@ function wikiSourceConnectionType(type: WikiDocumentationSourceType) {
 }
 
 function settingsProviderLogoClass(id: string) {
-  if (id === "telnyx" || id.startsWith("telnyx-")) return "telnyx";
+  if (id === "telnyx" || id.startsWith("telnyx-") || telnyxBrandedProviderIds.has(id)) return "telnyx";
   if (id.startsWith("google-")) return "google";
   if (id === "github") return "github";
   if (id === "slack") return "slack";
   return "default";
 }
 
+const telnyxBrandedProviderIds = new Set([
+  "number-intelligence",
+  "usage-cost-explorer",
+  "voice-monitor",
+]);
+
+function isTelnyxBrandedProvider(id: string, label: string) {
+  if (id === "telnyx" || id.startsWith("telnyx-")) return true;
+  if (telnyxBrandedProviderIds.has(id)) return true;
+  return label.toLowerCase().startsWith("telnyx ");
+}
+
 function SettingsProviderLogoMark({ id, label }: { id: string; label: string }) {
-  if (id === "telnyx" || id.startsWith("telnyx-")) {
+  const [imageFailed, setImageFailed] = useState(false);
+  if (isTelnyxBrandedProvider(id, label) && !imageFailed) {
+    return (
+      <img
+        className="settingsProviderLogoImage"
+        src={`${import.meta.env.BASE_URL}credential-logos/telnyx-logo.jpeg`}
+        alt="Telnyx"
+        onError={() => setImageFailed(true)}
+      />
+    );
+  }
+  if (isTelnyxBrandedProvider(id, label)) {
     return <TelnyxLinkIcon size={35} />;
   }
   if (id.startsWith("google-")) {
@@ -19817,6 +22100,9 @@ function LegacySettingsView({
   linkedPhoneNumber,
   setLinkedPhoneNumber,
   setView,
+  appShortcuts,
+  saveAppShortcut,
+  deleteAppShortcut,
   openTerminal,
   startManagedSkillSetupChat,
   embedded = false,
@@ -19839,6 +22125,9 @@ function LegacySettingsView({
   linkedPhoneNumber: string;
   setLinkedPhoneNumber: (phoneNumber: string) => void;
   setView: (view: ViewId) => void;
+  appShortcuts: DesktopShortcutBinding[];
+  saveAppShortcut: (binding: DesktopShortcutBinding) => void;
+  deleteAppShortcut: (id: string) => void;
   openTerminal: () => void;
   startManagedSkillSetupChat: (skill: { label: string; query: string; connectorName: string }) => Promise<void>;
   embedded?: boolean;
@@ -19864,6 +22153,16 @@ function LegacySettingsView({
 	  const [wikiSourceEditorOpen, setWikiSourceEditorOpen] = useState(false);
 	  const [wikiSourceStatus, setWikiSourceStatus] = useState("");
 	  const [wikiSourceBusy, setWikiSourceBusy] = useState("");
+	  const [customMcpServers, setCustomMcpServers] = useState<CustomMcpServer[]>([]);
+	  const [customMcpDraft, setCustomMcpDraft] = useState<CustomMcpDraft>(() => emptyCustomMcpDraft());
+	  const [customMcpEditorOpen, setCustomMcpEditorOpen] = useState(false);
+	  const [customMcpStatus, setCustomMcpStatus] = useState("");
+	  const [customMcpBusy, setCustomMcpBusy] = useState("");
+	  const [employeePlugins, setEmployeePlugins] = useState<EmployeePlugin[]>([]);
+	  const [employeePluginDraft, setEmployeePluginDraft] = useState<EmployeePluginDraft>(() => emptyEmployeePluginDraft());
+	  const [employeePluginEditorOpen, setEmployeePluginEditorOpen] = useState(false);
+	  const [employeePluginStatus, setEmployeePluginStatus] = useState("");
+	  const [employeePluginBusy, setEmployeePluginBusy] = useState("");
 	  const [toolDomainMode, setToolDomainMode] = useState<"internal" | "workspace" | "custom">("internal");
 	  const [customToolDomain, setCustomToolDomain] = useState("");
 	  const [toolDomainStatus, setToolDomainStatus] = useState("");
@@ -19872,32 +22171,54 @@ function LegacySettingsView({
 	  const [vpnStatus, setVpnStatus] = useState("");
 	  const [vpnCopyStatus, setVpnCopyStatus] = useState("");
 	  const [agentMailInvites, setAgentMailInvites] = useState<MeetingInvite[]>([]);
+	  const [sessionDaemonReadiness, setSessionDaemonReadiness] = useState<SessionDaemonReadiness | null>(null);
   useEffect(() => {
     if (toolDomainMode !== "internal") setToolDomainMode("internal");
     if (customToolDomain) setCustomToolDomain("");
     if (toolDomainStatus) setToolDomainStatus("");
   }, [customToolDomain, toolDomainMode, toolDomainStatus]);
-	  const visibleCredentials = useMemo(
-    () => credentials.filter((group) => !["agent-control-plane", "mcp-proxy", "guru", "pylon"].includes(group.id)),
-    [credentials],
-  );
-  const requiredCredentials = useMemo(
-    () => visibleCredentials.filter(isRequiredCredentialGroup).sort(compareCredentialGroups),
-    [visibleCredentials],
-  );
   const modelCenterTabs = new Set<SettingsTab>([
-    "general",
     "shortcuts",
-    "storage-privacy",
     "models",
-    "local-engines",
-    "cloud-providers",
+    "local-models",
+    "cloud-models",
     "local-api-server",
     "mcp-routing",
     "diagnostics",
   ]);
-  const settingsHeadingTitle = settingsSectionTabs.find(([id]) => id === tab)?.[1] || "Settings";
-  const settingsHeaderAction = tab === "dialer" ? dialerBuilderActions : tab === "wiki" ? (
+  const settingsHeadingTitle = tab === "sessions" ? "Terminal Sessions" : settingsSectionTabs.find(([id]) => id === tab)?.[1] || "Settings";
+  const settingsHeaderAction = tab === "dialer" ? dialerBuilderActions : tab === "mcps" ? (
+    <button
+      className="button primary"
+      type="button"
+      onClick={() => {
+        setCustomMcpDraft(emptyCustomMcpDraft());
+        setCustomMcpStatus("");
+        setCustomMcpEditorOpen(true);
+      }}
+    >
+      <Plus size={15} />
+      Add MCP
+    </button>
+  ) : tab === "plugins" ? (
+    <button
+      className="button primary"
+      type="button"
+      onClick={() => {
+        if (!connectors.some((connector) => connector.id === "merge-dev" && (connector.status === "connected" || connector.status === "signed_in"))) {
+          setEmployeePluginStatus("Connect Merge.dev before adding employee plugins.");
+          setEmployeePluginEditorOpen(false);
+          return;
+        }
+        setEmployeePluginDraft(emptyEmployeePluginDraft());
+        setEmployeePluginStatus("");
+        setEmployeePluginEditorOpen(true);
+      }}
+    >
+      <Plus size={15} />
+      New Plugin
+    </button>
+  ) : tab === "wiki" ? (
     <button
       className="button primary"
       type="button"
@@ -19920,6 +22241,14 @@ function LegacySettingsView({
 	    setWikiSources(sources);
 	  }
 
+	  async function refreshCustomMcps() {
+	    setCustomMcpServers(await linkApi.listCustomMcps());
+	  }
+
+	  async function refreshEmployeePlugins() {
+	    setEmployeePlugins(await linkApi.listEmployeePlugins());
+	  }
+
 	  async function refreshAgentMailAliases() {
 	    setAgentMailInvites(await linkApi.listMeetingBotInvites());
 	  }
@@ -19928,10 +22257,14 @@ function LegacySettingsView({
 	    setVpnWorkspace(await linkApi.getVpnWorkspace());
 	  }
 
+	  async function refreshSessionDaemonReadiness() {
+	    setSessionDaemonReadiness(await linkApi.getSessionDaemonReadiness());
+	  }
+
 	  async function refreshSettingsDirectories() {
 	    setSettingsRefreshBusy(true);
 	    try {
-	      await Promise.all([refreshCredentials(), refreshWikiSources(), refreshAgentMailAliases(), refreshVpnWorkspace()]);
+	      await Promise.all([refreshCredentials(), refreshWikiSources(), refreshCustomMcps(), refreshEmployeePlugins(), refreshAgentMailAliases(), refreshVpnWorkspace(), refreshSessionDaemonReadiness()]);
 	      await refresh();
 	    } finally {
       setSettingsRefreshBusy(false);
@@ -19939,7 +22272,7 @@ function LegacySettingsView({
   }
 
 	  useEffect(() => {
-	    void Promise.all([refreshCredentials(), refreshWikiSources(), refreshAgentMailAliases(), refreshVpnWorkspace()]);
+	    void Promise.all([refreshCredentials(), refreshWikiSources(), refreshCustomMcps(), refreshEmployeePlugins(), refreshAgentMailAliases(), refreshVpnWorkspace(), refreshSessionDaemonReadiness()]);
 	  }, []);
 
   useEffect(() => {
@@ -19958,6 +22291,14 @@ function LegacySettingsView({
 	    setWikiSourceBusy("");
 	    setWikiSourceDraft(emptyWikiSourceDraft());
 	    setWikiSourceEditorOpen(false);
+	    setCustomMcpStatus("");
+	    setCustomMcpBusy("");
+	    setCustomMcpDraft(emptyCustomMcpDraft());
+	    setCustomMcpEditorOpen(false);
+	    setEmployeePluginStatus("");
+	    setEmployeePluginBusy("");
+	    setEmployeePluginDraft(emptyEmployeePluginDraft());
+	    setEmployeePluginEditorOpen(false);
 	    setToolDomainStatus("");
 	    setVpnStatus("");
 	    setVpnCopyStatus("");
@@ -19984,6 +22325,11 @@ function LegacySettingsView({
     return tools.filter((tool) => tool.category.toLowerCase().includes(connector.name.toLowerCase()) || tool.name.toLowerCase().startsWith(`${connector.id}.`));
   }
 
+  function settingsDirectoryConnectors(directory: "plugins" | "mcps") {
+    if (directory === "mcps") return connectors.filter((connector) => connector.category === "MCP");
+    return connectors.filter((connector) => connector.category !== "MCP");
+  }
+
 	  async function connectSettingsConnector(id: string) {
 	    if (id === "agent-control-plane") {
 	      await linkApi.signInAgentControlPlane();
@@ -19992,6 +22338,46 @@ function LegacySettingsView({
 	    }
 	    if (id === "agentmail") {
 	      setTab("agentmail");
+	      return;
+	    }
+	    if (id === "merge-dev") {
+	      await connectMergeDev();
+	      return;
+	    }
+	    if (id === "github") {
+	      setEmployeePluginBusy("github");
+	      setEmployeePluginStatus("");
+	      try {
+	        await linkApi.connectGitHubWithDeviceFlow();
+	        await refreshCredentials();
+	        await refresh();
+	        setEmployeePluginStatus("GitHub paired.");
+	      } catch (error) {
+	        setEmployeePluginStatus(error instanceof Error ? error.message : "GitHub could not be paired.");
+	      } finally {
+	        setEmployeePluginBusy("");
+	      }
+	      return;
+	    }
+	    if (id === "google-drive" || id === "google-calendar" || id === "google-workspace" || id === "google-inbox" || id === "google-tasks") {
+	      setEmployeePluginBusy(id);
+	      setEmployeePluginStatus("");
+	      try {
+	        if (id === "google-inbox") {
+	          await linkApi.connectGoogleInboxWithGog();
+	        } else if (id === "google-tasks") {
+	          await linkApi.connectGoogleTasksWithGog();
+	        } else {
+	          await linkApi.connectGoogleWorkspaceWithSkill();
+	        }
+	        await refreshCredentials();
+	        await refresh();
+	        setEmployeePluginStatus("Google connected.");
+	      } catch (error) {
+	        setEmployeePluginStatus(error instanceof Error ? error.message : "Google could not be connected.");
+	      } finally {
+	        setEmployeePluginBusy("");
+	      }
 	      return;
 	    }
 	    setTab("auth");
@@ -20096,6 +22482,205 @@ function LegacySettingsView({
 	      setWikiSourceStatus(error instanceof Error ? error.message : "GitHub could not be paired.");
 	    } finally {
 	      setWikiSourceBusy("");
+	    }
+	  }
+
+	  function updateCustomMcpDraft<K extends keyof CustomMcpDraft>(key: K, value: CustomMcpDraft[K]) {
+	    setCustomMcpDraft((current) => ({ ...current, [key]: value }));
+	  }
+
+	  function customMcpServerForConnector(connector: ConnectorStatus) {
+	    const serverId = customMcpServerIdFromConnectorId(connector.id);
+	    return serverId ? customMcpServers.find((server) => server.id === serverId) || null : null;
+	  }
+
+	  function customMcpStatusLabel(connector: ConnectorStatus) {
+	    const customServer = customMcpServerForConnector(connector);
+	    const employeePlugin = employeePluginForConnector(connector);
+	    if (customServer && !customServer.enabled) return "Disabled";
+	    if (employeePlugin && !employeePlugin.enabled) return "Disabled";
+	    if (customServer?.lastError) return "Needs setup";
+	    return connector.status === "connected" || connector.status === "signed_in" ? "Connected" : "Needs setup";
+	  }
+
+	  function customMcpStatusTone(connector: ConnectorStatus) {
+	    const customServer = customMcpServerForConnector(connector);
+	    const employeePlugin = employeePluginForConnector(connector);
+	    if (customServer && !customServer.enabled) return "default" as const;
+	    if (employeePlugin && !employeePlugin.enabled) return "default" as const;
+	    if (connector.status === "connected" || connector.status === "signed_in") return "success" as const;
+	    return "warning" as const;
+	  }
+
+	  function editCustomMcpServer(server: CustomMcpServer) {
+	    setCustomMcpDraft(customMcpDraftFromServer(server));
+	    setCustomMcpStatus("");
+	    setCustomMcpEditorOpen(true);
+	  }
+
+	  async function saveCustomMcpDraft() {
+	    setCustomMcpBusy("save");
+	    setCustomMcpStatus("");
+	    try {
+	      const servers = await linkApi.saveCustomMcp(customMcpInputFromDraft(customMcpDraft));
+	      setCustomMcpServers(servers);
+	      setCustomMcpStatus(customMcpDraft.id ? "MCP updated." : "MCP added.");
+	      setCustomMcpDraft(emptyCustomMcpDraft());
+	      setCustomMcpEditorOpen(false);
+	      await refresh();
+	    } catch (error) {
+	      setCustomMcpStatus(error instanceof Error ? error.message : "MCP could not be saved.");
+	    } finally {
+	      setCustomMcpBusy("");
+	    }
+	  }
+
+	  async function testCustomMcpDraft() {
+	    setCustomMcpBusy("test");
+	    setCustomMcpStatus("");
+	    try {
+	      const result = await linkApi.testCustomMcp(customMcpInputFromDraft(customMcpDraft));
+	      setCustomMcpStatus(result.message);
+	    } catch (error) {
+	      setCustomMcpStatus(error instanceof Error ? error.message : "MCP test failed.");
+	    } finally {
+	      setCustomMcpBusy("");
+	    }
+	  }
+
+	  async function toggleCustomMcpServer(server: CustomMcpServer) {
+	    setCustomMcpBusy(server.id);
+	    setCustomMcpStatus("");
+	    try {
+	      const servers = await linkApi.setCustomMcpEnabled({ id: server.id, enabled: !server.enabled });
+	      setCustomMcpServers(servers);
+	      setCustomMcpStatus(`${server.name} ${server.enabled ? "disabled" : "enabled"}.`);
+	      await refresh();
+	    } catch (error) {
+	      setCustomMcpStatus(error instanceof Error ? error.message : "MCP could not be updated.");
+	    } finally {
+	      setCustomMcpBusy("");
+	    }
+	  }
+
+	  async function testSavedCustomMcpServer(server: CustomMcpServer) {
+	    setCustomMcpBusy(`test:${server.id}`);
+	    setCustomMcpStatus("");
+	    try {
+	      const result = await linkApi.testCustomMcp(server.id);
+	      setCustomMcpStatus(result.message);
+	      setCustomMcpServers(await linkApi.listCustomMcps());
+	      await refresh();
+	    } catch (error) {
+	      setCustomMcpStatus(error instanceof Error ? error.message : "MCP test failed.");
+	    } finally {
+	      setCustomMcpBusy("");
+	    }
+	  }
+
+	  async function deleteCustomMcpServer(server: CustomMcpServer) {
+	    setCustomMcpBusy(server.id);
+	    setCustomMcpStatus("");
+	    try {
+	      const servers = await linkApi.deleteCustomMcp(server.id);
+	      setCustomMcpServers(servers);
+	      setCustomMcpStatus(`${server.name} removed.`);
+	      if (customMcpDraft.id === server.id) {
+	        setCustomMcpDraft(emptyCustomMcpDraft());
+	        setCustomMcpEditorOpen(false);
+	      }
+	      if (selectedSettingsDetailId === `mcp:custom-mcp-${server.id}`) setSelectedSettingsDetailId("");
+	      await refresh();
+	    } catch (error) {
+	      setCustomMcpStatus(error instanceof Error ? error.message : "MCP could not be removed.");
+	    } finally {
+	      setCustomMcpBusy("");
+	    }
+	  }
+
+	  function updateEmployeePluginDraft<K extends keyof EmployeePluginDraft>(key: K, value: EmployeePluginDraft[K]) {
+	    setEmployeePluginDraft((current) => ({ ...current, [key]: value }));
+	  }
+
+	  function employeePluginForConnector(connector: ConnectorStatus) {
+	    const pluginId = employeePluginIdFromConnectorId(connector.id);
+	    return pluginId ? employeePlugins.find((plugin) => plugin.id === pluginId) || null : null;
+	  }
+
+	  function mergeDevConnected() {
+	    return connectors.some((connector) => connector.id === "merge-dev" && (connector.status === "connected" || connector.status === "signed_in"));
+	  }
+
+	  function editEmployeePlugin(plugin: EmployeePlugin) {
+	    setEmployeePluginDraft(employeePluginDraftFromPlugin(plugin));
+	    setEmployeePluginStatus("");
+	    setEmployeePluginEditorOpen(true);
+	  }
+
+	  async function connectMergeDev() {
+	    setEmployeePluginBusy("merge-dev");
+	    setEmployeePluginStatus("");
+	    try {
+	      const result = await linkApi.connectMergeDev();
+	      setCredentials(result.credentials);
+	      setEmployeePluginStatus("Merge.dev connected for employee plugins.");
+	      await refresh();
+	    } catch (error) {
+	      setEmployeePluginStatus(error instanceof Error ? error.message : "Merge.dev could not be connected.");
+	    } finally {
+	      setEmployeePluginBusy("");
+	    }
+	  }
+
+	  async function saveEmployeePluginDraft() {
+	    setEmployeePluginBusy("save");
+	    setEmployeePluginStatus("");
+	    try {
+	      const plugins = await linkApi.saveEmployeePlugin(employeePluginInputFromDraft(employeePluginDraft));
+	      setEmployeePlugins(plugins);
+	      setEmployeePluginStatus(employeePluginDraft.id ? "Employee plugin updated." : "Employee plugin added.");
+	      setEmployeePluginDraft(emptyEmployeePluginDraft());
+	      setEmployeePluginEditorOpen(false);
+	      await refresh();
+	    } catch (error) {
+	      setEmployeePluginStatus(error instanceof Error ? error.message : "Employee plugin could not be saved.");
+	    } finally {
+	      setEmployeePluginBusy("");
+	    }
+	  }
+
+	  async function toggleEmployeePlugin(plugin: EmployeePlugin) {
+	    setEmployeePluginBusy(plugin.id);
+	    setEmployeePluginStatus("");
+	    try {
+	      const plugins = await linkApi.setEmployeePluginEnabled({ id: plugin.id, enabled: !plugin.enabled });
+	      setEmployeePlugins(plugins);
+	      setEmployeePluginStatus(`${plugin.name} ${plugin.enabled ? "disabled" : "enabled"}.`);
+	      await refresh();
+	    } catch (error) {
+	      setEmployeePluginStatus(error instanceof Error ? error.message : "Employee plugin could not be updated.");
+	    } finally {
+	      setEmployeePluginBusy("");
+	    }
+	  }
+
+	  async function deleteEmployeePlugin(plugin: EmployeePlugin) {
+	    setEmployeePluginBusy(plugin.id);
+	    setEmployeePluginStatus("");
+	    try {
+	      const plugins = await linkApi.deleteEmployeePlugin(plugin.id);
+	      setEmployeePlugins(plugins);
+	      setEmployeePluginStatus(`${plugin.name} removed.`);
+	      if (employeePluginDraft.id === plugin.id) {
+	        setEmployeePluginDraft(emptyEmployeePluginDraft());
+	        setEmployeePluginEditorOpen(false);
+	      }
+	      if (selectedSettingsDetailId === `plugin:employee-plugin-${plugin.id}`) setSelectedSettingsDetailId("");
+	      await refresh();
+	    } catch (error) {
+	      setEmployeePluginStatus(error instanceof Error ? error.message : "Employee plugin could not be removed.");
+	    } finally {
+	      setEmployeePluginBusy("");
 	    }
 	  }
 
@@ -20253,138 +22838,131 @@ function LegacySettingsView({
   }
 
   function renderAuthTab() {
-    const authQuery = settingsQuery.trim().toLowerCase();
-    const authCredentials = [...requiredCredentials].sort((left, right) =>
-      left.label.localeCompare(right.label, undefined, { sensitivity: "base" }),
-    );
-    const filteredAuthCredentials = authCredentials.filter((group) => {
-      const connected = credentialConnected(group);
-      const matchesStatus =
-        settingsStatusFilter === "all" ||
-        (settingsStatusFilter === "connected" && connected) ||
-        (settingsStatusFilter === "needs_setup" && !connected);
-      const matchesQuery = !authQuery || `${group.label} ${group.id} ${group.help} ${group.fields.map((field) => field.name).join(" ")}`.toLowerCase().includes(authQuery);
-      return matchesStatus && matchesQuery;
-    });
-    const selectedGroupId = selectedSettingsDetailId.startsWith("auth:") ? selectedSettingsDetailId.slice(5) : "";
-    const selectedGroup = authCredentials.find((group) => group.id === selectedGroupId);
-    function renderAuthCredentialDetail(group: CredentialGroupStatus, connected: boolean) {
-      const selectedFields = visibleCredentialFields(group);
-      return (
-        <div className="settingsDirectoryDetail embeddedDirectoryDetailView settingsAuthDetailView">
-          <header className="directoryEmbeddedDetailHeader">
-            <button className="button ghost" type="button" onClick={() => setSelectedSettingsDetailId("")}>
-              <ArrowLeft size={16} />
-              Services
-            </button>
-            <div>
-              <h2>{group.label}</h2>
-              <p>{credentialHelpCopy(group)}</p>
-            </div>
-            <Badge tone={connected ? "success" : "warning"}>{connected ? "Connected" : "Needs setup"}</Badge>
-          </header>
-          <section className="chatDetailSurface" aria-label={`${group.label} credential details`}>
-            <div className="chatDetailTabs directoryDetailTabs" role="tablist" aria-label={`${group.label} credential details`}>
-              {(["overview", "details", "actions"] as const).map((detailTab) => (
-                <button
-                  key={detailTab}
-                  className={selectedSettingsDetailTab === detailTab ? "selected" : ""}
-                  type="button"
-                  onClick={() => setSelectedSettingsDetailTab(detailTab)}
-                >
-                  {detailTab === "overview" ? "Overview" : detailTab === "details" ? "Credentials" : "Actions"}
-                </button>
-              ))}
-            </div>
-            {selectedSettingsDetailTab === "overview" && (
-              <div className="chatResultDetails directoryDetailPanel">
-                <div>
-                  <strong>Status</strong>
-                  <span>{connected ? "Connected" : "Needs setup"}</span>
-                </div>
-                <div>
-                  <strong>Fields</strong>
-                  <span>{selectedFields.length ? `${selectedFields.filter((field) => field.configured).length}/${selectedFields.length} configured` : "Managed connection"}</span>
-                </div>
-                <div>
-                  <strong>Source</strong>
-                  <span>{group.id}</span>
-                </div>
-              </div>
-            )}
-            {selectedSettingsDetailTab === "details" && (
-              <div className="settingsCredentialDetailPanel">
-                <CredentialGroupCards
-                  connectors={connectors}
-                  groups={[group]}
-                  setGroups={setCredentials}
-                  onSaved={async () => {
-                    await refresh();
-                    await refreshCredentials();
-                  }}
-                />
-              </div>
-            )}
-            {selectedSettingsDetailTab === "actions" && (
-              <div className="directoryDetailPanel">
-                <div className="assistantNotice">
-                  <p>{connected ? "This credential is ready for Link workflows." : "Open the Credentials tab to connect or update this credential."}</p>
-                </div>
-              </div>
-            )}
-          </section>
-        </div>
-      );
-    }
-
-    if (selectedGroup) {
-      return renderAuthCredentialDetail(selectedGroup, credentialConnected(selectedGroup));
-    }
+    const telnyxGroup = credentials.find((group) => group.id === "telnyx");
+    if (!telnyxGroup) return <EmptyState title="Telnyx setup unavailable" body="Cloud Link could not load the Telnyx credential settings." icon={Cloud} />;
+    const telnyxConnected = credentialConnected(telnyxGroup);
+    const telnyxApiKeyReady = telnyxGroup.fields.some((field) => field.name === "TELNYX_API_KEY" && field.configured);
+    const webRtcReady = telnyxGroup.fields.some((field) => ["TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"].includes(field.name) && field.configured);
+    const storageGroup = credentials.find((group) => group.id === "telnyx-storage");
+    const storageReady = Boolean(storageGroup && credentialGroupConnected(storageGroup, connectors, googleWorkspaceConnected));
+    const cloudModelReady = connectors.some((connector) => connector.id === "telnyx" && (connector.status === "connected" || connector.status === "signed_in")) || telnyxApiKeyReady;
 
     return (
-      <div className="setupSettingsPanel settingsDirectoryPanel">
-        {renderSettingsDirectoryToolbar("Search services or credentials", `${filteredAuthCredentials.length} services`, "Refresh services")}
-        <div className="chatSessionRows directoryTable settingsDirectoryTable settingsAuthDirectoryTable" role="table" aria-label="Services">
-          <div className="chatResultRow directoryResultRow settingsDirectoryResultRow chatResultRowHead" role="row">
-            <span role="columnheader">Name</span>
-            <span role="columnheader">Status</span>
-            <span role="columnheader" aria-label="Open credential" />
+      <div className="setupSettingsPanel telnyxSetupPanel">
+        <section className="telnyxSetupHero">
+          <div className="telnyxSetupHeroIcon">
+            <Cloud size={24} />
           </div>
-          <div className="chatResultRows">
-            {filteredAuthCredentials.map((group) => {
-              const connected = credentialConnected(group);
-              return (
-                <div className="chatResultRow directoryResultRow settingsDirectoryResultRow" role="row" key={group.id}>
-                  <span className="directoryNameCell settingsProviderNameCell" role="cell">
-                    <span className={`settingsProviderLogoBox ${settingsProviderLogoClass(group.id)}`} aria-hidden="true">
-                      <SettingsProviderLogo group={group} />
-                    </span>
-                    <strong>{group.label}</strong>
-                  </span>
-                  <span role="cell">
-                    <Badge tone={connected ? "success" : "warning"}>{connected ? "Connected" : "Needs setup"}</Badge>
-                  </span>
-                  <span className="directoryRowActions" role="cell">
-                    <button
-                      className="chatSessionOpenButton"
-                      type="button"
-                      aria-label={`Open ${group.label}`}
-                      onClick={() => {
-                        setSelectedSettingsDetailId(`auth:${group.id}`);
-                        setSelectedSettingsDetailTab("overview");
-                      }}
-                    >
-                      <ArrowRight size={18} />
-                    </button>
-                  </span>
-                </div>
-              );
-            })}
-            {filteredAuthCredentials.length === 0 && (
-              <div className="phoneNumberEmpty">{authCredentials.length === 0 ? "No services available." : "No services match this search."}</div>
-            )}
+          <div>
+            <h2>Connect Telnyx</h2>
+            <p>Use one Telnyx API Key for calling, messaging, cloud models, voice, and storage features in Cloud Link.</p>
           </div>
-        </div>
+          <Badge tone={telnyxConnected ? "success" : "warning"}>{telnyxConnected ? "Connected" : "Needs setup"}</Badge>
+        </section>
+        <section className="telnyxSetupGrid" aria-label="Telnyx setup status">
+          <div>
+            <strong>Account key</strong>
+            <span>{telnyxApiKeyReady ? "Connected" : "Required"}</span>
+          </div>
+          <div>
+            <strong>Dialer</strong>
+            <span>{webRtcReady ? "Ready" : telnyxApiKeyReady ? "Can be created" : "Needs key"}</span>
+          </div>
+          <div>
+            <strong>Cloud models</strong>
+            <span>{cloudModelReady ? "Available" : "Needs key"}</span>
+          </div>
+          <div>
+            <strong>Cloud storage</strong>
+            <span>{storageReady ? "Bucket linked" : telnyxApiKeyReady ? "Choose bucket" : "Needs key"}</span>
+          </div>
+        </section>
+        {!telnyxApiKeyReady && (
+          <section className="phoneSetupAlert telnyxSetupAlert">
+            <div>
+              <strong>Add a Telnyx API Key to unlock Cloud Link features.</strong>
+              <p>Cloud Link stores the key locally and uses it for Telnyx-only workflows.</p>
+            </div>
+          </section>
+        )}
+        <section className="telnyxSetupCredentialCard">
+          <div className="telnyxSetupSectionHeader">
+            <h3>Telnyx API Key</h3>
+            <p>{credentialHelpCopy(telnyxGroup)}</p>
+          </div>
+          <CredentialGroupCards
+            connectors={connectors}
+            groups={[telnyxGroup]}
+            setGroups={setCredentials}
+            onSaved={async () => {
+              await refresh();
+              await refreshCredentials();
+            }}
+          />
+        </section>
+      </div>
+    );
+  }
+
+  function renderSessionsSettingsTab() {
+    const sessionsGroup = credentials.find((group) => group.id === "link-session-daemon");
+    const sessionsReady = Boolean(sessionDaemonReadiness?.ready);
+    const sessionsReachable = Boolean(sessionDaemonReadiness?.reachable);
+    const smsReady = Boolean(sessionsGroup?.fields.some((field) => field.name === "LINK_SESSION_SMS_FROM" && field.configured))
+      && Boolean(sessionsGroup?.fields.some((field) => field.name === "LINK_SESSION_SMS_TO" && field.configured));
+    const endpointReady = Boolean(sessionsGroup?.fields.some((field) => field.name === "LINK_SESSION_DAEMON_URL" && field.configured));
+    const authReady = connectors.some((connector) => connector.id === "telnyx" && (connector.status === "connected" || connector.status === "signed_in"))
+      || credentials.some((group) => group.id === "telnyx" && group.fields.some((field) => field.name === "TELNYX_API_KEY" && field.configured));
+
+    return (
+      <div className="setupSettingsPanel sessionsSettingsPanel">
+        {!sessionsReady && (
+          <section className="phoneSetupAlert serviceSetupAlert telnyxSetupAlert sessionsSetupAlert">
+            <span className="serviceSetupAlertIcon" aria-hidden="true"><SquareTerminal size={18} /></span>
+            <div>
+              <strong>Finish Terminal Sessions setup before starting managed runs.</strong>
+              <p>Add a Terminal Sessions endpoint, then connect Telnyx if you want blocked, approval, and done SMS alerts.</p>
+            </div>
+          </section>
+        )}
+        <section className="telnyxSetupGrid" aria-label="Terminal Sessions setup status">
+          <div>
+            <strong>Terminal Sessions endpoint</strong>
+            <span>{endpointReady ? "Configured" : "Required"}</span>
+          </div>
+          <div>
+            <strong>Runner</strong>
+            <span>{sessionsReachable ? "Reachable" : "Not connected"}</span>
+          </div>
+          <div>
+            <strong>Telnyx auth</strong>
+            <span>{authReady ? "Available" : "Needs key"}</span>
+          </div>
+          <div>
+            <strong>SMS alerts</strong>
+            <span>{smsReady ? "Enabled" : "Optional"}</span>
+          </div>
+        </section>
+        <section className="telnyxSetupCredentialCard">
+          <div className="telnyxSetupSectionHeader">
+            <h3>Session runner</h3>
+            <p>Use this for server-owned PTYs and long-running agent work. Local terminal sessions still work without it.</p>
+          </div>
+          {sessionsGroup ? (
+            <CredentialGroupCards
+              connectors={connectors}
+              groups={[sessionsGroup]}
+              setGroups={setCredentials}
+              onSaved={async () => {
+                await refreshCredentials();
+                await refreshSessionDaemonReadiness();
+                await refresh();
+              }}
+            />
+          ) : (
+            <EmptyState title="Terminal Sessions setup unavailable" body="Cloud Link could not load the Terminal Sessions credential settings." icon={SquareTerminal} />
+          )}
+        </section>
       </div>
     );
   }
@@ -20432,14 +23010,14 @@ function LegacySettingsView({
       "python3 -m pip install --user 'litellm[proxy]'",
       "",
       "# If Ollama is not installed yet, install it from https://ollama.com/download",
-      "# Then start Ollama and pull the default local model for Link:",
+      "# Then start Ollama and pull the default local model for Cloud Link:",
       `ollama pull ${defaultLocalModel}`,
     ].join("\n");
     const localInstallPresets = [
       {
         id: "llama3.2",
         title: "Llama 3.2",
-        summary: "Default local chat model for Link.",
+        summary: "Default local chat model for Cloud Link.",
       },
       {
         id: "qwen2.5:3b",
@@ -20470,7 +23048,7 @@ function LegacySettingsView({
         tone: modelRouteStatusTone(telnyxRoute ? modelRouteStatus(telnyxRoute, liteLlmRuntime) : liteLlmRuntime?.telnyx.apiKeyConfigured ? "degraded" : "needs_setup"),
         value: telnyxRoute ? simpleModelName(telnyxRoute) : liteLlmRuntime?.telnyx.apiKeyConfigured ? "Catalog available" : "API key missing",
         detail: liteLlmRuntime?.telnyx.baseUrl ?? "Telnyx base URL not set",
-        summary: telnyxRoute ? modelRouteHealthSummary(telnyxRoute, liteLlmRuntime) : "Add a Telnyx API key to use Telnyx cloud routes.",
+        summary: telnyxRoute ? modelRouteHealthSummary(telnyxRoute, liteLlmRuntime) : "Add a Telnyx API Key to use Telnyx cloud routes.",
         checkedAt: telnyxRoute ? modelRouteHealthCheckedAt(telnyxRoute, liteLlmRuntime) : liteLlmRuntime?.telnyx.lastCheckedAt ?? liteLlmRuntime?.telnyx.catalog.fetchedAt,
       },
       {
@@ -20490,7 +23068,7 @@ function LegacySettingsView({
         tone: modelRouteStatusTone(frontierRoute ? modelRouteStatus(frontierRoute, liteLlmRuntime) : liteLlmRuntime?.frontier.anthropicConfigured ? "degraded" : "needs_setup"),
         value: frontierRoute ? simpleModelName(frontierRoute) : "Claude route",
         detail: "Optional frontier connector",
-        summary: frontierRoute ? modelRouteHealthSummary(frontierRoute, liteLlmRuntime) : "Add your Anthropic API key to unlock the frontier route.",
+        summary: frontierRoute ? modelRouteHealthSummary(frontierRoute, liteLlmRuntime) : "Add your Anthropic API Key to unlock the frontier route.",
         checkedAt: frontierRoute ? modelRouteHealthCheckedAt(frontierRoute, liteLlmRuntime) : liteLlmRuntime?.frontier.lastCheckedAt,
       },
     ];
@@ -20641,58 +23219,44 @@ function LegacySettingsView({
               </div>
               <div>
                 <strong>Primary</strong>
-                <span>{providerPrimaryRoute ? simpleModelName(providerPrimaryRoute) : "Not selected"}</span>
+                <span>{providerPrimaryRoute ? "Selected" : "Not selected"}</span>
               </div>
               <div>
                 <strong>Fallback</strong>
-                <span>{providerFallbackRoute ? simpleModelName(providerFallbackRoute) : "Not selected"}</span>
+                <span>{providerFallbackRoute ? "Selected" : "Not selected"}</span>
               </div>
               <div>
                 <strong>Setup</strong>
                 <span>{selectedProvider.routes.some((route) => modelRouteStatus(route, liteLlmRuntime) === "ready") ? "Available" : "Needs setup"}</span>
               </div>
             </div>
-            <div className="chatSessionRows directoryTable settingsDirectoryTable modelsModelTable" role="table" aria-label={`${selectedProvider.label} models`}>
-              <div className="chatResultRow directoryResultRow settingsDirectoryResultRow modelsModelRow chatResultRowHead" role="row">
-              <span role="columnheader">Model</span>
-                <span role="columnheader">Use</span>
-                <span role="columnheader">Status</span>
-                <span role="columnheader" aria-label="Model actions" />
-              </div>
-              <div className="chatResultRows">
-                {selectedProvider.routes.map((route) => {
-                  const status = modelRouteStatus(route, liteLlmRuntime);
-                  const isPrimary = route.id === primaryRoute?.id;
-                  const isFallback = route.id === fallbackRoute?.id;
-                  return (
-                    <div className="chatResultRow directoryResultRow settingsDirectoryResultRow modelsModelRow" role="row" key={route.id}>
-                      <span className="directoryNameCell modelsModelNameCell" role="cell">
-                        <strong>{simpleModelName(route)}</strong>
-                        <small>{formatModelContextWindow(route.contextWindow) || dataBoundaryLabel(route.dataBoundary)}</small>
-                      </span>
-                      <span className="modelsProviderSummaryCell" role="cell">{modelRouteShortUse(route, liteLlmRuntime)}</span>
-                      <span className="modelsProviderStatusCell" role="cell">
-                        <Badge tone={modelRouteStatusTone(status)}>{modelRouteStatusLabel(status)}</Badge>
-                      </span>
-                      <span className="directoryRowActions modelsModelActions" role="cell">
-                        {isPrimary ? (
-                          <Badge tone="success">Primary</Badge>
-                        ) : (
-                          <button className="button ghost" type="button" onClick={() => setChatModelMode(route.id)}>
-                            Use
-                          </button>
-                        )}
-                        {isFallback ? (
-                          <Badge tone="warning">Fallback</Badge>
-                        ) : (
-                          <button className="button ghost" type="button" onClick={() => setChatFallbackModelMode(route.id)}>
-                            Backup
-                          </button>
-                        )}
-                      </span>
-                    </div>
-                  );
-                })}
+            <div className="modelsDefaultsGrid">
+              <label className="speakSettingField">
+                <span>Primary route</span>
+                <select value={providerPrimaryRoute?.id ?? ""} onChange={(event) => setChatModelMode(event.target.value)}>
+                  <option value="" disabled>Choose a {selectedProvider.label} route</option>
+                  {selectedProvider.routes.map((route) => (
+                    <option key={route.id} value={route.id}>
+                      {route.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="speakSettingField">
+                <span>Fallback route</span>
+                <select value={providerFallbackRoute?.id ?? ""} onChange={(event) => setChatFallbackModelMode(event.target.value)}>
+                  <option value="" disabled>Choose a {selectedProvider.label} route</option>
+                  {selectedProvider.routes.map((route) => (
+                    <option key={route.id} value={route.id}>
+                      {route.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="modelsRouteSummaryBar">
+                <strong>{providerPrimaryRoute ? modelRouteStatusLabel(modelRouteStatus(providerPrimaryRoute, liteLlmRuntime)) : "Primary not set to this provider"}</strong>
+                <ArrowRight size={16} />
+                <span>{providerFallbackRoute ? modelRouteStatusLabel(modelRouteStatus(providerFallbackRoute, liteLlmRuntime)) : "Fallback not set to this provider"}</span>
               </div>
             </div>
           </section>
@@ -20808,7 +23372,7 @@ function LegacySettingsView({
                   <div className="modelsRuntimeCardHeader">
                     <div>
                       <strong>LiteLLM</strong>
-                      <small>Routes local chat inside Link.</small>
+                      <small>Routes local chat inside Cloud Link.</small>
                     </div>
                     <Badge tone={localRuntimeReady ? "success" : "warning"}>{localRuntimeReady ? "Installed" : "Install"}</Badge>
                   </div>
@@ -20902,7 +23466,7 @@ function LegacySettingsView({
                 <div className="accessCardTitle">
                   <span className="accessIcon"><ShieldCheck size={18} /></span>
                   <div>
-                    <h3>Runs locally in Link</h3>
+                    <h3>Runs locally in Cloud Link</h3>
                   </div>
                 </div>
               </div>
@@ -20991,10 +23555,11 @@ function LegacySettingsView({
     );
   }
 
-	  function renderPluginsTab() {
+	  function renderConnectorsDirectoryTab(directory: "plugins" | "mcps") {
     const query = settingsQuery.trim().toLowerCase();
-    const pluginConnectors = connectors;
-    const sortedConnectors = [...pluginConnectors].sort((left, right) =>
+    const directoryTitle = directory === "mcps" ? "MCPs" : "Plugins";
+    const detailPrefix = directory === "mcps" ? "mcp:" : "plugin:";
+    const sortedConnectors = [...settingsDirectoryConnectors(directory)].sort((left, right) =>
       left.name.localeCompare(right.name, undefined, { sensitivity: "base" }),
     );
     const filteredConnectors = sortedConnectors.filter((connector) => {
@@ -21006,10 +23571,14 @@ function LegacySettingsView({
       const matchesQuery = !query || `${connector.name} ${connector.id} ${connector.category} ${connector.description} ${connector.requiredAccess.join(" ")}`.toLowerCase().includes(query);
       return matchesStatus && matchesQuery;
     });
-    const selectedConnectorId = selectedSettingsDetailId.startsWith("plugin:") ? selectedSettingsDetailId.slice(7) : "";
-    const selectedConnector = connectors.find((connector) => connector.id === selectedConnectorId);
+    const selectedConnectorId = selectedSettingsDetailId.startsWith(detailPrefix) ? selectedSettingsDetailId.slice(detailPrefix.length) : "";
+    const selectedConnector = settingsDirectoryConnectors(directory).find((connector) => connector.id === selectedConnectorId);
     if (selectedConnector) {
       const connected = selectedConnector.status === "connected" || selectedConnector.status === "signed_in";
+      const selectedCustomMcpServer = customMcpServerForConnector(selectedConnector);
+      const selectedEmployeePlugin = employeePluginForConnector(selectedConnector);
+      const selectedStatusLabel = customMcpStatusLabel(selectedConnector);
+      const selectedStatusTone = customMcpStatusTone(selectedConnector);
       const connectorToolList = settingsConnectorTools(selectedConnector);
       const grouped = {
         read: connectorToolList.filter((tool) => tool.capability === "read"),
@@ -21017,20 +23586,22 @@ function LegacySettingsView({
         interactive: connectorToolList.filter((tool) => tool.approvalRequired || tool.riskLevel === "high"),
       };
       return (
-        <div className="settingsDirectoryDetail embeddedDirectoryDetailView">
-          <header className="directoryEmbeddedDetailHeader">
-            <button className="button ghost" type="button" onClick={() => setSelectedSettingsDetailId("")}>
-              <ArrowLeft size={16} />
-              Plugins
+        <div className={`settingsDirectoryDetail embeddedDirectoryDetailView connectorDirectoryDetailView connectorDirectoryDetailView${directory === "mcps" ? "Mcps" : "Plugins"}`}>
+          <header className="directoryEmbeddedDetailHeader withActions">
+            <button className="iconButton chatDetailBackButton" type="button" onClick={() => setSelectedSettingsDetailId("")} aria-label={`Back to ${directoryTitle}`}>
+              <ArrowLeft size={17} />
             </button>
-            <div>
+            <div className="directoryEmbeddedDetailMeta">
+              <span>{directoryTitle}</span>
               <h2>{selectedConnector.name}</h2>
               <p>{selectedConnector.description}</p>
             </div>
-            <Badge tone={connected ? "success" : "warning"}>{connected ? "Connected" : "Needs setup"}</Badge>
+            <div className="headerActions directoryEmbeddedHeaderActions" aria-label={`${selectedConnector.name} status`}>
+              <Badge tone={selectedStatusTone}>{selectedStatusLabel}</Badge>
+            </div>
           </header>
           <section className="chatDetailSurface">
-            <div className="chatDetailTabs directoryDetailTabs" role="tablist" aria-label={`${selectedConnector.name} plugin details`}>
+            <div className="chatReviewTabs directoryDetailTabs" role="tablist" aria-label={`${selectedConnector.name} plugin details`}>
               {(["overview", "details", "actions"] as const).map((detailTab) => (
                 <button
                   key={detailTab}
@@ -21043,43 +23614,94 @@ function LegacySettingsView({
               ))}
             </div>
             {selectedSettingsDetailTab === "overview" && (
-              <div className="chatResultDetails directoryDetailPanel">
-                <div>
-                  <strong>Status</strong>
-                  <span>{connected ? "Connected" : "Needs setup"}</span>
+              <section className="directoryDetailSection">
+                <div className="directoryDetailSectionHeader">
+                  <h3>Overview</h3>
                 </div>
-                <div>
-                  <strong>Type</strong>
-                  <span>{connectorTypeLabel(selectedConnector)}</span>
+                <div className="chatResultDetails directoryDetailPanel">
+                  <div>
+                    <strong>Status</strong>
+                    <span>{selectedStatusLabel}</span>
+                  </div>
+                  <div>
+                    <strong>Type</strong>
+                    <span>{connectorTypeLabel(selectedConnector)}</span>
+                  </div>
+                  <div>
+                    <strong>Mode</strong>
+                    <span>{connectorModeLabel(selectedConnector)}</span>
+                  </div>
+                  <div>
+                    <strong>Access</strong>
+                    <span>{selectedConnector.requiredAccess.join(", ") || "No access scopes listed"}</span>
+                  </div>
                 </div>
-                <div>
-                  <strong>Mode</strong>
-                  <span>{connectorModeLabel(selectedConnector)}</span>
-                </div>
-                <div>
-                  <strong>Access</strong>
-                  <span>{selectedConnector.requiredAccess.join(", ") || "No access scopes listed"}</span>
-                </div>
-              </div>
+              </section>
             )}
             {selectedSettingsDetailTab === "details" && (
-              <div className="directoryDetailPanel">
-                <ToolGroup title="Read-only tools" tools={grouped.read} />
-                <ToolGroup title="Write/delete tools" tools={grouped.write} />
-                <ToolGroup title="Interactive tools" tools={grouped.interactive} />
-              </div>
+              <section className="directoryDetailSection">
+                <div className="directoryDetailSectionHeader">
+                  <h3>Tools</h3>
+                </div>
+                <div className="directoryDetailPanel">
+                  <ToolGroup title="Read-only tools" tools={grouped.read} />
+                  <ToolGroup title="Write/delete tools" tools={grouped.write} />
+                  <ToolGroup title="Interactive tools" tools={grouped.interactive} />
+                </div>
+              </section>
             )}
             {selectedSettingsDetailTab === "actions" && (
-              <div className="directoryDetailPanel">
-                <button
-                  className={connected ? "button ghost" : "button secondary"}
-                  type="button"
-                  disabled={connected}
-                  onClick={() => void connectSettingsConnector(selectedConnector.id)}
-                >
-                  {connectorButtonLabel(selectedConnector)}
-                </button>
-              </div>
+              <section className="directoryDetailSection">
+                <div className="directoryDetailSectionHeader">
+                  <h3>Actions</h3>
+                </div>
+                <div className="directoryDetailPanel directoryActionPanel">
+                  {selectedCustomMcpServer ? (
+                    <>
+                      <button className="button secondary" type="button" onClick={() => editCustomMcpServer(selectedCustomMcpServer)}>
+                        <Pencil size={15} />
+                        Edit MCP
+                      </button>
+                      <button className="button ghost" type="button" onClick={() => void testSavedCustomMcpServer(selectedCustomMcpServer)} disabled={customMcpBusy === `test:${selectedCustomMcpServer.id}`}>
+                        <RefreshCw size={15} />
+                        Test connection
+                      </button>
+                      <button className="button ghost" type="button" onClick={() => void toggleCustomMcpServer(selectedCustomMcpServer)} disabled={customMcpBusy === selectedCustomMcpServer.id}>
+                        {selectedCustomMcpServer.enabled ? <EyeOff size={15} /> : <Eye size={15} />}
+                        {selectedCustomMcpServer.enabled ? "Disable" : "Enable"}
+                      </button>
+                      <button className="button danger" type="button" onClick={() => void deleteCustomMcpServer(selectedCustomMcpServer)} disabled={customMcpBusy === selectedCustomMcpServer.id}>
+                        <Trash2 size={15} />
+                        Delete
+                      </button>
+                    </>
+                  ) : selectedEmployeePlugin ? (
+                    <>
+                      <button className="button secondary" type="button" onClick={() => editEmployeePlugin(selectedEmployeePlugin)}>
+                        <Pencil size={15} />
+                        Edit Plugin
+                      </button>
+                      <button className="button ghost" type="button" onClick={() => void toggleEmployeePlugin(selectedEmployeePlugin)} disabled={employeePluginBusy === selectedEmployeePlugin.id}>
+                        {selectedEmployeePlugin.enabled ? <EyeOff size={15} /> : <Eye size={15} />}
+                        {selectedEmployeePlugin.enabled ? "Disable" : "Enable"}
+                      </button>
+                      <button className="button danger" type="button" onClick={() => void deleteEmployeePlugin(selectedEmployeePlugin)} disabled={employeePluginBusy === selectedEmployeePlugin.id}>
+                        <Trash2 size={15} />
+                        Delete
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      className={connected && selectedConnector.id !== "agentmail" ? "button ghost" : "button secondary"}
+                      type="button"
+                      disabled={connected && selectedConnector.id !== "agentmail"}
+                      onClick={() => void connectSettingsConnector(selectedConnector.id)}
+                    >
+                      {connectorButtonLabel(selectedConnector)}
+                    </button>
+                  )}
+                </div>
+              </section>
             )}
           </section>
         </div>
@@ -21088,36 +23710,257 @@ function LegacySettingsView({
 
 	  return (
       <div className="setupSettingsPanel settingsDirectoryPanel">
-        {renderSettingsDirectoryToolbar("Search plugins, tools, sources, or access", `${filteredConnectors.length} plugins`, "Refresh plugins")}
-        <div className="chatSessionRows directoryTable settingsDirectoryTable" role="table" aria-label="Plugins">
+        {renderSettingsDirectoryToolbar(
+          directory === "mcps" ? "Search MCPs, servers, tools, or access" : "Search plugins, tools, sources, or access",
+          `${filteredConnectors.length} ${directory === "mcps" ? "MCPs" : "plugins"}`,
+          directory === "mcps" ? "Refresh MCPs" : "Refresh plugins",
+        )}
+        {directory === "mcps" && customMcpStatus && <p className="wikiSourceStatus customMcpStatus">{customMcpStatus}</p>}
+        {directory === "plugins" && employeePluginStatus && <p className="wikiSourceStatus employeePluginStatus">{employeePluginStatus}</p>}
+        {directory === "plugins" && !mergeDevConnected() && (
+          <section className="phoneSetupAlert agentMailSetupAlert mergeDevSetupAlert">
+            <div>
+              <strong>Connect Merge.dev to add employee plugins.</strong>
+              <p>Merge.dev Agent Handler provides the SSO-backed MCP endpoint for employee plugin tools.</p>
+            </div>
+            <button
+              className="runtimeSettingsButton"
+              type="button"
+              onClick={() => void connectMergeDev()}
+              disabled={employeePluginBusy === "merge-dev"}
+            >
+              {employeePluginBusy === "merge-dev" ? "Connecting Merge.dev" : "Connect Merge.dev"}
+            </button>
+          </section>
+        )}
+        {directory === "plugins" && employeePluginEditorOpen && (
+          <section className="accessCard wikiSourceEditor employeePluginEditor" aria-label={employeePluginDraft.id ? "Edit employee plugin" : "New employee plugin"}>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveEmployeePluginDraft();
+              }}
+            >
+              <div className="wikiSourceEditorHeader">
+                <div>
+                  <h3>{employeePluginDraft.id ? "Edit employee plugin" : "New Plugin"}</h3>
+                  <p>{employeePluginDraft.id ? "Update this Merge.dev-backed plugin." : "Add an employee plugin powered by Merge.dev Agent Handler."}</p>
+                </div>
+                <button className="button ghost" type="button" onClick={() => {
+                  setEmployeePluginDraft(emptyEmployeePluginDraft());
+                  setEmployeePluginEditorOpen(false);
+                }}>
+                  <X size={14} />
+                  Cancel
+                </button>
+              </div>
+              <div className="wikiSourceFormGrid employeePluginFormGrid">
+                <label className="wikiSourceField">
+                  <span>Name</span>
+                  <input value={employeePluginDraft.name} onChange={(event) => updateEmployeePluginDraft("name", event.target.value)} placeholder="HR employee tools" />
+                </label>
+                <label className="wikiSourceField">
+                  <span>Audience</span>
+                  <input value={employeePluginDraft.audience} onChange={(event) => updateEmployeePluginDraft("audience", event.target.value)} placeholder="Employees" />
+                </label>
+                <label className="wikiSourceField">
+                  <span>Tool pack</span>
+                  <input value={employeePluginDraft.toolPack} onChange={(event) => updateEmployeePluginDraft("toolPack", event.target.value)} placeholder="Employee tools" />
+                </label>
+                <label className="wikiSourceField">
+                  <span>Provider</span>
+                  <input value="Merge.dev Agent Handler" readOnly />
+                </label>
+                <label className="wikiSourceField wide">
+                  <span>Description</span>
+                  <input value={employeePluginDraft.description} onChange={(event) => updateEmployeePluginDraft("description", event.target.value)} placeholder="Employee plugin available through Merge.dev SSO" />
+                </label>
+                <div className="wikiSourceFormActions">
+                  <button
+                    className={`settingsToggle ${employeePluginDraft.enabled ? "selected" : ""}`}
+                    type="button"
+                    aria-label={employeePluginDraft.enabled ? "Disable employee plugin" : "Enable employee plugin"}
+                    onClick={() => updateEmployeePluginDraft("enabled", !employeePluginDraft.enabled)}
+                  >
+                    <span>{employeePluginDraft.enabled ? "Enabled" : "Disabled"}</span>
+                    <i />
+                  </button>
+                  <button className="button primary" type="submit" disabled={employeePluginBusy === "save" || !employeePluginDraft.name.trim() || !mergeDevConnected()}>
+                    <Save size={14} />
+                    {employeePluginDraft.id ? "Save" : "Add"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </section>
+        )}
+        {directory === "mcps" && customMcpEditorOpen && (
+          <section className="accessCard wikiSourceEditor customMcpEditor" aria-label={customMcpDraft.id ? "Edit MCP" : "Add MCP"}>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveCustomMcpDraft();
+              }}
+            >
+              <div className="wikiSourceEditorHeader">
+                <div>
+                  <h3>{customMcpDraft.id ? "Edit MCP" : "Add MCP"}</h3>
+                  <p>{customMcpDraft.id ? "Update this server endpoint, token, or availability." : "Connect a streamable HTTP MCP server so agents can discover its tools."}</p>
+                </div>
+                <button className="button ghost" type="button" onClick={() => {
+                  setCustomMcpDraft(emptyCustomMcpDraft());
+                  setCustomMcpEditorOpen(false);
+                }}>
+                  <X size={14} />
+                  Cancel
+                </button>
+              </div>
+              <div className="wikiSourceFormGrid customMcpFormGrid">
+                <label className="wikiSourceField">
+                  <span>Name</span>
+                  <input value={customMcpDraft.name} onChange={(event) => updateCustomMcpDraft("name", event.target.value)} placeholder="Customer data MCP" />
+                </label>
+                <label className="wikiSourceField">
+                  <span>Endpoint URL</span>
+                  <input value={customMcpDraft.url} onChange={(event) => updateCustomMcpDraft("url", event.target.value)} placeholder="https://mcp.example.com/mcp" />
+                </label>
+                <label className="wikiSourceField wide">
+                  <span>Description</span>
+                  <input value={customMcpDraft.description} onChange={(event) => updateCustomMcpDraft("description", event.target.value)} placeholder="Tools exposed to Cloud Link agents" />
+                </label>
+                <label className="wikiSourceField">
+                  <span>Bearer token</span>
+                  <input
+                    value={customMcpDraft.bearerToken}
+                    onChange={(event) => updateCustomMcpDraft("bearerToken", event.target.value)}
+                    placeholder={customMcpDraft.id ? "Leave blank to keep saved token" : "Optional"}
+                    type="password"
+                  />
+                </label>
+                {customMcpDraft.id && (
+                  <label className="customMcpCheckboxField">
+                    <input
+                      checked={customMcpDraft.clearBearerToken}
+                      onChange={(event) => updateCustomMcpDraft("clearBearerToken", event.target.checked)}
+                      type="checkbox"
+                    />
+                    <span>Clear saved bearer token</span>
+                  </label>
+                )}
+                <div className="wikiSourceFormActions">
+                  <button
+                    className={`settingsToggle ${customMcpDraft.enabled ? "selected" : ""}`}
+                    type="button"
+                    aria-label={customMcpDraft.enabled ? "Disable MCP" : "Enable MCP"}
+                    onClick={() => updateCustomMcpDraft("enabled", !customMcpDraft.enabled)}
+                  >
+                    <span>{customMcpDraft.enabled ? "Enabled" : "Disabled"}</span>
+                    <i />
+                  </button>
+                  <button className="button ghost" type="button" onClick={() => void testCustomMcpDraft()} disabled={customMcpBusy === "test" || !customMcpDraft.name.trim() || !customMcpDraft.url.trim()}>
+                    <RefreshCw size={14} />
+                    Test
+                  </button>
+                  <button className="button primary" type="submit" disabled={customMcpBusy === "save" || !customMcpDraft.name.trim() || !customMcpDraft.url.trim()}>
+                    <Save size={14} />
+                    {customMcpDraft.id ? "Save" : "Add"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </section>
+        )}
+        <div className={`chatSessionRows directoryTable settingsDirectoryTable${directory === "mcps" ? " settingsMcpsDirectoryTable" : ""}`} role="table" aria-label={directoryTitle}>
           <div className="chatResultRow directoryResultRow settingsDirectoryResultRow chatResultRowHead" role="row">
             <span role="columnheader">Name</span>
             <span role="columnheader">Type</span>
             <span role="columnheader">Status</span>
-            <span role="columnheader" aria-label="Open plugin" />
+            <span role="columnheader" aria-label={directory === "mcps" ? "MCP actions" : "Open plugin"}>{directory === "mcps" ? "Actions" : ""}</span>
           </div>
           <div className="chatResultRows">
             {filteredConnectors.map((connector) => {
-              const connected = connector.status === "connected" || connector.status === "signed_in";
+              const customMcpServer = customMcpServerForConnector(connector);
+              const employeePlugin = employeePluginForConnector(connector);
+              const statusLabel = customMcpStatusLabel(connector);
+              const statusTone = customMcpStatusTone(connector);
               return (
                 <div className="chatResultRow directoryResultRow settingsDirectoryResultRow" role="row" key={connector.id}>
                   <span className="directoryNameCell settingsProviderNameCell" role="cell">
-                    <span className={`settingsProviderLogoBox ${settingsProviderLogoClass(connector.id)}`} aria-hidden="true">
-                      <SettingsConnectorLogo connector={connector} />
-                    </span>
                     <strong>{connector.name}</strong>
+                    {customMcpServer && <small>{customMcpServer.url}</small>}
+                    {employeePlugin && <small>Merge.dev Agent Handler · {employeePlugin.audience}</small>}
                   </span>
                   <span role="cell">{connectorTypeLabel(connector)}</span>
                   <span role="cell">
-                    <Badge tone={connected ? "success" : "warning"}>{connected ? "Connected" : "Needs setup"}</Badge>
+                    <Badge tone={statusTone}>{statusLabel}</Badge>
                   </span>
-                  <span className="directoryRowActions" role="cell">
+                  <span className={`directoryRowActions${customMcpServer || employeePlugin ? " customMcpRowActions" : ""}`} role="cell">
+                    {customMcpServer && (
+                      <>
+                        <button
+                          className="iconButton"
+                          type="button"
+                          aria-label={customMcpServer.enabled ? `Disable ${connector.name}` : `Enable ${connector.name}`}
+                          title={customMcpServer.enabled ? "Disable" : "Enable"}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void toggleCustomMcpServer(customMcpServer);
+                          }}
+                          disabled={customMcpBusy === customMcpServer.id}
+                        >
+                          {customMcpServer.enabled ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                        <button
+                          className="iconButton danger"
+                          type="button"
+                          aria-label={`Delete ${connector.name}`}
+                          title="Delete"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void deleteCustomMcpServer(customMcpServer);
+                          }}
+                          disabled={customMcpBusy === customMcpServer.id}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    )}
+                    {employeePlugin && (
+                      <>
+                        <button
+                          className="iconButton"
+                          type="button"
+                          aria-label={employeePlugin.enabled ? `Disable ${connector.name}` : `Enable ${connector.name}`}
+                          title={employeePlugin.enabled ? "Disable" : "Enable"}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void toggleEmployeePlugin(employeePlugin);
+                          }}
+                          disabled={employeePluginBusy === employeePlugin.id}
+                        >
+                          {employeePlugin.enabled ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                        <button
+                          className="iconButton danger"
+                          type="button"
+                          aria-label={`Delete ${connector.name}`}
+                          title="Delete"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void deleteEmployeePlugin(employeePlugin);
+                          }}
+                          disabled={employeePluginBusy === employeePlugin.id}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    )}
                     <button
                       className="chatSessionOpenButton"
                       type="button"
                       aria-label={`Open ${connector.name}`}
                       onClick={() => {
-                        setSelectedSettingsDetailId(`plugin:${connector.id}`);
+                        setSelectedSettingsDetailId(`${detailPrefix}${connector.id}`);
                         setSelectedSettingsDetailTab("overview");
                       }}
                     >
@@ -21128,12 +23971,20 @@ function LegacySettingsView({
               );
             })}
             {filteredConnectors.length === 0 && (
-              <div className="phoneNumberEmpty">No plugins match this search.</div>
+              <div className="phoneNumberEmpty">No {directory === "mcps" ? "MCPs" : "plugins"} match this search.</div>
             )}
           </div>
         </div>
       </div>
     );
+  }
+
+  function renderPluginsTab() {
+    return renderConnectorsDirectoryTab("plugins");
+  }
+
+  function renderMcpsTab() {
+    return renderConnectorsDirectoryTab("mcps");
   }
 
   function renderAgentMailSettingsTab() {
@@ -21182,12 +24033,13 @@ function LegacySettingsView({
               className="runtimeSettingsButton"
               type="button"
               onClick={() => {
-                setTab("plugins");
-                setSelectedSettingsDetailId("plugin:agentmail");
+                setSelectedSettingsDetailId("");
                 setSelectedSettingsDetailTab("overview");
+                setTab("agentmail");
               }}
             >
-              Open AgentMail plugin
+              <Plus size={15} />
+              Install AgentMail plugin
             </button>
           </section>
         )}
@@ -21249,7 +24101,7 @@ function LegacySettingsView({
       {
         id: "workspace",
         label: "Workspace domain",
-        value: "tools.telnyx.com",
+        value: "{company}.cloud.link",
         description: "Publish approved apps to the workspace domain your team owns.",
         available: false,
       },
@@ -21350,8 +24202,7 @@ function LegacySettingsView({
             <div className="accessCardTitle">
               <span className="accessIcon"><ShieldCheck size={18} /></span>
               <div>
-                <h3>App VPN</h3>
-                <p>Make Link tools reachable online through a Telnyx Cloud VPN and verify which URLs stay private.</p>
+                <h3>Enable Remote App Access</h3>
               </div>
             </div>
             <div className="accessCardActions vpnHeaderActions">
@@ -21469,16 +24320,18 @@ function LegacySettingsView({
                 </div>
               </div>
               <details className="vpnConfigDisclosure">
-                <summary>{workspace.selectedPeerId ? `Link peer ${workspace.selectedPeerId}` : "WireGuard config"}</summary>
+                <summary>{workspace.selectedPeerId ? `Cloud Link peer ${workspace.selectedPeerId}` : "WireGuard config"}</summary>
                 <pre className="vpnConfigPre">{workspace.selectedPeerConfig}</pre>
               </details>
             </div>
           )}
 
-          <div className="vpnStatusStack">
-            <p className="wikiSourceStatus">{vpnStatus || workspace?.message || "Loading Cloud VPNs..."}</p>
-            {vpnCopyStatus && <p className="wikiSourceStatus">{vpnCopyStatus}</p>}
-          </div>
+          {(vpnStatus || vpnCopyStatus) && (
+            <div className="vpnStatusStack">
+              {vpnStatus && <p className="wikiSourceStatus">{vpnStatus}</p>}
+              {vpnCopyStatus && <p className="wikiSourceStatus">{vpnCopyStatus}</p>}
+            </div>
+          )}
         </section>
 
         <section className="accessCard vpnTableSection">
@@ -21523,7 +24376,7 @@ function LegacySettingsView({
                 <div className="tableEmptyState vpnTableEmptyState" role="row">
                   <EmptyState
                     title={interfaces.length === 0 ? "No Cloud VPNs yet" : "No VPNs found"}
-                    body={interfaces.length === 0 ? "Create a Telnyx Cloud VPN, then refresh Link." : "Try another search term or filter."}
+                    body={interfaces.length === 0 ? "Create a Telnyx Cloud VPN, then refresh Cloud Link." : "Try another search term or filter."}
                     icon={ShieldCheck}
                   />
                 </div>
@@ -21542,7 +24395,7 @@ function LegacySettingsView({
               </div>
             </div>
           </div>
-          <div className="chatSessionRows directoryTable vpnServiceTable" role="table" aria-label="VPN-protected Link services">
+          <div className="chatSessionRows directoryTable vpnServiceTable" role="table" aria-label="VPN-protected Cloud Link services">
             <div className="chatResultRow directoryResultRow vpnServiceRow chatResultRowHead" role="row">
               <span role="columnheader">Service</span>
               <span role="columnheader">URL</span>
@@ -21563,7 +24416,7 @@ function LegacySettingsView({
               ))}
               {!workspace && (
                 <div className="tableEmptyState vpnTableEmptyState" role="row">
-                  <EmptyState title="Loading services" body="Checking Link service URLs against Cloud VPN settings." icon={ShieldCheck} />
+                  <EmptyState title="Loading services" body="Checking Cloud Link service URLs against Cloud VPN settings." icon={ShieldCheck} />
                 </div>
               )}
             </div>
@@ -21758,6 +24611,7 @@ function LegacySettingsView({
 	          <div className="chatSessionRows directoryTable wikiSourceTable" role="table" aria-label="Active Knowledge sources">
 	            <div className="chatResultRow directoryResultRow wikiSourceRow chatResultRowHead" role="row">
 	              <span role="columnheader">Source</span>
+	              <span role="columnheader" aria-label="Icon" />
 	              <span role="columnheader">Type</span>
 	              <span role="columnheader">Status</span>
 	              <span role="columnheader" aria-label="Open knowledge source" />
@@ -21769,13 +24623,15 @@ function LegacySettingsView({
 	                  <Fragment key={source.id}>
 	                    <div className={`chatResultRow directoryResultRow wikiSourceRow ${expanded ? "expanded" : ""}`} role="row">
 	                      <span className="directoryNameCell wikiSourceNameCell" role="cell">
+	                        <span>
+	                          <strong>{source.label}</strong>
+	                        </span>
+	                      </span>
+	                      <span className="wikiSourceIconCell" role="cell" aria-label={`${source.label} icon`}>
 	                        {(() => {
 	                          const SourceIcon = wikiIconForName(wikiSourceIconName(source));
 	                          return <SourceIcon size={17} />;
 	                        })()}
-	                        <span>
-	                          <strong>{source.label}</strong>
-	                        </span>
 	                      </span>
 	                      <span role="cell">{wikiSourceConnectionType(source.type)}</span>
 	                      <span role="cell">
@@ -21809,16 +24665,21 @@ function LegacySettingsView({
 
   const settingsContent = (
     <>
-      {!hideHeader && <PageSectionHeader parent="Link" title={settingsHeadingTitle} action={settingsHeaderAction} />}
+      {!hideHeader && <PageSectionHeader parent="Cloud Link" title={settingsHeadingTitle} action={settingsHeaderAction} />}
 
       {tab === "auth" && renderAuthTab()}
+      {tab === "sessions" && renderSessionsSettingsTab()}
       {modelCenterTabs.has(tab) && (
         <ModelCenterSettingsView
           tab={tab}
           setTab={(nextTab) => setTab(nextTab as SettingsTab)}
+          appShortcuts={appShortcuts}
+          saveAppShortcut={saveAppShortcut}
+          deleteAppShortcut={deleteAppShortcut}
           embedded
         />
       )}
+      {tab === "mcps" && renderMcpsTab()}
       {tab === "plugins" && renderPluginsTab()}
       {tab === "agentmail" && renderAgentMailSettingsTab()}
       {(tab === "contacts" || tab === "assistants" || tab === "numbers") && (
@@ -21832,7 +24693,8 @@ function LegacySettingsView({
             if (nextTab === "contacts" || nextTab === "assistants" || nextTab === "numbers") setTab(nextTab);
           }}
           refresh={refresh}
-          startManagedSkillSetupChat={startManagedSkillSetupChat}
+          activeDialerConfig={activeDialerConfig}
+          setActiveDialerConfig={setActiveDialerConfig}
           openSettingsTab={setTab}
           hideSectionSidebar
           hideHeader
@@ -22298,14 +25160,14 @@ function AgentControlPlaneSetupPanel({
                 <label>
                   <input type="checkbox" checked={toolAccess.linkTools} onChange={(event) => updateToolAccess("linkTools", event.target.checked)} />
                   <span>
-                    <strong>Use connected Link tools</strong>
+                    <strong>Use connected Cloud Link tools</strong>
                     <small>Expose approved MCPs, inbox, docs, calendar, phone, and internal sources.</small>
                   </span>
                 </label>
                 <label>
                   <input type="checkbox" checked={toolAccess.memory} onChange={(event) => updateToolAccess("memory", event.target.checked)} />
                   <span>
-                    <strong>Recall Link memory</strong>
+                    <strong>Recall Cloud Link memory</strong>
                     <small>Allow source-attributed memory retrieval.</small>
                   </span>
                 </label>
@@ -22568,7 +25430,7 @@ function buildLocalAgentInstallCommand(draft: {
     "JSON",
     `printf "\\nLocal ${runtimeLabel} agent config saved to $HOME/.telnyx-link/agents/${slug}/agent-config.json\\n"`,
     `printf "Model route: ${draft.model.primaryRoute} (${draft.model.localProvider} ${draft.model.localModel} at ${draft.model.localApiBase})\\n"`,
-    `printf "Use this config with your local ${runtimeLabel} runtime from the Link terminal.\\n"`,
+    `printf "Use this config with your local ${runtimeLabel} runtime from the Cloud Link terminal.\\n"`,
   ].join("\n");
 }
 
@@ -22643,13 +25505,33 @@ function ttsVoiceSupportsLanguageBoost(voice: TelnyxTtsVoice | null) {
   return Boolean(voice?.voiceId && /\.Ultra\./i.test(voice.voiceId));
 }
 
+const localTtsSampleDefault = "Cloud Link local text-to-speech is ready.";
+
+function localTtsVoiceId(voice: SpeechSynthesisVoice) {
+  return voice.voiceURI || voice.name;
+}
+
+function localTtsVoiceLabel(voice: SpeechSynthesisVoice) {
+  return [voice.name, voice.lang].filter(Boolean).join(" - ");
+}
+
 function formatTtsVoiceOptionLabel(voice: TelnyxTtsVoice) {
   const facets = [voice.language || "", voice.gender || ""].filter(Boolean).join(" / ");
   return facets ? `${voice.name || voice.voiceId} - ${facets}` : voice.name || voice.voiceId;
 }
 
-function ScribesView({ setView }: { setView: (view: ViewId) => void }) {
-  const [activeTab, setActiveTab] = useState<ScribesWorkspaceTab>("history");
+function ScribesView({
+  setView,
+  openSettingsTab,
+  telnyxCredentialReady,
+  initialTab,
+}: {
+  setView: (view: ViewId) => void;
+  openSettingsTab: (tab: SettingsTab) => void;
+  telnyxCredentialReady: boolean;
+  initialTab?: ScribesWorkspaceTab;
+}) {
+  const [activeTab, setActiveTab] = useState<ScribesWorkspaceTab>(initialTab ?? "history");
   const [status, setStatus] = useState<ScribesStatus | null>(null);
   const [message, setMessage] = useState("");
   const [headerBusyAction, setHeaderBusyAction] = useState("");
@@ -22716,11 +25598,71 @@ function ScribesView({ setView }: { setView: (view: ViewId) => void }) {
     }
   }
 
+  async function deepSyncCalendarMeetingsFromHeader() {
+    if (!status) return;
+    setHeaderBusyAction("calendar-sync");
+    setMessage("");
+    try {
+      const events = await linkApi.listGoogleCalendarEvents();
+      const syncableEvents = events.filter((event) => event.status !== "past");
+      let createdCount = 0;
+      let updatedCount = 0;
+      for (const event of syncableEvents) {
+        const existing = status.sessions.find((session) => scribesMeetingMatchesCalendarEvent(session, event));
+        const meeting = {
+          ...(existing?.meeting ?? {
+            micStatus: status.workspace.meetingCapture.microphone ? "ready" as const : "disabled" as const,
+            systemAudioStatus: status.workspace.meetingCapture.systemAudio ? "ready" as const : "disabled" as const,
+            diarizationStatus: status.workspace.meetingCapture.diarization ? "available" as const : "disabled" as const,
+            speakerLabels: status.workspace.meetingCapture.speakerLabels ? ["Speaker 1"] : [],
+            summaryStatus: "not_started",
+          }),
+          calendarEventId: event.id,
+          calendarEventUrl: calendarEventJoinUrl(event),
+          calendarEventStart: event.start || "",
+          calendarEventEnd: event.end || "",
+        };
+        if (existing) {
+          await linkApi.updateScribesSession({
+            id: existing.id,
+            patch: {
+              title: event.title,
+              meeting,
+            },
+          });
+          updatedCount += 1;
+        } else {
+          await linkApi.createScribesSession({
+            id: calendarEventScribesSessionId(event),
+            title: event.title,
+            transcriptText: event.transcript || "",
+            sessionType: "meeting",
+            durationMs: calendarEventDurationMs(event),
+            createdAt: event.start || new Date().toISOString(),
+            cleanupProfileId: status.workspace.activeCleanupProfileId,
+            meeting,
+          });
+          createdCount += 1;
+        }
+      }
+      await refreshScribesWorkspace();
+      setMessage(`Deep sync complete: ${createdCount} created, ${updatedCount} refreshed.`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Meeting notes could not sync with Google Calendar.");
+    } finally {
+      setHeaderBusyAction("");
+    }
+  }
+
   useEffect(() => {
     void refreshScribesWorkspace().catch((err) => {
       setMessage(err instanceof Error ? err.message : "Scribe workspace could not load.");
     });
   }, []);
+
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
 
   const activeLabel = scribesWorkspaceTabs.find(([id]) => id === activeTab)?.[1] || "Scribe";
   const harperInstalled = Boolean(status?.workspace.addons.harper.installed);
@@ -22746,6 +25688,13 @@ function ScribesView({ setView }: { setView: (view: ViewId) => void }) {
           {headerBusyAction === "server:start" ? "Starting" : "Start Server"}
         </button>
       )
+    : activeTab === "history"
+    ? (
+      <button className="button secondary" type="button" onClick={() => void deepSyncCalendarMeetingsFromHeader()} disabled={headerBusyAction !== "" || !status}>
+        <RefreshCw size={14} />
+        {headerBusyAction === "calendar-sync" ? "Syncing" : "Deep sync"}
+      </button>
+    )
     : activeTab === "harper" && !harperInstalled
     ? (
       <button className="button primary" type="button" onClick={() => void installWorkspaceHarperFromHeader()} disabled={headerBusyAction !== ""}>
@@ -22772,10 +25721,10 @@ function ScribesView({ setView }: { setView: (view: ViewId) => void }) {
 
   function renderActivePanel() {
     if (!status) return <div className="appEmptyPanel">Loading Scribe workspace...</div>;
-    if (activeTab === "stt") return <SpeakSettingsPanel section="stt" />;
+    if (activeTab === "stt") return <SpeakSettingsPanel section="stt" openSttModels={() => setActiveTab("stt-models")} />;
     if (activeTab === "stt-models") return <ScribesLocalVoiceModelsPanel />;
     if (activeTab === "tts") return <SpeakSettingsPanel section="tts" />;
-    if (activeTab === "tts-voices") return <ScribesVoiceLibraryPanel refreshKey={voiceLibraryRefreshKey} />;
+    if (activeTab === "tts-voices") return <ScribesVoiceLibraryPanel refreshKey={voiceLibraryRefreshKey} openSettingsTab={openSettingsTab} telnyxCredentialReady={telnyxCredentialReady} />;
     if (activeTab === "history") return <ScribesHistoryPanel status={status} onRefresh={refreshScribesWorkspace} setView={setView} />;
     if (activeTab === "harper") return <ScribesWorkspaceHarperPanel status={status} onRefresh={refreshScribesWorkspace} />;
     return <ScribesWorkspaceConfigurePanel status={status} onRefresh={refreshScribesWorkspace} />;
@@ -22862,64 +25811,6 @@ function ScribesHistoryPanel({ status, onRefresh, setView }: { status: ScribesSt
     };
   }, [query, typeFilter, status.updatedAt]);
 
-  async function deepSyncCalendarMeetings() {
-    setBusyAction("calendar-sync");
-    setMessage("");
-    setCalendarLoading(true);
-    try {
-      const events = await linkApi.listGoogleCalendarEvents();
-      setCalendarEvents(events);
-      const syncableEvents = events.filter((event) => event.status !== "past");
-      let createdCount = 0;
-      let updatedCount = 0;
-      for (const event of syncableEvents) {
-        const existing = status.sessions.find((session) => scribesMeetingMatchesCalendarEvent(session, event));
-        const meeting = {
-          ...(existing?.meeting ?? {
-            micStatus: status.workspace.meetingCapture.microphone ? "ready" as const : "disabled" as const,
-            systemAudioStatus: status.workspace.meetingCapture.systemAudio ? "ready" as const : "disabled" as const,
-            diarizationStatus: status.workspace.meetingCapture.diarization ? "available" as const : "disabled" as const,
-            speakerLabels: status.workspace.meetingCapture.speakerLabels ? ["Speaker 1"] : [],
-            summaryStatus: "not_started",
-          }),
-          calendarEventId: event.id,
-          calendarEventUrl: calendarEventJoinUrl(event),
-          calendarEventStart: event.start || "",
-          calendarEventEnd: event.end || "",
-        };
-        if (existing) {
-          await linkApi.updateScribesSession({
-            id: existing.id,
-            patch: {
-              title: event.title,
-              meeting,
-            },
-          });
-          updatedCount += 1;
-        } else {
-          await linkApi.createScribesSession({
-            id: calendarEventScribesSessionId(event),
-            title: event.title,
-            transcriptText: event.transcript || "",
-            sessionType: "meeting",
-            durationMs: calendarEventDurationMs(event),
-            createdAt: event.start || new Date().toISOString(),
-            cleanupProfileId: status.workspace.activeCleanupProfileId,
-            meeting,
-          });
-          createdCount += 1;
-        }
-      }
-      await onRefresh();
-      setMessage(`Deep sync complete: ${createdCount} created, ${updatedCount} refreshed.`);
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Meeting notes could not sync with Google Calendar.");
-    } finally {
-      setBusyAction("");
-      setCalendarLoading(false);
-    }
-  }
-
   async function generateArtifact(session: ScribesSession, kind: ScribesArtifactKind) {
     setBusyAction(`${kind}:${session.id}`);
     setMessage("");
@@ -22943,6 +25834,19 @@ function ScribesHistoryPanel({ status, onRefresh, setView }: { status: ScribesSt
       setMessage("Scribe record deleted.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Scribe record could not be deleted.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function refreshLibrary() {
+    setBusyAction("refresh");
+    setMessage("");
+    try {
+      await onRefresh();
+      setMessage("Library refreshed.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribe library could not refresh.");
     } finally {
       setBusyAction("");
     }
@@ -22986,9 +25890,15 @@ function ScribesHistoryPanel({ status, onRefresh, setView }: { status: ScribesSt
             placeholder={workspaceView?.searchSchema?.placeholder || "Search recordings, meetings, transcripts, or artifacts"}
           />
         </div>
-        <button className="button secondary" type="button" onClick={() => void deepSyncCalendarMeetings()} disabled={busyAction !== "" || calendarLoading}>
-          <RefreshCw size={14} />
-          {busyAction === "calendar-sync" ? "Syncing" : "Deep sync"}
+        <button
+          className="iconButton"
+          type="button"
+          aria-label="Refresh Scribe library"
+          title="Refresh"
+          onClick={() => void refreshLibrary()}
+          disabled={busyAction !== ""}
+        >
+          <RefreshCw size={16} className={busyAction === "refresh" ? "spinning" : ""} />
         </button>
       </div>
       {filtersOpen && (
@@ -23570,7 +26480,7 @@ function ScribesWorkspaceConfigurePanel({ status, onRefresh }: { status: Scribes
         </div>
         <div className="scribesModeNotice">
           <strong>What goes here</strong>
-          <span>Add product names, acronyms, people, or uncommon terms you want Link to keep as written. Enter one term per line.</span>
+          <span>Add product names, acronyms, people, or uncommon terms you want Cloud Link to keep as written. Enter one term per line.</span>
         </div>
         <div className="scribesVocabularyExamples" aria-label="Suggested vocabulary examples">
           {vocabularyExamples.map((term) => (
@@ -23590,7 +26500,7 @@ function ScribesWorkspaceConfigurePanel({ status, onRefresh }: { status: Scribes
         </label>
         <div className="scribesVocabularyMeta">
           <span>{parsedVocabulary.length} saved term{parsedVocabulary.length === 1 ? "" : "s"}</span>
-          <small>Link will treat commas or new lines as separate entries.</small>
+          <small>Cloud Link will treat commas or new lines as separate entries.</small>
         </div>
         {parsedVocabulary.length > 0 && (
           <div className="scribesVocabularyPreview">
@@ -23676,24 +26586,12 @@ function ScribesWorkspaceHarperPanel({ status, onRefresh }: { status: ScribesSta
             <span className="accessIcon"><Plug size={18} /></span>
             <div>
               <h3>Powered by Harper</h3>
-              <p>Use Harper to review and polish writing across Link.</p>
+              <p>Use Harper to review and polish writing across Cloud Link.</p>
             </div>
           </div>
           <Badge tone={grammarAddonStatusTone(harper)}>{grammarAddonStatusLabel(harper)}</Badge>
         </div>
         <div className="speakSettingsRows">
-          <div className="speakToggleRow">
-            <span>Auto-update</span>
-            <button
-              className={`settingsToggle ${harper.autoUpdate ? "selected" : ""}`}
-              type="button"
-              onClick={() => void saveHarperSettings({ autoUpdate: !harper.autoUpdate })}
-              disabled={busyAction !== "" || !harper.installed}
-            >
-              <span>{harper.autoUpdate ? "On" : "Off"}</span>
-              <i />
-            </button>
-          </div>
           <div className="speakToggleRow">
             <span>Enable</span>
             <button
@@ -23723,18 +26621,34 @@ function ScribesWorkspaceHarperPanel({ status, onRefresh }: { status: ScribesSta
               <option value="indian">Indian English</option>
             </select>
           </label>
-          <div className="speakToggleRow">
-            <span>Inbox drafts</span>
-            <button
-              className={`settingsToggle ${harper.surfaces.inboxDrafts ? "selected" : ""}`}
-              type="button"
-              onClick={() => void saveHarperSettings({ surfaces: { ...harper.surfaces, inboxDrafts: !harper.surfaces.inboxDrafts } })}
-              disabled={busyAction !== "" || !harper.installed}
-            >
-              <span>{harper.surfaces.inboxDrafts ? "On" : "Off"}</span>
-              <i />
-            </button>
-          </div>
+          {harper.installed && (
+            <>
+              <div className="speakToggleRow">
+                <span>Auto-update</span>
+                <button
+                  className={`settingsToggle ${harper.autoUpdate ? "selected" : ""}`}
+                  type="button"
+                  onClick={() => void saveHarperSettings({ autoUpdate: !harper.autoUpdate })}
+                  disabled={busyAction !== ""}
+                >
+                  <span>{harper.autoUpdate ? "On" : "Off"}</span>
+                  <i />
+                </button>
+              </div>
+              <div className="speakToggleRow">
+                <span>Inbox drafts</span>
+                <button
+                  className={`settingsToggle ${harper.surfaces.inboxDrafts ? "selected" : ""}`}
+                  type="button"
+                  onClick={() => void saveHarperSettings({ surfaces: { ...harper.surfaces, inboxDrafts: !harper.surfaces.inboxDrafts } })}
+                  disabled={busyAction !== ""}
+                >
+                  <span>{harper.surfaces.inboxDrafts ? "On" : "Off"}</span>
+                  <i />
+                </button>
+              </div>
+            </>
+          )}
           {harper.lastError && <div className="voiceInputStatus" aria-live="polite">{harper.lastError}</div>}
         </div>
       </section>
@@ -23782,8 +26696,8 @@ function describeScribesTranscriptionRoute({
       providerLabel: "Telnyx Cloud",
       ready: telnyxCloudReady,
       message: telnyxCloudReady
-        ? "Cloud transcription is on by default because TELNYX_API_KEY is configured."
-        : "Save TELNYX_API_KEY in Settings to use cloud transcription, or switch to local to keep dictation on this Mac.",
+        ? "Cloud transcription is on by default because a Telnyx API Key is configured."
+        : "Save a Telnyx API Key in Settings to use cloud transcription, or switch to local to keep dictation on this Mac.",
     };
   }
 
@@ -23794,8 +26708,8 @@ function describeScribesTranscriptionRoute({
     message: routeReady
       ? "Local transcription is selected and ready on this Mac."
       : telnyxCloudReady
-      ? "Local transcription is selected, but this Mac is not ready yet. Download a model or switch back to cloud."
-      : "Local transcription is selected, but this Mac is not ready yet. Download a model to continue.",
+      ? "Download a model to enable local transcription, or use cloud transcription while local setup finishes."
+      : "Download a model to enable local transcription.",
   };
 }
 
@@ -23810,6 +26724,7 @@ function ScribesLocalVoiceModelsPanel() {
   const [busyAction, setBusyAction] = useState("");
   const [message, setMessage] = useState("");
   const [detailModelId, setDetailModelId] = useState("");
+  const [query, setQuery] = useState("");
 
   async function refreshScribesStatus() {
     const nextStatus = await linkApi.getScribesStatus();
@@ -23890,6 +26805,19 @@ function ScribesLocalVoiceModelsPanel() {
 
   const selectedModelId = status.settings.sttMode === "local" ? status.settings.sttModel : "";
   const detailModel = detailModelId ? status.models.find((model) => model.id === detailModelId) : undefined;
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleModels = status.models.filter((model) => {
+    if (!normalizedQuery) return true;
+    return [
+      model.label,
+      model.id,
+      model.provider,
+      sttProviderLabel(model.provider),
+      model.engine,
+      model.description,
+      model.languages.join(" "),
+    ].join(" ").toLowerCase().includes(normalizedQuery);
+  });
 
   if (detailModel) {
     return (
@@ -23958,12 +26886,10 @@ function ScribesLocalVoiceModelsPanel() {
 
   return (
     <section className="accessCard scribesModelManager">
-      <div className="accessCardHeader">
-        <div className="accessCardTitle">
-          <span className="accessIcon"><Download size={18} /></span>
-          <div>
-            <h3>Models</h3>
-          </div>
+      <div className="chatSearchRow scribesModelsSearchRow">
+        <div className="explorerSearch compactSearch">
+          <Search size={16} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search models, providers, or languages" />
         </div>
       </div>
       {(status.server.lastError || (status.server.running && !status.server.ready && status.server.message)) && (
@@ -23980,7 +26906,7 @@ function ScribesLocalVoiceModelsPanel() {
           <span role="columnheader">Status</span>
           <span role="columnheader">Action</span>
         </div>
-        {status.models.map((model) => {
+        {visibleModels.map((model) => {
           const selected = selectedModelId === model.id;
           const progress = model.download?.totalBytes ? Math.round(((model.download.receivedBytes || 0) / model.download.totalBytes) * 100) : 0;
           return (
@@ -24034,6 +26960,11 @@ function ScribesLocalVoiceModelsPanel() {
             </div>
           );
         })}
+        {visibleModels.length === 0 && (
+          <div className="tableEmptyState" role="row">
+            <span>No models match that search.</span>
+          </div>
+        )}
       </div>
       {message && <div className="voiceInputStatus" aria-live="polite">{message}</div>}
     </section>
@@ -24047,10 +26978,12 @@ function formatScribesBytes(bytes: number) {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
-function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
+function SpeakSettingsPanel({ section, openSttModels }: { section: "stt" | "tts"; openSttModels?: () => void }) {
   const [settings, setSettings] = useState<SpeakSettings | null>(null);
   const [status, setStatus] = useState<ScribesStatus | null>(null);
   const [message, setMessage] = useState("");
+  const [localTtsVoices, setLocalTtsVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [localTtsSampleText, setLocalTtsSampleText] = useState(localTtsSampleDefault);
 
   async function refreshSpeakSettings() {
     const nextStatus = await linkApi.getScribesStatus();
@@ -24062,6 +26995,15 @@ function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
     void refreshSpeakSettings().catch((err) => {
       setMessage(err instanceof Error ? err.message : "Scribe settings could not load.");
     });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const synth = window.speechSynthesis;
+    const loadVoices = () => setLocalTtsVoices(synth.getVoices());
+    loadVoices();
+    synth.addEventListener("voiceschanged", loadVoices);
+    return () => synth.removeEventListener("voiceschanged", loadVoices);
   }, []);
 
   async function saveSpeakSettingsPatch(patch: Partial<SpeakSettings>) {
@@ -24114,11 +27056,52 @@ function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
   }
 
   async function chooseTtsMode(nextMode: SpeakSettings["ttsMode"]) {
+    if (!settings) return;
+    if (nextMode === "local") {
+      const existingLocalVoice = localTtsVoices.find((voice) => localTtsVoiceId(voice) === settings.ttsVoice || voice.name === settings.ttsVoice);
+      await saveSpeakSettingsPatch({
+        ttsMode: "local",
+        localTtsProvider: "system",
+        ttsVoice: existingLocalVoice ? localTtsVoiceId(existingLocalVoice) : localTtsVoices[0] ? localTtsVoiceId(localTtsVoices[0]) : "system-default",
+      });
+      return;
+    }
     await saveSpeakSettingsPatch({
       ttsMode: nextMode,
-      localTtsProvider: "stub",
+      localTtsProvider: "system",
       ttsProvider: "telnyx",
+      ttsVoice: settings.ttsMode === "telnyx-cloud" && settings.ttsVoice ? settings.ttsVoice : "Telnyx.NaturalHD.astra",
     });
+  }
+
+  async function chooseLocalTtsVoice(voiceId: string) {
+    await saveSpeakSettingsPatch({
+      ttsMode: "local",
+      localTtsProvider: "system",
+      ttsVoice: voiceId,
+    });
+  }
+
+  function testLocalTtsVoice() {
+    if (!settings) return;
+    if (typeof window === "undefined" || !("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
+      setMessage("Local system TTS is not available in this runtime.");
+      return;
+    }
+    const sampleText = localTtsSampleText.replace(/\s+/g, " ").trim() || localTtsSampleDefault;
+    const selectedVoice = localTtsVoices.find((voice) => localTtsVoiceId(voice) === settings.ttsVoice || voice.name === settings.ttsVoice);
+    const utterance = new SpeechSynthesisUtterance(sampleText);
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+      utterance.lang = selectedVoice.lang || settings.sttLanguage || "en-US";
+    } else {
+      utterance.lang = settings.sttLanguage || "en-US";
+    }
+    utterance.onend = () => setMessage("Local TTS test complete");
+    utterance.onerror = (event) => setMessage(`Local TTS test failed${event.error ? `: ${event.error}` : "."}`);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+    setMessage("Playing local TTS test");
   }
 
   if (!settings) {
@@ -24127,12 +27110,18 @@ function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
 
   const cloudSttSelected = settings.sttMode === "telnyx-cloud" && settings.sttProvider === "telnyx";
   const localSttSelected = settings.sttMode === "local";
+  const localSttEnabled = localSttSelected || Boolean(status?.route.ready);
+  const cloudSttEnabled = cloudSttSelected || Boolean(status?.telnyxCloudReady);
   const cloudTtsSelected = settings.ttsMode === "telnyx-cloud";
+  const localTtsAvailable = typeof window !== "undefined" && "speechSynthesis" in window;
+  const selectedLocalTtsVoice = localTtsVoices.find((voice) => localTtsVoiceId(voice) === settings.ttsVoice || voice.name === settings.ttsVoice) || null;
+  const currentLocalTtsVoiceIsListed = Boolean(selectedLocalTtsVoice) || settings.ttsVoice === "system-default" || !settings.ttsVoice;
   const sttRouteSummary = describeScribesTranscriptionRoute({
     settings,
     routeReady: Boolean(status?.route.ready),
     telnyxCloudReady: Boolean(status?.telnyxCloudReady),
   });
+  const showLocalSttWarning = section === "stt" && localSttSelected && !sttRouteSummary.ready;
 
   return (
     <div className={`speakSettings speakSettings${section === "stt" ? "Stt" : "Tts"}`}>
@@ -24148,25 +27137,43 @@ function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
               </div>
             </div>
             <div className="speakSettingsRows">
+              {showLocalSttWarning && (
+                <section className="phoneSetupAlert serviceSetupAlert scribeSttSetupAlert">
+                  <span className="serviceSetupAlertIcon" aria-hidden="true"><Download size={18} /></span>
+                  <div>
+                    <strong>Local disconnected</strong>
+                    <p>OpenAI Whisper needs a downloaded model before local transcription can run.</p>
+                  </div>
+                  <button className="runtimeSettingsButton" type="button" onClick={openSttModels}>
+                    Download model
+                  </button>
+                </section>
+              )}
               <div className="speakSettingField">
                 <span>STT Mode</span>
-                <div className="segmented scribesRouteSegmented" role="tablist" aria-label="Speech-to-text mode">
-                  <button
-                    type="button"
-                    className={localSttSelected ? "selected" : ""}
-                    onClick={() => void chooseSttMode("local")}
-                    aria-selected={localSttSelected}
+                <div className="scribesModeCheckboxes" aria-label="Speech-to-text routes">
+                  <label
+                    className={`scribesModeCheckbox ${localSttEnabled ? "selected" : ""}`}
+                    aria-label="Use local transcription"
                   >
-                    Local
-                  </button>
-                  <button
-                    type="button"
-                    className={cloudSttSelected ? "selected" : ""}
-                    onClick={() => void chooseSttMode("telnyx-cloud")}
-                    aria-selected={cloudSttSelected}
+                    <input
+                      type="checkbox"
+                      checked={localSttEnabled}
+                      onChange={() => void chooseSttMode("local")}
+                    />
+                    <span>Local</span>
+                  </label>
+                  <label
+                    className={`scribesModeCheckbox ${cloudSttEnabled ? "selected" : ""}`}
+                    aria-label="Use cloud transcription"
                   >
-                    Cloud
-                  </button>
+                    <input
+                      type="checkbox"
+                      checked={cloudSttEnabled}
+                      onChange={() => void chooseSttMode("telnyx-cloud")}
+                    />
+                    <span>Cloud</span>
+                  </label>
                 </div>
               </div>
               <label className="speakSettingField">
@@ -24204,22 +27211,13 @@ function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
                 <input type="range" min="0.005" max="0.2" step="0.005" value={settings.silenceThreshold} onChange={(event) => void saveSpeakSettingsPatch({ silenceThreshold: Number(event.target.value) })} />
                 <strong>{settings.silenceThreshold.toFixed(3)}</strong>
               </label>
-              <div className="speakToggleRow">
-                <span>LLM Cleanup</span>
-                <button
-                  className={`settingsToggle ${settings.llmCleanupEnabled ? "selected" : ""}`}
-                  aria-label={settings.llmCleanupEnabled ? "Disable LLM cleanup" : "Enable LLM cleanup"}
-                  onClick={() => void saveSpeakSettingsPatch({ llmCleanupEnabled: !settings.llmCleanupEnabled })}
-                >
-                  <span>{settings.llmCleanupEnabled ? "On" : "Off"}</span>
-                  <i />
-                </button>
-              </div>
-              <div className="scribesRouteNote">
-                <span>{sttRouteSummary.statusLabel}</span>
-                <strong>{sttRouteSummary.providerLabel}</strong>
-                <small>{sttRouteSummary.message}</small>
-              </div>
+              {!showLocalSttWarning && (
+                <div className="scribesRouteNote">
+                  <span>{sttRouteSummary.statusLabel}</span>
+                  <strong>{sttRouteSummary.providerLabel}</strong>
+                  <small>{sttRouteSummary.message}</small>
+                </div>
+              )}
             </div>
           </section>
         </>
@@ -24245,19 +27243,49 @@ function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
           </label>
           <label className="speakSettingField">
             <span>Provider</span>
-            <select value={cloudTtsSelected ? settings.ttsProvider : settings.localTtsProvider} onChange={(event) => void saveSpeakSettingsPatch({ ttsMode: "telnyx-cloud", ttsProvider: event.target.value })} disabled={!cloudTtsSelected}>
-              {cloudTtsSelected ? <option value="telnyx">Telnyx Cloud</option> : <option value="stub">Pluggable local TTS</option>}
+            <select
+              value={cloudTtsSelected ? settings.ttsProvider : settings.localTtsProvider}
+              onChange={(event) => {
+                if (cloudTtsSelected) void saveSpeakSettingsPatch({ ttsMode: "telnyx-cloud", ttsProvider: event.target.value });
+                else void saveSpeakSettingsPatch({ ttsMode: "local", localTtsProvider: "system" });
+              }}
+            >
+              {cloudTtsSelected ? <option value="telnyx">Telnyx Cloud</option> : <option value="system">System Speech</option>}
             </select>
           </label>
           <label className="speakSettingField">
             <span>Voice</span>
-            <input value={settings.ttsVoice} onChange={(event) => setSettings({ ...settings, ttsVoice: event.target.value })} onBlur={() => void saveSpeakSettingsPatch({ ttsVoice: settings.ttsVoice })} />
+            {cloudTtsSelected ? (
+              <input value={settings.ttsVoice} onChange={(event) => setSettings({ ...settings, ttsVoice: event.target.value })} onBlur={() => void saveSpeakSettingsPatch({ ttsVoice: settings.ttsVoice })} />
+            ) : (
+              <select value={settings.ttsVoice || "system-default"} onChange={(event) => void chooseLocalTtsVoice(event.target.value)} disabled={!localTtsAvailable}>
+                <option value="system-default">System default</option>
+                {!currentLocalTtsVoiceIsListed && settings.ttsVoice && <option value={settings.ttsVoice}>{settings.ttsVoice}</option>}
+                {localTtsVoices.map((voice) => (
+                  <option key={localTtsVoiceId(voice)} value={localTtsVoiceId(voice)}>{localTtsVoiceLabel(voice)}</option>
+                ))}
+              </select>
+            )}
           </label>
+          {!cloudTtsSelected && (
+            <label className="speakSettingField speakSettingTextareaField">
+              <span>Sample</span>
+              <textarea value={localTtsSampleText} onChange={(event) => setLocalTtsSampleText(event.target.value)} />
+            </label>
+          )}
         </div>
         {!cloudTtsSelected && (
-          <div className="scribesModeNotice">
-            <strong>Local TTS placeholder</strong>
-            <span>Plan C keeps this as a pluggable slot; Telnyx Cloud TTS remains the working hosted path.</span>
+          <div className="scribesModeNotice localTtsRuntimeNotice">
+            <strong>Local system TTS</strong>
+            <span>
+              {localTtsAvailable
+                ? `${localTtsVoices.length || "System"} voice${localTtsVoices.length === 1 ? "" : "s"} available. ${selectedLocalTtsVoice ? localTtsVoiceLabel(selectedLocalTtsVoice) : "System default"} is active.`
+                : "System speech synthesis is not available in this runtime."}
+            </span>
+            <button className="button primary" type="button" onClick={testLocalTtsVoice} disabled={!localTtsAvailable}>
+              <Play size={16} />
+              Test voice
+            </button>
           </div>
         )}
       </section>
@@ -24268,7 +27296,15 @@ function SpeakSettingsPanel({ section }: { section: "stt" | "tts" }) {
   );
 }
 
-function ScribesVoiceLibraryPanel({ refreshKey = 0 }: { refreshKey?: number }) {
+function ScribesVoiceLibraryPanel({
+  refreshKey = 0,
+  openSettingsTab,
+  telnyxCredentialReady,
+}: {
+  refreshKey?: number;
+  openSettingsTab: (tab: SettingsTab) => void;
+  telnyxCredentialReady: boolean;
+}) {
   const [settings, setSettings] = useState<SpeakSettings | null>(null);
   const [voices, setVoices] = useState<TelnyxTtsVoice[]>([]);
   const [voiceProviderFilter, setVoiceProviderFilter] = useState("telnyx");
@@ -24298,6 +27334,14 @@ function ScribesVoiceLibraryPanel({ refreshKey = 0 }: { refreshKey?: number }) {
   }, []);
 
   async function loadVoices(provider = voiceProviderFilter) {
+    if (provider === "telnyx" && !telnyxCredentialReady) {
+      setVoices([]);
+      setVoiceLanguageFilter("all");
+      setVoiceGenderFilter("all");
+      setSampleAudioSrc("");
+      setMessage("");
+      return;
+    }
     setBusyAction("voices");
     setMessage("");
     try {
@@ -24316,7 +27360,7 @@ function ScribesVoiceLibraryPanel({ refreshKey = 0 }: { refreshKey?: number }) {
 
   useEffect(() => {
     void loadVoices(voiceProviderFilter);
-  }, [refreshKey, voiceProviderFilter]);
+  }, [refreshKey, voiceProviderFilter, telnyxCredentialReady]);
 
   useEffect(() => {
     if (sampleAudioSrc === "") return;
@@ -24392,7 +27436,7 @@ function ScribesVoiceLibraryPanel({ refreshKey = 0 }: { refreshKey?: number }) {
       });
       if (!sample.audioBase64) {
         setSampleAudioSrc("");
-        setMessage("Sample playback is available after saving a Telnyx API key.");
+        setMessage("Sample playback is available after saving a Telnyx API Key.");
         return;
       }
       setSampleAudioSrc(`data:${sample.mimeType};base64,${sample.audioBase64}`);
@@ -24411,6 +27455,15 @@ function ScribesVoiceLibraryPanel({ refreshKey = 0 }: { refreshKey?: number }) {
 
   return (
     <section className="accessCard ttsLibraryPanel scribeLibraryPage" aria-label="Voices">
+      {voiceProviderFilter === "telnyx" && !telnyxCredentialReady && (
+        <ServiceSetupAlert
+          title="Add your Telnyx API Key to browse hosted voices."
+          body="Voices, previews, and generated samples come from Telnyx Text-to-Speech."
+          actionLabel="Add Telnyx API Key"
+          icon={Volume2}
+          onAction={() => openSettingsTab("auth")}
+        />
+      )}
       <div className="ttsPlaygroundControls">
         <label>
           <span>Provider</span>
@@ -24637,7 +27690,7 @@ function CredentialGroupCards({
     if (groupId === "google-workspace") {
       return {
         connected: googleWorkspaceConnected,
-        description: "Link opens Google sign-in and verifies Calendar and Contacts access.",
+        description: "Cloud Link opens Google sign-in and verifies Calendar and Contacts access.",
         savingKey: "GOOGLE_WORKSPACE_AGENT_CONNECTION_ID",
         onConnect: connectGoogleWorkspace,
       };
@@ -24645,7 +27698,7 @@ function CredentialGroupCards({
     if (groupId === "github") {
       return {
         connected: githubConnected,
-        description: "Link pairs GitHub and stores the read-only app token securely.",
+        description: "Cloud Link pairs GitHub and stores the read-only app token securely.",
         savingKey: "GITHUB_USER_ACCESS_TOKEN",
         onConnect: connectGitHub,
       };
@@ -24653,7 +27706,7 @@ function CredentialGroupCards({
     if (groupId === "guru") {
       return {
         connected: guruConnected,
-        description: "Link opens Guru OAuth and stores the refresh token securely.",
+        description: "Cloud Link opens Guru OAuth and stores the refresh token securely.",
         savingKey: "GURU_OAUTH_ACCESS_TOKEN",
         onConnect: connectGuru,
       };
@@ -24661,7 +27714,7 @@ function CredentialGroupCards({
     if (groupId === "pylon") {
       return {
         connected: pylonConnected,
-        description: "Link opens Pylon OAuth and stores the MCP refresh token securely.",
+        description: "Cloud Link opens Pylon OAuth and stores the MCP refresh token securely.",
         savingKey: "PYLON_MCP_ACCESS_TOKEN",
         onConnect: connectPylon,
       };
@@ -24748,17 +27801,30 @@ function CredentialGroupCards({
   );
 }
 
+function credentialLogoId(groupId: string) {
+  if (groupId === "telnyx" || groupId.startsWith("telnyx-")) return "telnyx";
+  return groupId;
+}
+
 function CredentialLogoMark({ groupId }: { groupId: string }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const logoId = credentialLogoId(groupId);
   const credentialLogoSources: Record<string, { src: string; alt: string }> = {
     github: { src: `${import.meta.env.BASE_URL}credential-logos/github-logo.jpeg`, alt: "GitHub" },
     "google-workspace": { src: `${import.meta.env.BASE_URL}credential-logos/google-logo.jpeg`, alt: "Google" },
     litellm: { src: `${import.meta.env.BASE_URL}credential-logos/litellm-logo.png`, alt: "LiteLLM" },
     telnyx: { src: `${import.meta.env.BASE_URL}credential-logos/telnyx-logo.jpeg`, alt: "Telnyx" },
   };
-  const logo = credentialLogoSources[groupId];
+  const logo = credentialLogoSources[logoId];
   if (logo && !imageFailed) {
-    return <img className="credentialLogoImage" src={logo.src} alt={logo.alt} onError={() => setImageFailed(true)} />;
+    return (
+      <img
+        className={`credentialLogoImage${logoId === "telnyx" ? " credentialLogoImageTelnyx" : ""}`}
+        src={logo.src}
+        alt={logo.alt}
+        onError={() => setImageFailed(true)}
+      />
+    );
   }
   if (groupId === "google-workspace") {
     return <span className="credentialGoogleMark" aria-label="Google">G</span>;
@@ -24793,14 +27859,18 @@ function credentialGroupConnected(group: CredentialGroupStatus, connectors: Conn
   if (group.id === "github") return group.fields.some((field) => ["GITHUB_USER_ACCESS_TOKEN", "GH_TOKEN"].includes(field.name) && field.configured);
   if (group.id === "guru") return group.fields.some((field) => ["GURU_OAUTH_REFRESH_TOKEN", "GURU_OAUTH_ACCESS_TOKEN"].includes(field.name) && field.configured);
   if (group.id === "agentmail") return group.fields.some((field) => field.name === "AGENTMAIL_API_KEY" && field.configured);
+  if (group.id === "merge-dev") return group.fields.some((field) => ["MERGE_AGENT_HANDLER_MCP_URL", "MERGE_AGENT_HANDLER_ACCESS_TOKEN"].includes(field.name) && field.configured);
   if (group.id === "telnyx-storage") return group.fields.filter((field) => ["TELNYX_STORAGE_BUCKET", "TELNYX_STORAGE_REGION"].includes(field.name)).every((field) => field.configured);
+  if (group.id === "link-session-daemon") return group.fields.some((field) => field.name === "LINK_SESSION_DAEMON_URL" && field.configured);
   const matchingConnector = connectors.find((connector) => connector.id === group.id);
   if (matchingConnector?.status === "connected" || matchingConnector?.status === "signed_in") return true;
   return visibleFields.length > 0 && visibleFields.every((field) => field.configured);
 }
 
 function credentialHelpCopy(group: CredentialGroupStatus) {
-  if (group.id === "litellm") return "Controls the AI runtime layer for Link. Local Ollama mode powers on-device chat, managed gateway settings add hosted routing, and frontier BYO stays opt-in.";
+  if (group.id === "litellm") return "Controls the AI runtime layer for Cloud Link. Local Ollama mode powers on-device chat, managed gateway settings add hosted routing, and frontier BYO stays opt-in.";
+  if (group.id === "telnyx") return "Telnyx account key for calling, messaging, cloud routes, and Telnyx Storage access. Cloud Storage bucket selection is configured from Storage, not as a separate service key.";
+  if (group.id === "link-session-daemon") return "Server-owned terminal and agent runs for work that should continue after this Mac sleeps. SMS alerts use your Telnyx API Key.";
   return group.help;
 }
 
@@ -24808,7 +27878,11 @@ function credentialFieldLabel(name: string) {
   if (name === "LITELLM_API_KEY") return "Managed Gateway API Key";
   if (name === "LITELLM_BASE_URL") return "Managed Gateway URL";
   if (name === "LITELLM_MODEL") return "LiteLLM Model";
+  if (name === "TELNYX_API_KEY") return "Telnyx API Key";
   if (name === "TELNYX_INFERENCE_BASE_URL") return "Telnyx Inference Base URL";
+  if (name === "LINK_SESSION_DAEMON_URL") return "Terminal Sessions endpoint";
+  if (name === "LINK_SESSION_SMS_FROM") return "SMS from number";
+  if (name === "LINK_SESSION_SMS_TO") return "SMS to number";
   if (name === "ANTHROPIC_API_KEY") return "Anthropic API Key";
   if (name === "GOOGLE_WORKSPACE_AGENT_CONNECTION_ID") return "Google Workspace Agent Connection";
   if (name === "GOG_ACCOUNT") return "GOG Account";
@@ -24840,16 +27914,16 @@ function credentialFieldLabel(name: string) {
   return name;
 }
 
+function readableSetupText(value: string) {
+  return value
+    .replaceAll("LINK_SESSION_DAEMON_URL", "Terminal Sessions endpoint")
+    .replaceAll("LINK_SESSION_SMS_FROM", "SMS from number")
+    .replaceAll("LINK_SESSION_SMS_TO", "SMS to number")
+    .replaceAll("TELNYX_API_KEY", "Telnyx API Key");
+}
+
 function isSecretCredentialField(name: string) {
   return name !== "GITHUB_APP_CLIENT_ID" && /TOKEN|KEY|SECRET|PASSWORD/i.test(name);
-}
-
-function isRequiredCredentialGroup(group: CredentialGroupStatus) {
-  return ["telnyx", "telnyx-storage", "github", "google-workspace", "guru", "pylon", "intercom-help-center", "mintlify-developer-docs"].includes(group.id);
-}
-
-function compareCredentialGroups(left: CredentialGroupStatus, right: CredentialGroupStatus) {
-  return left.label.localeCompare(right.label, undefined, { sensitivity: "base" });
 }
 
 function fallbackAiModelRoutes(): AiModelRoute[] {
@@ -25044,7 +28118,7 @@ function modelRouteHealthSummary(route: AiModelRoute, runtime: LiteLlmRuntimeSta
   if (route.provider === "local") {
     return runtime?.local.message?.trim()
       || runtime?.message?.trim()
-      || "Link checks this local route through LiteLLM and the Ollama-compatible runtime on this device.";
+      || "Cloud Link checks this local route through LiteLLM and the Ollama-compatible runtime on this device.";
   }
   if (route.provider === "managed-telnyx") {
     return runtime?.managedGateway.message?.trim()
@@ -25063,7 +28137,7 @@ function modelRouteHealthSummary(route: AiModelRoute, runtime: LiteLlmRuntimeSta
       || runtime?.telnyx.message?.trim()
       || (runtime?.telnyx.apiKeyConfigured
         ? `Telnyx cloud catalog available at ${runtime.telnyx.baseUrl}.`
-        : "Add a Telnyx API key to use managed Telnyx routes.");
+        : "Add a Telnyx API Key to use managed Telnyx routes.");
   }
   return route.description;
 }
@@ -25075,24 +28149,13 @@ function formatModelContextWindow(contextWindow?: number | null) {
 
 function modelRouteSuggestedUse(route: AiModelRoute, runtime: LiteLlmRuntimeStatus | null) {
   const capabilities = modelRouteCapabilities(route, runtime);
-  if (route.id === "auto/ask-before-cloud") return "Best default for everyday Link chat when you want local-first behavior.";
+  if (route.id === "auto/ask-before-cloud") return "Best default for everyday Cloud Link chat when you want local-first behavior.";
   if (route.id === "auto/local-only" || route.id === "local/default") return "Best for on-device work, offline-safe drafts, and private first-pass analysis.";
   if (capabilities.includes("reasoning") || capabilities.includes("tools")) return "Best for investigations, task triage, and tool-heavy problem solving.";
   if (capabilities.includes("long-context")) return "Best for long notes, transcripts, and large document review.";
   if (route.provider === "managed-telnyx") return "Best when you want a managed gateway with stable routing and support.";
   if (route.provider === "anthropic") return "Best for optional frontier BYO review or high-judgment writing when configured.";
   return "General purpose route.";
-}
-
-function modelRouteShortUse(route: AiModelRoute, runtime: LiteLlmRuntimeStatus | null) {
-  const capabilities = modelRouteCapabilities(route, runtime);
-  if (route.id === "auto/ask-before-cloud") return "Everyday chat";
-  if (route.id === "auto/local-only" || route.id === "local/default") return "On-device work";
-  if (capabilities.includes("reasoning") || capabilities.includes("tools")) return "Reasoning and tools";
-  if (capabilities.includes("long-context")) return "Long context";
-  if (route.provider === "managed-telnyx") return "Managed routing";
-  if (route.provider === "anthropic") return "Frontier review";
-  return "General use";
 }
 
 function dataBoundaryLabel(boundary?: AiModelRoute["dataBoundary"]) {
@@ -25171,6 +28234,12 @@ function CredentialSection({ title, groups, children }: { title: string; groups:
 }
 
 function connectorButtonLabel(connector: ConnectorStatus) {
+  if (connector.id === "agentmail") return "Open AgentMail";
+  if (connector.id === "github") return connector.status === "connected" || connector.status === "signed_in" ? "Connected" : "Connect GitHub";
+  if (connector.id === "google-drive" || connector.id === "google-calendar" || connector.id === "google-workspace" || connector.id === "google-inbox" || connector.id === "google-tasks") {
+    return connector.status === "connected" || connector.status === "signed_in" ? "Connected" : "Connect Google";
+  }
+  if (connector.id === "merge-dev") return connector.status === "connected" ? "Connected" : "Connect Merge.dev";
   if (connector.id === "agent-control-plane" && connector.status === "needs_access") return "Sign in with Okta";
   if (connector.id === "agent-control-plane" && connector.status === "requested") return "Sign in with Okta";
   if (connector.status === "connected") return "Connected";
@@ -25212,6 +28281,8 @@ function formatSourceLabel(source: AgentSummary["source"]) {
 }
 
 function connectorTypeLabel(connector: ConnectorStatus) {
+  if (connector.id === "github") return "Code";
+  if (connector.id === "google-drive" || connector.id === "google-calendar" || connector.id === "google-workspace" || connector.id === "google-inbox" || connector.id === "google-tasks") return "Workspace";
   const searchable = `${connector.id} ${connector.name} ${connector.category} ${connector.description} ${connector.requiredAccess.join(" ")}`.toLowerCase();
   if (searchable.includes("mcp") || searchable.includes("aida")) return "MCP";
   if (searchable.includes("oauth") || searchable.includes("okta")) return "OAuth";
@@ -25237,173 +28308,54 @@ function connectorModeLabel(connector: ConnectorStatus) {
   return `needs ${connector.requiredAccess.join(", ")}`;
 }
 
-function DesignSystemView({ embedded = false }: { embedded?: boolean }) {
-  const [tab, setTab] = useState<"colors" | "components" | "surfaces" | "typography" | "agents">("components");
-  const colorTokens = [
-    ["Background", "--bg"],
-    ["Surface", "--surface"],
-    ["Soft surface", "--surface-soft"],
-    ["Raised surface", "--surface-raised"],
-    ["Text", "--text"],
-    ["Muted", "--text-muted"],
-    ["Faint text", "--text-faint"],
-    ["Border", "--border"],
-    ["Soft border", "--border-soft"],
-    ["Accent", "--accent"],
-    ["Accent soft", "--accent-soft"],
-    ["Accent ink", "--accent-ink"],
-    ["Success", "--success"],
-    ["Warning", "--warning"],
-    ["Danger", "--danger"],
-    ["Info", "--info"],
-    ["Skill", "--skill"],
-    ["Toggle background", "--toggle-off-bg"],
-    ["Toggle border", "--toggle-off-border"],
-    ["Toggle thumb", "--toggle-off-thumb"],
-  ];
-  const designTabHeading = {
-    colors: ["Colors", Sun],
-    components: ["Components", Component],
-    surfaces: ["Surfaces", LayoutDashboard],
-    typography: ["Typography", FileText],
-    agents: ["Agents", Bot],
-  } satisfies Record<typeof tab, [string, AppIcon]>;
-  void designTabHeading;
-  const agentInstructionPreview = buildLinkDesignSystemInstruction()
-    .split("\n")
-    .filter(Boolean)
-    .slice(0, 8);
-  return (
-    <section className={embedded ? "designView settingsDesignPanel" : "content designView"}>
-      {!embedded && (
-        <header className="pageHeader">
-          <div>
-            <h1>Design System</h1>
-          </div>
-        </header>
-      )}
-      <div className="designTabs">
-        {([
-          ["colors", "Colors", Sun],
-          ["components", "Components", Component],
-          ["surfaces", "Surfaces", LayoutDashboard],
-          ["typography", "Typography", FileText],
-          ["agents", "Agents", Bot],
-        ] as const).map(([item, label, Icon]) => (
-          <button key={item} className={tab === item ? "selected" : ""} onClick={() => setTab(item)}>
-            <Icon size={15} />
-            {label}
-          </button>
-        ))}
-      </div>
-      {tab === "colors" && (
-        <div className="tokenGrid">
-          {colorTokens.map(([label, token]) => (
-            <div className="tokenSwatch" key={token}>
-              <span style={{ background: `var(${token})` }} />
-              <strong>{label}</strong>
-              <small>{token}</small>
-            </div>
-          ))}
-        </div>
-      )}
+type DesignGuideTabId = "colors" | "components" | "typography" | "design-doc";
+type DesignGuideViewTabId = DesignGuideTabId;
 
-      {tab === "typography" && (
-        <div className="designSection">
-          <Panel title="Type scale">
-            <div className="typeScale">
-              <h1>Page title 24/1.15</h1>
-              <h2>Artifact title 24/1.15</h2>
-              <strong>Body emphasis 13/650</strong>
-              <p>Body copy uses compact system UI metrics for dense operational scanning.</p>
-              <small>Section labels use uppercase 11px with stable spacing.</small>
-            </div>
-          </Panel>
-          <Panel title="Copy rules">
-            <div className="designSpecList">
-                  <p>Use direct noun labels for tabs and commands: Credentials, Dark Mode, Design System, Chat, Phone.</p>
-              <p>Prefer concise operational text over marketing copy. Detail belongs inside rows, panels, and empty states.</p>
-              <p>Keep status labels concrete: Connected, Connect, Configure, Needs setup, Approval required.</p>
-            </div>
-          </Panel>
-        </div>
-      )}
+type DesignGuideWidget = {
+  id: string;
+  title: string;
+  notes: string;
+  code: string;
+  codeLanguage?: "css" | "js" | "md";
+};
 
-      {tab === "components" && (
-        <div className="componentGrid">
-          <Panel title="Buttons">
-            <div className="componentRow">
-              <button className="button primary">Primary</button>
-              <button className="button secondary">Secondary</button>
-              <button className="button ghost">Ghost</button>
-              <button className="button primary" disabled>Disabled</button>
-            </div>
-          </Panel>
-          <Panel title="Badges and dots">
-            <div className="componentRow">
-              <Badge tone="success">Success</Badge>
-              <Badge tone="warning">Warning</Badge>
-              <Badge tone="danger">Danger</Badge>
-              <Badge tone="skill">Skill</Badge>
-              <StatusDot tone="success" />
-              <StatusDot tone="warning" />
-              <StatusDot tone="danger" />
-              <StatusDot tone="muted" />
-            </div>
-          </Panel>
-          <Panel title="Segmented controls">
-            <div className="componentRow">
-              <Segmented selected="Auto" />
-              <Segmented selected="Ask" />
-              <Segmented selected="Active" options={["Active", "Paused"]} />
-            </div>
-          </Panel>
-          <Panel title="Permission row">
-            <div className="permissionRow demoRow">
-              <div>
-                <strong>hindsight.recall</strong>
-                <small>Recall long-term agent memory with source attribution.</small>
-              </div>
-              <Segmented selected="Auto" />
-            </div>
-          </Panel>
-          <Panel title="Toolbar actions">
-            <div className="designToolbar">
-              <button className="iconButton" aria-label="Search"><Search size={15} /></button>
-              <button className="iconButton" aria-label="Refresh"><RefreshCw size={15} /></button>
-              <button className="button secondary"><Plus size={15} /> Add</button>
-              <button className="button primary"><Upload size={15} /> Build</button>
-            </div>
-          </Panel>
-          <Panel title="Form controls">
-            <div className="componentField">
-              <label className="field">
-                <span>Label</span>
-                <input value="Compact input" readOnly />
-              </label>
-              <label className="assistantDesignSystemOption demoDesignToggle">
-                <span>
-                  <Grid2X2 size={14} />
-                  <strong>Use Link design system</strong>
-                  <small>Session scoped app-build setting.</small>
-                </span>
-                <input type="checkbox" checked readOnly />
-              </label>
-            </div>
-          </Panel>
-          <Panel title="Status rows">
-            <div className="designSpecRows">
-              <div><StatusDot tone="success" /><strong>Google Workspace</strong><small>Connected through managed OAuth skill.</small></div>
-              <div><StatusDot tone="warning" /><strong>Telnyx Inference</strong><small>Needs API key before live agents can run.</small></div>
-            </div>
-          </Panel>
-          <Panel title="Tables">
-            <div className="designSpecList">
-              <p>Middle-section tables use the shared chatSessionRows/chatResultRow pattern: 18px row side padding, 14px column gaps, 58px rows, 48px uppercase headers, and an optional 44px trailing action column.</p>
-              <p>Header labels are left-aligned to the body text in the same column. Rows are clickable as a whole, with the trailing arrow turning primary on hover in light and dark mode.</p>
-              <p>Implementation guardrail: scrollable directory tables reserve a stable scrollbar gutter in the rowgroup, so the header must carry the matching right-side compensation. App tables that do not scroll need their own header override instead of reusing the scrollable compensation blindly.</p>
-            </div>
-            <pre className="designCodeBlock">{`.directoryTable .chatResultRows {
+type DesignGuideDocument = {
+  title: string;
+  updatedAt: string;
+  tabs: Record<DesignGuideTabId, DesignGuideWidget[]>;
+};
+
+const designGuideStorageKey = "telnyx-link-design-md-document";
+const designGuideEditableTabs: DesignGuideTabId[] = ["colors", "components", "typography", "design-doc"];
+const designGuideTabMeta: Array<{ id: DesignGuideViewTabId; label: string; icon: AppIcon }> = [
+  { id: "colors", label: "Colors", icon: Sun },
+  { id: "components", label: "Components", icon: Component },
+  { id: "typography", label: "Typography", icon: FileText },
+  { id: "design-doc", label: "Design Doc", icon: BookOpen },
+];
+const designGuideColorTokens = [
+  ["Background", "--bg"],
+  ["Surface", "--surface"],
+  ["Soft surface", "--surface-soft"],
+  ["Raised surface", "--surface-raised"],
+  ["Text", "--text"],
+  ["Muted", "--text-muted"],
+  ["Faint text", "--text-faint"],
+  ["Border", "--border"],
+  ["Soft border", "--border-soft"],
+  ["Accent", "--accent"],
+  ["Accent soft", "--accent-soft"],
+  ["Accent ink", "--accent-ink"],
+  ["Success", "--success"],
+  ["Warning", "--warning"],
+  ["Danger", "--danger"],
+  ["Info", "--info"],
+  ["Skill", "--skill"],
+  ["Toggle background", "--toggle-off-bg"],
+  ["Toggle border", "--toggle-off-border"],
+  ["Toggle thumb", "--toggle-off-thumb"],
+] as const;
+const defaultTablesGuideCode = `.directoryTable .chatResultRows {
   overflow: auto;
   scrollbar-gutter: stable;
 }
@@ -25423,50 +28375,8 @@ function DesignSystemView({ embedded = false }: { embedded?: boolean }) {
 
 .appDirectoryTable .chatResultRowHead {
   padding-right: calc(var(--table-row-inline-inset) + var(--table-scrollbar-gutter-width));
-}`}</pre>
-          </Panel>
-        </div>
-      )}
-
-      {tab === "surfaces" && (
-        <div className="designSection">
-          <Panel title="Current app layout">
-            <div className="surfaceAnatomy">
-              <div><strong>Titlebar</strong><small>30px draggable app chrome with centered product name.</small></div>
-              <div><strong>Rail</strong><small>54px collapsed or 176px expanded icon navigation with 40px controls.</small></div>
-              <div><strong>Content</strong><small>Scrollable page surface with a compact header, full-width tab rows, and dense panels.</small></div>
-              <div><strong>Assistant</strong><small>Right panel uses the same top inset, tab styling, cards, forms, and fixed composer rules.</small></div>
-            </div>
-          </Panel>
-          <Panel title="Surface rules">
-            <div className="designSpecGrid">
-              <div><strong>Navigation</strong><p>Use icon plus label in top tab strips. Keep selected tabs white in light mode and raised neutral in dark mode.</p></div>
-              <div><strong>Panels</strong><p>Use panels for bounded tools, repeated rows, and demos. Avoid nested cards and decorative section wrappers.</p></div>
-              <div><strong>Header actions</strong><p>Primary actions in page headers and section headers use the shared 40px top-control height.</p></div>
-              <div><strong>Forms</strong><p>Group credentials and setup flows by backend capability. Keep save actions close to the field they affect.</p></div>
-              <div><strong>Phone</strong><p>Keep telephony controls stable in size. Dialer keys, contact actions, and call buttons should not shift on state changes.</p></div>
-            </div>
-          </Panel>
-        </div>
-      )}
-
-      {tab === "agents" && (
-        <div className="designSection">
-          <Panel title="Embedded app contract">
-            <div className="designSpecGrid">
-              <div><strong>Intent</strong><p>Generated apps should read as Link tools inside the main browser surface, with the workflow visible immediately.</p></div>
-              <div><strong>Tokens</strong><p>Use Link CSS variables for surfaces, text, borders, accent, status tones, and the 14px/40px layout rhythm.</p></div>
-              <div><strong>Controls</strong><p>Use icon buttons for tools, tabs for views, segmented controls for modes, toggles for binary settings, and compact forms.</p></div>
-              <div><strong>Avoid</strong><p>No landing pages, nested cards, oversized panel type, decorative gradients, or standalone product chrome.</p></div>
-            </div>
-          </Panel>
-          <Panel title="Agent instruction preview">
-            <div className="agentInstructionPreview">
-              {agentInstructionPreview.map((line) => <p key={line}>{line}</p>)}
-            </div>
-          </Panel>
-          <Panel title="Theme bridge">
-            <pre className="designCodeBlock">{`const params = new URLSearchParams(location.search);
+}`;
+const defaultThemeBridgeCode = `const params = new URLSearchParams(location.search);
 const applyLinkTheme = ({ theme, accent }) => {
   if (theme) document.documentElement.dataset.theme = theme;
   if (accent) document.documentElement.style.setProperty("--accent", accent);
@@ -25474,11 +28384,604 @@ const applyLinkTheme = ({ theme, accent }) => {
 applyLinkTheme({ theme: params.get("theme"), accent: params.get("accent") });
 window.addEventListener("message", (event) => {
   if (event.data?.type === "telnyx-link-theme") applyLinkTheme(event.data);
-});`}</pre>
-          </Panel>
-        </div>
+});`;
+const defaultDesignGuideDocument: DesignGuideDocument = {
+  title: "Design.md",
+  updatedAt: "",
+  tabs: {
+    colors: [
+      {
+        id: "palette-tokens",
+        title: "Palette Tokens",
+        notes: [
+          "Use Cloud Link CSS custom properties as the public design contract for generated tools.",
+          "",
+          "- Match Cloud Link surfaces, text, borders, accent, status tones, and toggles before introducing anything custom.",
+          "- Light defaults should stay close to `#f7f6f4` background, `#ffffff` surfaces, `#20201f` text, `#dedbd7` borders, and `#00e3aa` accent.",
+          "- Dark mode should use `[data-theme=\"dark\"]` with neutral surfaces instead of decorative gradients.",
+        ].join("\n"),
+        code: "",
+      },
+    ],
+    typography: [
+      {
+        id: "type-scale",
+        title: "Type scale",
+        notes: [
+          "- Page title and artifact title use `24px / 1.15`.",
+          "- Body emphasis uses `13px / 650`.",
+          "- Section labels use uppercase `11px` with stable spacing.",
+          "- Keep body copy compact and operational for dense scanning.",
+        ].join("\n"),
+        code: "",
+      },
+      {
+        id: "copy-rules",
+        title: "Copy rules",
+        notes: [
+          "- Use direct noun labels for tabs and commands: Credentials, Dark Mode, Design System, Chat, Phone.",
+          "- Prefer concise operational text over marketing copy.",
+          "- Keep status labels concrete: Connected, Connect, Configure, Needs setup, Approval required.",
+        ].join("\n"),
+        code: "",
+      },
+    ],
+    components: [
+      {
+        id: "buttons",
+        title: "Buttons",
+        notes: "Use primary buttons for commit actions, secondary buttons for adjacent setup actions, and ghost buttons for lower-emphasis or dismissive actions.",
+        code: "",
+      },
+      {
+        id: "badges-and-dots",
+        title: "Badges and dots",
+        notes: "Use badges and status dots for compact state communication inside dense rows and cards. Reserve warning and danger for actionable states.",
+        code: "",
+      },
+      {
+        id: "segmented-controls",
+        title: "Segmented controls",
+        notes: "Use segmented controls for fast, in-place mode switches where every option stays visible without opening a menu.",
+        code: "",
+      },
+      {
+        id: "permission-row",
+        title: "Permission row",
+        notes: "Permission rows should keep the capability name, the short description, and the control on one stable line group.",
+        code: "",
+      },
+      {
+        id: "toolbar-actions",
+        title: "Toolbar actions",
+        notes: "Top-row tools should use compact icon buttons for utility actions and reserve full buttons for create, attach, import, or build actions.",
+        code: "",
+      },
+      {
+        id: "form-controls",
+        title: "Form controls",
+        notes: "Keep form controls compact, aligned, and close to the action they affect. Session-scoped toggles should explain exactly what prompt behavior they change.",
+        code: "",
+      },
+      {
+        id: "status-rows",
+        title: "Status rows",
+        notes: "Status rows should pair a connector or system name with one operational sentence and a single visible health signal.",
+        code: "",
+      },
+      {
+        id: "tables",
+        title: "Tables",
+        notes: [
+          "Use the shared `chatSessionRows` / `chatResultRow` scaffold for middle-section tables.",
+          "",
+          "- Row side padding: `18px`.",
+          "- Column gaps: `14px`.",
+          "- Body row height: `58px`.",
+          "- Header labels: uppercase, aligned with the body column text.",
+          "- Trailing action column: `44px` when a row arrow is needed.",
+          "",
+          "If the rowgroup uses `scrollbar-gutter: stable`, the header must carry matching right-side compensation. Non-scrollable app tables need their own header override instead of copying the scrollable compensation unchanged.",
+        ].join("\n"),
+        code: defaultTablesGuideCode,
+        codeLanguage: "css",
+      },
+    ],
+    "design-doc": [
+      {
+        id: "design-md",
+        title: "Design.md",
+        notes: "This generated markdown file is the centralized source of truth that Cloud Link injects when `Use Cloud Link design system` is enabled in the Build app workflow.",
+        code: "",
+      },
+      {
+        id: "embedded-app-contract",
+        title: "Embedded app contract",
+        notes: [
+          "- Intent: generated apps should read as Cloud Link tools inside the main browser surface, with the workflow visible immediately.",
+          "- Tokens: use Cloud Link CSS variables for surfaces, text, borders, accent, status tones, and the `14px` / `40px` rhythm.",
+          "- Controls: use icon buttons for tools, tabs for views, segmented controls for modes, toggles for binary settings, and compact forms.",
+          "- Avoid: no landing pages, nested cards, oversized panel type, decorative gradients, or standalone product chrome.",
+        ].join("\n"),
+        code: "",
+      },
+      {
+        id: "current-app-layout",
+        title: "Current app layout",
+        notes: [
+          "- Titlebar: 30px draggable app chrome with centered product name.",
+          "- Rail: 54px collapsed or 176px expanded icon navigation with 40px controls.",
+          "- Content: scrollable page surface with compact headers, full-width tab rows, and dense panels.",
+          "- Assistant: right panel uses the same inset, tab styling, cards, forms, and composer rules.",
+        ].join("\n"),
+        code: "",
+      },
+      {
+        id: "surface-rules",
+        title: "Surface rules",
+        notes: [
+          "- Navigation: use icon plus label in top tab strips.",
+          "- Panels: use panels for bounded tools, repeated rows, and demos. Avoid nested decorative shells.",
+          "- Header actions: primary actions should reuse the shared `40px` top-control height.",
+          "- Forms: group setup by backend capability and keep save actions close to the affected field.",
+          "- Phone: keep telephony controls stable so the dialer and call actions do not shift on state changes.",
+        ].join("\n"),
+        code: "",
+      },
+      {
+        id: "surface-rules",
+        title: "Surface rules",
+        notes: [
+          "- Navigation: use icon plus label in top tab strips.",
+          "- Panels: use panels for bounded tools, repeated rows, and demos. Avoid nested decorative shells.",
+          "- Header actions: primary actions should reuse the shared `40px` top-control height.",
+          "- Forms: group setup by backend capability and keep save actions close to the affected field.",
+          "- Phone: keep telephony controls stable so the dialer and call actions do not shift on state changes.",
+        ].join("\n"),
+        code: "",
+      },
+      {
+        id: "theme-bridge",
+        title: "Theme bridge",
+        notes: "Generated tools should read theme and accent from the Cloud Link shell so previews and deployed apps stay in sync with the user’s current chrome.",
+        code: defaultThemeBridgeCode,
+        codeLanguage: "js",
+      },
+    ],
+  },
+};
+
+function normalizeDesignGuideDocument(input: unknown): DesignGuideDocument {
+  const candidate = input && typeof input === "object" && !Array.isArray(input) ? input as Partial<DesignGuideDocument> : {};
+  const storedTabs = candidate.tabs && typeof candidate.tabs === "object" ? candidate.tabs as Record<string, unknown> : undefined;
+  const tabs = {} as Record<DesignGuideTabId, DesignGuideWidget[]>;
+  for (const tabId of designGuideEditableTabs) {
+    const defaultWidgets = defaultDesignGuideDocument.tabs[tabId];
+    const candidateWidgets = [
+      ...(Array.isArray(storedTabs?.[tabId]) ? storedTabs[tabId] as unknown[] : []),
+      ...(tabId === "design-doc" && Array.isArray(storedTabs?.agents) ? storedTabs.agents as unknown[] : []),
+      ...(tabId === "design-doc" && Array.isArray(storedTabs?.surfaces) ? storedTabs.surfaces as unknown[] : []),
+    ];
+    tabs[tabId] = defaultWidgets.map((widget) => {
+      const storedWidget = candidateWidgets.find((item): item is Partial<DesignGuideWidget> => item !== null && typeof item === "object" && "id" in item && (item as Partial<DesignGuideWidget>).id === widget.id);
+      return {
+        ...widget,
+        title: typeof storedWidget?.title === "string" && storedWidget.title.trim() ? storedWidget.title : widget.title,
+        notes: typeof storedWidget?.notes === "string" ? storedWidget.notes : widget.notes,
+        code: typeof storedWidget?.code === "string" ? storedWidget.code : widget.code,
+      };
+    });
+  }
+  return {
+    title: typeof candidate.title === "string" && candidate.title.trim() ? candidate.title : defaultDesignGuideDocument.title,
+    updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : defaultDesignGuideDocument.updatedAt,
+    tabs,
+  };
+}
+
+function readStoredDesignGuideDocument() {
+  if (typeof window === "undefined") return defaultDesignGuideDocument;
+  try {
+    return normalizeDesignGuideDocument(JSON.parse(window.localStorage.getItem(designGuideStorageKey) ?? "null"));
+  } catch {
+    return defaultDesignGuideDocument;
+  }
+}
+
+function updateDesignGuideWidget(document: DesignGuideDocument, widgetId: string, nextDraft: Pick<DesignGuideWidget, "title" | "notes" | "code">) {
+  const nextTabs = {} as Record<DesignGuideTabId, DesignGuideWidget[]>;
+  for (const tabId of designGuideEditableTabs) {
+    nextTabs[tabId] = document.tabs[tabId].map((widget) => widget.id === widgetId ? {
+      ...widget,
+      title: nextDraft.title.trim() || widget.title,
+      notes: nextDraft.notes,
+      code: nextDraft.code,
+    } : widget);
+  }
+  return {
+    ...document,
+    updatedAt: new Date().toISOString(),
+    tabs: nextTabs,
+  };
+}
+
+function designGuideMarkdown(document: DesignGuideDocument) {
+  const lines: string[] = [
+    `# ${document.title}`,
+    "",
+    "Use this document as the source of truth when `Use Cloud Link design system` is enabled for generated Cloud Link tools.",
+    "Build as an embedded Cloud Link tool inside the main browser surface, not a standalone marketing site.",
+    "",
+  ];
+
+  for (const tabId of designGuideEditableTabs) {
+    const tabMeta = designGuideTabMeta.find((item) => item.id === tabId);
+    if (!tabMeta) continue;
+    lines.push(`## ${tabMeta.label}`, "");
+    for (const widget of document.tabs[tabId]) {
+      lines.push(`### ${widget.title}`, "");
+      if (widget.notes.trim()) lines.push(widget.notes.trim(), "");
+      if (widget.id === "palette-tokens") {
+        lines.push("Supported color and surface tokens:");
+        for (const [label, token] of designGuideColorTokens) lines.push(`- ${label}: \`${token}\``);
+        lines.push("");
+      }
+      if (widget.code.trim()) {
+        lines.push(`\`\`\`${widget.codeLanguage ?? ""}`.trimEnd());
+        lines.push(widget.code.trim());
+        lines.push("```", "");
+      }
+    }
+  }
+
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function findDesignGuideWidget(document: DesignGuideDocument, widgetId: string) {
+  for (const tabId of designGuideEditableTabs) {
+    const match = document.tabs[tabId].find((widget) => widget.id === widgetId);
+    if (match) return match;
+  }
+  return null;
+}
+
+function DesignSystemView({ embedded = false }: { embedded?: boolean }) {
+  const [tab, setTab] = useState<DesignGuideViewTabId>("components");
+  const [designGuide, setDesignGuide] = useState<DesignGuideDocument>(() => readStoredDesignGuideDocument());
+  const [editingWidgetId, setEditingWidgetId] = useState("");
+  const [widgetDraft, setWidgetDraft] = useState({ title: "", notes: "", code: "" });
+  const [copyStatus, setCopyStatus] = useState("");
+  const instructionsMarkdown = useMemo(() => designGuideMarkdown(designGuide), [designGuide]);
+  const designMdPreview = useMemo(() => instructionsMarkdown.split("\n").filter(Boolean).slice(0, 8), [instructionsMarkdown]);
+  const editingWidget = useMemo(() => editingWidgetId ? findDesignGuideWidget(designGuide, editingWidgetId) : null, [designGuide, editingWidgetId]);
+
+  useEffect(() => {
+    window.localStorage.setItem(designGuideStorageKey, JSON.stringify(designGuide));
+  }, [designGuide]);
+
+  useEffect(() => {
+    if (!copyStatus) return;
+    const timeoutId = window.setTimeout(() => setCopyStatus(""), 1600);
+    return () => window.clearTimeout(timeoutId);
+  }, [copyStatus]);
+
+  useEffect(() => {
+    if (!editingWidget) return;
+    setWidgetDraft({
+      title: editingWidget.title,
+      notes: editingWidget.notes,
+      code: editingWidget.code,
+    });
+  }, [editingWidget]);
+
+  async function copyDesignGuideMarkdown() {
+    try {
+      await navigator.clipboard.writeText(instructionsMarkdown);
+      setCopyStatus("Copied");
+    } catch {
+      setCopyStatus("Copy failed");
+    }
+  }
+
+  function startEditingWidget(widget: DesignGuideWidget) {
+    setEditingWidgetId(widget.id);
+  }
+
+  function closeWidgetEditor() {
+    setEditingWidgetId("");
+    setWidgetDraft({ title: "", notes: "", code: "" });
+  }
+
+  function saveWidgetDraft() {
+    if (!editingWidgetId) return;
+    setDesignGuide((current) => updateDesignGuideWidget(current, editingWidgetId, widgetDraft));
+    closeWidgetEditor();
+  }
+
+  function widgetAction(widget: DesignGuideWidget) {
+    return (
+      <button className="iconButton" type="button" aria-label={`Edit ${widget.title}`} title={`Edit ${widget.title}`} onClick={() => startEditingWidget(widget)}>
+        <Pencil size={14} />
+      </button>
+    );
+  }
+
+  function renderDesignGuideNotes(notes: string) {
+    if (!notes.trim()) return null;
+    return <div className="designGuideNotes" dangerouslySetInnerHTML={{ __html: wikiMarkdownToRichTextHtml(notes) }} />;
+  }
+
+  function renderDesignWidget(widget: DesignGuideWidget) {
+    if (widget.id === "palette-tokens") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <div className="tokenGrid">
+            {designGuideColorTokens.map(([label, token]) => (
+              <div className="tokenSwatch" key={token}>
+                <span style={{ background: `var(${token})` }} />
+                <strong>{label}</strong>
+                <small>{token}</small>
+              </div>
+            ))}
+          </div>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "type-scale") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <div className="typeScale">
+            <h1>Page title 24/1.15</h1>
+            <h2>Artifact title 24/1.15</h2>
+            <strong>Body emphasis 13/650</strong>
+            <p>Body copy uses compact system UI metrics for dense operational scanning.</p>
+            <small>Section labels use uppercase 11px with stable spacing.</small>
+          </div>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "copy-rules") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          {renderDesignGuideNotes(widget.notes)}
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "buttons") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <div className="componentRow">
+            <button className="button primary">Primary</button>
+            <button className="button secondary">Secondary</button>
+            <button className="button ghost">Ghost</button>
+            <button className="button primary" disabled>Disabled</button>
+          </div>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "badges-and-dots") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <div className="componentRow">
+            <Badge tone="success">Success</Badge>
+            <Badge tone="warning">Warning</Badge>
+            <Badge tone="danger">Danger</Badge>
+            <Badge tone="skill">Skill</Badge>
+            <StatusDot tone="success" />
+            <StatusDot tone="warning" />
+            <StatusDot tone="danger" />
+            <StatusDot tone="muted" />
+          </div>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "segmented-controls") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <div className="componentRow">
+            <Segmented selected="Auto" />
+            <Segmented selected="Ask" />
+            <Segmented selected="Active" options={["Active", "Paused"]} />
+          </div>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "permission-row") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <div className="permissionRow demoRow">
+            <div>
+              <strong>hindsight.recall</strong>
+              <small>Recall long-term agent memory with source attribution.</small>
+            </div>
+            <Segmented selected="Auto" />
+          </div>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "toolbar-actions") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <div className="designToolbar">
+            <button className="iconButton" aria-label="Search"><Search size={15} /></button>
+            <button className="iconButton" aria-label="Refresh"><RefreshCw size={15} /></button>
+            <button className="button secondary"><Plus size={15} /> Add</button>
+            <button className="button primary"><Upload size={15} /> Build</button>
+          </div>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "form-controls") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <div className="componentField">
+            <label className="field">
+              <span>Label</span>
+              <input value="Compact input" readOnly />
+            </label>
+            <label className="assistantDesignSystemOption demoDesignToggle">
+              <span>
+                <Grid2X2 size={14} />
+                <strong>Use Cloud Link design system</strong>
+                <small>Uses Design.md when enabled.</small>
+              </span>
+              <input type="checkbox" checked readOnly />
+            </label>
+          </div>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "status-rows") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <div className="designSpecRows">
+            <div><StatusDot tone="success" /><strong>Google Workspace</strong><small>Connected through managed OAuth skill.</small></div>
+            <div><StatusDot tone="warning" /><strong>Telnyx Inference</strong><small>Needs API key before live agents can run.</small></div>
+          </div>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "tables") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <pre className="designCodeBlock">{widget.code}</pre>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "current-app-layout") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <div className="surfaceAnatomy">
+            <div><strong>Titlebar</strong><small>30px draggable app chrome with centered product name.</small></div>
+            <div><strong>Rail</strong><small>54px collapsed or 176px expanded icon navigation with 40px controls.</small></div>
+            <div><strong>Content</strong><small>Scrollable page surface with a compact header, full-width tab rows, and dense panels.</small></div>
+            <div><strong>Assistant</strong><small>Right panel uses the same top inset, tab styling, cards, forms, and fixed composer rules.</small></div>
+          </div>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "surface-rules") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <div className="designSpecGrid">
+            <div><strong>Navigation</strong><p>Use icon plus label in top tab strips. Keep selected tabs white in light mode and raised neutral in dark mode.</p></div>
+            <div><strong>Panels</strong><p>Use panels for bounded tools, repeated rows, and demos. Avoid nested cards and decorative section wrappers.</p></div>
+            <div><strong>Header actions</strong><p>Primary actions in page headers and section headers use the shared 40px top-control height.</p></div>
+            <div><strong>Forms</strong><p>Group credentials and setup flows by backend capability. Keep save actions close to the field they affect.</p></div>
+            <div><strong>Phone</strong><p>Keep telephony controls stable in size. Dialer keys, contact actions, and call buttons should not shift on state changes.</p></div>
+          </div>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "embedded-app-contract") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <div className="designSpecGrid">
+            <div><strong>Intent</strong><p>Generated apps should read as Cloud Link tools inside the main browser surface, with the workflow visible immediately.</p></div>
+            <div><strong>Tokens</strong><p>Use Cloud Link CSS variables for surfaces, text, borders, accent, status tones, and the 14px/40px layout rhythm.</p></div>
+            <div><strong>Controls</strong><p>Use icon buttons for tools, tabs for views, segmented controls for modes, toggles for binary settings, and compact forms.</p></div>
+            <div><strong>Avoid</strong><p>No landing pages, nested cards, oversized panel type, decorative gradients, or standalone product chrome.</p></div>
+          </div>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "design-md") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <div className="agentInstructionPreview">
+            {designMdPreview.map((line) => <p key={line}>{line}</p>)}
+          </div>
+        </DesignPanel>
+      );
+    }
+    if (widget.id === "theme-bridge") {
+      return (
+        <DesignPanel key={widget.id} title={widget.title} action={widgetAction(widget)}>
+          <pre className="designCodeBlock">{widget.code}</pre>
+        </DesignPanel>
+      );
+    }
+    return null;
+  }
+
+  const activeWidgets = designGuide.tabs[tab];
+
+  return (
+    <section className={embedded ? "designView settingsDesignPanel" : "content designView"}>
+      {!embedded && (
+        <header className="pageHeader">
+          <div>
+            <h1>Design System</h1>
+          </div>
+        </header>
+      )}
+      <div className="designTabs">
+        {designGuideTabMeta.map(({ id, label, icon: Icon }) => (
+          <button key={id} className={tab === id ? "selected" : ""} onClick={() => setTab(id)}>
+            <Icon size={15} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {editingWidget && (
+        <section className="panel designWidgetEditor">
+          <div className="designPanelHeader">
+            <div>
+              <h3>Edit {editingWidget.title}</h3>
+              <p>Updates the linked {designGuide.title} used by Build app when the design-system chat toggle is enabled.</p>
+            </div>
+            <button className="button ghost" type="button" onClick={closeWidgetEditor}>
+              <X size={14} />
+              Close
+            </button>
+          </div>
+          <div className="designWidgetEditorFields">
+            <label className="field">
+              <span>Widget title</span>
+              <input value={widgetDraft.title} onChange={(event) => setWidgetDraft((current) => ({ ...current, title: event.target.value }))} />
+            </label>
+            <label className="field wide">
+              <span>Design.md notes</span>
+              <textarea className="scribesSettingsTextarea designWidgetTextarea" value={widgetDraft.notes} onChange={(event) => setWidgetDraft((current) => ({ ...current, notes: event.target.value }))} />
+            </label>
+            <label className="field wide">
+              <span>Code sample</span>
+              <textarea className="scribesSettingsTextarea designWidgetTextarea" value={widgetDraft.code} onChange={(event) => setWidgetDraft((current) => ({ ...current, code: event.target.value }))} />
+            </label>
+          </div>
+          <div className="designWidgetEditorActions">
+            <button className="button primary" type="button" onClick={saveWidgetDraft}>
+              <Save size={14} />
+              Save widget
+            </button>
+            <button className="button secondary" type="button" onClick={closeWidgetEditor}>
+              Cancel
+            </button>
+          </div>
+        </section>
       )}
 
+      {tab === "design-doc" ? (
+        <div className="designSection">
+          <DesignPanel
+            title={designGuide.title}
+            action={(
+              <button className="button secondary" type="button" onClick={() => void copyDesignGuideMarkdown()}>
+                <Copy size={14} />
+                {copyStatus || "Copy"}
+              </button>
+            )}
+          >
+            <pre className="designCodeBlock designInstructionsBlock">{instructionsMarkdown}</pre>
+          </DesignPanel>
+          {activeWidgets.map((widget) => renderDesignWidget(widget))}
+        </div>
+      ) : (
+        <div className={tab === "components" ? "componentGrid" : "designSection"}>
+          {activeWidgets.map((widget) => renderDesignWidget(widget))}
+        </div>
+      )}
     </section>
   );
 }
@@ -25495,7 +28998,7 @@ function MemoryModal({ onClose, sources }: { onClose: () => void; sources: strin
         </header>
         <div className="scanTitle">
           <span className="spinner small" />
-          Link scanning connected sources
+          Cloud Link scanning connected sources
         </div>
         <div className="sourceTable">
           <div className="sourceHeader"><span>Source</span><span>Status</span></div>
@@ -25514,6 +29017,18 @@ function MemoryModal({ onClose, sources }: { onClose: () => void; sources: strin
   );
 }
 
+function DesignPanel({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="panel">
+      <div className="designPanelHeader">
+        <h3>{title}</h3>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="panel">
@@ -25523,10 +29038,10 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function EmptyState({ title, body, icon: Icon = List }: { title: string; body: ReactNode; icon?: AppIcon }) {
+function EmptyState({ title, body, icon: Icon = List, hideIcon = false }: { title: string; body: ReactNode; icon?: AppIcon; hideIcon?: boolean }) {
   return (
     <section className="content emptyState">
-      <Icon size={36} />
+      {!hideIcon && <Icon size={36} />}
       <h1>{title}</h1>
       <p>{body}</p>
     </section>
@@ -25646,25 +29161,9 @@ function messageHasEdgePreviewCandidate(message: ChatMessage) {
 
 function buildLinkDesignSystemInstruction() {
   return [
-    "Link design system instruction: build this as an embedded Link tool, not a standalone marketing site.",
-    "The app will run in Link's main browser surface and should look seamless with the shell.",
+    "Use the following Design.md as the source of truth for Cloud Link-generated tools whenever the user enables the Cloud Link design-system build toggle.",
     "",
-    "Use these CSS custom properties as the public contract:",
-    "--bg, --surface, --surface-soft, --surface-raised, --text, --text-muted, --text-faint, --border, --border-soft, --accent, --accent-soft, --accent-ink, --success, --warning, --danger, --info, --skill.",
-    "Use --app-top-inset: 14px, --app-bottom-inset: 14px, --top-row-gap: 14px, --top-control-height: 40px, and 8px panel/card radius.",
-    "Default light values should match Link: #f7f6f4 background, #ffffff surface, #20201f text, #dedbd7 border, #00e3aa accent.",
-    "Support dark mode with [data-theme=\"dark\"] and neutral surfaces: #151515 background, #20201f surface, #f4f1ec text, #3b3936 border.",
-    "",
-    "Use compact operational layouts: full-width canvas, dense panels, icon-led buttons, tabs for views, segmented controls for modes, toggles for binary settings, and stable 32px controls or 40px header actions.",
-    "For middle-section tables, use the standard Link table rhythm: 18px row side padding, 14px column gaps, 58px rows, 48px uppercase headers, left-aligned header/body columns, whole-row click targets, and a 44px trailing action column when an arrow is needed.",
-    "Implement tables with the shared chatSessionRows/chatResultRow/directoryResultRow scaffold unless there is a proven reason not to.",
-    "Important alignment rule: when the table body uses scrollbar-gutter: stable on the rowgroup, keep the header on matching grid math by adding the matching right-side gutter compensation. Do not let header tracks be wider than body tracks.",
-    "Do not override table body cells back to content-width block layout. Cells must stretch to their grid tracks so header and body columns stay aligned, especially in app tables.",
-    "If a table variant does not scroll its rowgroup, add a local header padding override for that variant instead of copying the scrollable directory-table compensation unchanged.",
-    "Avoid landing-page heroes, nested cards, decorative gradients/orbs, oversized type inside panels, and layouts that depend on a single hue palette.",
-    "Keep generated tools first-screen useful: show the actual app workflow in the main surface immediately.",
-    "",
-    "Add a small runtime theme bridge: read theme and accent from URLSearchParams, apply document.documentElement.dataset.theme, set --accent/--accent-soft/--accent-ink when provided, and listen for postMessage events with type \"telnyx-link-theme\" carrying { theme, accent }.",
+    designGuideMarkdown(readStoredDesignGuideDocument()),
   ].join("\n");
 }
 
@@ -25835,12 +29334,12 @@ function formatModelLabel(model: string) {
 }
 
 function assistantDisplayName(name?: string) {
-  if (!name || name === "Telnyx AI Assistant") return "Link";
+  if (!name || name === "Telnyx AI Assistant" || name === "Link") return "Cloud Link";
   return name;
 }
 
 function sessionSelectedAgentName(session: ChatSession) {
-  const selectedAgentPattern = /Selected Link chat agent:\s*([^.\n]+)/i;
+  const selectedAgentPattern = /Selected (?:Cloud Link|Link) chat agent:\s*([^.\n]+)/i;
   return [...session.messages]
     .reverse()
     .map((message) => selectedAgentPattern.exec(message.content)?.[1]?.trim())
@@ -26021,6 +29520,20 @@ function explorerResultSourceLabel(source: ExplorerResult["source"]) {
   if (source === "okf") return "Source file";
   if (source === "mcp") return "MCP";
   return source.replace(/_/g, " ");
+}
+
+function explorerResultTypeLabel(result: ExplorerResult) {
+  if (result.type === "ticket") return "Ticket";
+  if (result.type === "file") return "File";
+  if (result.source === "telnyx_developers" || result.source === "guru" || result.source === "telnyx_support") return "Page";
+  return "Doc";
+}
+
+function explorerSourceNoResultsBody(source: Pick<ExplorerSourceConfig, "id" | "label">) {
+  if (source.id === "developers") return "No matching Dev Docs pages found.";
+  if (source.id === "wiki") return "No matching Guru pages found.";
+  if (source.id === "pylon") return "No matching Pylon tickets found.";
+  return `No matching ${source.label} items found.`;
 }
 
 function initialsFromIdentity(identity: string) {

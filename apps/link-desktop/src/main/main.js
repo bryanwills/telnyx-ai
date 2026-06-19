@@ -54,14 +54,15 @@ const defaultTelnyxStorageBackupPrefix = "link-desktop/backups";
 const defaultSurfaceCacheRefreshIntervalMs = 5 * 60 * 1000;
 const defaultDialerConfigId = "link-dialer";
 const legacyDialerTemplateIds = new Set(["standard", "sales", "support"]);
-const defaultAgentControlPlaneUrl = "";
+const defaultAgentControlPlaneUrl = "https://agent-control-plane.query.prod.telnyx.io:8000";
 const defaultA2aDiscoveryUrl = "";
-const defaultAuthInternalUrl = "";
+const defaultAuthInternalUrl = "https://auth-internal.query.prod.telnyx.io:6674";
 const defaultHindsightUrl = "";
 const defaultAidaMcpUrl = "";
 const defaultLinkAppPublisherUrl = "";
 const defaultSkillRegistryUrl = "";
 const defaultMessageGatewayUrl = "";
+const defaultSessionDaemonUrl = "";
 const defaultTelnyxEdgeApiEndpoint = "https://apidev.telnyx.com";
 const localPublishInspectionContract = {
   manifestCandidates: ["link-app.yml", "link-app.yaml", "link-app.json"],
@@ -132,6 +133,9 @@ const defaultTelnyxApiBaseUrl = "https://api.telnyx.com";
 const defaultManagedLiteLlmBaseUrl = "http://litellm-aiswe.query.prod.telnyx.io:4000";
 const agentMailApiKeyField = "AGENTMAIL_API_KEY";
 const agentMailDomainField = "AGENTMAIL_DOMAIN";
+const mergeAgentHandlerMcpUrlField = "MERGE_AGENT_HANDLER_MCP_URL";
+const mergeAgentHandlerAccessTokenField = "MERGE_AGENT_HANDLER_ACCESS_TOKEN";
+const defaultMergeAgentHandlerMcpUrl = "https://ah-api.merge.dev/mcp";
 const telnyxVoiceConnectionIdField = "TELNYX_VOICE_CONNECTION_ID";
 const telnyxMeetCallerIdField = "TELNYX_MEET_CALLER_ID";
 const telnyxMeetWebhookUrlField = "TELNYX_MEET_WEBHOOK_URL";
@@ -205,10 +209,50 @@ const googleContactsAccessTokenField = "GOOGLE_CONTACTS_ACCESS_TOKEN";
 const defaultGoogleCalendarApiBaseUrl = "https://www.googleapis.com/calendar/v3";
 const defaultGooglePeopleApiBaseUrl = "https://people.googleapis.com/v1";
 const defaultGoogleOAuthTokenUrl = "https://oauth2.googleapis.com/token";
-const appDisplayName = "Link";
+const appDisplayName = "Cloud Link";
+const appTrayTitle = "Scribe";
 const appIconPath = path.resolve(__dirname, "../../public/link-icon.png");
 const appTrayTemplateIconPath = path.resolve(__dirname, "../../public/scribeTrayTemplate.png");
 const aidaMcpUrlField = "AIDA_MCP_URL";
+
+function parseDotenvLine(line) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed || trimmed.startsWith("#")) return null;
+  const withoutExport = trimmed.startsWith("export ") ? trimmed.slice(7).trim() : trimmed;
+  const separatorIndex = withoutExport.indexOf("=");
+  if (separatorIndex <= 0) return null;
+  const key = withoutExport.slice(0, separatorIndex).trim();
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) return null;
+  let value = withoutExport.slice(separatorIndex + 1).trim();
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    value = value.slice(1, -1);
+  }
+  return { key, value };
+}
+
+function loadLocalBuildEnv() {
+  const candidatePaths = [
+    path.join(sourceRepoRoot, "apps/link-desktop/.env.local"),
+    path.join(app.getAppPath(), ".env.local"),
+  ];
+  for (const candidatePath of candidatePaths) {
+    try {
+      if (!fsSync.existsSync(candidatePath)) continue;
+      const contents = fsSync.readFileSync(candidatePath, "utf8");
+      for (const line of contents.split(/\r?\n/u)) {
+        const parsed = parseDotenvLine(line);
+        if (!parsed) continue;
+        if (!process.env[parsed.key]) process.env[parsed.key] = parsed.value;
+      }
+      return candidatePath;
+    } catch {
+      continue;
+    }
+  }
+  return "";
+}
+
+loadLocalBuildEnv();
 const singleInstanceLock = app.requestSingleInstanceLock();
 const scribeLanguageOptions = [
   { label: "English", value: "en-US" },
@@ -271,7 +315,7 @@ const mcpProxyFallbackServers = [
   {
     id: "pylon-mcp-server",
     name: "Pylon MCP Server",
-    description: "Pylon issue, account, contact, and user context. Link v1 allows read tools plus create_issue and blocks update tools.",
+    description: "Pylon issue, account, contact, and user context. Cloud Link v1 allows read tools plus create_issue and blocks update tools.",
     ownerSquad: "support-engineering",
     toolCount: 9,
     status: "active",
@@ -378,6 +422,7 @@ const mcpProxyFallbackServers = [
   },
 ];
 const mcpProxyFallbackTools = [];
+const customMcpTokenPrefix = "CUSTOM_MCP_TOKEN_";
 const telnyxDocsSources = [
   {
     id: "telnyx-support-center",
@@ -393,7 +438,7 @@ const telnyxDocsSources = [
   },
 ];
 const hindsightAgentCapabilityBase =
-  "Hindsight is Link's source-attributed long-term memory layer. Agents may use Hindsight recall when it is configured, must respect bank scope, user permissions, tool permissions, and customer-data boundaries, and must not claim Hindsight recall was used if Hindsight is unconfigured, unavailable, or returns no results.";
+  "Hindsight is Cloud Link's source-attributed long-term memory layer. Agents may use Hindsight recall when it is configured, must respect bank scope, user permissions, tool permissions, and customer-data boundaries, and must not claim Hindsight recall was used if Hindsight is unconfigured, unavailable, or returns no results.";
 const authWebContentsIds = new Set();
 const trustedRendererWebContentsIds = new Set();
 const mediaPermissionNames = new Set(["media", "microphone"]);
@@ -430,6 +475,8 @@ let storageBackupState = emptyStorageBackupState();
 let hostedAgentCacheState = emptyHostedAgentCacheState();
 let surfaceCacheState = emptySurfaceCacheState();
 let wikiSources = defaultWikiDocumentationSources();
+let customMcpServers = [];
+let employeePlugins = [];
 let surfaceCacheRefreshTimer = null;
 const harperAddonManager = createHarperAddonManager({
   app,
@@ -597,7 +644,7 @@ const connectorCatalog = [
     id: "agent-control-plane",
     name: "Agent Control Plane",
     category: "Hosted agents",
-    description: "List, route to, and chat with hosted Hermes/OpenClaw agents through Link.",
+    description: "List, route to, and chat with hosted Hermes/OpenClaw agents through Cloud Link.",
     envGroups: [
       ["AGENT_CONTROL_PLANE_URL"],
       ["AGENT_CONTROL_PLANE_URL", "TELNYX_AUTH_REV2"],
@@ -606,11 +653,11 @@ const connectorCatalog = [
   },
   {
     id: "litellm",
-    name: "Link Model Gateway",
+    name: "Cloud Link Model Gateway",
     category: "Model runtime",
     description: "Run a local LiteLLM proxy for Ollama, Telnyx Inference, optional managed Telnyx gateway, and frontier BYO connectors.",
     envGroups: [["TELNYX_API_KEY"], ["LITELLM_BASE_URL", "LITELLM_API_KEY"], ["ANTHROPIC_API_KEY"]],
-    requiredAccess: ["Local litellm Python binary for local/self-hosted mode", "Ollama on 127.0.0.1:11434 for local models", "optional TELNYX_API_KEY for Telnyx open-source cloud models", "optional LITELLM_BASE_URL and LITELLM_API_KEY for a managed gateway"],
+    requiredAccess: ["Local litellm Python binary for local/self-hosted mode", "Ollama on 127.0.0.1:11434 for local models", "optional Telnyx API Key for Telnyx open-source cloud models", "optional LITELLM_BASE_URL and LITELLM_API_KEY for a managed gateway"],
   },
   {
     id: "hindsight",
@@ -633,7 +680,7 @@ const connectorCatalog = [
       ["GURU_USERNAME", "GURU_USER_TOKEN"],
       ["GURU_COLLECTION_ID", "GURU_COLLECTION_TOKEN"],
     ],
-    requiredAccess: ["Guru OAuth client configured for Telnyx Link", "User approval through Guru SSO", "Legacy Guru API token fallback is still supported"],
+    requiredAccess: ["Guru OAuth client configured for Telnyx Cloud Link", "User approval through Guru SSO", "Legacy Guru API token fallback is still supported"],
   },
   {
     id: "pylon",
@@ -649,7 +696,7 @@ const connectorCatalog = [
     requiredAccess: [
       "team-telnyx/pylon-mcp-server compatible MCP endpoint",
       "User-scoped Pylon MCP OAuth access token",
-      "Link v1 allows read tools and create_issue; update_issue and update_account are blocked",
+      "Cloud Link v1 allows read tools and create_issue; update_issue and update_account are blocked",
     ],
   },
   {
@@ -664,7 +711,7 @@ const connectorCatalog = [
     id: "google-calendar",
     name: "Google Calendar",
     category: "Calendar",
-    description: "Sync meetings, availability, and call artifacts for Link calendar workflows.",
+    description: "Sync meetings, availability, and call artifacts for Cloud Link calendar workflows.",
     envGroups: [[googleCalendarAccessTokenField], [googleWorkspaceAccessTokenField], [googleWorkspaceVerifiedField]],
     requiredAccess: ["openclaw-itops-setup-utils/gog-setup connection or GOOGLE_CALENDAR_ACCESS_TOKEN"],
   },
@@ -672,9 +719,9 @@ const connectorCatalog = [
     id: "google-inbox",
     name: "Google Inbox",
     category: "Communications",
-    description: "Read Gmail inbox threads and save Gmail drafts without exposing send from Link.",
+    description: "Read Gmail inbox threads and save Gmail drafts without exposing send from Cloud Link.",
     envGroups: [[googleInboxVerifiedField], [googleInboxAgentConnectionField]],
-    requiredAccess: ["gog Gmail authorization", "Link app-level Gmail no-send guard"],
+    requiredAccess: ["gog Gmail authorization", "Cloud Link app-level Gmail no-send guard"],
   },
   {
     id: "google-tasks",
@@ -690,7 +737,7 @@ const connectorCatalog = [
     category: "Knowledge",
     description: "Query built-in Telnyx Help Center, Developer Docs, and Guru-backed skill context, then suggest documentation updates when bot answers are wrong or incomplete.",
     envGroups: [["INTERCOM_ACCESS_TOKEN"], ["MINTLIFY_API_KEY"], ["GURU_USER_EMAIL", "GURU_USER_TOKEN"]],
-    requiredAccess: ["Built-in Help Center and Developer Docs search", "Guru-backed Link skills", "optional source API tokens for enrichment", "GitHub approval for documentation PRs"],
+    requiredAccess: ["Built-in Help Center and Developer Docs search", "Guru-backed Cloud Link skills", "optional source API tokens for enrichment", "GitHub approval for documentation PRs"],
   },
   {
     id: "github",
@@ -712,9 +759,17 @@ const connectorCatalog = [
     id: "agentmail",
     name: "AgentMail",
     category: "Communications",
-    description: "Create deterministic inbox identities for bots that Link can invite to Calendar meetings.",
+    description: "Create deterministic inbox identities for bots that Cloud Link can invite to Calendar meetings.",
     envGroups: [[agentMailApiKeyField]],
     requiredAccess: ["AgentMail API key", "optional AGENTMAIL_DOMAIN for custom inbox domains"],
+  },
+  {
+    id: "merge-dev",
+    name: "Merge.dev",
+    category: "Employee plugins",
+    description: "Connect Merge.dev Agent Handler so employees can add approved plugins for their agent tools.",
+    envGroups: [[mergeAgentHandlerMcpUrlField], [mergeAgentHandlerAccessTokenField], [mergeAgentHandlerMcpUrlField, mergeAgentHandlerAccessTokenField]],
+    requiredAccess: ["Merge.dev Agent Handler MCP endpoint", "employee SSO through Merge.dev", "group-based tool access policies"],
   },
   {
     id: "telnyx",
@@ -753,15 +808,15 @@ const connectorCatalog = [
   },
   {
     id: "link-app-publisher",
-    name: "Link App Publisher",
+    name: "Cloud Link App Publisher",
     category: "Apps",
-    description: "Publish, review, duplicate, and open private Link apps through a configured managed publisher service.",
+    description: "Publish, review, duplicate, and open private Cloud Link apps through a configured managed publisher service.",
     envGroups: [["LINK_APP_PUBLISHER_URL", "TELNYX_AUTH_REV2"], ["LINK_APP_PUBLISHER_URL", "TELNYX_API_KEY"]],
     requiredAccess: ["Configured LINK_APP_PUBLISHER_URL", "Okta Rev2 session or Telnyx API key"],
   },
   {
     id: "link-skill-registry",
-    name: "Link Skill Registry",
+    name: "Cloud Link Skill Registry",
     category: "Skills",
     description: "Track internal skill stars, installs/downloads, and runs through a configured managed registry service.",
     envGroups: [["LINK_SKILL_REGISTRY_URL", "TELNYX_AUTH_REV2"], ["LINK_SKILL_REGISTRY_URL", "TELNYX_API_KEY"]],
@@ -769,11 +824,19 @@ const connectorCatalog = [
   },
   {
     id: "link-message-gateway",
-    name: "Link Message Gateway",
+    name: "Cloud Link Message Gateway",
     category: "Communications",
-    description: "Create delivery envelopes for Slack, Google Chat, and A2A recipients while Link owns routing, retries, and audit state.",
+    description: "Create delivery envelopes for Slack, Google Chat, and A2A recipients while Cloud Link owns routing, retries, and audit state.",
     envGroups: [["LINK_MESSAGE_GATEWAY_URL", "TELNYX_AUTH_REV2"], ["LINK_MESSAGE_GATEWAY_URL", "TELNYX_API_KEY"]],
     requiredAccess: ["Configured LINK_MESSAGE_GATEWAY_URL", "Okta Rev2 session or Telnyx API key", "Slack/Google Chat/A2A adapters configured on the hosted gateway"],
+  },
+  {
+    id: "link-session-daemon",
+    name: "Cloud Link Sessions",
+    category: "Agents",
+    description: "Run persistent server-owned PTY and agent sessions with attach approvals, audit events, and Telnyx SMS notifications.",
+    envGroups: [["LINK_SESSION_DAEMON_URL", "TELNYX_AUTH_REV2"], ["LINK_SESSION_DAEMON_URL", "TELNYX_API_KEY"]],
+    requiredAccess: ["Configured LINK_SESSION_DAEMON_URL", "Okta Rev2 session or Telnyx API key", "Telnyx-hosted session runner", "Optional LINK_SESSION_SMS_FROM and LINK_SESSION_SMS_TO for SMS alerts"],
   },
   {
     id: "edge-compute",
@@ -795,24 +858,26 @@ const connectorCatalog = [
 
 const credentialDefinitions = [
   { id: "agent-control-plane", label: "Agent Control Plane", fields: ["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"], help: "Configure the Okta auth bridge URL before sign-in. TELNYX_AUTH_REV2 is stored securely after sign-in." },
-  { id: "mcp-proxy", label: "Telnyx MCP Proxy", fields: ["MCP_PROXY_URL"], help: "Connect Link to team-telnyx/mcp-proxy so agents discover approved MCP servers and tools through one Telnyx registry." },
-  { id: "link-app-publisher", label: "Link App Publisher", fields: ["LINK_APP_PUBLISHER_URL"], help: "Managed publisher service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY." },
-  { id: "link-skill-registry", label: "Link Skill Registry", fields: ["LINK_SKILL_REGISTRY_URL"], help: "Managed skill registry service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY." },
-  { id: "link-message-gateway", label: "Link Message Gateway", fields: ["LINK_MESSAGE_GATEWAY_URL"], help: "Managed message gateway service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY." },
+  { id: "mcp-proxy", label: "Telnyx MCP Proxy", fields: ["MCP_PROXY_URL"], help: "Connect Cloud Link to team-telnyx/mcp-proxy so agents discover approved MCP servers and tools through one Telnyx registry." },
+  { id: "link-app-publisher", label: "Cloud Link App Publisher", fields: ["LINK_APP_PUBLISHER_URL"], help: "Managed publisher service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY." },
+  { id: "link-skill-registry", label: "Cloud Link Skill Registry", fields: ["LINK_SKILL_REGISTRY_URL"], help: "Managed skill registry service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY." },
+  { id: "link-message-gateway", label: "Cloud Link Message Gateway", fields: ["LINK_MESSAGE_GATEWAY_URL"], help: "Managed message gateway service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY." },
+  { id: "link-session-daemon", label: "Cloud Link Sessions", fields: ["LINK_SESSION_DAEMON_URL", "LINK_SESSION_SMS_FROM", "LINK_SESSION_SMS_TO"], help: "Managed session daemon URL plus optional Telnyx SMS from/to numbers for blocked, approval, and done alerts. SMS uses the saved Telnyx API Key per request." },
   { id: "litellm", label: "Model Gateway", fields: ["LITELLM_BASE_URL", "LITELLM_API_KEY", "TELNYX_INFERENCE_BASE_URL", "ANTHROPIC_API_KEY"], help: "Optional managed gateway and frontier BYO settings. Local Ollama mode does not require a cloud key; Telnyx BYO uses the Telnyx API key group." },
-  { id: "hindsight", label: "Hindsight", fields: ["HINDSIGHT_API_URL", "HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"], help: "Configured Hindsight API URL, per-user Hindsight API key, and optional memory bank id for retain operations. Link can still infer the bank from live bank selection or compatible key claims." },
+  { id: "hindsight", label: "Hindsight", fields: ["HINDSIGHT_API_URL", "HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"], help: "Configured Hindsight API URL, per-user Hindsight API key, and optional memory bank id for retain operations. Cloud Link can still infer the bank from live bank selection or compatible key claims." },
   { id: "aida", label: "AIDA", fields: [aidaMcpUrlField], help: "Optional AIDA MCP endpoint for self-hosted OpenClaw or Hermes runtime routes. Hosted agent routes can own this configuration server-side." },
   { id: "linear", label: "Linear", fields: ["LINEAR_API_KEY"], help: "Linear API key for issue and project lookup." },
-  { id: "telnyx", label: "Telnyx", fields: ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"], help: "Telnyx API key for account, phone, messaging, and WebRTC token generation." },
-  { id: "telnyx-storage", label: "Telnyx Storage", fields: ["TELNYX_STORAGE_BUCKET", "TELNYX_STORAGE_REGION", "TELNYX_STORAGE_PREFIX"], help: "Link a Telnyx Cloud Storage bucket for desktop workspace backups. Link reuses TELNYX_API_KEY for S3-compatible upload auth." },
-  { id: "telnyx-meet-bridge", label: "Telnyx Meet Bridge", fields: [telnyxVoiceConnectionIdField, telnyxMeetCallerIdField, telnyxMeetWebhookUrlField, telnyxMeetConversationRelayWsUrlField, linkMeetingAgentAdapterUrlField], help: "Runtime settings for Google Meet live joins. Telnyx Assistants can join by assistant id; generic agents require a public Conversation Relay wss:// URL and may use the Link hosted agent adapter URL." },
-  { id: "agentmail", label: "AgentMail", fields: [agentMailApiKeyField, agentMailDomainField], help: "AgentMail creates one deterministic inbox per meeting bot. Link uses that email identity as the Calendar attendee." },
-  { id: "github", label: "GitHub", fields: [githubUserAccessTokenField, githubAppClientIdField, "GH_TOKEN"], help: "Pair GitHub with a read-only Telnyx Link GitHub App so Link can access approved Telnyx repositories without asking users to create personal access tokens." },
-  { id: "guru", label: "Guru", fields: [guruOAuthClientIdField, guruOAuthClientSecretField, guruOAuthScopeField, guruOAuthRedirectUriField, guruOAuthAccessTokenField, guruOAuthRefreshTokenField, guruOAuthTokenExpiresAtField, guruOAuthUserIdField], help: "Connect Guru through OAuth so Link can search Guru MCP cards after the user approves access through Guru SSO. Admins can provide the OAuth client settings through env or managed app config." },
-  { id: "pylon", label: "Pylon", fields: [pylonMcpUrlField, pylonMcpClientIdField, pylonMcpAccessTokenField, pylonMcpRefreshTokenField, pylonMcpTokenExpiresAtField], help: "Connect the team-telnyx/pylon-mcp-server compatible endpoint through Pylon OAuth so Link can search tickets and create issues through user-scoped Pylon MCP access. Link blocks update_issue and update_account in v1." },
+  { id: "telnyx", label: "Telnyx", fields: ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"], help: "Telnyx API key for account, phone, messaging, WebRTC token generation, and Telnyx Storage access. Bucket selection lives in Storage." },
+  { id: "telnyx-storage", label: "Telnyx Storage", fields: ["TELNYX_STORAGE_BUCKET", "TELNYX_STORAGE_REGION", "TELNYX_STORAGE_PREFIX"], help: "Attach a Telnyx Cloud Storage bucket for desktop workspace backups. Cloud Link reuses your Telnyx API Key for S3-compatible upload auth." },
+  { id: "telnyx-meet-bridge", label: "Telnyx Meet Bridge", fields: [telnyxVoiceConnectionIdField, telnyxMeetCallerIdField, telnyxMeetWebhookUrlField, telnyxMeetConversationRelayWsUrlField, linkMeetingAgentAdapterUrlField], help: "Runtime settings for Google Meet live joins. Telnyx Assistants can join by assistant id; generic agents require a public Conversation Relay wss:// URL and may use the Cloud Link hosted agent adapter URL." },
+  { id: "agentmail", label: "AgentMail", fields: [agentMailApiKeyField, agentMailDomainField], help: "AgentMail creates one deterministic inbox per meeting bot. Cloud Link uses that email identity as the Calendar attendee." },
+  { id: "merge-dev", label: "Merge.dev", fields: [mergeAgentHandlerMcpUrlField, mergeAgentHandlerAccessTokenField], help: "Connect Merge.dev Agent Handler so Cloud Link can create employee plugins backed by Merge.dev SSO and group-based tool access." },
+  { id: "github", label: "GitHub", fields: [githubUserAccessTokenField, githubAppClientIdField, "GH_TOKEN"], help: "Pair GitHub with a read-only Telnyx Cloud Link GitHub App so Cloud Link can access approved Telnyx repositories without asking users to create personal access tokens." },
+  { id: "guru", label: "Guru", fields: [guruOAuthClientIdField, guruOAuthClientSecretField, guruOAuthScopeField, guruOAuthRedirectUriField, guruOAuthAccessTokenField, guruOAuthRefreshTokenField, guruOAuthTokenExpiresAtField, guruOAuthUserIdField], help: "Connect Guru through OAuth so Cloud Link can search Guru MCP cards after the user approves access through Guru SSO. Admins can provide the OAuth client settings through env or managed app config." },
+  { id: "pylon", label: "Pylon", fields: [pylonMcpUrlField, pylonMcpClientIdField, pylonMcpAccessTokenField, pylonMcpRefreshTokenField, pylonMcpTokenExpiresAtField], help: "Connect the team-telnyx/pylon-mcp-server compatible endpoint through Pylon OAuth so Cloud Link can search tickets and create issues through user-scoped Pylon MCP access. Cloud Link blocks update_issue and update_account in v1." },
   { id: "slack", label: "Slack", fields: ["SLACK_USER_TOKEN", "SLACK_BOT_TOKEN"], help: "Slack user token discovers and DMs bot users; bot token can post where the app has access." },
-  { id: "google-workspace", label: "Google", fields: [googleWorkspaceAgentConnectionField, gogAccountField, gogKeyringPasswordField], help: "Connect Google Workspace through openclaw-itops-setup-utils/gog-setup. Link launches Google sign-in through gog and verifies Calendar and Contacts before marking this connected." },
-  { id: "google-inbox", label: "Google Inbox", fields: [googleInboxAgentConnectionField, googleInboxVerifiedField, gogAccountField, gogKeyringPasswordField], help: "Connect Gmail through gog. Link can read inbox threads and save Gmail drafts, but blocks all Gmail send commands at the app level." },
+  { id: "google-workspace", label: "Google", fields: [googleWorkspaceAgentConnectionField, gogAccountField, gogKeyringPasswordField], help: "Connect Google Workspace through openclaw-itops-setup-utils/gog-setup. Cloud Link launches Google sign-in through gog and verifies Calendar and Contacts before marking this connected." },
+  { id: "google-inbox", label: "Google Inbox", fields: [googleInboxAgentConnectionField, googleInboxVerifiedField, gogAccountField, gogKeyringPasswordField], help: "Connect Gmail through gog. Cloud Link can read inbox threads and save Gmail drafts, but blocks all Gmail send commands at the app level." },
   { id: "google-tasks", label: "Google Tasks", fields: [googleTasksAgentConnectionField, googleTasksVerifiedField, gogAccountField, gogKeyringPasswordField], help: "Connect Google Tasks through gog so Taskbox can sync, create, update, and complete Google tasks without delete or clear commands." },
 ];
 
@@ -940,6 +1005,11 @@ function trayIconSource() {
   return fsSync.existsSync(appTrayTemplateIconPath) ? appTrayTemplateIconPath : trayIconImage();
 }
 
+function trayTitleForIcon(icon) {
+  if (typeof icon === "string") return "";
+  return icon.isEmpty() ? appTrayTitle : "";
+}
+
 function showTrayNotification(body, title = appDisplayName) {
   if (!body || !Notification.isSupported()) return;
   const icon = nativeImage.createFromPath(appIconPath);
@@ -988,13 +1058,13 @@ function trayWhisperAlertLabel({ settings, whisperStatus }) {
   if (process.platform !== "darwin") return "Dictation is only available on macOS.";
   if (!settings.whisperEnabled || whisperStatus.running) return "";
   if (whisperStatus.sttMode === "local" && !whisperStatus.localReady) {
-    return whisperStatus.message || "Open Link to finish local dictation setup.";
+    return whisperStatus.message || "Open Telnyx Cloud Link to finish local dictation setup.";
   }
   if (whisperStatus.sttMode === "telnyx-cloud" && !whisperStatus.apiKeyReady) {
     return "Add your Telnyx API key in Settings before starting Telnyx Cloud dictation.";
   }
   if (!whisperStatus.available) {
-    return whisperStatus.message || "Dictation is unavailable right now. Open Link to finish setup.";
+    return whisperStatus.message || "Dictation is unavailable right now. Open Telnyx Cloud Link to finish setup.";
   }
   return "";
 }
@@ -1005,7 +1075,7 @@ function buildAppTrayMenu({ settings, whisperStatus, recentDictation }) {
   const canStartDictation = canStartWhisperFromTray({ settings, whisperStatus });
   const alertLabel = trayWhisperAlertLabel({ settings, whisperStatus });
   const menuItems = [
-    { label: "Open Link", click: () => createWindow() },
+    { label: "Open Telnyx Cloud Link", click: () => createWindow() },
     { type: "separator" },
     {
       label: "Dictation Enabled",
@@ -1105,7 +1175,7 @@ function buildAppTrayMenu({ settings, whisperStatus, recentDictation }) {
     menuItems.push({ type: "separator" }, { label: alertLabel, enabled: false });
   }
 
-  menuItems.push({ type: "separator" }, { role: "quit", label: "Quit Link" });
+  menuItems.push({ type: "separator" }, { role: "quit", label: `Quit ${appDisplayName}` });
   return Menu.buildFromTemplate(menuItems);
 }
 
@@ -1117,15 +1187,16 @@ async function refreshAppTrayMenu() {
   const icon = trayIconSource();
   appTray.setImage(icon);
   if (process.platform === "darwin") appTray.setPressedImage(icon);
-  appTray.setTitle("");
+  appTray.setTitle(trayTitleForIcon(icon));
   appTray.setContextMenu(buildAppTrayMenu({ settings, whisperStatus, recentDictation }));
   appTray.setToolTip(whisperStatus.running ? `${appDisplayName} · ${settings.shortcutLabel} active` : appDisplayName);
 }
 
 async function ensureAppTray() {
   if (process.platform !== "darwin" || appTray) return;
-  appTray = new Tray(trayIconSource());
-  appTray.setTitle("");
+  const icon = trayIconSource();
+  appTray = new Tray(icon);
+  appTray.setTitle(trayTitleForIcon(icon));
   appTray.setToolTip(appDisplayName);
   appTray.on("double-click", () => {
     createWindow();
@@ -1190,7 +1261,7 @@ app.on("before-quit", () => {
   if (scribesLocalServer) scribesLocalServer.close();
   if (localApiServer) localApiServer.close();
   stopLiteLlmProxy();
-  stopTerminalProcess();
+  void stopTerminalProcess().catch(() => undefined);
 });
 
 function configureWebPermissions() {
@@ -1342,6 +1413,16 @@ function registerIpc() {
   secureIpcHandle("link:deploy-artifact", (_event, input) => deployArtifact(input));
   secureIpcHandle("link:list-tools", () => listTools());
   secureIpcHandle("link:list-connectors", () => listConnectors());
+  secureIpcHandle("link:list-custom-mcps", () => listCustomMcpServers());
+  secureIpcHandle("link:save-custom-mcp", (_event, input) => saveCustomMcpServer(input));
+  secureIpcHandle("link:test-custom-mcp", (_event, input) => testCustomMcpServer(input));
+  secureIpcHandle("link:set-custom-mcp-enabled", (_event, input) => setCustomMcpServerEnabled(input));
+  secureIpcHandle("link:delete-custom-mcp", (_event, id) => deleteCustomMcpServer(id));
+  secureIpcHandle("link:list-employee-plugins", () => listEmployeePlugins());
+  secureIpcHandle("link:save-employee-plugin", (_event, input) => saveEmployeePlugin(input));
+  secureIpcHandle("link:set-employee-plugin-enabled", (_event, input) => setEmployeePluginEnabled(input));
+  secureIpcHandle("link:delete-employee-plugin", (_event, id) => deleteEmployeePlugin(id));
+  secureIpcHandle("link:connect-merge-dev", () => connectMergeDevAgentHandler());
   secureIpcHandle("link:list-credentials", () => listCredentials());
   secureIpcHandle("link:save-credential", (_event, input) => saveCredential(input));
   secureIpcHandle("link:storage-backup-status", () => getStorageBackupStatus());
@@ -1372,6 +1453,7 @@ function registerIpc() {
   secureIpcHandle("link:pylon-connect-oauth", () => connectPylonWithOAuth());
   secureIpcHandle("link:pylon-create-issue", (_event, input) => createPylonIssue(input));
   secureIpcHandle("link:submit-wiki-workspace-doc", (_event, input) => submitWikiWorkspaceDoc(input));
+  secureIpcHandle("link:export-personal-wiki", (_event, input) => exportPersonalWiki(input));
   secureIpcHandle("link:google-calendar-events", () => listGoogleCalendarEvents());
   secureIpcHandle("link:calendar-workspace", (_event, input) => getCalendarWorkspaceView(input));
   secureIpcHandle("link:meeting-bots", () => listMeetingBots());
@@ -1452,6 +1534,7 @@ function registerIpc() {
   secureIpcHandle("link:delete-wiki-source", (_event, id) => deleteWikiSource(id));
   secureIpcHandle("link:reset-wiki-sources", () => resetWikiSources());
   secureIpcHandle("link:search-explorer", (_event, input) => searchExplorer(input));
+  secureIpcHandle("link:list-explorer-source-items", (_event, input) => listExplorerSourceItems(input));
   secureIpcHandle("link:ask-knowledge-agent", (_event, input) => askKnowledgeAgent(input));
   secureIpcHandle("link:list-chat-sessions", () => sortChatSessions(chatSessions));
   secureIpcHandle("link:create-chat-session", (_event, input) => createChatSession(input));
@@ -1482,6 +1565,7 @@ function registerIpc() {
   secureIpcHandle("link:list-wiki-state", () => wikiState);
   secureIpcHandle("link:publisher-readiness", () => getPublisherReadiness());
   secureIpcHandle("link:message-gateway-readiness", () => getMessageGatewayReadiness());
+  secureIpcHandle("link:session-daemon-readiness", () => getSessionDaemonReadiness());
   secureIpcHandle("link:message-gateway-list-messages", (_event, input) => listGatewayMessages(input));
   secureIpcHandle("link:message-gateway-send-message", (_event, input) => sendGatewayMessage(input));
   secureIpcHandle("link:message-gateway-list-events", (_event, input) => listGatewayMessageEvents(input));
@@ -1500,6 +1584,7 @@ function registerIpc() {
   secureIpcHandle("link:edge-list-local-draft-apps", () => listLocalEdgeDraftApps());
   secureIpcHandle("link:edge-import-local-app", (_event, input) => importLocalEdgeApp(input));
   secureIpcHandle("link:edge-delete-local-draft-app", (_event, input) => deleteLocalEdgeDraftApp(input));
+  secureIpcHandle("link:edge-materialize-html-artifact", (_event, input) => materializeHtmlArtifact(input));
   secureIpcHandle("link:edge-preview-local-app", (_event, input) => previewLocalEdgeApp(input));
   secureIpcHandle("link:edge-deploy-local-app", (_event, input) => deployLocalEdgeApp(input));
   secureIpcHandle("link:audit-events", () => auditLogger.all());
@@ -1636,7 +1721,7 @@ async function publishToolManifest(input = {}) {
       body: JSON.stringify(registryPayloadForToolManifest(manifest)),
     });
     const remoteTool = normalizeToolCatalogItem(response.tool);
-    if (!remoteTool) throw new Error("Link Skill Registry returned malformed tool catalog data.");
+    if (!remoteTool) throw new Error("Cloud Link Skill Registry returned malformed tool catalog data.");
     toolCatalogItems = mergeToolCatalogItems(toolCatalogItems, [remoteTool]);
     if (remoteTool.stats) {
       skillRegistryStats[remoteTool.stats.skillId] = mergeSkillRegistryStats(skillRegistryStats[remoteTool.stats.skillId], normalizeSkillRegistryStats(remoteTool.stats));
@@ -1765,7 +1850,7 @@ async function publishToolManifestRemote(input = {}) {
     body: JSON.stringify(registryPayloadForToolManifest(manifest)),
   });
   const remoteTool = normalizeToolCatalogItem(response.tool);
-  if (!remoteTool) throw new Error("Link Skill Registry returned malformed tool catalog data.");
+  if (!remoteTool) throw new Error("Cloud Link Skill Registry returned malformed tool catalog data.");
   toolCatalogItems = mergeToolCatalogItems(toolCatalogItems, [remoteTool]);
   if (remoteTool.stats) {
     skillRegistryStats[remoteTool.stats.skillId] = mergeSkillRegistryStats(skillRegistryStats[remoteTool.stats.skillId], normalizeSkillRegistryStats(remoteTool.stats));
@@ -1933,7 +2018,7 @@ async function fetchSkillRegistryJson(pathname, init = {}) {
     ...(init.headers || {}),
   };
   const response = await fetch(`${baseUrl}${pathname}`, { ...init, headers });
-  if (!response.ok) throw new Error(`Link Skill Registry request failed: ${response.status}`);
+  if (!response.ok) throw new Error(`Cloud Link Skill Registry request failed: ${response.status}`);
   return response.json();
 }
 
@@ -1943,7 +2028,7 @@ function skillRegistryUrl() {
 
 function skillRegistryHeaders() {
   const token = credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY");
-  if (!token) throw new Error("Link Skill Registry requires Okta Rev2 auth or TELNYX_API_KEY.");
+  if (!token) throw new Error("Cloud Link Skill Registry requires Okta Rev2 auth or TELNYX_API_KEY.");
   const headers = { Authorization: `Bearer ${token}` };
   const actor = process.env.TELNYX_ACTOR || credentialValue("TELNYX_AUTH_USER_NAME") || credentialValue("TELNYX_AUTH_USER_ID");
   if (actor) headers["X-Telnyx-Actor"] = actor;
@@ -2079,7 +2164,7 @@ function normalizeToolManifestInput(input = {}) {
     riskLevel,
     customerSafe,
     approvalRequired,
-    sourceOfTruth: normalizeOptionalString(input.sourceOfTruth ?? input.source_of_truth) || "Git-backed Link tool definition.",
+    sourceOfTruth: normalizeOptionalString(input.sourceOfTruth ?? input.source_of_truth) || "Git-backed Cloud Link tool definition.",
     repeatedChecks: normalizeOptionalString(input.repeatedChecks ?? input.repeated_checks) || "Run the included test fixture before sharing.",
     humanCheckpoints: normalizeOptionalString(input.humanCheckpoints ?? input.human_checkpoints) || "Human owner reviews public or destructive actions.",
     testFixture: normalizeOptionalString(input.testFixture ?? input.test_fixture) || "Use the latest real chat request as the fixture.",
@@ -2163,7 +2248,7 @@ function normalizeToolCatalogItem(value) {
     riskLevel: normalizeRiskLevel(value.riskLevel ?? value.risk_level),
     customerSafe: Boolean(value.customerSafe ?? value.customer_safe),
     approvalRequired: Boolean(value.approvalRequired ?? value.approval_required),
-    sourceOfTruth: normalizeOptionalString(value.sourceOfTruth ?? value.source_of_truth) || "Git-backed Link tool definition.",
+    sourceOfTruth: normalizeOptionalString(value.sourceOfTruth ?? value.source_of_truth) || "Git-backed Cloud Link tool definition.",
     repeatedChecks: normalizeOptionalString(value.repeatedChecks ?? value.repeated_checks) || "Run the included test fixture before sharing.",
     humanCheckpoints: normalizeOptionalString(value.humanCheckpoints ?? value.human_checkpoints) || "Human owner reviews public or destructive actions.",
     testFixture: normalizeOptionalString(value.testFixture ?? value.test_fixture) || "Use the latest real chat request as the fixture.",
@@ -2500,7 +2585,7 @@ async function sendChatMessage({ sessionId, workspaceId = "workspace-link", cont
   if (!trimmed) throw new Error("Chat message cannot be empty.");
   const hiddenInstruction = String(systemInstruction ?? "").trim();
   const targetAgent = [agentName, agentId].filter(Boolean).join(" / ") || "Personal OpenClaw";
-  const assistantDisplayName = agentName || (agentId ? targetAgent : "Link");
+  const assistantDisplayName = agentName || (agentId ? targetAgent : "Cloud Link");
   const aidaRoute = isAidaAgentSelection(agentId, agentName);
   const a2aRoute = isA2aAgentSelection(agentId, agentSource);
   const routingLabel = aiModelRoutingRequestLabel(modelMode);
@@ -2525,7 +2610,7 @@ async function sendChatMessage({ sessionId, workspaceId = "workspace-link", cont
       status: "active",
       updatedAt: new Date().toISOString(),
       messages: [
-        createMessage("system", `You are ${assistantDisplayName}. Telnyx Link is only the desktop client routing this conversation, not your assistant identity. ${routeInstruction} ${hindsightInstruction}`),
+        createMessage("system", `You are ${assistantDisplayName}. Telnyx Cloud Link is only the desktop client routing this conversation, not your assistant identity. ${routeInstruction} ${hindsightInstruction}`),
       ],
     };
     chatSessions = [sessionItem, ...chatSessions];
@@ -2533,7 +2618,7 @@ async function sendChatMessage({ sessionId, workspaceId = "workspace-link", cont
 
   sessionItem.messages = [
     ...sessionItem.messages,
-    createMessage("system", `Selected Link chat agent: ${targetAgent}. ${chatSettings} ${hindsightInstruction}`),
+    createMessage("system", `Selected Cloud Link chat agent: ${targetAgent}. ${chatSettings} ${hindsightInstruction}`),
     ...(hiddenInstruction ? [createMessage("system", hiddenInstruction)] : []),
     createMessage("user", trimmed),
   ];
@@ -2548,7 +2633,7 @@ async function sendChatMessage({ sessionId, workspaceId = "workspace-link", cont
     createMessage(
       "assistant",
       responseText,
-      createChatArtifacts(trimmed),
+      createChatArtifacts(trimmed, responseText),
       responseSources,
       assistantDisplayName,
     ),
@@ -2639,8 +2724,8 @@ async function createChatSession({
   const isHostedAgent = runtimeType === "hermes" || runtimeType === "openclaw";
   const isA2aAgent = isA2aAgentSelection(selectedAgentId, selectedAgentSource);
   const isSelfHostedAgent = isSelfHostedAgentSelection(selectedAgentId, selectedAgentSource);
-  const targetAgent = [selectedAgentName, selectedAgentId].filter(Boolean).join(" / ") || "Link";
-  const assistantDisplayName = selectedAgentName || (selectedAgentId ? targetAgent : "Link");
+  const targetAgent = [selectedAgentName, selectedAgentId].filter(Boolean).join(" / ") || "Cloud Link";
+  const assistantDisplayName = selectedAgentName || (selectedAgentId ? targetAgent : "Cloud Link");
   const routingLabel = aiModelRoutingRequestLabel(modelMode);
   const requestedModelRoute = normalizeAiModelRoute(modelMode);
   const chatSettings = `Approval mode: ${approvalMode}. Runtime route: ${routingLabel}. Context scope: ${contextScope}.`;
@@ -2666,8 +2751,8 @@ async function createChatSession({
     updatedAt: now,
     ...(isA2aAgent ? { a2a: { targetAgentId: selectedAgentId } } : {}),
     messages: [
-      createMessage("system", `You are ${assistantDisplayName}. Telnyx Link is only the desktop client routing this conversation, not your assistant identity. ${routeInstruction} ${hindsightInstruction}`),
-      createMessage("system", `Selected Link chat agent: ${targetAgent}. New session initialized for ${isA2aAgent ? "a2a-discovery" : isSelfHostedAgent ? `self-hosted-${runtimeType}` : isHostedAgent ? runtimeType : "default"} runtime. ${chatSettings} ${hindsightInstruction} ${workboardInstruction}`),
+      createMessage("system", `You are ${assistantDisplayName}. Telnyx Cloud Link is only the desktop client routing this conversation, not your assistant identity. ${routeInstruction} ${hindsightInstruction}`),
+      createMessage("system", `Selected Cloud Link chat agent: ${targetAgent}. New session initialized for ${isA2aAgent ? "a2a-discovery" : isSelfHostedAgent ? `self-hosted-${runtimeType}` : isHostedAgent ? runtimeType : "default"} runtime. ${chatSettings} ${hindsightInstruction} ${workboardInstruction}`),
     ],
   };
 
@@ -2722,7 +2807,7 @@ function aidaAgentRouteInstruction(chatSettings) {
     `Route this conversation through AIDA using OpenClaw or Hermes as the agent runtime. ${chatSettings}`,
     endpoint
       ? `AIDA's configured MCP endpoint is ${endpoint}.`
-      : "No AIDA_MCP_URL is configured in Link; use a hosted runtime route that already owns AIDA tool configuration.",
+      : "No AIDA_MCP_URL is configured in Cloud Link; use a hosted runtime route that already owns AIDA tool configuration.",
     "Do not ask the user to install or configure a local MCP server.",
     "The agent runtime should use the user's Telnyx auth context and call AIDA as an internal tool.",
   ].join(" ");
@@ -2731,15 +2816,15 @@ function aidaAgentRouteInstruction(chatSettings) {
 function createAidaAgentHandoff(prompt, chatSettings) {
   const endpoint = optionalAidaMcpUrl();
   const authState = credentialConfigured("TELNYX_API_KEY")
-    ? "TELNYX_API_KEY is available to the Link main process."
+    ? "Telnyx API Key is available to the Cloud Link main process."
     : credentialConfigured("TELNYX_AUTH_REV2")
-      ? "Okta Rev2 auth is available to the Link main process."
-      : "Telnyx auth is not configured in Link yet.";
+      ? "Okta Rev2 auth is available to the Cloud Link main process."
+      : "Telnyx auth is not configured in Cloud Link yet.";
   return [
     "AIDA route selected.",
     "",
-    "Link will route this request to OpenClaw/Hermes with AIDA as the target tool without requiring local MCP setup.",
-    endpoint ? `AIDA MCP endpoint: ${endpoint}` : "AIDA MCP endpoint is not configured in Link.",
+    "Cloud Link will route this request to OpenClaw/Hermes with AIDA as the target tool without requiring local MCP setup.",
+    endpoint ? `AIDA MCP endpoint: ${endpoint}` : "AIDA MCP endpoint is not configured in Cloud Link.",
     authState,
     chatSettings,
     "",
@@ -2750,7 +2835,7 @@ function createAidaAgentHandoff(prompt, chatSettings) {
 function liveRuntimeUnavailableMessage(aidaRoute, detail = "", a2aRoute = false) {
   const suffix = detail ? `\n\nRuntime detail: ${detail}` : "";
   if (a2aRoute) {
-    return `The selected A2A agent did not return a live response. Verify network access, A2A discovery availability, and that the agent accepts Link desktop messages.${suffix}`;
+    return `The selected A2A agent did not return a live response. Verify network access, A2A discovery availability, and that the agent accepts Cloud Link desktop messages.${suffix}`;
   }
   if (aidaRoute) {
     return `AIDA is selected, but no live agent runtime returned a response. Confirm Agent Control Plane is signed in and the selected agent is deployed with chat enabled.${suffix}`;
@@ -2765,8 +2850,8 @@ function telnyxDocsRouteInstruction() {
 
 function hindsightAgentCapabilityInstruction() {
   const status = hindsightConfigured()
-    ? "Hindsight is configured for this Link install."
-    : "Hindsight can be enabled for this Link install by configuring HINDSIGHT_API_URL and HINDSIGHT_API_KEY.";
+    ? "Hindsight is configured for this Cloud Link install."
+    : "Hindsight can be enabled for this Cloud Link install by configuring HINDSIGHT_API_URL and HINDSIGHT_API_KEY.";
   return `${hindsightAgentCapabilityBase} ${status}`;
 }
 
@@ -2984,7 +3069,7 @@ async function runSelfHostedAgentChat({ agentId, agentSource, prompt }) {
   const envName = runtimeType === "hermes" ? "HERMES_CHAT_ARGS_JSON" : "OPENCLAW_CHAT_ARGS_JSON";
   return {
     ok: false,
-    error: `Self-hosted ${label} was detected, but Link could not complete a local chat command. Set ${envName} to a JSON array of arguments with "{{prompt}}" if your CLI uses a custom chat command. ${failures.join(" ")}`.trim(),
+    error: `Self-hosted ${label} was detected, but Cloud Link could not complete a local chat command. Set ${envName} to a JSON array of arguments with "{{prompt}}" if your CLI uses a custom chat command. ${failures.join(" ")}`.trim(),
   };
 }
 
@@ -3096,7 +3181,7 @@ async function runLiteLlmChat(messages, modelMode = defaultAiModelRoute) {
 
 async function runLiteLlmChatRoute(route, messages) {
   if (route.dataBoundary === "telnyx-cloud" && route.provider !== "managed-telnyx" && !credentialConfigured("TELNYX_API_KEY")) {
-    return { ok: false, error: "TELNYX_API_KEY is not configured. Save a Telnyx API key or choose a Local route." };
+    return { ok: false, error: "Telnyx API Key is not configured. Save a Telnyx API Key or choose a Local route." };
   }
   if (route.dataBoundary === "frontier-byo" && !credentialConfigured("ANTHROPIC_API_KEY")) {
     return { ok: false, error: "ANTHROPIC_API_KEY is not configured. Save an Anthropic key or choose a Local route." };
@@ -3360,7 +3445,7 @@ async function getLiteLlmRuntimeStatus() {
         ? `Telnyx catalog refresh failed: ${snapshot.catalog.error}`
         : credentialConfigured("TELNYX_API_KEY")
         ? "Telnyx model catalog is available."
-        : "Add TELNYX_API_KEY to enable Telnyx cloud routes.",
+        : "Add a Telnyx API Key to enable Telnyx cloud routes.",
     },
     managedGateway: {
       configured: snapshot.managed.configured,
@@ -3523,8 +3608,6 @@ async function pullLocalModel(input = {}) {
 }
 
 async function importLocalModel(input = {}) {
-  const name = String(input.name || "").trim();
-  if (!name) throw new Error("Enter a model name before importing a GGUF or Modelfile.");
   let importPath = String(input.path || "").trim();
   if (!importPath) {
     const selection = await dialog.showOpenDialog({
@@ -3537,6 +3620,8 @@ async function importLocalModel(input = {}) {
     if (selection.canceled || selection.filePaths.length === 0) return getModelCenterSnapshot({ force: false });
     importPath = selection.filePaths[0];
   }
+  const name = String(input.name || importModelNameFromPath(importPath)).trim();
+  if (!name) throw new Error("Choose a GGUF or Modelfile to import.");
 
   const modelId = catalogModelIdForLocalExternalId(name);
   localModelOperations.set(modelId, {
@@ -3579,6 +3664,17 @@ async function importLocalModel(input = {}) {
   await saveDesktopState();
   invalidateAiModelRouteHealthCache();
   return getModelCenterSnapshot({ force: true });
+}
+
+function importModelNameFromPath(importPath) {
+  const parsed = path.parse(String(importPath || ""));
+  const rawName = parsed.name || parsed.base || "imported-model";
+  return rawName
+    .replace(/\.(gguf|modelfile|txt)$/i, "")
+    .replace(/[^a-z0-9._-]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase()
+    || "imported-model";
 }
 
 async function removeLocalModel(input = {}) {
@@ -4178,7 +4274,7 @@ async function getModelCenterSnapshot({ force = false } = {}) {
       id: "ollama",
       label: "Ollama",
       kind: "local",
-      description: "Local Ollama engine managed by the Link Runtime Manager.",
+      description: "Local Ollama engine managed by the Cloud Link Runtime Manager.",
       engineFamily: "ollama",
       dataBoundary: "local",
     },
@@ -4887,7 +4983,7 @@ function buildAiModelRouteHealths(routes, snapshot) {
         {
           name: "telnyx_api_key",
           ok: telnyxConfigured,
-          detail: telnyxConfigured ? "TELNYX_API_KEY is configured." : "Add TELNYX_API_KEY to enable Telnyx cloud routes.",
+          detail: telnyxConfigured ? "Telnyx API Key is configured." : "Add a Telnyx API Key to enable Telnyx cloud routes.",
         },
         {
           name: "telnyx_catalog",
@@ -4908,12 +5004,12 @@ function buildAiModelRouteHealths(routes, snapshot) {
         state = "setup_required";
         ready = false;
         reachable = false;
-        message = "Install LiteLLM to use direct Telnyx cloud routes from Link Desktop.";
+        message = "Install LiteLLM to use direct Telnyx cloud routes from Telnyx Cloud Link Desktop.";
       } else if (!telnyxConfigured) {
         state = "setup_required";
         ready = false;
         reachable = null;
-        message = "Add TELNYX_API_KEY to enable direct Telnyx cloud routes.";
+        message = "Add a Telnyx API Key to enable direct Telnyx cloud routes.";
       } else if (!modelKnown) {
         state = "degraded";
         ready = false;
@@ -5294,7 +5390,7 @@ async function searchExplorer({ query = "", workspaceId } = {}) {
       source: "skill",
       type: "skill",
       permission: "allowed",
-      freshness: skill.source === "tool-studio" ? "Tool Studio catalog" : skill.source === "telnyx" ? "Root skills repository" : "Link skill",
+      freshness: skill.source === "tool-studio" ? "Tool Studio catalog" : skill.source === "telnyx" ? "Root skills repository" : "Cloud Link skill",
       excerpt: skill.description,
     })),
     ...agents.slice(0, 2).map((agent) => ({
@@ -5309,6 +5405,204 @@ async function searchExplorer({ query = "", workspaceId } = {}) {
   ];
 }
 
+async function listExplorerSourceItems({ source = "", workspaceId, limit = 25 } = {}) {
+  const sourceId = String(source || "").trim();
+  const normalizedLimit = Math.max(1, Math.min(25, Number(limit) || 25));
+  if (!sourceId) return [];
+
+  if (sourceId === "telnyx_developers") {
+    return listRecentTelnyxDeveloperDocs(workspaceId, normalizedLimit);
+  }
+  if (sourceId === "guru") {
+    return listRecentGuruDocs(workspaceId, normalizedLimit);
+  }
+  if (sourceId === "pylon") {
+    return listRecentPylonIssues(workspaceId, normalizedLimit);
+  }
+  return [];
+}
+
+function sortExplorerResultsByUpdatedAt(results, limit = 25) {
+  return dedupeExplorerResults(results)
+    .sort((left, right) => {
+      const rightTime = Date.parse(right?.updatedAt || "") || 0;
+      const leftTime = Date.parse(left?.updatedAt || "") || 0;
+      if (rightTime !== leftTime) return rightTime - leftTime;
+      return String(left?.title || "").localeCompare(String(right?.title || ""));
+    })
+    .slice(0, Math.max(1, Math.min(25, Number(limit) || 25)));
+}
+
+async function listRecentTelnyxDeveloperDocs(workspaceId, limit = 25) {
+  const sitemapUrls = [
+    "https://developers.telnyx.com/sitemap.xml",
+    "https://developers.telnyx.com/sitemap-pages.xml",
+  ];
+
+  for (const sitemapUrl of sitemapUrls) {
+    try {
+      const entries = await fetchSitemapEntries(sitemapUrl);
+      const results = entries
+        .filter((entry) => /developers\.telnyx\.com/i.test(entry.loc))
+        .sort((left, right) => (Date.parse(right.lastmod || "") || 0) - (Date.parse(left.lastmod || "") || 0))
+        .slice(0, limit)
+        .map((entry, index) => {
+          const title = docsPageTitle(new URL(entry.loc).pathname) || "Developer Docs page";
+          return {
+            id: `explorer-dev-docs-recent-${slugifyId(entry.loc || `item-${index}`)}`,
+            title,
+            source: "telnyx_developers",
+            type: "doc",
+            permission: "allowed",
+            freshness: entry.lastmod ? `Developer Docs - ${relativeTime(entry.lastmod)}` : "Developer Docs",
+            excerpt: `Recently updated Developer Docs page: ${title}.`,
+            updatedAt: entry.lastmod || undefined,
+            workspaceId: workspaceId || "workspace-link",
+            url: entry.loc,
+          };
+        });
+      if (results.length) return results;
+    } catch {
+      // Try the next sitemap shape before giving up.
+    }
+  }
+
+  return fallbackTelnyxDocsResults("", workspaceId)
+    .filter((result) => result.source === "telnyx_developers")
+    .slice(0, 1);
+}
+
+async function fetchSitemapEntries(url, seen = new Set(), depth = 0) {
+  if (!url || seen.has(url) || depth > 4) return [];
+  seen.add(url);
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Accept: "application/xml, text/xml;q=0.9, */*;q=0.8",
+    },
+  });
+  if (!response.ok) return [];
+
+  const xml = await response.text();
+  if (!xml.includes("<urlset") && !xml.includes("<sitemapindex")) return [];
+
+  if (xml.includes("<sitemapindex")) {
+    const sitemapLocs = [...xml.matchAll(/<sitemap>\s*[\s\S]*?<loc>([^<]+)<\/loc>[\s\S]*?<\/sitemap>/gi)]
+      .map((match) => decodeXmlEntities(match[1] || "").trim())
+      .filter(Boolean)
+      .slice(0, 10);
+    const nestedEntries = await Promise.all(sitemapLocs.map((loc) => fetchSitemapEntries(loc, seen, depth + 1)));
+    return nestedEntries.flat();
+  }
+
+  return [...xml.matchAll(/<url>\s*[\s\S]*?<loc>([^<]+)<\/loc>(?:[\s\S]*?<lastmod>([^<]+)<\/lastmod>)?[\s\S]*?<\/url>/gi)]
+    .map((match) => ({
+      loc: decodeXmlEntities(match[1] || "").trim(),
+      lastmod: decodeXmlEntities(match[2] || "").trim(),
+    }))
+    .filter((entry) => Boolean(entry.loc));
+}
+
+function decodeXmlEntities(value) {
+  return String(value || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'");
+}
+
+async function listRecentGuruDocs(workspaceId, limit = 25) {
+  if (!connectorReady("guru")) return [];
+
+  const authorization = await guruMcpAuthorizationHeader().catch(() => "");
+  if (authorization) {
+    const agentId = credentialValue("GURU_KNOWLEDGE_AGENT_ID") || await guruMcpDefaultAgentId(authorization).catch(() => "");
+    const attempts = [
+      ["guru_search_documents", { query: "", agentId, limit }],
+      ["guru_search_documents", { query: " ", agentId, limit }],
+      ["guru_list_documents", { agentId, limit }],
+      ["guru_list_documents", { limit }],
+    ];
+
+    for (const [toolName, args] of attempts) {
+      const raw = await guruMcpToolCall(toolName, args, authorization).catch(() => null);
+      const payload = parseGuruMcpPayload(raw);
+      const records = Array.isArray(payload?.documents)
+        ? payload.documents
+        : Array.isArray(payload?.data?.documents)
+          ? payload.data.documents
+          : Array.isArray(payload?.results)
+            ? payload.results
+            : Array.isArray(payload)
+              ? payload
+              : [];
+      const results = sortExplorerResultsByUpdatedAt(
+        records
+          .filter((record) => !record?.documentType || record.documentType === "GURU")
+          .map((record, index) => normalizeGuruMcpExplorerResult(record, index, workspaceId))
+          .filter(Boolean),
+        limit,
+      );
+      if (results.length) return results;
+    }
+  }
+
+  try {
+    const params = new URLSearchParams({
+      q: "",
+      queryType: "cards",
+      maxResults: String(limit),
+      includeCardAttributes: "true",
+      sortBy: "lastModified",
+      sortOrder: "desc",
+    });
+    const response = await fetch(`${guruApiBaseUrl()}/search/query?${params.toString()}`, {
+      headers: {
+        Authorization: guruAuthorizationHeader(),
+      },
+    });
+    if (!response.ok) return [];
+
+    const payload = await response.json();
+    const records = Array.isArray(payload) ? payload : payload.results ?? payload.cards ?? payload.items ?? [];
+    return sortExplorerResultsByUpdatedAt(
+      records.map((record, index) => normalizeGuruExplorerResult(record, index, workspaceId)).filter(Boolean),
+      limit,
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function listRecentPylonIssues(workspaceId, limit = 25) {
+  if (!connectorReady("pylon")) return [];
+
+  const attempts = [
+    ["list_issues", { limit }],
+    ["list_issues", { page_size: limit }],
+    ["list_issues", { pageSize: limit }],
+    ["pylon_list_issues", { limit }],
+    ["pylon_list_issues", { page_size: limit }],
+    ["pylon_list_issues", { pageSize: limit }],
+    ["search_issues", { query: "", limit }],
+    ["pylon_search_issues", { query: "", limit }],
+  ];
+
+  for (const [toolName, args] of attempts) {
+    const raw = await pylonMcpToolCall(toolName, args).catch(() => null);
+    const records = pylonMcpRecords(raw);
+    const results = sortExplorerResultsByUpdatedAt(
+      records.map((record, index) => normalizePylonExplorerResult(record, index, workspaceId)).filter(Boolean),
+      limit,
+    );
+    if (results.length) return results;
+  }
+
+  return [];
+}
+
 function customWikiSourceResults(term, workspaceId) {
   return listWikiSources()
     .filter((source) => source.enabled && !source.readonly && customWikiSourceTypes.has(source.type))
@@ -5320,6 +5614,7 @@ function customWikiSourceResults(term, workspaceId) {
       permission: "allowed",
       freshness: source.status === "disabled" ? "Disabled" : `Configured ${wikiSourceTypeLabel(source.type)}`,
       excerpt: `${source.description || "Custom Wiki source"} Target: ${source.target}. Search term: ${term}.`,
+      updatedAt: source.updatedAt,
       workspaceId: workspaceId || "workspace-acme",
       ...(source.target.startsWith("http") ? { url: source.target } : {}),
     }));
@@ -5434,7 +5729,7 @@ function fallbackTelnyxDocsResults(term, workspaceId) {
       type: "doc",
       permission: "allowed",
       freshness: "Built-in public source",
-      excerpt: "Link can search Telnyx Help Center content without requiring each user to configure Intercom credentials.",
+      excerpt: "Cloud Link can search Telnyx Help Center content without requiring each user to configure Intercom credentials.",
       workspaceId: workspaceId || "workspace-link",
       url: telnyxDocsSearchUrl(supportSource.url, query),
     },
@@ -5445,7 +5740,7 @@ function fallbackTelnyxDocsResults(term, workspaceId) {
       type: "doc",
       permission: "allowed",
       freshness: "Built-in public source",
-      excerpt: "Link can open Telnyx Developer Docs for API guides, SDK references, and implementation material without asking employees for Mintlify credentials.",
+      excerpt: "Cloud Link can open Telnyx Developer Docs for API guides, SDK references, and implementation material without asking employees for Mintlify credentials.",
       workspaceId: workspaceId || "workspace-link",
       url: telnyxDocsSearchUrl(developerSource.url, query),
     },
@@ -5518,6 +5813,7 @@ function normalizeIntercomExplorerResult(record, index, workspaceId) {
     permission: "allowed",
     freshness: updatedAt ? `Intercom - ${relativeTime(updatedAt)}` : "Intercom Help Center",
     excerpt: truncateText(cleanDocText(rawExcerpt || title)),
+    updatedAt: updatedAt || undefined,
     workspaceId: workspaceId || "workspace-link",
     url,
   };
@@ -5650,6 +5946,7 @@ function normalizeMintlifyExplorerResult(record, index, workspaceId, domain) {
   const title = doc.title ?? doc.heading ?? doc.name ?? record.title ?? "Developer Docs page";
   const rawExcerpt = doc.description ?? doc.excerpt ?? doc.snippet ?? doc.content ?? doc.markdown ?? doc.text ?? record.highlight ?? "";
   const pathValue = doc.url ?? doc.href ?? doc.path ?? doc.slug ?? "";
+  const updatedAt = doc.updated_at ?? doc.updatedAt ?? doc.last_modified ?? doc.lastModified ?? record.updated_at ?? record.updatedAt;
 
   return {
     id: `explorer-mintlify-${id}`,
@@ -5657,8 +5954,9 @@ function normalizeMintlifyExplorerResult(record, index, workspaceId, domain) {
     source: "telnyx_developers",
     type: "doc",
     permission: "allowed",
-    freshness: "Mintlify Developer Docs",
+    freshness: updatedAt ? `Mintlify Developer Docs - ${relativeTime(updatedAt)}` : "Mintlify Developer Docs",
     excerpt: truncateText(cleanDocText(rawExcerpt || title)),
+    updatedAt: updatedAt || undefined,
     workspaceId: workspaceId || "workspace-link",
     url: mintlifyResultUrl(pathValue, domain),
   };
@@ -5820,6 +6118,7 @@ function normalizeGuruMcpExplorerResult(record, index, workspaceId) {
     permission: "allowed",
     freshness: lastModified ? `Guru MCP - ${relativeTime(lastModified)}` : "Guru MCP",
     excerpt: truncateText(`${collection}${excerpt || "Verified Guru knowledge card."}`),
+    updatedAt: lastModified || undefined,
     workspaceId: workspaceId || "workspace-link",
     url,
   };
@@ -5853,7 +6152,7 @@ function fallbackGuruSkillResults(term, workspaceId) {
       source: "guru",
       type: "skill",
       permission: "allowed",
-      freshness: "Guru-backed Link skill",
+      freshness: "Guru-backed Cloud Link skill",
       excerpt: skill.excerpt,
       workspaceId: workspaceId || "workspace-link",
     }));
@@ -5874,6 +6173,7 @@ function normalizeGuruExplorerResult(record, index, workspaceId) {
     permission: "allowed",
     freshness: lastModified ? `Guru - ${relativeTime(lastModified)}` : "Guru user token",
     excerpt,
+    updatedAt: lastModified || undefined,
     workspaceId: workspaceId || "workspace-acme",
     url,
   };
@@ -5965,7 +6265,7 @@ async function getPylonIssueExplorerResults(issueId, workspaceId) {
 
 async function createPylonIssue(input = {}) {
   if (!connectorReady("pylon")) {
-    throw new Error("Pylon MCP is not configured. Connect Pylon with OAuth or add PYLON_MCP_ACCESS_TOKEN and optionally PYLON_MCP_URL in Link settings.");
+    throw new Error("Pylon MCP is not configured. Connect Pylon with OAuth or add PYLON_MCP_ACCESS_TOKEN and optionally PYLON_MCP_URL in Cloud Link settings.");
   }
 
   const title = normalizeRequiredString(input.title, "title");
@@ -6027,7 +6327,7 @@ async function submitWikiWorkspaceDoc(input = {}) {
   if (source.type === "pylon") {
     return submitWikiWorkspaceDocToPylon(source, { title, content, note });
   }
-  throw new Error(`${source.label} does not accept draft submissions from Link yet.`);
+  throw new Error(`${source.label} does not accept draft submissions from Cloud Link yet.`);
 }
 
 async function submitWikiWorkspaceDocToPylon(source, input) {
@@ -6080,7 +6380,7 @@ async function submitWikiWorkspaceDocToGitHub(source, input) {
   await githubRequest(githubRepoContentsUrl(repo, filePath), token, {
     method: "PUT",
     body: {
-      message: `docs: submit ${slugify(input.title)} draft from Link`,
+      message: `docs: submit ${slugify(input.title)} draft from Cloud Link`,
       content: Buffer.from(markdown, "utf8").toString("base64"),
       branch: branchName,
       ...(existingFile?.sha ? { sha: existingFile.sha } : {}),
@@ -6130,7 +6430,7 @@ function buildWikiWorkspaceGitHubDocMarkdown(source, input) {
   const body = normalizeRequiredString(input.content, "content").replace(/\r\n?/g, "\n").trim();
   const lines = [];
   if (!/^#\s+/m.test(body)) lines.push(`# ${input.title}`);
-  lines.push("> Submitted from Telnyx Link for admin review.");
+  lines.push("> Submitted from Telnyx Cloud Link for admin review.");
   lines.push(`> Source: ${source.label}`);
   if (input.note) lines.push(`> Review note: ${input.note.replace(/\r\n?/g, " ").trim()}`);
   lines.push("");
@@ -6142,7 +6442,7 @@ function buildWikiWorkspaceGitHubPrBody(source, input, filePath) {
   const sections = [
     "## Summary",
     "",
-    "Submitted from the Telnyx Link Docs workspace for admin review.",
+    "Submitted from the Telnyx Cloud Link Docs workspace for admin review.",
     "",
     `- Source: ${source.label}`,
     `- Draft path: \`${filePath}\``,
@@ -6156,7 +6456,7 @@ function buildWikiWorkspaceGitHubPrBody(source, input, filePath) {
 
 function wikiWorkspaceDocPylonIssueHtml(source, input) {
   const blocks = [
-    "<p>Submitted from the Telnyx Link Docs workspace for admin review.</p>",
+    "<p>Submitted from the Telnyx Cloud Link Docs workspace for admin review.</p>",
     `<p><strong>Source:</strong> ${escapeHtml(source.label)}</p>`,
   ];
   if (input.note) {
@@ -6205,7 +6505,7 @@ async function connectPylonWithOAuth() {
     type: "info",
     title: "Connect Pylon",
     message: `Enter this Pylon code: ${device.user_code}`,
-    detail: "Link will open Pylon OAuth in your browser. Approve access, then return to Link.",
+    detail: "Cloud Link will open Pylon OAuth in your browser. Approve access, then return to Cloud Link.",
     buttons: ["Open Pylon", "Cancel"],
     defaultId: 0,
     cancelId: 1,
@@ -6286,10 +6586,10 @@ async function pylonMcpToolCall(toolName, args = {}) {
 
 function assertPylonMcpToolAllowed(toolName) {
   if (pylonMcpBlockedTools.has(toolName)) {
-    throw new Error(`Pylon MCP tool ${toolName} is blocked in Link v1.`);
+    throw new Error(`Pylon MCP tool ${toolName} is blocked in Cloud Link v1.`);
   }
   if (!pylonMcpAllowedTools.has(toolName)) {
-    throw new Error(`Pylon MCP tool ${toolName} is not enabled in Link v1.`);
+    throw new Error(`Pylon MCP tool ${toolName} is not enabled in Cloud Link v1.`);
   }
 }
 
@@ -6342,7 +6642,7 @@ async function pylonOAuthClientId(oauth) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      client_name: "Telnyx Link",
+      client_name: "Telnyx Cloud Link",
       client_uri: "https://telnyx.com",
       grant_types: ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"],
       scope: pylonOAuthScope(),
@@ -6521,6 +6821,7 @@ function normalizePylonExplorerResult(record, index, workspaceId) {
     permission: "allowed",
     freshness: latest ? `Pylon - ${relativeTime(latest)}` : "Pylon MCP",
     excerpt: truncateText(details),
+    updatedAt: latest || undefined,
     workspaceId: workspaceId || "workspace-link",
     url: pylonIssueLink(issue),
   };
@@ -6585,9 +6886,14 @@ async function listAgents() {
     ...liteLlmAgents,
     ...hostedAgents.map((agent) => ({
       ...agent,
-      visibility: agent.type === "slack" ? "slack" : "public",
+      visibility: agent.type === "slack" ? "slack" : "internal",
       source: "agent-control-plane",
       slackChannel: agent.type === "slack" ? "#telnyx-link-eng" : undefined,
+      squad: agent.type || "Agent Control Plane",
+      audience: "internal",
+      origin: "agent-control-plane",
+      available: agent.status !== "disabled",
+      requiresAuthentication: true,
     })),
     ...slackAgents,
   ]);
@@ -6885,7 +7191,7 @@ const workboardProviderLabels = {
   hermes: "Hermes Kanban",
   openclaw: "OpenClaw Workboard",
   google_tasks: "Google Tasks",
-  local: "Link local board",
+  local: "Cloud Link local board",
 };
 
 const workboardStatusArchitecture = [
@@ -7144,7 +7450,7 @@ async function dispatchWorkboard(input = {}) {
       return {
         ...card,
         status: "in_progress",
-        diagnostics: [...(card.diagnostics || []), "Link local dispatch marked this card in progress. No external worker was started."],
+        diagnostics: [...(card.diagnostics || []), "Cloud Link local dispatch marked this card in progress. No external worker was started."],
         updatedAt: new Date().toISOString(),
       };
     }
@@ -7201,7 +7507,7 @@ async function findWorkboardCardForTask(input = {}) {
 function resolveWorkboardTaskAgent(input = {}, card = {}) {
   const rawAgentType = String(input.agentType || card.assigneeType || input.preferredAgentType || "").toLowerCase();
   const agentId = String(input.agentId || card.assigneeId || "").trim();
-  const agentName = String(input.agentName || card.assigneeName || card.assignee || agentId || "Link").trim();
+  const agentName = String(input.agentName || card.assigneeName || card.assignee || agentId || "Cloud Link").trim();
   const agentSource = input.agentSource
     || (rawAgentType.includes("a2a") ? "a2a-discovery" : agentId.startsWith("self:") ? "link" : "agent-control-plane");
   const agentType = rawAgentType.includes("hermes") ? "hermes" : rawAgentType.includes("a2a") ? "a2a" : "openclaw";
@@ -7360,7 +7666,7 @@ async function dispatchWorkboardTask(input = {}) {
     cardId: card.id,
     status: "in_progress",
     autoDispatch: false,
-    comment: "Started from Telnyx Link task session.",
+    comment: "Started from Telnyx Cloud Link task session.",
   });
 
   const routedSession = await sendChatMessage({
@@ -7415,28 +7721,28 @@ async function detectWorkboardProviders() {
       label: workboardProviderLabels.hermes,
       available: hermes,
       mode: hermes ? "native" : "unavailable",
-      message: hermes ? "Hermes CLI detected. Link will use Hermes Kanban commands." : "Hermes CLI was not found on PATH.",
+      message: hermes ? "Hermes CLI detected. Cloud Link will use Hermes Kanban commands." : "Hermes CLI was not found on PATH.",
     },
     {
       id: "openclaw",
       label: workboardProviderLabels.openclaw,
       available: openclaw,
       mode: openclaw ? "native" : "unavailable",
-      message: openclaw ? "OpenClaw CLI detected. Link will use OpenClaw Workboard commands." : "OpenClaw CLI was not found on PATH.",
+      message: openclaw ? "OpenClaw CLI detected. Cloud Link will use OpenClaw Workboard commands." : "OpenClaw CLI was not found on PATH.",
     },
     {
       id: "google_tasks",
       label: workboardProviderLabels.google_tasks,
       available: googleTasks,
       mode: googleTasks ? "native" : "unavailable",
-      message: googleTasks ? "Google Tasks is available through gog. Link can sync, create, update, and complete tasks." : "Google Tasks through gog is not connected yet.",
+      message: googleTasks ? "Google Tasks is available through gog. Cloud Link can sync, create, update, and complete tasks." : "Google Tasks through gog is not connected yet.",
     },
     {
       id: "local",
       label: workboardProviderLabels.local,
       available: true,
       mode: "fallback",
-      message: "Link local board is always available and does not require Hermes or OpenClaw.",
+      message: "Cloud Link local board is always available and does not require Hermes or OpenClaw.",
     },
   ];
 }
@@ -7542,7 +7848,7 @@ async function listHermesWorkboard(boardId, providers) {
     cards,
     assignees: normalizeAssignees(assigneesResult, cards),
     stats: normalizeWorkboardStats(statsResult, cards),
-    message: "Hermes Kanban is active. Link is using the native Hermes board and dispatcher.",
+    message: "Hermes Kanban is active. Cloud Link is using the native Hermes board and dispatcher.",
   };
 }
 
@@ -7561,7 +7867,7 @@ async function updateHermesWorkboardCard(input) {
   if (input.assigneeId !== undefined || input.assigneeName !== undefined || input.assignee !== undefined) {
     await runHermesKanban(input.boardId, ["assign", cardId, hasWorkboardAssignee(input) ? String(workboardAssigneeValue(input)) : "none"]);
   }
-  if (input.comment) await runHermesKanban(input.boardId, ["comment", cardId, String(input.comment), "--author", "Telnyx Link"]);
+  if (input.comment) await runHermesKanban(input.boardId, ["comment", cardId, String(input.comment), "--author", "Telnyx Cloud Link"]);
   if (input.title !== undefined || input.body !== undefined || input.priority !== undefined || input.labels !== undefined) {
     const editArgs = ["edit", cardId];
     if (input.title !== undefined) editArgs.push("--title", String(input.title));
@@ -7574,7 +7880,7 @@ async function updateHermesWorkboardCard(input) {
 
   const status = normalizeWorkboardStatus(input.status);
   if (status === "in_progress") await runHermesKanban(input.boardId, ["promote", cardId]);
-  if (status === "needs_review") await runHermesKanban(input.boardId, ["complete", cardId, "--result", "Final response is ready for human review from Telnyx Link."]);
+  if (status === "needs_review") await runHermesKanban(input.boardId, ["complete", cardId, "--result", "Final response is ready for human review from Telnyx Cloud Link."]);
   if (status === "done") await runHermesKanban(input.boardId, ["archive", cardId]);
   if (status === "todo") await runHermesKanban(input.boardId, ["unblock", cardId]).catch(() => null);
 }
@@ -7644,7 +7950,7 @@ async function listOpenClawWorkboard(boardId, providers) {
     cards,
     assignees: [...new Set(cards.map((card) => card.assignee).filter(Boolean))],
     stats: normalizeWorkboardStats(null, cards),
-    message: "OpenClaw Workboard is active. Link is reading the native Gateway board.",
+    message: "OpenClaw Workboard is active. Cloud Link is reading the native Gateway board.",
   };
 }
 
@@ -7823,7 +8129,7 @@ async function listGoogleTasksWorkboard(boardId, providers) {
     cards,
     assignees: [...new Set(cards.map((card) => card.assignee).filter(Boolean))],
     stats: normalizeWorkboardStats(null, cards),
-    message: "Google Tasks is active. Link is syncing tasks through gog with list/add/update/complete commands only.",
+    message: "Google Tasks is active. Cloud Link is syncing tasks through gog with list/add/update/complete commands only.",
   };
 }
 
@@ -7937,7 +8243,7 @@ function googleTasksGogCommandPath(commandArgs = []) {
 function googleTasksUnavailableMessage(error) {
   const detail = errorMessage(error);
   if (/aborted|AbortError|timeout|ETIMEDOUT|ECONNRESET|ERR_STREAM_PREMATURE_CLOSE/i.test(detail)) {
-    return "Google Tasks sync was interrupted before it completed. Link kept Taskbox available; reconnect Google Tasks or retry sync.";
+    return "Google Tasks sync was interrupted before it completed. Cloud Link kept Taskbox available; reconnect Google Tasks or retry sync.";
   }
   return detail;
 }
@@ -7948,7 +8254,7 @@ function localWorkboardSnapshot(providers, boardId = "local") {
     provider: "local",
     boardId: boardId || "local",
     providers,
-    boards: [{ id: "local", name: "Link local board", description: "Link-owned fallback board for manual monitoring.", provider: "local" }],
+    boards: [{ id: "local", name: "Cloud Link local board", description: "Cloud Link-owned fallback board for manual monitoring.", provider: "local" }],
     columns: workboardColumnsByProvider.local,
     cards,
     assignees: [...new Set(cards.map((card) => card.assignee).filter(Boolean))],
@@ -8343,7 +8649,7 @@ function clampInteger(value, min, max, fallback) {
 
 function requireTelnyxApiKey(label = "this Telnyx account") {
   const key = credentialValue("TELNYX_API_KEY") || "";
-  if (!key.trim()) throw new Error(`Save TELNYX_API_KEY before using ${label}.`);
+  if (!key.trim()) throw new Error(`Save a Telnyx API Key before using ${label}.`);
   return key.trim();
 }
 
@@ -8463,7 +8769,7 @@ async function listMemoryBanks() {
         name: "Key-scoped archive",
         scope: "user",
         status: "connected",
-        mission: "Link uses the archive selected by the configured API key.",
+        mission: "Cloud Link uses the archive selected by the configured API key.",
         updatedAt: "Configured",
         observationCount: 0,
         sourceCount: 0,
@@ -8579,6 +8885,147 @@ async function importOkfConcepts({ concepts, bankId } = {}) {
     results,
     errors,
   };
+}
+
+async function exportPersonalWiki(input = {}) {
+  const docs = Array.isArray(input.docs) ? input.docs.map(normalizePersonalWikiExportDoc).filter(Boolean) : [];
+  if (docs.length === 0) throw new Error("Add at least one saved doc before exporting your Personal Wiki.");
+  const title = normalizeOptionalString(input.title) || "Personal Wiki";
+  const selection = await dialog.showOpenDialog({
+    title: "Export Personal Wiki",
+    buttonLabel: "Choose export folder",
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (selection.canceled || !selection.filePaths[0]) return null;
+
+  const destinationParent = path.resolve(selection.filePaths[0]);
+  const bundleName = uniquePersonalWikiBundleName(title);
+  const bundleRoot = await ensureUniqueChildDirectory(destinationParent, bundleName);
+  const pagesDirectory = path.join(bundleRoot, "pages");
+  const logsDirectory = path.join(bundleRoot, "logs");
+  const exportedAt = new Date().toISOString();
+
+  await fs.mkdir(pagesDirectory, { recursive: true });
+  await fs.mkdir(logsDirectory, { recursive: true });
+
+  const pageRows = [];
+  for (const doc of docs) {
+    const slug = slugify(doc.title || doc.id || "note") || `note-${pageRows.length + 1}`;
+    const relativePath = `pages/${slug}.md`;
+    const frontmatter = formatOkfFrontmatter({
+      type: "note",
+      title: doc.title,
+      description: personalWikiDocDescription(doc.content),
+      tags: ["personal-wiki", `source-${doc.source}`],
+      timestamp: doc.updatedAt,
+      link_doc_id: doc.id,
+      created_at: doc.createdAt,
+      source: doc.source,
+    });
+    const body = [frontmatter, "", doc.content.trim()].join("\n").trimEnd() + "\n";
+    await fs.writeFile(path.join(bundleRoot, relativePath), body, "utf8");
+    pageRows.push(`- [${doc.title}](/${relativePath})`);
+  }
+
+  const indexFrontmatter = formatOkfFrontmatter({
+    type: "index",
+    title,
+    description: "Portable personal knowledge bundle exported from Telnyx Link.",
+    tags: ["personal-wiki", "telnyx-link"],
+    timestamp: exportedAt,
+  });
+  const indexBody = [
+    indexFrontmatter,
+    "",
+    `# ${title}`,
+    "",
+    "This OKF bundle contains your exported Telnyx Link Personal Wiki pages.",
+    "",
+    "## Pages",
+    "",
+    ...pageRows,
+    "",
+  ].join("\n");
+  await fs.writeFile(path.join(bundleRoot, "index.md"), indexBody, "utf8");
+
+  const logBody = [
+    "---",
+    "type: log",
+    `title: ${yamlScalar(`${title} export log`)}`,
+    `timestamp: ${yamlScalar(exportedAt)}`,
+    "---",
+    "",
+    `- ${exportedAt}: Exported ${docs.length} page${docs.length === 1 ? "" : "s"} from Telnyx Link.`,
+    "",
+  ].join("\n");
+  await fs.writeFile(path.join(logsDirectory, "log.md"), logBody, "utf8");
+
+  return {
+    status: "exported",
+    rootPath: bundleRoot,
+    bundleName: path.basename(bundleRoot),
+    documentCount: docs.length,
+    exportedAt,
+  };
+}
+
+function normalizePersonalWikiExportDoc(value) {
+  if (!value || typeof value !== "object") return null;
+  const id = normalizeRequiredString(value.id, "doc.id");
+  const title = normalizeOptionalString(value.title) || "Untitled doc";
+  const content = normalizeOptionalString(value.content).replace(/\r\n?/g, "\n").trim();
+  if (!content) return null;
+  const source = normalizeOptionalString(value.source) || "manual";
+  return {
+    id,
+    title,
+    content,
+    source,
+    createdAt: normalizeOptionalString(value.createdAt) || new Date().toISOString(),
+    updatedAt: normalizeOptionalString(value.updatedAt) || new Date().toISOString(),
+  };
+}
+
+async function ensureUniqueChildDirectory(parentDirectory, baseName) {
+  const basePath = path.join(parentDirectory, baseName);
+  let candidatePath = basePath;
+  let suffix = 2;
+  while (true) {
+    try {
+      await fs.mkdir(candidatePath, { recursive: false });
+      return candidatePath;
+    } catch (error) {
+      if (error && typeof error === "object" && "code" in error && error.code === "EEXIST") {
+        candidatePath = `${basePath}-${suffix++}`;
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+function uniquePersonalWikiBundleName(title) {
+  const base = slugify(title) || "personal-wiki";
+  return `${base}-${new Date().toISOString().slice(0, 10)}`;
+}
+
+function personalWikiDocDescription(markdown) {
+  const normalized = normalizeOptionalString(markdown).replace(/^#.*$/m, "").replace(/[#*_`>\-\[\]\(\)]/g, " ");
+  return normalized.replace(/\s+/g, " ").trim().slice(0, 160);
+}
+
+function formatOkfFrontmatter(fields = {}) {
+  const lines = ["---"];
+  for (const [key, value] of Object.entries(fields)) {
+    if (value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)) continue;
+    if (Array.isArray(value)) {
+      lines.push(`${key}: [${value.map((entry) => yamlScalar(entry)).join(", ")}]`);
+    } else {
+      lines.push(`${key}: ${yamlScalar(value)}`);
+    }
+  }
+  lines.push("---");
+  return lines.join("\n");
 }
 
 function normalizeOkfConceptInput(value) {
@@ -8828,7 +9275,9 @@ async function listConnectors() {
     };
   }));
   const mcpServers = await listMcpProxyServerConnectors();
-  return [...baseConnectors, ...mcpServers];
+  const customMcpConnectors = listCustomMcpServerConnectors();
+  const employeePluginConnectors = listEmployeePluginConnectors();
+  return [...baseConnectors, ...mcpServers, ...customMcpConnectors, ...employeePluginConnectors];
 }
 
 function connectorStatusOverride(id) {
@@ -8879,7 +9328,9 @@ async function googleTasksConnectorReady() {
 async function listTools() {
   const registryTools = createDefaultToolRegistry().list().map(metadataForTool);
   const mcpTools = await listMcpProxyTools();
-  return [...registryTools, ...mcpTools];
+  const customMcpTools = await listCustomMcpTools();
+  const employeePluginTools = listEmployeePluginTools();
+  return [...registryTools, ...mcpTools, ...customMcpTools, ...employeePluginTools];
 }
 
 async function getScribesStatus() {
@@ -10357,6 +10808,7 @@ function vpnServiceDefinitions() {
   return [
     { id: "link-app-publisher", label: "App Publisher", url: credentialValue("LINK_APP_PUBLISHER_URL") || process.env.LINK_APP_PUBLISHER_URL || "" },
     { id: "link-message-gateway", label: "Message Gateway", url: credentialValue("LINK_MESSAGE_GATEWAY_URL") || process.env.LINK_MESSAGE_GATEWAY_URL || "" },
+    { id: "link-session-daemon", label: "Sessions", url: credentialValue("LINK_SESSION_DAEMON_URL") || process.env.LINK_SESSION_DAEMON_URL || "" },
     { id: "link-skill-registry", label: "Skill Registry", url: credentialValue("LINK_SKILL_REGISTRY_URL") || process.env.LINK_SKILL_REGISTRY_URL || "" },
     { id: "mcp-proxy", label: "MCP Proxy", url: credentialValue("MCP_PROXY_URL") || process.env.MCP_PROXY_URL || "" },
   ];
@@ -10379,15 +10831,15 @@ async function managedVpnPeerConfig(apiKey, settings, selectedInterfaceId) {
 }
 
 function vpnWorkspaceMessage({ apiKeyConfigured, interfaces, selectedInterface, deviceConnected, services, toolAccessMode, reachable }) {
-  if (!apiKeyConfigured) return "Save TELNYX_API_KEY to list Cloud VPNs from this Telnyx account.";
+  if (!apiKeyConfigured) return "Save a Telnyx API Key to list Cloud VPNs from this Telnyx account.";
   if (!reachable) return "Telnyx Cloud VPN inventory could not be loaded right now.";
-  if (interfaces.length === 0) return "No Telnyx Cloud VPNs were found on this account. Create one in Mission Control, then refresh Link.";
-  if (!selectedInterface) return "Choose a Cloud VPN to evaluate how Link services stay private.";
+  if (interfaces.length === 0) return "No Telnyx Cloud VPNs were found on this account. Create one in Mission Control, then refresh Cloud Link.";
+  if (!selectedInterface) return "Choose a Cloud VPN to evaluate how Cloud Link services stay private.";
   if (!deviceConnected) return "Selected Cloud VPN is loaded, but this Mac is not on that WireGuard subnet yet.";
   if (toolAccessMode === "required" && services.some((service) => service.configured && service.match !== "vpn")) {
-    return "VPN-only mode is on, but one or more Link service URLs still resolve outside the selected VPN.";
+    return "VPN-only mode is on, but one or more Cloud Link service URLs still resolve outside the selected VPN.";
   }
-  return "Selected Cloud VPN is ready. Link services that resolve inside its subnet stay private to peers on that VPN.";
+  return "Selected Cloud VPN is ready. Cloud Link services that resolve inside its subnet stay private to peers on that VPN.";
 }
 
 async function getVpnWorkspace() {
@@ -10397,9 +10849,9 @@ async function getVpnWorkspace() {
     return {
       apiKeyConfigured: false,
       reachable: false,
-      message: "Save TELNYX_API_KEY to list Cloud VPNs from this Telnyx account.",
+      message: "Save a Telnyx API Key to list Cloud VPNs from this Telnyx account.",
       checks: [
-        { name: "Telnyx API key", ok: false, detail: "TELNYX_API_KEY is missing." },
+        { name: "Telnyx API key", ok: false, detail: "Telnyx API Key is missing." },
         { name: "Cloud VPNs", ok: false, detail: "Add a Telnyx API key before loading WireGuard interfaces." },
       ],
       settings,
@@ -10414,7 +10866,7 @@ async function getVpnWorkspace() {
         hostname: "",
         resolvedIp: "",
         match: service.url ? "unresolved" : "missing",
-        detail: service.url ? "Save TELNYX_API_KEY to validate this URL against a Cloud VPN." : "Not configured yet.",
+        detail: service.url ? "Save a Telnyx API Key to validate this URL against a Cloud VPN." : "Not configured yet.",
         configured: Boolean(service.url),
         insideSelectedVpn: false,
       })),
@@ -10484,10 +10936,10 @@ async function getVpnWorkspace() {
         reachable: true,
       }),
       checks: [
-        { name: "Telnyx API key", ok: true, detail: "TELNYX_API_KEY is configured." },
+        { name: "Telnyx API key", ok: true, detail: "Telnyx API Key is configured." },
         { name: "Cloud VPNs", ok: hydratedInterfaces.length > 0, detail: hydratedInterfaces.length > 0 ? `${hydratedInterfaces.length} Cloud VPNs found.` : "No Cloud VPNs found on this account." },
         { name: "This Mac", ok: !selectedInterface || deviceConnected, detail: selectedInterface ? (deviceConnected ? `Connected on ${deviceAddresses.join(", ")}.` : "This Mac is not connected to the selected VPN.") : "Choose a Cloud VPN to check local connectivity." },
-        { name: "Tool URLs", ok: toolUrlChecksOk, detail: toolUrlChecksOk ? "Configured Link services match the selected VPN or are still unset." : "One or more configured Link services resolve outside the selected VPN." },
+        { name: "Tool URLs", ok: toolUrlChecksOk, detail: toolUrlChecksOk ? "Configured Cloud Link services match the selected VPN or are still unset." : "One or more configured Cloud Link services resolve outside the selected VPN." },
       ],
       settings,
       networks: hydratedNetworks,
@@ -10507,7 +10959,7 @@ async function getVpnWorkspace() {
       reachable: false,
       message: errorMessage(error),
       checks: [
-        { name: "Telnyx API key", ok: true, detail: "TELNYX_API_KEY is configured." },
+        { name: "Telnyx API key", ok: true, detail: "Telnyx API Key is configured." },
         { name: "Cloud VPNs", ok: false, detail: errorMessage(error) },
       ],
       settings,
@@ -10537,7 +10989,7 @@ async function createVpnPeer(input = {}) {
       workspace,
       peerId: existingPeerId,
       created: false,
-      message: "Existing Link WireGuard peer config is ready.",
+      message: "Existing Cloud Link WireGuard peer config is ready.",
     };
   }
 
@@ -10587,14 +11039,14 @@ function getWhisperStatus(extra = {}) {
     : cloudSelected && !apiKeyReady
     ? "Add your Telnyx API key in Settings before starting Telnyx Cloud dictation."
     : built && localReady
-    ? `${providerLabel} dictation is ready. Link will manage the helper automatically.`
+    ? `${providerLabel} dictation is ready. Cloud Link will manage the helper automatically.`
     : built
-    ? "Telnyx Cloud dictation is ready. Link will manage the helper automatically."
+    ? "Telnyx Cloud dictation is ready. Cloud Link will manage the helper automatically."
     : sourceAvailable
     ? "Dictation helper will be prepared automatically when you start."
     : bundleAvailable
-    ? "Dictation is unavailable right now. Open Link to finish setup."
-    : "Dictation is unavailable right now. Open Link to finish setup.";
+    ? "Dictation is unavailable right now. Open Telnyx Cloud Link to finish setup."
+    : "Dictation is unavailable right now. Open Telnyx Cloud Link to finish setup.";
 
   return {
     available: process.platform === "darwin" && (sourceAvailable || built),
@@ -10627,7 +11079,7 @@ async function buildWhisperHelper() {
   const { root, sourceAvailable } = whisperInstallation();
   if (!sourceAvailable) {
     throw new Error(app.isPackaged
-      ? "This Link build does not include dictation source. Ship the prebuilt helper with `npm run bundle:whisper` before packaging."
+      ? "This Cloud Link build does not include dictation source. Ship the prebuilt helper with `npm run bundle:whisper` before packaging."
       : "Dictation source is missing from apps/link-desktop/native/telnyx-whisper.");
   }
 
@@ -10676,7 +11128,7 @@ async function startWhisperHelper() {
     if (installation.sourceAvailable) {
       await buildWhisperHelper();
     } else {
-      throw new Error("Dictation is unavailable right now. Open Link to finish setup.");
+      throw new Error("Dictation is unavailable right now. Open Telnyx Cloud Link to finish setup.");
     }
   }
   if (!fsSync.existsSync(executablePath)) {
@@ -10917,7 +11369,7 @@ function whisperRootCandidates() {
 }
 
 function describeWhisperRoot(root) {
-  const preferredBundlePath = path.join(root, "Telnyx Link.app");
+  const preferredBundlePath = path.join(root, "Telnyx Cloud Link.app");
   const fallbackBundlePath = path.join(root, "TelnyxDictation.app");
   const appBundlePath = fsSync.existsSync(preferredBundlePath) ? preferredBundlePath : fallbackBundlePath;
   const executablePath = path.join(appBundlePath, "Contents", "MacOS", "TelnyxDictation");
@@ -10972,14 +11424,18 @@ function terminalSessionStatus(session) {
     lastExit: session?.lastExit || null,
     startedAt: session?.startedAt || null,
     updatedAt: new Date().toISOString(),
+    mode: session?.remoteSessionId ? "managed" : "local",
+    agentState: session?.remoteAgentState || undefined,
+    serviceUrl: session?.remoteSessionId ? sessionDaemonUrl() : undefined,
   };
 }
 
 function terminalEnabled() {
-  return !app.isPackaged || process.env.LINK_DESKTOP_ENABLE_TERMINAL === "1";
+  return sessionDaemonConfigured() || !app.isPackaged || process.env.LINK_DESKTOP_ENABLE_TERMINAL === "1";
 }
 
-function getTerminalStatus(input = {}) {
+async function getTerminalStatus(input = {}) {
+  if (sessionDaemonConfigured()) return getManagedTerminalStatus(input);
   const session = getTerminalSession(input, true);
   return terminalSessionStatus(session);
 }
@@ -10997,10 +11453,11 @@ function appendTerminalOutput(sender, session, data) {
   }
 }
 
-function startTerminalProcess(sender, input = {}) {
+async function startTerminalProcess(sender, input = {}) {
+  if (sessionDaemonConfigured()) return startManagedTerminalSession(sender, input);
   const session = getTerminalSession(input, true);
   if (!terminalEnabled()) {
-    session.buffer = "Built-in terminal is disabled in packaged Link builds. Set LINK_DESKTOP_ENABLE_TERMINAL=1 before launch to enable this developer tool.\n";
+    session.buffer = "Built-in terminal is disabled in packaged Cloud Link builds. Set LINK_DESKTOP_ENABLE_TERMINAL=1 before launch to enable this developer tool.\n";
     session.lastExit = null;
     session.startedAt = null;
     return terminalSessionStatus(session);
@@ -11023,7 +11480,7 @@ function startTerminalProcess(sender, input = {}) {
     },
     stdio: ["pipe", "pipe", "pipe"],
   });
-  appendTerminalOutput(sender, session, `Telnyx Link terminal started in ${cwd}\n`);
+  appendTerminalOutput(sender, session, `Telnyx Cloud Link terminal started in ${cwd}\n`);
   session.process.stdout.on("data", (chunk) => appendTerminalOutput(sender, session, chunk));
   session.process.stderr.on("data", (chunk) => appendTerminalOutput(sender, session, chunk));
   session.process.on("exit", (code, signal) => {
@@ -11039,9 +11496,10 @@ function startTerminalProcess(sender, input = {}) {
   return terminalSessionStatus(session);
 }
 
-function writeTerminalInput(input = {}) {
+async function writeTerminalInput(input = {}) {
+  if (sessionDaemonConfigured()) return sendManagedTerminalInput(input);
   if (!terminalEnabled()) {
-    throw new Error("Built-in terminal is disabled in packaged Link builds. Set LINK_DESKTOP_ENABLE_TERMINAL=1 before launch to enable it.");
+    throw new Error("Built-in terminal is disabled in packaged Cloud Link builds. Set LINK_DESKTOP_ENABLE_TERMINAL=1 before launch to enable it.");
   }
   const session = getTerminalSession(input, false);
   if (!session?.process || session.process.killed || session.process.exitCode !== null) {
@@ -11053,7 +11511,8 @@ function writeTerminalInput(input = {}) {
   return terminalSessionStatus(session);
 }
 
-function stopTerminalProcess(input = {}) {
+async function stopTerminalProcess(input = {}) {
+  if (sessionDaemonConfigured()) return stopManagedTerminalSession(input);
   const session = getTerminalSession(input, false);
   if (session?.process && !session.process.killed && session.process.exitCode === null) {
     session.process.kill("SIGTERM");
@@ -11062,9 +11521,183 @@ function stopTerminalProcess(input = {}) {
   return getTerminalStatus(input);
 }
 
+function sessionDaemonConfigured() {
+  try {
+    return Boolean(sessionDaemonUrl());
+  } catch {
+    return true;
+  }
+}
+
+async function getManagedTerminalStatus(input = {}) {
+  const session = getTerminalSession(input, true);
+  if (!session.remoteSessionId) return managedTerminalPlaceholderStatus(session);
+  try {
+    const payload = await fetchSessionDaemonJson(`/sessions/${encodeURIComponent(session.remoteSessionId)}`);
+    return terminalStatusFromManagedSession(session, payload.session);
+  } catch (error) {
+    session.lastExit = { code: null, signal: "managed-error", at: new Date().toISOString(), message: errorMessage(error) };
+    session.buffer = `${session.buffer || ""}\n[Cloud Link Session Daemon unavailable: ${errorMessage(error)}]\n`.slice(-80_000);
+    return managedTerminalPlaceholderStatus(session, session.buffer);
+  }
+}
+
+async function startManagedTerminalSession(sender, input = {}) {
+  const session = getTerminalSession(input, true);
+  if (session.remoteSessionId) return getManagedTerminalStatus(input);
+  const title = typeof input === "object" && input?.title ? String(input.title).slice(0, 64) : session.title || "Cloud Link Session";
+  session.title = title;
+  session.remoteIdempotencyKey = session.remoteIdempotencyKey || `desktop-terminal:${session.id}:${crypto.randomUUID()}`;
+  const payload = await fetchSessionDaemonJson("/sessions", {
+    method: "POST",
+    body: JSON.stringify({
+      title,
+      cwd: desktopWorkspaceRoot(),
+      agent: "cloud-link-terminal",
+      idempotency_key: session.remoteIdempotencyKey,
+      notifications: sessionDaemonNotificationSettings(),
+      metadata: {
+        source: "link-desktop",
+        terminalId: session.id,
+      },
+    }),
+  });
+  const status = terminalStatusFromManagedSession(session, payload.session);
+  if (sender && !sender.isDestroyed()) {
+    sender.send("link:terminal-output", {
+      terminalId: session.id,
+      text: status.buffer || `Cloud Link managed session ${session.remoteSessionId} started.\n`,
+      status,
+    });
+  }
+  return status;
+}
+
+async function sendManagedTerminalInput(input = {}) {
+  const session = getTerminalSession(input, true);
+  if (!session.remoteSessionId) await startManagedTerminalSession(null, input);
+  if (!session.remoteSessionId) throw new Error("Cloud Link managed session is not running.");
+  const text = typeof input === "string" ? input : String(input.text || "");
+  if (!text) return getManagedTerminalStatus(input);
+  const payload = await fetchSessionDaemonJson(`/sessions/${encodeURIComponent(session.remoteSessionId)}/input`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+  return terminalStatusFromManagedSession(session, payload.session);
+}
+
+async function stopManagedTerminalSession(input = {}) {
+  const session = getTerminalSession(input, false);
+  if (!session?.remoteSessionId) return managedTerminalPlaceholderStatus(session || getTerminalSession(input, true));
+  try {
+    const payload = await fetchSessionDaemonJson(`/sessions/${encodeURIComponent(session.remoteSessionId)}/stop`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    const status = terminalStatusFromManagedSession(session, payload.session);
+    session.remoteSessionId = "";
+    session.remoteIdempotencyKey = "";
+    return status;
+  } catch (error) {
+    session.lastExit = { code: null, signal: "managed-error", at: new Date().toISOString(), message: errorMessage(error) };
+    throw error;
+  }
+}
+
+function managedTerminalPlaceholderStatus(session, buffer = "") {
+  const serviceUrl = sessionDaemonUrl();
+  return {
+    id: session?.id || defaultTerminalId,
+    title: session?.title || "Cloud Link Session",
+    enabled: true,
+    running: false,
+    shell: "Cloud Link Session Daemon",
+    cwd: desktopWorkspaceRoot(),
+    buffer: buffer || `Cloud Link Sessions are configured at ${serviceUrl}. Start the terminal to create a managed server-owned session.\n`,
+    lastExit: session?.lastExit || null,
+    startedAt: session?.startedAt || null,
+    updatedAt: new Date().toISOString(),
+    mode: "managed",
+    agentState: session?.remoteAgentState || "idle",
+    serviceUrl,
+  };
+}
+
+function terminalStatusFromManagedSession(localSession, value) {
+  const session = normalizeManagedSession(value);
+  if (!session.id) throw new Error("Cloud Link Session Daemon response did not include a session id.");
+  localSession.remoteSessionId = session.id;
+  localSession.remoteAgentState = session.agentState;
+  localSession.startedAt = session.createdAt || localSession.startedAt || new Date().toISOString();
+  localSession.buffer = session.output || localSession.buffer || "";
+  localSession.lastExit = session.lifecycle === "stopped" || session.lifecycle === "failed"
+    ? { code: session.lifecycle === "failed" ? 1 : 0, signal: session.lifecycle, at: session.updatedAt || new Date().toISOString(), message: session.lastError }
+    : null;
+  return {
+    id: localSession.id,
+    title: session.title || localSession.title || "Cloud Link Session",
+    enabled: true,
+    running: session.lifecycle !== "stopped" && session.lifecycle !== "failed",
+    pid: undefined,
+    shell: "Cloud Link Session Daemon",
+    cwd: session.cwd || desktopWorkspaceRoot(),
+    buffer: session.output || "",
+    lastExit: localSession.lastExit,
+    startedAt: session.createdAt || localSession.startedAt,
+    updatedAt: session.updatedAt || new Date().toISOString(),
+    mode: "managed",
+    agentState: session.agentState,
+    serviceUrl: sessionDaemonUrl(),
+    remoteSessionId: session.id,
+  };
+}
+
+function normalizeManagedSession(value = {}) {
+  const record = value && typeof value === "object" ? value : {};
+  return {
+    id: normalizeOptionalString(record.id),
+    title: normalizeOptionalString(record.title),
+    cwd: normalizeOptionalString(record.cwd),
+    output: normalizeOptionalString(record.output ?? record.buffer),
+    lifecycle: normalizeManagedSessionLifecycle(record.lifecycle),
+    agentState: normalizeManagedAgentState(record.agentState ?? record.agent_state),
+    lastError: normalizeOptionalString(record.lastError ?? record.last_error) || undefined,
+    createdAt: normalizeOptionalString(record.createdAt ?? record.created_at) || null,
+    updatedAt: normalizeOptionalString(record.updatedAt ?? record.updated_at) || null,
+  };
+}
+
+function normalizeManagedSessionLifecycle(value) {
+  const text = normalizeOptionalString(value);
+  if (["starting", "running", "stopped", "failed"].includes(text)) return text;
+  return "running";
+}
+
+function normalizeManagedAgentState(value) {
+  const text = normalizeOptionalString(value).replace(/[-\s]+/g, "_");
+  if (["idle", "working", "blocked", "needs_approval", "done"].includes(text)) return text;
+  return "idle";
+}
+
+function sessionDaemonNotificationSettings() {
+  const from = normalizeOptionalString(credentialValue("LINK_SESSION_SMS_FROM") || process.env.LINK_SESSION_SMS_FROM);
+  const to = normalizeOptionalString(credentialValue("LINK_SESSION_SMS_TO") || process.env.LINK_SESSION_SMS_TO);
+  return {
+    ...(from && to ? {
+      sms: {
+        enabled: true,
+        from,
+        to,
+        onStates: ["blocked", "needs_approval", "done"],
+      },
+    } : {}),
+    mobileUrl: normalizeOptionalString(credentialValue("LINK_SESSION_MOBILE_URL") || process.env.LINK_SESSION_MOBILE_URL) || undefined,
+  };
+}
+
 async function listTelnyxTtsVoices(input = {}) {
   const apiKey = String(credentialValue("TELNYX_API_KEY") || "").trim();
-  if (!apiKey) throw new Error("Save TELNYX_API_KEY in Settings before loading Telnyx TTS voices.");
+  if (!apiKey) throw new Error("Save a Telnyx API Key in Settings before loading Telnyx TTS voices.");
   const provider = String(input?.provider || "").trim().toLowerCase();
   const params = new URLSearchParams();
   if (provider && provider !== "all") params.set("provider", provider);
@@ -11090,7 +11723,7 @@ async function listTelnyxTtsVoices(input = {}) {
 
 async function generateTelnyxTtsSample(input = {}) {
   const apiKey = String(credentialValue("TELNYX_API_KEY") || "").trim();
-  if (!apiKey) throw new Error("Save TELNYX_API_KEY in Settings before sampling Telnyx TTS voices.");
+  if (!apiKey) throw new Error("Save a Telnyx API Key in Settings before sampling Telnyx TTS voices.");
   const voiceId = String(input?.voiceId || "").trim();
   if (!voiceId) throw new Error("Choose a voice before sampling.");
   const text = String(input?.text || "").replace(/\s+/g, " ").trim().slice(0, 320);
@@ -11245,7 +11878,7 @@ function getWebRtcStatus() {
     canAutoProvision: apiReady,
     ready: apiReady,
     message: !apiReady
-      ? "Save TELNYX_API_KEY in Settings to enable WebRTC calling. Link can create the WebRTC connection and credential automatically after the API key is saved."
+      ? "Connect to Telnyx to start making outbound calls."
       : credentialReady
       ? "WebRTC credentials are configured."
       : "WebRTC credentials will be created automatically from your saved Telnyx API key.",
@@ -11282,7 +11915,7 @@ async function provisionWebRtcCredential(apiKey, options = {}) {
 
   const payload = await telnyxRequest(apiKey, "POST", "/telephony_credentials", {
     connection_id: connectionId,
-    name: "Link Desktop WebRTC",
+    name: "Telnyx Cloud Link Desktop WebRTC",
     tag: "link-desktop",
   });
   const credentialId = String(payload?.data?.id || payload?.id || "").trim();
@@ -11457,7 +12090,7 @@ function normalizeSpeakSettings(input = {}) {
     silenceThreshold: Number.isFinite(silenceThreshold) ? Math.max(0.005, Math.min(0.2, silenceThreshold)) : 0.05,
     llmCleanupEnabled: typeof source.llmCleanupEnabled === "boolean" ? source.llmCleanupEnabled : true,
     ttsMode,
-    localTtsProvider: "stub",
+    localTtsProvider: "system",
     ttsProvider: String(source.ttsProvider || "telnyx"),
     ttsVoice: String(source.ttsVoice || "Telnyx.NaturalHD.astra"),
     updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : new Date().toISOString(),
@@ -11644,6 +12277,68 @@ async function getMessageGatewayReadiness() {
   }
 }
 
+async function getSessionDaemonReadiness() {
+  let serviceUrl = "";
+  let configurationMessage = "";
+  try {
+    serviceUrl = sessionDaemonUrl();
+  } catch (error) {
+    configurationMessage = errorMessage(error);
+  }
+  const authConfigured = Boolean(credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY"));
+  if (!serviceUrl) {
+    const message = configurationMessage || unconfiguredSessionDaemonMessage();
+    const checks = [{ name: "Session Daemon URL configured", ok: false, detail: message }];
+    return {
+      serviceUrl,
+      reachable: false,
+      ready: false,
+      authConfigured,
+      mode: "unconfigured",
+      checks,
+      message,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(`${serviceUrl}/readyz`, {
+      headers: optionalSessionDaemonHeaders(),
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    const checks = Array.isArray(payload.checks) ? payload.checks.map(normalizeMessageGatewayReadinessCheck) : [];
+    const ready = Boolean(payload.ready) && response.ok;
+    const mode = normalizeOptionalString(payload.runner?.mode) || (ready ? "managed" : response.status === 401 ? "unauthorized" : "reachable");
+    return {
+      serviceUrl,
+      reachable: true,
+      ready,
+      authConfigured,
+      mode,
+      checks,
+      message: sessionDaemonReadinessMessage({ ready, reachable: true, authConfigured, checks, status: response.status, mode }),
+      updatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    const detail = await messageGatewayConnectionFailureDetail(serviceUrl, error);
+    const checks = [{ name: "Session Daemon reachable", ok: false, detail }];
+    return {
+      serviceUrl,
+      reachable: false,
+      ready: false,
+      authConfigured,
+      mode: "unreachable",
+      checks,
+      message: sessionDaemonReadinessMessage({ ready: false, reachable: false, authConfigured, checks, status: 0, mode: "unreachable" }),
+      updatedAt: new Date().toISOString(),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function listGatewayMessages(input = {}) {
   const filter = {
     status: normalizeOptionalString(input.status),
@@ -11787,7 +12482,7 @@ async function getPublisherReadiness() {
 
 async function selectLocalPublishApp() {
   const selection = await dialog.showOpenDialog({
-    title: "Select Link app directory",
+    title: "Select Cloud Link app directory",
     properties: ["openDirectory"],
   });
   if (selection.canceled || !selection.filePaths[0]) return { canceled: true };
@@ -11803,7 +12498,7 @@ async function importLocalEdgeApp(input = {}) {
       title: `Import ${scope === "company" ? "company" : "personal"} Edge app`,
       properties: ["openFile", "openDirectory"],
       filters: [
-        { name: "Link apps and Zip archives", extensions: ["zip"] },
+        { name: "Cloud Link apps and Zip archives", extensions: ["zip"] },
         { name: "Zip archives", extensions: ["zip"] },
         { name: "All files", extensions: ["*"] },
       ],
@@ -11889,7 +12584,7 @@ async function extractLocalEdgeZipToTempDirectory(zipPath) {
         assertSafeZipEntryName(fileName);
         entryCount += 1;
         totalBytes += Number(entry.uncompressedSize || 0);
-        if (entryCount > limits.entries) throw new Error("Zip archive has too many entries for Link app import.");
+        if (entryCount > limits.entries) throw new Error("Zip archive has too many entries for Cloud Link app import.");
         if (totalBytes > limits.bytes) throw new Error("Zip archive is larger than the 100 MB import limit.");
       },
     });
@@ -12108,7 +12803,7 @@ async function assertLocalEdgeDraftDirectory(directoryPath, label = "directory")
     const relative = path.relative(root, realDirectory);
     return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
   });
-  if (!insideDraftRoot) throw new Error(`${label} must be an imported Link draft app. Import the app before previewing or deploying it.`);
+  if (!insideDraftRoot) throw new Error(`${label} must be an imported Cloud Link draft app. Import the app before previewing or deploying it.`);
   return directory;
 }
 
@@ -12300,6 +12995,120 @@ async function prepareLocalEdgeAppForPreview(input = {}) {
   };
 }
 
+async function materializeHtmlArtifact(input = {}) {
+  const request = input && typeof input === "object" ? input : {};
+  const artifact = normalizeHtmlArtifactInput(request);
+  const directory = path.join(localEdgeAppsRoot(), "personal", artifact.slug);
+  const existed = Boolean(await fs.stat(directory).catch(() => null));
+  if (existed && request.replaceExisting === false) {
+    throw new Error(`Session Review app already exists for slug "${artifact.slug}". Enable replaceExisting to update the same review URL.`);
+  }
+
+  const scriptsDirectory = path.join(directory, "scripts");
+  const distDirectory = path.join(directory, "dist");
+  await fs.mkdir(scriptsDirectory, { recursive: true });
+  await fs.mkdir(distDirectory, { recursive: true });
+  await fs.writeFile(path.join(directory, "index.html"), ensureHtmlArtifactDocument(artifact), "utf8");
+  await fs.writeFile(path.join(scriptsDirectory, "link-build.mjs"), htmlArtifactBuildScript(), "utf8");
+  await fs.writeFile(path.join(directory, "package.json"), JSON.stringify({
+    name: artifact.slug,
+    private: true,
+    type: "module",
+    scripts: {
+      build: "node scripts/link-build.mjs",
+    },
+  }, null, 2), "utf8");
+  await fs.writeFile(path.join(directory, "link-app.json"), JSON.stringify({
+    name: artifact.title,
+    slug: artifact.slug,
+    description: "Session Review generated from a Cloud Link chat session.",
+    owner_squad: "personal.tools",
+    audience: "Personal workspace",
+    app_type: "web",
+    source_repo: "https://github.com/team-telnyx/link",
+    source_ref: "main",
+    source_subdir: `edge-apps/personal/${artifact.slug}`,
+    build_command: "node scripts/link-build.mjs",
+    output_dir: "dist",
+    environment: "dev",
+    access: "vpn",
+    risk_level: "low",
+    reviewers: [],
+  }, null, 2), "utf8");
+
+  const inspection = await inspectLocalPublishApp(directory);
+  auditPublisherAction("edge.html_artifact.materialized", "materialize_html_artifact", `app-${artifact.slug}`, {
+    artifactId: artifact.id,
+    slug: artifact.slug,
+    directory,
+    replaced: existed,
+  });
+  return {
+    ...inspection,
+    materialized: true,
+    artifactId: artifact.id,
+    artifactTitle: artifact.title,
+    slug: artifact.slug,
+    htmlPath: path.join(directory, "index.html"),
+    distPath: distDirectory,
+    replaced: existed,
+    warnings: [
+      ...(inspection.warnings ?? []),
+      existed ? "Updated the existing Session Review app folder so future previews use the same slug." : "Created a local Edge app folder for this Session Review.",
+    ],
+  };
+}
+
+function normalizeHtmlArtifactInput(input = {}) {
+  const request = input && typeof input === "object" ? input : {};
+  const artifact = request.artifact && typeof request.artifact === "object" ? request.artifact : request;
+  const title = normalizeOptionalString(artifact.title) || "Cloud Link Session Review";
+  const id = normalizeOptionalString(artifact.id) || `artifact-${slugifyId(title)}`;
+  const content = normalizeOptionalString(artifact.content);
+  if (!content) throw new Error("Session Review HTML content is required.");
+  if (Buffer.byteLength(content, "utf8") > 2 * 1024 * 1024) throw new Error("Session Review HTML content is larger than the 2 MB local preview limit.");
+  const slug = slugifyId(request.slug || artifact.slug || title);
+  return {
+    id,
+    title,
+    slug,
+    filename: normalizeOptionalString(artifact.filename) || `${slug}.html`,
+    content,
+  };
+}
+
+function ensureHtmlArtifactDocument(artifact) {
+  const content = String(artifact.content || "").trim();
+  if (/<!doctype html/i.test(content) || /<html[\s>]/i.test(content)) return content;
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(artifact.title)}</title>
+</head>
+<body>
+  <main>
+    <h1>${escapeHtml(artifact.title)}</h1>
+    <pre>${escapeHtml(content)}</pre>
+  </main>
+</body>
+</html>`;
+}
+
+function htmlArtifactBuildScript() {
+  return `import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const dist = path.join(root, "dist");
+fs.rmSync(dist, { recursive: true, force: true });
+fs.mkdirSync(dist, { recursive: true });
+fs.copyFileSync(path.join(root, "index.html"), path.join(dist, "index.html"));
+`;
+}
+
 async function previewLocalEdgeApp(input = {}) {
   const prepared = await prepareLocalEdgeAppForPreview(input);
   if (prepared.canceled) return { canceled: true };
@@ -12355,7 +13164,7 @@ async function deployLocalEdgeApp(input = {}) {
   const command = await resolveTelnyxEdgeCommand();
   const edgeStatus = await ensureTelnyxEdgeReadyForDeploy(command);
   if (!edgeStatus.command) throw new Error(edgeStatus.message || "telnyx-edge CLI is not available.");
-  if (!edgeStatus.configured || !edgeStatus.authenticated) throw new Error(edgeStatus.message || "Edge Compute is not authenticated. Sign in with Okta in Link or save TELNYX_API_KEY.");
+  if (!edgeStatus.configured || !edgeStatus.authenticated) throw new Error(edgeStatus.message || "Edge Compute is not authenticated. Sign in with Okta in Cloud Link or save TELNYX_API_KEY.");
 
   const appDirectory = inspection.directory;
   const output = [];
@@ -12390,13 +13199,13 @@ async function deployLocalEdgeApp(input = {}) {
     const edgeSignIn = await signInTelnyxEdgeWithOkta(edgeStatus.command);
     authRetryDetail = edgeSignIn.detail;
     if (!edgeSignIn.signedIn) {
-      throw new Error(`Edge Compute auth could not be refreshed from Link. ${edgeSignIn.detail}`);
+      throw new Error(`Edge Compute auth could not be refreshed from Cloud Link. ${edgeSignIn.detail}`);
     }
 	    shipResult = await runTelnyxEdgeShip(edgeStatus.command, deployDirectory, deployEnv);
 	  }
   const combinedOutput = [output.join("\n"), authRetryDetail, shipResult.stdout, shipResult.stderr].filter(Boolean).join("\n");
   const url = extractFirstHttpsUrl(combinedOutput);
-  if (!url || !isAllowedLinkAppUrl(url)) throw new Error(`telnyx-edge did not return an approved Link app URL. Output: ${redactCommandOutput(combinedOutput).slice(0, 1000)}`);
+  if (!url || !isAllowedLinkAppUrl(url)) throw new Error(`telnyx-edge did not return an approved Cloud Link app URL. Output: ${redactCommandOutput(combinedOutput).slice(0, 1000)}`);
 
   const now = new Date().toISOString();
   const owner = currentLinkActorIdentity();
@@ -12772,11 +13581,11 @@ async function openPublishedApp(id) {
   if (!appId) throw new Error("App id is required.");
   const app = (await listPublishedApps()).find((item) => item.id === appId || item.slug === appId);
   if (!app) throw new Error("Published app not found.");
-  if (app.status === "deprecated") throw new Error("This app is deprecated and cannot be opened from Link.");
-  if (!isPublishedAppOpenable(app)) throw new Error("This app is not ready to open from Link.");
+  if (app.status === "deprecated") throw new Error("This app is deprecated and cannot be opened from Cloud Link.");
+  if (!isPublishedAppOpenable(app)) throw new Error("This app is not ready to open from Cloud Link.");
   const url = app.vpnUrl || app.deployedUrl || app.previewUrl;
   if (!url) throw new Error("This app does not have a private app URL yet.");
-  if (!isAllowedLinkAppUrl(url)) throw new Error("Refusing to open a non-approved Link app URL.");
+  if (!isAllowedLinkAppUrl(url)) throw new Error("Refusing to open a non-approved Cloud Link app URL.");
   void openExternalBrowserUrl(url);
   auditPublisherAction("publisher.app.opened", "open_app", app.id, { url });
   return { opened: true, url };
@@ -12878,6 +13687,557 @@ function mcpProxyHeaders() {
   return headers;
 }
 
+function listCustomMcpServers() {
+  return customMcpServers.map(publicCustomMcpServerRecord);
+}
+
+function listCustomMcpServerConnectors() {
+  return customMcpServers.map((server) => {
+    const enabled = server.enabled !== false;
+    const tokenConfigured = credentialConfigured(customMcpCredentialName(server.id));
+    return {
+      id: customMcpConnectorId(server.id),
+      name: server.name,
+      category: "MCP",
+      description: server.description || `Custom MCP server at ${server.url}.`,
+      requiredAccess: [
+        `Endpoint: ${server.url}`,
+        `${server.lastToolCount || 0} tools discovered`,
+        enabled ? "Enabled for agents" : "Temporarily disabled",
+        tokenConfigured ? "Bearer token saved" : "No bearer token saved",
+        ...(server.lastError ? [`Last check: ${server.lastError}`] : []),
+      ],
+      status: enabled ? (server.lastError ? "needs_access" : "connected") : "requested",
+      mode: "saved",
+    };
+  });
+}
+
+async function listCustomMcpTools() {
+  const serverTools = await Promise.all(
+    customMcpServers
+      .filter((server) => server.enabled !== false)
+      .map(async (server) => {
+        try {
+          return await fetchCustomMcpToolsForServer(server);
+        } catch {
+          return [];
+        }
+      }),
+  );
+  return serverTools.flat();
+}
+
+async function saveCustomMcpServer(input = {}) {
+  const existing = input?.id ? customMcpServers.find((server) => server.id === input.id) : null;
+  const server = normalizeCustomMcpServerInput(input, existing);
+  const token = typeof input?.bearerToken === "string" ? input.bearerToken.trim() : "";
+  const credentialName = customMcpCredentialName(server.id);
+  if (token) {
+    await saveSecureCredential(credentialName, token);
+  } else if (input?.clearBearerToken === true) {
+    delete storedCredentials[credentialName];
+    await saveStoredCredentials();
+  }
+
+  const nextServer = { ...server };
+  if (nextServer.enabled !== false) {
+    const testResult = await testCustomMcpServerConnection(nextServer);
+    nextServer.lastCheckedAt = testResult.checkedAt;
+    nextServer.lastToolCount = testResult.toolCount;
+    nextServer.lastError = testResult.ok ? "" : testResult.message;
+  } else {
+    nextServer.lastError = "";
+  }
+
+  customMcpServers = [
+    nextServer,
+    ...customMcpServers.filter((item) => item.id !== nextServer.id),
+  ].sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+  await saveDesktopState();
+  return listCustomMcpServers();
+}
+
+async function testCustomMcpServer(input = {}) {
+  const existing = typeof input === "string"
+    ? customMcpServers.find((server) => server.id === input)
+    : input?.id ? customMcpServers.find((server) => server.id === input.id) : null;
+  if (typeof input === "string" && !existing) throw new Error("Custom MCP server was not found.");
+  const server = typeof input === "string" ? existing : normalizeCustomMcpServerInput(input, existing);
+  const token = typeof input?.bearerToken === "string" ? input.bearerToken.trim() : "";
+  const result = await testCustomMcpServerConnection(server, token);
+  if (existing && !token) {
+    customMcpServers = customMcpServers.map((item) =>
+      item.id === existing.id
+        ? { ...item, lastCheckedAt: result.checkedAt, lastToolCount: result.toolCount, lastError: result.ok ? "" : result.message }
+        : item,
+    );
+    await saveDesktopState();
+  }
+  return result;
+}
+
+async function setCustomMcpServerEnabled(input = {}) {
+  const id = String(input?.id || "").trim();
+  const server = customMcpServers.find((item) => item.id === id);
+  if (!server) throw new Error("Custom MCP server was not found.");
+  const enabled = input.enabled !== false;
+  let nextServer = { ...server, enabled, updatedAt: new Date().toISOString() };
+  if (enabled) {
+    const result = await testCustomMcpServerConnection(nextServer);
+    nextServer = { ...nextServer, lastCheckedAt: result.checkedAt, lastToolCount: result.toolCount, lastError: result.ok ? "" : result.message };
+  } else {
+    nextServer = { ...nextServer, lastError: "" };
+  }
+  customMcpServers = customMcpServers.map((item) => item.id === id ? nextServer : item);
+  await saveDesktopState();
+  return listCustomMcpServers();
+}
+
+async function deleteCustomMcpServer(id) {
+  const normalizedId = String(id || "").trim();
+  const existing = customMcpServers.find((server) => server.id === normalizedId);
+  if (!existing) return listCustomMcpServers();
+  delete storedCredentials[customMcpCredentialName(normalizedId)];
+  customMcpServers = customMcpServers.filter((server) => server.id !== normalizedId);
+  await Promise.all([saveStoredCredentials(), saveDesktopState()]);
+  return listCustomMcpServers();
+}
+
+function normalizeCustomMcpServerInput(input = {}, existing = null) {
+  const now = new Date().toISOString();
+  const name = String(input.name ?? existing?.name ?? "").trim();
+  const url = normalizeCustomMcpUrl(input.url ?? existing?.url ?? "");
+  if (!name) throw new Error("Name the MCP before saving.");
+  const requestedId = String(input.id || existing?.id || "").trim();
+  const id = existing?.id || normalizeNewCustomMcpId(requestedId || name || url);
+  return {
+    id,
+    name,
+    url,
+    description: String(input.description ?? existing?.description ?? "").trim() || "Custom MCP server.",
+    enabled: input.enabled !== undefined ? input.enabled !== false : existing?.enabled !== false,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    lastCheckedAt: existing?.lastCheckedAt || "",
+    lastToolCount: Number.isFinite(Number(existing?.lastToolCount)) ? Number(existing.lastToolCount) : 0,
+    lastError: String(existing?.lastError || ""),
+  };
+}
+
+function normalizeCustomMcpServerRecord(value) {
+  if (!value || typeof value !== "object") return null;
+  try {
+    const id = normalizeStoredCustomMcpId(value.id);
+    const name = String(value.name || "").trim();
+    const url = normalizeCustomMcpUrl(value.url);
+    if (!id || !name || !url) return null;
+    return {
+      id,
+      name,
+      url,
+      description: String(value.description || "").trim(),
+      enabled: value.enabled !== false,
+      createdAt: String(value.createdAt || value.created_at || new Date().toISOString()),
+      updatedAt: String(value.updatedAt || value.updated_at || new Date().toISOString()),
+      lastCheckedAt: String(value.lastCheckedAt || value.last_checked_at || ""),
+      lastToolCount: Number.isFinite(Number(value.lastToolCount ?? value.last_tool_count)) ? Number(value.lastToolCount ?? value.last_tool_count) : 0,
+      lastError: String(value.lastError || value.last_error || ""),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function publicCustomMcpServerRecord(server) {
+  return {
+    ...server,
+    tokenConfigured: credentialConfigured(customMcpCredentialName(server.id)),
+  };
+}
+
+function normalizeCustomMcpUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) throw new Error("Add an MCP endpoint URL before saving.");
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error("Use a valid MCP endpoint URL.");
+  }
+  if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("MCP endpoint must use http:// or https://.");
+  return parsed.toString().replace(/\/$/, "");
+}
+
+function normalizeStoredCustomMcpId(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+}
+
+function normalizeNewCustomMcpId(value) {
+  const baseId = normalizeStoredCustomMcpId(value) || `custom-${Date.now().toString(36)}`;
+  let candidate = baseId;
+  let index = 2;
+  while (customMcpServers.some((server) => server.id === candidate)) {
+    candidate = `${baseId}-${index}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function customMcpConnectorId(id) {
+  return `custom-mcp-${id}`;
+}
+
+function customMcpCredentialName(id) {
+  return `${customMcpTokenPrefix}${String(id || "").toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`;
+}
+
+async function testCustomMcpServerConnection(server, bearerToken = "") {
+  const checkedAt = new Date().toISOString();
+  try {
+    const tools = await fetchCustomMcpToolsForServer(server, { bearerToken });
+    return {
+      ok: true,
+      checkedAt,
+      toolCount: tools.length,
+      message: tools.length === 1 ? "Connected. 1 tool discovered." : `Connected. ${tools.length} tools discovered.`,
+      tools: tools.slice(0, 12).map((tool) => ({ name: tool.name, description: tool.description, category: tool.category })),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      checkedAt,
+      toolCount: 0,
+      message: error instanceof Error ? error.message : "MCP connection failed.",
+      tools: [],
+    };
+  }
+}
+
+async function fetchCustomMcpToolsForServer(server, options = {}) {
+  const attempts = [
+    () => fetchCustomMcpJsonRpcTools(server, options),
+    () => fetchCustomMcpRegistryTools(server, "/mcp-registry/tools", options),
+    () => fetchCustomMcpRegistryTools(server, "/tools", options),
+  ];
+  const failures = [];
+  for (const attempt of attempts) {
+    try {
+      const tools = await attempt();
+      if (tools.length > 0) return normalizeCustomMcpTools(server, tools);
+      failures.push("No tools returned.");
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  throw new Error(failures.find(Boolean) || "No MCP tools were discovered.");
+}
+
+async function fetchCustomMcpJsonRpcTools(server, options = {}) {
+  let sessionId = "";
+  try {
+    const initialized = await postCustomMcpJsonRpc(server, "initialize", {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "Cloud Link", version: app.getVersion?.() || "desktop" },
+    }, { ...options, id: "initialize" });
+    sessionId = initialized.sessionId || "";
+    await postCustomMcpJsonRpc(server, "notifications/initialized", {}, { ...options, sessionId, notification: true }).catch(() => null);
+  } catch {
+    sessionId = "";
+  }
+  const listed = await postCustomMcpJsonRpc(server, "tools/list", {}, { ...options, id: "tools-list", sessionId });
+  return extractCustomMcpToolArray(listed.payload);
+}
+
+async function postCustomMcpJsonRpc(server, method, params = {}, options = {}) {
+  const body = options.notification
+    ? { jsonrpc: "2.0", method, params }
+    : { jsonrpc: "2.0", id: options.id || method, method, params };
+  const response = await fetchCustomMcpJson(server.url, server, {
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.sessionId ? { "Mcp-Session-Id": options.sessionId } : {}),
+    },
+    bearerToken: options.bearerToken,
+  });
+  return response;
+}
+
+async function fetchCustomMcpRegistryTools(server, pathname, options = {}) {
+  const payload = await fetchCustomMcpJson(joinCustomMcpUrl(server.url, pathname), server, {
+    method: "GET",
+    bearerToken: options.bearerToken,
+  });
+  return extractCustomMcpToolArray(payload.payload);
+}
+
+async function fetchCustomMcpJson(url, server, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const response = await fetch(url, {
+      method: options.method || "GET",
+      headers: {
+        Accept: "application/json, text/event-stream",
+        ...customMcpAuthHeaders(server, options.bearerToken),
+        ...(options.headers || {}),
+      },
+      body: options.body,
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(`MCP request failed with HTTP ${response.status}.`);
+    if (!text.trim()) return { payload: {}, sessionId: response.headers.get("mcp-session-id") || "" };
+    const payload = parseCustomMcpPayload(text);
+    if (payload?.error) throw new Error(payload.error.message || "MCP server returned an error.");
+    return { payload, sessionId: response.headers.get("mcp-session-id") || "" };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") throw new Error("MCP request timed out.");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function customMcpAuthHeaders(server, bearerToken = "") {
+  const token = String(bearerToken || "").trim() || credentialValue(customMcpCredentialName(server.id));
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function parseCustomMcpPayload(text) {
+  const trimmed = String(text || "").trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    // Continue into SSE parsing.
+  }
+  const dataLines = trimmed
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.replace(/^data:\s*/u, "").trim())
+    .filter((line) => line && line !== "[DONE]");
+  for (const line of dataLines) {
+    try {
+      return JSON.parse(line);
+    } catch {
+      continue;
+    }
+  }
+  throw new Error("MCP server returned a response Cloud Link could not parse.");
+}
+
+function extractCustomMcpToolArray(payload) {
+  if (Array.isArray(payload?.tools)) return payload.tools;
+  if (Array.isArray(payload?.result?.tools)) return payload.result.tools;
+  if (Array.isArray(payload?.data?.tools)) return payload.data.tools;
+  if (Array.isArray(payload?.result)) return payload.result;
+  return [];
+}
+
+function normalizeCustomMcpTools(server, tools) {
+  const namespace = normalizeStoredCustomMcpId(server.name).replace(/-/g, "_") || server.id.replace(/-/g, "_");
+  return tools
+    .map((tool) => {
+      const rawName = String(tool.functionalName || tool.functional_name || tool.originalName || tool.original_name || tool.name || tool.id || "").trim();
+      if (!rawName) return null;
+      const annotations = tool.annotations || {};
+      const destructive = Boolean(annotations.destructiveHint || annotations.openWorldHint || annotations.destructive_hint || annotations.open_world_hint);
+      const readOnly = annotations.readOnlyHint !== false && annotations.read_only_hint !== false && !destructive;
+      const name = rawName.includes(".") ? rawName : `${namespace}.${rawName}`;
+      return {
+        name,
+        description: String(tool.description || `${server.name} MCP tool.`),
+        category: server.name,
+        visibility: "internal_only",
+        capability: readOnly ? "read" : "write",
+        riskLevel: destructive ? "high" : "medium",
+        approvalRequired: destructive,
+        outputCanBeShownExternally: false,
+      };
+    })
+    .filter(Boolean);
+}
+
+function joinCustomMcpUrl(baseUrl, pathname) {
+  return `${String(baseUrl || "").replace(/\/$/u, "")}/${String(pathname || "").replace(/^\//u, "")}`;
+}
+
+function listEmployeePlugins() {
+  return employeePlugins.map(publicEmployeePluginRecord);
+}
+
+function listEmployeePluginConnectors() {
+  const mergeReady = mergeDevConnected();
+  return employeePlugins.map((plugin) => {
+    const enabled = plugin.enabled !== false;
+    return {
+      id: employeePluginConnectorId(plugin.id),
+      name: plugin.name,
+      category: "Employee plugin",
+      description: plugin.description || `${plugin.name} plugin powered by Merge.dev Agent Handler.`,
+      requiredAccess: [
+        "Powered by Merge.dev Agent Handler",
+        `MCP endpoint: ${mergeAgentHandlerMcpUrl()}`,
+        `Audience: ${plugin.audience || "Employees"}`,
+        `Tool pack: ${plugin.toolPack || "Employee tools"}`,
+        enabled ? "Enabled for agents" : "Temporarily disabled",
+      ],
+      status: mergeReady && enabled ? "connected" : enabled ? "needs_access" : "requested",
+      mode: "saved",
+    };
+  });
+}
+
+function listEmployeePluginTools() {
+  if (!mergeDevConnected()) return [];
+  return employeePlugins
+    .filter((plugin) => plugin.enabled !== false)
+    .flatMap((plugin) => {
+      const namespace = employeePluginToolNamespace(plugin);
+      return [
+        {
+          name: `${namespace}.search`,
+          description: `Search and inspect ${plugin.name} through Merge.dev Agent Handler.`,
+          category: plugin.name,
+          visibility: "internal_only",
+          capability: "read",
+          riskLevel: "medium",
+          approvalRequired: false,
+          outputCanBeShownExternally: false,
+        },
+        {
+          name: `${namespace}.run`,
+          description: `Run approved ${plugin.name} employee plugin actions through Merge.dev Agent Handler.`,
+          category: plugin.name,
+          visibility: "internal_only",
+          capability: "write",
+          riskLevel: "high",
+          approvalRequired: true,
+          outputCanBeShownExternally: false,
+        },
+      ];
+    });
+}
+
+async function connectMergeDevAgentHandler() {
+  await saveSecureCredential(mergeAgentHandlerMcpUrlField, defaultMergeAgentHandlerMcpUrl);
+  void openExternalBrowserUrl("https://docs.merge.dev/merge-agent-handler/overview").catch(() => undefined);
+  return {
+    connected: true,
+    url: defaultMergeAgentHandlerMcpUrl,
+    credentials: await listCredentials(),
+    connectors: await listConnectors(),
+  };
+}
+
+async function saveEmployeePlugin(input = {}) {
+  if (!mergeDevConnected()) throw new Error("Connect Merge.dev before adding employee plugins.");
+  const existing = input?.id ? employeePlugins.find((plugin) => plugin.id === input.id) : null;
+  const plugin = normalizeEmployeePluginInput(input, existing);
+  employeePlugins = [
+    plugin,
+    ...employeePlugins.filter((item) => item.id !== plugin.id),
+  ].sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+  await saveDesktopState();
+  return listEmployeePlugins();
+}
+
+async function setEmployeePluginEnabled(input = {}) {
+  const id = String(input?.id || "").trim();
+  const plugin = employeePlugins.find((item) => item.id === id);
+  if (!plugin) throw new Error("Employee plugin was not found.");
+  employeePlugins = employeePlugins.map((item) =>
+    item.id === id
+      ? { ...item, enabled: input.enabled !== false, updatedAt: new Date().toISOString() }
+      : item,
+  );
+  await saveDesktopState();
+  return listEmployeePlugins();
+}
+
+async function deleteEmployeePlugin(id) {
+  const normalizedId = String(id || "").trim();
+  employeePlugins = employeePlugins.filter((plugin) => plugin.id !== normalizedId);
+  await saveDesktopState();
+  return listEmployeePlugins();
+}
+
+function normalizeEmployeePluginInput(input = {}, existing = null) {
+  const now = new Date().toISOString();
+  const name = String(input.name ?? existing?.name ?? "").trim();
+  if (!name) throw new Error("Name the employee plugin before saving.");
+  const requestedId = String(input.id || existing?.id || "").trim();
+  const id = existing?.id || normalizeNewEmployeePluginId(requestedId || name);
+  const toolPack = String(input.toolPack ?? existing?.toolPack ?? "Employee tools").trim() || "Employee tools";
+  return {
+    id,
+    name,
+    description: String(input.description ?? existing?.description ?? "").trim() || "Employee plugin powered by Merge.dev Agent Handler.",
+    audience: String(input.audience ?? existing?.audience ?? "Employees").trim() || "Employees",
+    toolPack,
+    enabled: input.enabled !== undefined ? input.enabled !== false : existing?.enabled !== false,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  };
+}
+
+function normalizeEmployeePluginRecord(value) {
+  if (!value || typeof value !== "object") return null;
+  const id = normalizeStoredCustomMcpId(value.id);
+  const name = String(value.name || "").trim();
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    description: String(value.description || "").trim(),
+    audience: String(value.audience || "Employees").trim() || "Employees",
+    toolPack: String(value.toolPack || value.tool_pack || "Employee tools").trim() || "Employee tools",
+    enabled: value.enabled !== false,
+    createdAt: String(value.createdAt || value.created_at || new Date().toISOString()),
+    updatedAt: String(value.updatedAt || value.updated_at || new Date().toISOString()),
+  };
+}
+
+function publicEmployeePluginRecord(plugin) {
+  return {
+    ...plugin,
+    provider: "merge-dev",
+    mcpUrl: mergeAgentHandlerMcpUrl(),
+    connected: mergeDevConnected(),
+  };
+}
+
+function normalizeNewEmployeePluginId(value) {
+  const baseId = normalizeStoredCustomMcpId(value) || `employee-plugin-${Date.now().toString(36)}`;
+  let candidate = baseId;
+  let index = 2;
+  while (employeePlugins.some((plugin) => plugin.id === candidate)) {
+    candidate = `${baseId}-${index}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function employeePluginConnectorId(id) {
+  return `employee-plugin-${id}`;
+}
+
+function employeePluginToolNamespace(plugin) {
+  return `merge_${normalizeStoredCustomMcpId(plugin.name).replace(/-/g, "_") || plugin.id.replace(/-/g, "_")}`;
+}
+
+function mergeAgentHandlerMcpUrl() {
+  return (credentialValue(mergeAgentHandlerMcpUrlField) || process.env[mergeAgentHandlerMcpUrlField] || defaultMergeAgentHandlerMcpUrl).replace(/\/$/u, "");
+}
+
+function mergeDevConnected() {
+  return credentialConfigured(mergeAgentHandlerMcpUrlField) || credentialConfigured(mergeAgentHandlerAccessTokenField);
+}
+
 async function fetchPublisherJson(pathname, init = {}) {
   const baseUrl = linkAppPublisherUrl();
   if (!baseUrl) throw new Error(unconfiguredLinkAppPublisherMessage());
@@ -12888,7 +14248,7 @@ async function fetchPublisherJson(pathname, init = {}) {
     ...(init.headers || {}),
   };
   const response = await fetch(`${baseUrl}${pathname}`, { ...init, headers });
-  if (!response.ok) throw new Error(`Link App Publisher request failed: ${response.status}`);
+  if (!response.ok) throw new Error(`Cloud Link App Publisher request failed: ${response.status}`);
   return response.json();
 }
 
@@ -12902,7 +14262,21 @@ async function fetchMessageGatewayJson(pathname, init = {}) {
     ...(init.headers || {}),
   };
   const response = await fetch(`${baseUrl}${pathname}`, { ...init, headers });
-  if (!response.ok) throw new Error(`Link Message Gateway request failed: ${response.status}`);
+  if (!response.ok) throw new Error(`Cloud Link Message Gateway request failed: ${response.status}`);
+  return response.json();
+}
+
+async function fetchSessionDaemonJson(pathname, init = {}) {
+  const baseUrl = sessionDaemonUrl();
+  if (!baseUrl) throw new Error(unconfiguredSessionDaemonMessage());
+  const headers = {
+    Accept: "application/json",
+    ...(init.body ? { "Content-Type": "application/json" } : {}),
+    ...sessionDaemonHeaders(),
+    ...(init.headers || {}),
+  };
+  const response = await fetch(`${baseUrl}${pathname}`, { ...init, headers });
+  if (!response.ok) throw new Error(`Cloud Link Session Daemon request failed: ${response.status}`);
   return response.json();
 }
 
@@ -12914,9 +14288,13 @@ function messageGatewayUrl() {
   return configuredInternalServiceUrl(credentialValue("LINK_MESSAGE_GATEWAY_URL") || process.env.LINK_MESSAGE_GATEWAY_URL || defaultMessageGatewayUrl, "LINK_MESSAGE_GATEWAY_URL");
 }
 
+function sessionDaemonUrl() {
+  return configuredInternalServiceUrl(credentialValue("LINK_SESSION_DAEMON_URL") || process.env.LINK_SESSION_DAEMON_URL || defaultSessionDaemonUrl, "LINK_SESSION_DAEMON_URL");
+}
+
 function publisherHeaders() {
   const token = credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY");
-  if (!token) throw new Error("Link App Publisher requires Okta Rev2 auth or TELNYX_API_KEY.");
+  if (!token) throw new Error("Cloud Link App Publisher requires Okta Rev2 auth or TELNYX_API_KEY.");
   const headers = { Authorization: `Bearer ${token}` };
   const actor = process.env.TELNYX_ACTOR || credentialValue("TELNYX_AUTH_USER_NAME") || credentialValue("TELNYX_AUTH_USER_ID");
   if (actor) headers["X-Telnyx-Actor"] = actor;
@@ -12927,8 +14305,23 @@ function publisherHeaders() {
 
 function messageGatewayHeaders() {
   const token = credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY");
-  if (!token) throw new Error("Link Message Gateway requires Okta Rev2 auth or TELNYX_API_KEY.");
+  if (!token) throw new Error("Cloud Link Message Gateway requires Okta Rev2 auth or TELNYX_API_KEY.");
   const headers = { Authorization: `Bearer ${token}` };
+  const actor = currentLinkActorIdentity();
+  if (actor.actor) headers["X-Telnyx-Actor"] = actor.actor;
+  if (actor.userName) headers["X-Telnyx-Actor-Name"] = actor.userName;
+  if (actor.actor?.includes("@")) headers["X-Telnyx-Actor-Email"] = actor.actor;
+  if (process.env.TELNYX_ON_BEHALF_OF) headers["X-On-Behalf-Of"] = process.env.TELNYX_ON_BEHALF_OF;
+  if (process.env.TELNYX_GROUPS) headers["X-Telnyx-Groups"] = process.env.TELNYX_GROUPS;
+  return headers;
+}
+
+function sessionDaemonHeaders() {
+  const token = credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY");
+  if (!token) throw new Error("Cloud Link Session Daemon requires Okta Rev2 auth or TELNYX_API_KEY.");
+  const headers = { Authorization: `Bearer ${token}`, "X-Link-Surface": "link-desktop" };
+  const telnyxApiKey = credentialValue("TELNYX_API_KEY");
+  if (telnyxApiKey) headers["X-Telnyx-API-Key"] = telnyxApiKey;
   const actor = currentLinkActorIdentity();
   if (actor.actor) headers["X-Telnyx-Actor"] = actor.actor;
   if (actor.userName) headers["X-Telnyx-Actor-Name"] = actor.userName;
@@ -12952,6 +14345,13 @@ function optionalMessageGatewayHeaders() {
   return { ...headers, ...messageGatewayHeaders() };
 }
 
+function optionalSessionDaemonHeaders() {
+  const headers = { Accept: "application/json" };
+  const token = credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY");
+  if (!token) return headers;
+  return { ...headers, ...sessionDaemonHeaders() };
+}
+
 function normalizePublisherReadinessCheck(value) {
   return {
     name: normalizeOptionalString(value?.name) || "Publisher check",
@@ -12972,21 +14372,34 @@ function messageGatewayReadinessMessage({ ready, reachable, authConfigured, chec
   if (ready) return "Message Gateway is ready for routed Slack, Google Chat, and A2A delivery.";
   if (!reachable) {
     return authConfigured
-      ? "Cannot reach Link Message Gateway. Check DNS, network access, or LINK_MESSAGE_GATEWAY_URL."
-      : "Cannot reach Link Message Gateway. Configure LINK_MESSAGE_GATEWAY_URL and sign in with Okta or save TELNYX_API_KEY.";
+      ? "Cannot reach Cloud Link Message Gateway. Check DNS, network access, or LINK_MESSAGE_GATEWAY_URL."
+      : "Cannot reach Cloud Link Message Gateway. Configure LINK_MESSAGE_GATEWAY_URL and sign in with Okta or save TELNYX_API_KEY.";
   }
-  if (status === 401 || !authConfigured) return "Sign in with Okta or save TELNYX_API_KEY before sending through Link Message Gateway.";
+  if (status === 401 || !authConfigured) return "Sign in with Okta or save TELNYX_API_KEY before sending through Cloud Link Message Gateway.";
   const failedNames = checks.filter((check) => !check.ok).map((check) => check.name).filter(Boolean);
   if (failedNames.length > 0) return `Message Gateway reachable, but not production ready: ${failedNames.join(", ")}.`;
   return "Message Gateway is reachable, but not production ready.";
+}
+
+function sessionDaemonReadinessMessage({ ready, reachable, authConfigured, checks, status, mode }) {
+  if (ready) return "Cloud Link Sessions is ready for server-owned agent sessions, attach approvals, audit events, and SMS alerts.";
+  if (!reachable) {
+    return authConfigured
+      ? "Cannot reach Cloud Link Sessions. Check DNS, network access, or LINK_SESSION_DAEMON_URL."
+      : "Cannot reach Cloud Link Sessions. Configure LINK_SESSION_DAEMON_URL and sign in with Okta or save TELNYX_API_KEY.";
+  }
+  if (status === 401 || !authConfigured) return "Sign in with Okta or save TELNYX_API_KEY before starting managed sessions.";
+  const failedNames = checks.filter((check) => !check.ok).map((check) => check.name).filter(Boolean);
+  if (failedNames.length > 0) return `Cloud Link Sessions reachable (${mode || "unknown"}), but not production ready: ${failedNames.join(", ")}.`;
+  return "Cloud Link Sessions is reachable, but not production ready.";
 }
 
 function publisherReadinessMessage({ ready, reachable, authConfigured, mode, checks, status }) {
   if (ready) return "Publisher is ready for production Edge publishing.";
   if (!reachable) {
     return authConfigured
-      ? "Cannot reach Link App Publisher. Check DNS, network access, or LINK_APP_PUBLISHER_URL."
-      : "Cannot reach Link App Publisher. Configure LINK_APP_PUBLISHER_URL and sign in with Okta or save TELNYX_API_KEY.";
+      ? "Cannot reach Cloud Link App Publisher. Check DNS, network access, or LINK_APP_PUBLISHER_URL."
+      : "Cannot reach Cloud Link App Publisher. Configure LINK_APP_PUBLISHER_URL and sign in with Okta or save TELNYX_API_KEY.";
   }
   if (status === 401 || !authConfigured) return "Sign in with Okta or save TELNYX_API_KEY before publishing.";
   const failedNames = checks.filter((check) => !check.ok).map((check) => check.name).filter(Boolean);
@@ -13007,7 +14420,7 @@ async function publisherConnectionFailureDetail(serviceUrl, error) {
       const hostname = new URL(serviceUrl).hostname;
       return `DNS lookup failed for ${hostname}: ${dnsDetail}`;
     } catch {
-      return `Invalid Link App Publisher URL: ${serviceUrl}`;
+      return `Invalid Cloud Link App Publisher URL: ${serviceUrl}`;
     }
   }
   return fetchDetail;
@@ -13024,7 +14437,7 @@ async function messageGatewayConnectionFailureDetail(serviceUrl, error) {
       const hostname = new URL(serviceUrl).hostname;
       return `DNS lookup failed for ${hostname}: ${dnsDetail}`;
     } catch {
-      return `Invalid Link Message Gateway URL: ${serviceUrl}`;
+      return `Invalid Cloud Link Message Gateway URL: ${serviceUrl}`;
     }
   }
   return fetchDetail;
@@ -13182,7 +14595,7 @@ async function ensureTelnyxEdgeDevConfig() {
 
 async function seedTelnyxEdgeApiKey(command) {
   const apiKey = credentialValue("TELNYX_API_KEY").trim();
-  if (!apiKey) return { seeded: false, detail: "No TELNYX_API_KEY saved in Link." };
+  if (!apiKey) return { seeded: false, detail: "No TELNYX_API_KEY saved in Cloud Link." };
   try {
     await execFileAsync(command, ["auth", "logout"], {
       timeout: 10000,
@@ -13194,7 +14607,7 @@ async function seedTelnyxEdgeApiKey(command) {
       maxBuffer: 1024 * 1024,
       env: process.env,
     });
-    return { seeded: true, detail: "telnyx-edge auth is configured from Link's saved TELNYX_API_KEY." };
+    return { seeded: true, detail: "telnyx-edge auth is configured from Cloud Link's saved TELNYX_API_KEY." };
   } catch (error) {
     return { seeded: false, detail: error instanceof Error ? error.message : String(error) };
   }
@@ -13202,7 +14615,7 @@ async function seedTelnyxEdgeApiKey(command) {
 
 async function signInTelnyxEdgeWithOkta(command) {
   if (!credentialConfigured("TELNYX_AUTH_REV2")) {
-    return { signedIn: false, detail: "Sign in with Okta in Link before Edge Compute deployment." };
+    return { signedIn: false, detail: "Sign in with Okta in Cloud Link before Edge Compute deployment." };
   }
   try {
     const { stdout, stderr } = await execFileAsync(command, ["auth", "login"], {
@@ -13332,7 +14745,7 @@ async function getEdgeComputeStatus({ seedAuth = false } = {}) {
       configured: Boolean(config.configured),
       authenticated: false,
       authSeeded: false,
-      message: "Install the telnyx-edge CLI to publish Edge Compute functions from Link.",
+      message: "Install the telnyx-edge CLI to publish Edge Compute functions from Cloud Link.",
       detail: config.error || "Neither telnyx-edge-dev nor telnyx-edge is available on PATH.",
     };
   }
@@ -13356,8 +14769,8 @@ async function getEdgeComputeStatus({ seedAuth = false } = {}) {
         authenticated: false,
         authSeeded: Boolean(seeded.seeded),
         message: seeded.seeded
-          ? "Edge Compute auth was refreshed from Link, but telnyx-edge is still reporting an auth problem."
-          : "Edge Compute auth needs to be refreshed from Link.",
+          ? "Edge Compute auth was refreshed from Cloud Link, but telnyx-edge is still reporting an auth problem."
+          : "Edge Compute auth needs to be refreshed from Cloud Link.",
         detail: output || seeded.detail,
       };
     }
@@ -13385,7 +14798,7 @@ async function getEdgeComputeStatus({ seedAuth = false } = {}) {
       authSeeded: Boolean(seeded.seeded),
       message: seeded.seeded
         ? "Edge Compute auth was seeded, but telnyx-edge status is not ready yet."
-        : "Sign in with Okta in Link or save TELNYX_API_KEY to deploy Edge Compute apps.",
+        : "Sign in with Okta in Cloud Link or save TELNYX_API_KEY to deploy Edge Compute apps.",
       detail: error instanceof Error ? error.message : String(error),
     };
   }
@@ -13432,7 +14845,7 @@ function normalizePublishedApp(item) {
     id,
     name: name || titleize(slug),
     slug,
-    description: normalizeOptionalString(item.description) || "Private Link app.",
+    description: normalizeOptionalString(item.description) || "Private Cloud Link app.",
     ownerSquad: normalizeOptionalString(item.ownerSquad ?? item.owner_squad) || "unknown.squad",
     audience: normalizeOptionalString(item.audience) || "Telnyx",
     appType: normalizeAppType(item.appType ?? item.app_type),
@@ -13556,7 +14969,7 @@ function normalizePublishIntentInput(input) {
   return {
     name,
     slug,
-    description: normalizeOptionalString(input.description) || "Private Link app.",
+    description: normalizeOptionalString(input.description) || "Private Cloud Link app.",
     ownerSquad: normalizeRequiredString(input.ownerSquad ?? input.owner_squad, "owner_squad"),
     audience: normalizeRequiredString(input.audience, "audience"),
     appType: normalizeAppType(input.appType ?? input.app_type),
@@ -13976,7 +15389,7 @@ function createAuthInternalCallbackServer(expectedState) {
       }
 
       response.writeHead(200, { "Content-Type": "text/html" });
-      response.end(authCallbackHtml("Signed in", "You can close this window and return to Telnyx Link."));
+      response.end(authCallbackHtml("Signed in", "You can close this window and return to Telnyx Cloud Link."));
       resolveCallback({
         code: url.searchParams.get("code") || "",
         error: url.searchParams.get("error") || "",
@@ -13984,7 +15397,7 @@ function createAuthInternalCallbackServer(expectedState) {
       });
     } catch (error) {
       response.writeHead(500, { "Content-Type": "text/html" });
-      response.end(authCallbackHtml("Sign-in failed", "Telnyx Link could not complete the local callback."));
+      response.end(authCallbackHtml("Sign-in failed", "Telnyx Cloud Link could not complete the local callback."));
       rejectCallback(error);
     }
   });
@@ -14008,6 +15421,7 @@ function createAuthInternalCallbackServer(expectedState) {
 }
 
 function authCallbackHtml(title, message) {
+  const iconDataUrl = authCallbackIconDataUrl();
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -14019,19 +15433,27 @@ function authCallbackHtml(title, message) {
     html, body { height: 100%; }
     body { margin: 0; display: grid; place-items: center; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     main { width: min(440px, calc(100vw - 48px)); padding: 30px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); text-align: center; }
-    .mark { width: 42px; height: 42px; margin: 0 auto 18px; border-radius: 8px; display: grid; place-items: center; background: var(--accent); color: #151410; font-weight: 900; }
+    .mark { width: 48px; height: 48px; margin: 0 auto 18px; display: block; object-fit: contain; }
     h1 { margin: 0 0 10px; font-size: 24px; letter-spacing: 0; }
     p { margin: 0; color: var(--muted); line-height: 1.45; }
   </style>
 </head>
 <body>
   <main>
-    <div class="mark">TL</div>
+    <img class="mark" src="${iconDataUrl}" alt="Cloud Link" />
     <h1>${escapeHtml(title)}</h1>
     <p>${escapeHtml(message)}</p>
   </main>
 </body>
 </html>`;
+}
+
+function authCallbackIconDataUrl() {
+  try {
+    return `data:image/png;base64,${fsSync.readFileSync(appIconPath).toString("base64")}`;
+  } catch {
+    return "";
+  }
 }
 
 function authInternalAuthorizationUrl(callbackUrl, state, baseUrl = authInternalUrl()) {
@@ -14128,7 +15550,7 @@ async function getAgentControlPlaneAuthStatus() {
     message: ready
       ? onBehalfOfConfigured
         ? "Agent Control Plane is ready with an explicit squad context."
-        : "Agent Control Plane is ready. Link will use the Okta session unless ACP requires a squad context."
+        : "Agent Control Plane is ready. Cloud Link will use the Okta session unless ACP requires a squad context."
       : validation.message || "Sign in with Telnyx Okta to bring your agents, tasks, calls, calendar, docs, and internal tools into one secure workspace.",
   };
 }
@@ -14181,7 +15603,7 @@ async function validateAgentControlPlaneSession(baseUrl) {
     await clearAgentControlPlaneSession();
     return {
       ready: false,
-      message: "Your Telnyx Okta session expired. Sign in again to use Link.",
+      message: "Your Telnyx Okta session expired. Sign in again to use Cloud Link.",
     };
   }
 
@@ -14293,15 +15715,18 @@ async function listHostedAgents() {
   }
 
   const payload = await response.json();
-  const agents = (payload.items ?? []).map((agent) => ({
-    id: agent.id,
-    name: agent.name,
-    displayName: agent.display_name ?? agent.name,
-    description: agent.description ?? "",
-    status: agent.status,
-    type: agent.agent_type,
-    capabilities: agent.capabilities ?? [],
-  }));
+  const records = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.items)
+    ? payload.items
+    : Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload?.agents)
+    ? payload.agents
+    : Array.isArray(payload?.results)
+    ? payload.results
+    : [];
+  const agents = records.map(normalizeHostedAgentSummary).filter(Boolean);
   await saveHostedAgentCache(agents);
   return agents;
 }
@@ -14421,15 +15846,19 @@ function unconfiguredA2aDiscoveryMessage() {
 }
 
 function unconfiguredLinkAppPublisherMessage() {
-  return "Configure LINK_APP_PUBLISHER_URL with an HTTPS Link App Publisher endpoint before using the managed publisher service. HTTP is only allowed for loopback local development.";
+  return "Connect a domain or add a cloud.link subdomain before using the managed App Publisher service.";
 }
 
 function unconfiguredSkillRegistryMessage() {
-  return "Configure LINK_SKILL_REGISTRY_URL with an HTTPS Link Skill Registry endpoint before syncing managed skill and tool catalog events. HTTP is only allowed for loopback local development.";
+  return "Configure LINK_SKILL_REGISTRY_URL with an HTTPS Cloud Link Skill Registry endpoint before syncing managed skill and tool catalog events. HTTP is only allowed for loopback local development.";
 }
 
 function unconfiguredMessageGatewayMessage() {
-  return "Configure LINK_MESSAGE_GATEWAY_URL with an HTTPS Link Message Gateway endpoint before using hosted message delivery. HTTP is only allowed for loopback local development.";
+  return "Configure LINK_MESSAGE_GATEWAY_URL with an HTTPS Cloud Link Message Gateway endpoint before using hosted message delivery. HTTP is only allowed for loopback local development.";
+}
+
+function unconfiguredSessionDaemonMessage() {
+  return "Configure LINK_SESSION_DAEMON_URL with an HTTPS Cloud Link Sessions endpoint before using server-owned terminal and agent sessions. HTTP is only allowed for loopback local development.";
 }
 
 function unconfiguredAuthInternalMessage() {
@@ -14965,10 +16394,10 @@ async function backupWorkspaceToTelnyxStorage(input = {}) {
       })),
       summary: storageBackupSummary(),
       notes: includeEncryptedCredentials && !encryptedCredentialsBuffer
-        ? ["An encrypted credentials snapshot was requested, but Link did not find any saved desktop credentials to upload."]
+        ? ["An encrypted credentials snapshot was requested, but Cloud Link did not find any saved desktop credentials to upload."]
         : includeEncryptedCredentials
         ? ["The credentials file contains encrypted values from this desktop profile. Restore behavior depends on the destination Mac's secure storage context."]
-        : ["The credentials snapshot was excluded. Link backed up workspace state only."],
+        : ["The credentials snapshot was excluded. Cloud Link backed up workspace state only."],
     };
     const manifestBuffer = Buffer.from(JSON.stringify(manifest, null, 2), "utf8");
 
@@ -15291,7 +16720,7 @@ async function connectGitHubWithDeviceFlow() {
     type: "info",
     title: "Connect GitHub",
     message: `Enter this GitHub code: ${device.user_code}`,
-    detail: `Link will open ${device.verification_uri}. Approve the Telnyx Link GitHub App, then return to Link.`,
+    detail: `Telnyx Cloud Link will open ${device.verification_uri}. Approve the Telnyx Cloud Link GitHub App, then return to Telnyx Cloud Link.`,
     buttons: ["Open GitHub", "Cancel"],
     defaultId: 0,
     cancelId: 1,
@@ -15331,7 +16760,7 @@ async function connectGitHubWithDeviceFlow() {
 async function connectGitHubWithDeveloperTokenFallback() {
   const token = await githubDeveloperFallbackToken();
   if (!token) {
-    throw new Error("GitHub is not configured for this Link build. Add LINK_GITHUB_APP_CLIENT_ID for device pairing, save a GitHub App Client ID in Settings, set GH_TOKEN/GITHUB_TOKEN, or run `gh auth login`.");
+    throw new Error("GitHub is not configured for this Cloud Link build. Add LINK_GITHUB_APP_CLIENT_ID for device pairing, save a GitHub App Client ID in Settings, set GH_TOKEN/GITHUB_TOKEN, or run `gh auth login`.");
   }
 
   const verificationRepo = githubAppDeviceVerificationRepo();
@@ -15364,7 +16793,7 @@ async function connectGuruWithOAuth() {
   const clientId = guruOAuthClientId();
   const clientSecret = guruOAuthClientSecret();
   if (!clientId || !clientSecret) {
-    throw new Error("Guru OAuth is not configured. Add GURU_OAUTH_CLIENT_ID and GURU_OAUTH_CLIENT_SECRET in Link settings or managed environment config.");
+    throw new Error("Guru OAuth is not configured. Add GURU_OAUTH_CLIENT_ID and GURU_OAUTH_CLIENT_SECRET in Cloud Link settings or managed environment config.");
   }
 
   const parent = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
@@ -15539,7 +16968,7 @@ function createGuruOAuthCallbackServer(expectedState, redirectUri) {
       }
 
       response.writeHead(200, { "Content-Type": "text/html" });
-      response.end(authCallbackHtml("Guru connected", "You can close this window and return to Telnyx Link."));
+      response.end(authCallbackHtml("Guru connected", "You can close this window and return to Telnyx Cloud Link."));
       resolveCallback({
         code: url.searchParams.get("code") || "",
         error: url.searchParams.get("error") || "",
@@ -15547,7 +16976,7 @@ function createGuruOAuthCallbackServer(expectedState, redirectUri) {
       });
     } catch (error) {
       response.writeHead(500, { "Content-Type": "text/html" });
-      response.end(authCallbackHtml("Connection failed", "Telnyx Link could not complete the Guru callback."));
+      response.end(authCallbackHtml("Connection failed", "Telnyx Cloud Link could not complete the Guru callback."));
       rejectCallback(error);
     }
   });
@@ -16481,9 +17910,9 @@ function googleWorkspaceSetupFailureMessage(detail, resetAttempted = false) {
   const conciseDetail = summarizeGoogleWorkspaceSetupFailure(detail);
   if (resetAttempted) {
     return [
-      "Google Workspace setup could not unlock Link's local gog keyring. Link reset its local gog credentials and retried, but authorization still failed.",
+      "Google Workspace setup could not unlock Cloud Link's local gog keyring. Cloud Link reset its local gog credentials and retried, but authorization still failed.",
       process.env[gogKeyringPasswordField]
-        ? "Unset GOG_KEYRING_PASSWORD, relaunch Link, and press Connect again."
+        ? "Unset GOG_KEYRING_PASSWORD, relaunch Cloud Link, and press Connect again."
         : "Press Connect again to restart Google authorization.",
       conciseDetail ? `Details: ${conciseDetail}` : "",
     ].filter(Boolean).join(" ");
@@ -16501,7 +17930,7 @@ function summarizeGoogleWorkspaceSetupFailure(detail) {
     .trim();
   if (!text) return "";
   if (isRecoverableGoogleWorkspaceKeyringError(text)) {
-    return "The saved gog file-keyring password did not match Link's local gog credential store.";
+    return "The saved gog file-keyring password did not match Cloud Link's local gog credential store.";
   }
   const authFailure = text.match(/Authorization failed[^.]*\.?/i)?.[0];
   if (authFailure) return authFailure.trim();
@@ -16521,7 +17950,7 @@ async function resolveGogCommand() {
       // Try the next candidate.
     }
   }
-  throw new Error("Google Workspace setup requires the bundled `gog` CLI, but Link could not find it in app resources or on PATH.");
+  throw new Error("Google Workspace setup requires the bundled `gog` CLI, but Cloud Link could not find it in app resources or on PATH.");
 }
 
 function gogCommandCandidates() {
@@ -16754,7 +18183,7 @@ function googleWorkspaceAccountEmail() {
   ].filter(Boolean).map((value) => String(value).trim());
   const email = candidates.find((value) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value));
   if (!email) {
-    throw new Error("Sign in with Okta first so Link can infer your Telnyx Google account, or launch Link with GOG_ACCOUNT=you@telnyx.com.");
+    throw new Error("Sign in with Okta first so Cloud Link can infer your Telnyx Google account, or launch Cloud Link with GOG_ACCOUNT=you@telnyx.com.");
   }
   return email;
 }
@@ -16950,7 +18379,7 @@ function meetingBotFromAgent(agent) {
     id: agent.id,
     name: agent.name || agent.displayName || agent.id,
     displayName: agent.displayName || agent.name || agent.id,
-    description: agent.description || "Agent available to Link.",
+    description: agent.description || "Agent available to Cloud Link.",
     status: agent.status || (agent.available ? "available" : "needs_access"),
     type: agent.type || "agent",
     source: agent.source || "agent",
@@ -16983,7 +18412,7 @@ async function resolveMeetingBot(botId) {
   if (!id) throw new Error("Choose a bot to invite to the meeting.");
   const bots = await listMeetingBots();
   const bot = bots.find((item) => item.id === id);
-  if (!bot) throw new Error("That bot is not available in Link.");
+  if (!bot) throw new Error("That bot is not available in Cloud Link.");
   return bot;
 }
 
@@ -16997,7 +18426,7 @@ async function preflightMeetingBotInvite(input = {}) {
   let joinTarget = null;
 
   if (!credentialValue(agentMailApiKeyField)) {
-    blockers.push("Save AGENTMAIL_API_KEY before Link can create the bot invite inbox.");
+    blockers.push("Save AGENTMAIL_API_KEY before Cloud Link can create the bot invite inbox.");
   }
 
   const token = await googleCalendarAccessToken();
@@ -17209,7 +18638,7 @@ function normalizeCalendarSendUpdates(value) {
 
 async function createAgentMailInboxForBot(bot) {
   const apiKey = String(credentialValue(agentMailApiKeyField) || "").trim();
-  if (!apiKey) throw new Error("Save AGENTMAIL_API_KEY before Link can create the bot invite inbox.");
+  if (!apiKey) throw new Error("Save AGENTMAIL_API_KEY before Cloud Link can create the bot invite inbox.");
   const clientId = agentMailClientId(bot.id);
   const username = agentMailUsername(bot);
   const domain = String(credentialValue(agentMailDomainField) || "").trim();
@@ -17377,7 +18806,7 @@ function liveMeetingInviteBlockers({ bot, event, joinTarget }) {
 
 function missingTelnyxMeetBridgeConfig(bot) {
   const missing = [];
-  if (!credentialValue("TELNYX_API_KEY")) missing.push("Save TELNYX_API_KEY.");
+  if (!credentialValue("TELNYX_API_KEY")) missing.push("Save a Telnyx API Key.");
   if (!credentialValue(telnyxVoiceConnectionIdField)) missing.push(`Save ${telnyxVoiceConnectionIdField}.`);
   if (!credentialValue(telnyxMeetCallerIdField)) missing.push(`Save ${telnyxMeetCallerIdField}.`);
   if (!credentialValue(telnyxMeetWebhookUrlField)) missing.push(`Save ${telnyxMeetWebhookUrlField}.`);
@@ -17956,6 +19385,8 @@ async function loadDesktopState() {
     hostedAgentCacheState = useSavedState && saved.hostedAgentCacheState && typeof saved.hostedAgentCacheState === "object" ? normalizeHostedAgentCacheState(saved.hostedAgentCacheState) : emptyHostedAgentCacheState();
     surfaceCacheState = useSavedState && saved.surfaceCacheState && typeof saved.surfaceCacheState === "object" ? normalizeSurfaceCacheState(saved.surfaceCacheState) : emptySurfaceCacheState();
     wikiSources = mergeWikiDocumentationSources(saved.wikiSources);
+    customMcpServers = useSavedState && Array.isArray(saved.customMcpServers) ? saved.customMcpServers.map(normalizeCustomMcpServerRecord).filter(Boolean) : [];
+    employeePlugins = useSavedState && Array.isArray(saved.employeePlugins) ? saved.employeePlugins.map(normalizeEmployeePluginRecord).filter(Boolean) : [];
     modelCenterPreferences = useSavedState && saved.modelCenterPreferences && typeof saved.modelCenterPreferences === "object"
       ? normalizeModelCenterPreferences(saved.modelCenterPreferences)
       : normalizeModelCenterPreferences({});
@@ -18000,6 +19431,8 @@ async function loadDesktopState() {
     hostedAgentCacheState = emptyHostedAgentCacheState();
     surfaceCacheState = emptySurfaceCacheState();
     wikiSources = defaultWikiDocumentationSources();
+    customMcpServers = [];
+    employeePlugins = [];
     modelCenterPreferences = normalizeModelCenterPreferences({});
     localApiServerStatus = {
       ...localApiServerStatus,
@@ -18046,6 +19479,8 @@ async function saveDesktopState() {
     hostedAgentCacheState,
     surfaceCacheState,
     wikiSources,
+    customMcpServers,
+    employeePlugins,
     modelCenterPreferences,
     telnyxInferenceCatalog,
   };
@@ -18076,17 +19511,26 @@ function emptyHostedAgentCacheState() {
 
 function normalizeHostedAgentSummary(value) {
   if (!value || typeof value !== "object") return null;
-  const id = String(value.id || "").trim();
-  const name = String(value.name || "").trim();
+  const id = String(value.id || value.agent_id || value.uuid || value.slug || value.name || value.display_name || "").trim();
+  const name = String(value.name || value.display_name || value.agent_name || value.slug || id).trim();
   if (!id || !name) return null;
+  const rawCapabilities = Array.isArray(value.capabilities)
+    ? value.capabilities
+    : Array.isArray(value.skills)
+    ? value.skills
+    : Array.isArray(value.tools)
+    ? value.tools
+    : [];
   return {
     id,
     name,
-    displayName: String(value.displayName || value.display_name || name).trim() || name,
+    displayName: String(value.displayName || value.display_name || value.agent_name || name).trim() || name,
     description: String(value.description || "").trim(),
     status: String(value.status || "available").trim() || "available",
     type: String(value.type || value.agent_type || "hosted").trim() || "hosted",
-    capabilities: Array.isArray(value.capabilities) ? value.capabilities.map((item) => String(item || "").trim()).filter(Boolean) : [],
+    capabilities: rawCapabilities
+      .map((item) => String(typeof item === "object" && item ? item.name || item.id || item.slug || "" : item || "").trim())
+      .filter(Boolean),
   };
 }
 
@@ -18245,17 +19689,35 @@ function createMessage(role, content, artifacts = [], sources = [], displayName 
   };
 }
 
-function createChatArtifacts(prompt) {
+function createChatArtifacts(prompt, responseText = "") {
   const text = String(prompt ?? "");
   const wantsPdf = /\bpdf\b/i.test(text);
   const wantsMarkdown = /\.md\b|\bmarkdown\b|\bmd file\b/i.test(text);
-  if (!wantsPdf && !wantsMarkdown) return [];
+  const wantsHtml = /\b(artifact|html|web page|live page|dashboard|walkthrough|checklist|timeline|visual report|interactive|session reviews?|review page)\b/i.test(text);
+  if (!wantsPdf && !wantsMarkdown && !wantsHtml) return [];
   const createdAt = new Date().toISOString();
-  const title = text.replace(/\s+/g, " ").trim().slice(0, 48) || "Link generated document";
-  const content = `# ${title}\n\nGenerated from the active Link chat.\n\n## Request\n\n${text.trim() || "No prompt provided."}\n\n## Notes\n\n- Review content before sharing externally.\n- Attach sources when live connectors are available.`;
+  const title = text.replace(/\s+/g, " ").trim().slice(0, 48) || "Cloud Link Session Review";
+  const content = `# ${title}\n\nGenerated from the active Cloud Link chat.\n\n## Request\n\n${text.trim() || "No prompt provided."}\n\n## Notes\n\n- Review content before sharing externally.\n- Attach sources when live connectors are available.`;
+  const id = `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  if (wantsHtml) {
+    const slug = slugifyId(title || "session-review");
+    return [
+      {
+        id,
+        title,
+        kind: "html",
+        filename: `${slug}.html`,
+        content: buildSessionArtifactHtml({ title, prompt: text, responseText, createdAt, slug }),
+        createdAt,
+        updatedAt: createdAt,
+        slug,
+        version: createdAt.replace(/[:.]/g, "-"),
+      },
+    ];
+  }
   return [
     {
-      id: `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      id,
       title,
       kind: wantsPdf ? "pdf" : "markdown",
       filename: wantsPdf ? "link-generated-document.pdf" : "link-generated-document.md",
@@ -18263,6 +19725,89 @@ function createChatArtifacts(prompt) {
       createdAt,
     },
   ];
+}
+
+function buildSessionArtifactHtml(input) {
+  const title = escapeHtml(input.title);
+  const prompt = escapeHtml(String(input.prompt || "").trim() || "No prompt provided.");
+  const response = escapeHtml(String(input.responseText || "").trim() || "No assistant response was available when this Session Review was created.");
+  const createdAt = escapeHtml(input.createdAt);
+  const slug = escapeHtml(input.slug);
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #f7f6f4; --panel: #ffffff; --text: #20201f; --muted: #6e6a66; --line: #dedbd7; --soft: #f0efed; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #151515; --panel: #20201f; --text: #f4f1ec; --muted: #b7b0a8; --line: #3b3936; --soft: #2a2927; } }
+    * { box-sizing: border-box; } body { margin: 0; background: var(--bg); color: var(--text); } main { width: min(1120px, 100%); margin: 0 auto; padding: 24px; } header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; margin-bottom: 16px; } h1 { margin: 0; font-size: 30px; line-height: 1.1; } h2 { margin: 0 0 10px; font-size: 16px; } p { margin: 0; color: var(--muted); line-height: 1.55; } button, input { font: inherit; } input { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 11px; background: var(--panel); color: var(--text); } .pill { border: 1px solid var(--line); border-radius: 999px; padding: 7px 10px; color: var(--muted); background: var(--panel); font-size: 12px; white-space: nowrap; } .grid { display: grid; gap: 12px; } .summary { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 16px 0; } .main { grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); } .card, .panel { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 1px 2px rgba(31,30,28,.05); } .card { padding: 14px; min-height: 92px; } .panel { padding: 16px; } .label { color: var(--muted); font-size: 12px; font-weight: 760; text-transform: uppercase; letter-spacing: .04em; } .value { margin-top: 7px; font-size: 18px; font-weight: 760; overflow-wrap: anywhere; } .body { white-space: pre-wrap; color: var(--text); line-height: 1.55; } .timeline { display: grid; gap: 10px; } .step { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 9px; align-items: start; } .dot { width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center; background: var(--soft); color: var(--text); border: 1px solid var(--line); font-weight: 800; font-size: 12px; } .checklist { display: grid; gap: 8px; } label.check { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; align-items: start; color: var(--text); } label.check span { overflow-wrap: anywhere; } .footer { margin-top: 14px; color: var(--muted); font-size: 12px; } mark { border-radius: 4px; background: var(--soft); color: var(--text); padding: 0 2px; }
+    @media (max-width: 820px) { main { padding: 16px; } header, .summary, .main { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <div class="label">Session Review</div>
+        <h1>${title}</h1>
+        <p>Generated from session context and ready for local preview or Telnyx Edge deployment.</p>
+      </div>
+      <span class="pill">Version ${createdAt}</span>
+    </header>
+    <section class="grid summary" aria-label="Session Review summary">
+      <article class="card"><div class="label">Slug</div><div class="value">${slug}</div></article>
+      <article class="card"><div class="label">Boundary</div><div class="value">Local first</div></article>
+      <article class="card"><div class="label">Status</div><div class="value">Draft review</div></article>
+    </section>
+    <section class="grid main">
+      <article class="panel">
+        <h2>Session Request</h2>
+        <input id="filter" placeholder="Filter this review" />
+        <p class="body" id="requestText">${prompt}</p>
+      </article>
+      <article class="panel">
+        <h2>Review Checklist</h2>
+        <div class="checklist">
+          <label class="check"><input type="checkbox" /><span>Context and sources are sufficient for the audience.</span></label>
+          <label class="check"><input type="checkbox" /><span>No secrets, credentials, or private customer data are exposed.</span></label>
+          <label class="check"><input type="checkbox" /><span>Preview was checked before cloud deployment.</span></label>
+        </div>
+      </article>
+      <article class="panel">
+        <h2>Assistant Output</h2>
+        <p class="body" id="responseText">${response}</p>
+      </article>
+      <article class="panel">
+        <h2>Review Timeline</h2>
+        <div class="timeline">
+          <div class="step"><div class="dot">1</div><p>Session context captured.</p></div>
+          <div class="step"><div class="dot">2</div><p>Session Review generated as a static page.</p></div>
+          <div class="step"><div class="dot">3</div><p>Use Cloud Link to preview locally, then deploy with the same slug.</p></div>
+        </div>
+      </article>
+    </section>
+    <div class="footer">Cloud Link Session Review ${slug} generated ${createdAt}</div>
+  </main>
+  <script>
+    const filter = document.getElementById("filter");
+    const blocks = [document.getElementById("requestText"), document.getElementById("responseText")];
+    const originals = blocks.map((block) => block.textContent);
+    function escapeRegExp(value) {
+      const specials = new Set([".", "*", "+", "?", "^", "$", "{", "}", "(", ")", "|", "[", "]", "\\\\"]);
+      return [...value].map((char) => specials.has(char) ? "\\\\" + char : char).join("");
+    }
+    filter.addEventListener("input", () => {
+      const query = filter.value.trim();
+      blocks.forEach((block, index) => {
+        const text = originals[index];
+        block.innerHTML = query ? text.replace(new RegExp(escapeRegExp(query), "gi"), (match) => "<mark>" + match + "</mark>") : text;
+      });
+    });
+  </script>
+</body>
+</html>`;
 }
 
 function createKit(id, name, description, mastered, total, tone) {

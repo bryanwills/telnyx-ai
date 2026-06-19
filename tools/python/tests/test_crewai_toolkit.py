@@ -1,7 +1,7 @@
 """Tests for the CrewAI adapter.
 
 These tests verify the tool generation logic without importing crewai.
-CrewAI integration tests require `pip install telnyx-agent-toolkit[crewai]`.
+CrewAI integration tests require a separately installed, security-reviewed CrewAI distribution.
 """
 
 from unittest.mock import patch

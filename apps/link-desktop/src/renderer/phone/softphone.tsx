@@ -27,9 +27,9 @@ import {
   Volume2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { TelnyxRTC } from "@telnyx/webrtc";
+import * as TelnyxWebRtc from "@telnyx/webrtc";
 import { linkApi, type ConnectorStatus, type GoogleContact, type PhoneAssistantOption, type PhoneCallHistoryRow, type PhoneNumberOption, type ViewId, type WebRtcStatus } from "../api.js";
-import { dialerActions, dialerFeatures, dialpadKeys, type DialerConfig, type DialerFeature, type DialerFeaturePhase } from "./dialer-config.js";
+import { dialerActions, dialerFeatures, dialpadKeys, normalizeDialerConfig, type DialerConfig, type DialerFeature, type DialerFeaturePhase } from "./dialer-config.js";
 
 type SdkCall = {
   id?: string;
@@ -59,7 +59,7 @@ type SdkNotification = {
   error?: Error;
 };
 
-type SdkClient = InstanceType<typeof TelnyxRTC> & {
+type SdkClient = {
   remoteElement?: string;
   newCall: (input: Record<string, unknown>) => SdkCall;
   connect: () => unknown;
@@ -68,6 +68,11 @@ type SdkClient = InstanceType<typeof TelnyxRTC> & {
   updateToken?: (token: string) => unknown;
   on: (event: string, handler: (payload?: unknown) => void) => SdkClient;
 };
+
+type TelnyxRtcConstructor = new (input: Record<string, unknown>) => SdkClient;
+
+const telnyxWebRtcModule = TelnyxWebRtc as unknown as { TelnyxRTC?: TelnyxRtcConstructor; default?: { TelnyxRTC?: TelnyxRtcConstructor } };
+const TelnyxRTC = (telnyxWebRtcModule.TelnyxRTC ?? telnyxWebRtcModule.default?.TelnyxRTC) as TelnyxRtcConstructor;
 
 type CallState = "idle" | "connecting" | "ready" | "dialing" | "ringing" | "active" | "held" | "ended" | "error";
 type CallBotOption = {
@@ -177,8 +182,9 @@ function callStatusLabel(status: PhoneCallHistoryRow["status"]) {
   }
 }
 
-function defaultRecordingEnabled(config: DialerConfig) {
-  return Boolean(config.featureSettings.recording?.["recording-auto"] ?? true);
+function defaultRecordingEnabled(config: Partial<DialerConfig> | null | undefined) {
+  const normalizedConfig = normalizeDialerConfig(config);
+  return Boolean(normalizedConfig.featureSettings.recording?.["recording-auto"] ?? true);
 }
 
 function readRecordCallDefault(config: DialerConfig) {
@@ -201,7 +207,7 @@ function eventPathContains(event: Event, node: Node | null) {
 }
 
 export function LinkSoftphone({
-  config,
+  config: rawConfig,
   linkedPhoneNumber,
   setLinkedPhoneNumber,
   telnyxApiReady,
@@ -225,6 +231,7 @@ export function LinkSoftphone({
   previewMode?: boolean;
   previewPhase?: DialerFeaturePhase;
 }) {
+  const config = useMemo(() => normalizeDialerConfig(rawConfig), [rawConfig]);
   const initialNormalizedDialString = previewMode ? normalizeDialString(initialDialNumber || "15551234567") : "";
   const [dialString, setDialString] = useState(initialNormalizedDialString);
   const [callSearchQuery, setCallSearchQuery] = useState(initialNormalizedDialString);
@@ -1004,6 +1011,22 @@ export function LinkSoftphone({
     <div className={`linkSoftphone theme-${config.theme} shape-${config.shape} accent-${config.accentColor} font-${config.fontSize}`}>
       <audio id="link-phone-remote-audio" autoPlay />
       <div className="linkSoftphoneBody">
+        {showSetupState && (
+          <div className="linkSoftphoneSetup">
+            <div className="linkSoftphoneSetupIcon">
+              <PhoneCall size={18} />
+            </div>
+            <div>
+              <strong>{callState === "error" || webRtcError ? "Dialer needs attention" : "Finish Dialer Setup"}</strong>
+              <p>{webRtcError || webRtcStatus?.message || "Connect to Telnyx to start making outbound calls."}</p>
+            </div>
+            <button className="runtimeSettingsButton" type="button" onClick={() => setView("settings")}>
+              <Settings size={14} />
+              Open Settings
+            </button>
+          </div>
+        )}
+
         {showPostCallSummary ? (
           <section className="linkSoftphoneWrapUpCard" aria-label="Call wrap-up">
             <div className="linkSoftphoneWrapUpHeader">
@@ -1212,7 +1235,7 @@ export function LinkSoftphone({
                         {call.direction === "inbound" ? <PhoneIncoming size={13} /> : <PhoneOutgoing size={13} />}
                         {callDirectionLabel(call.direction)}
                       </span>
-                      <small>{callStatusLabel(call.status)} · {formatCallDuration(call.durationSeconds)} · {call.agentName || "Link"}</small>
+                      <small>{callStatusLabel(call.status)} · {formatCallDuration(call.durationSeconds)} · {call.agentName || "Cloud Link"}</small>
                     </div>
                   </article>
                 ))}
@@ -1224,22 +1247,6 @@ export function LinkSoftphone({
               </div>
             )}
           </section>
-        )}
-
-        {showSetupState && (
-          <div className="linkSoftphoneSetup">
-            <div className="linkSoftphoneSetupIcon">
-              <PhoneCall size={18} />
-            </div>
-            <div>
-              <strong>{callState === "error" || webRtcError ? "Dialer needs attention" : "Finish WebRTC setup"}</strong>
-              <p>{webRtcError || webRtcStatus?.message || "Save TELNYX_API_KEY in Settings. Link will create the WebRTC connection and credential automatically when the key has permission."}</p>
-            </div>
-            <button className="runtimeSettingsButton" type="button" onClick={() => setView("settings")}>
-              <Settings size={14} />
-              Open Settings
-            </button>
-          </div>
         )}
 
         {visiblePhaseFeatures.length > 0 && (

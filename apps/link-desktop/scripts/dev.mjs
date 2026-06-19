@@ -20,10 +20,16 @@ const urls = server.resolvedUrls?.local ?? ["http://127.0.0.1:5173/"];
 const rendererUrl = urls[0] ?? "http://127.0.0.1:5173/";
 console.log(`Renderer: ${rendererUrl}`);
 
-const { executablePath } = await prepareMacDevRuntime(appDir);
+const { executablePath: electronExecutable } = process.platform === "darwin"
+  ? await prepareMacDevRuntime(appDir)
+  : {
+    executablePath: process.platform === "win32"
+      ? path.join(appDir, "node_modules", ".bin", "electron.cmd")
+      : path.join(appDir, "node_modules", ".bin", "electron"),
+  };
 const electron = spawn(
-  process.platform === "darwin" ? executablePath : (process.platform === "win32" ? "npx.cmd" : "npx"),
-  process.platform === "darwin" ? ["src/main/main.js"] : ["electron", "src/main/main.js"],
+  electronExecutable,
+  process.platform === "darwin" ? [] : ["src/main/main.js"],
   {
     cwd: appDir,
     stdio: "inherit",

@@ -23,7 +23,7 @@ const service = new SkillRegistryService({ storagePath });
 const server = createSkillRegistryServer(service, { requireAuth, requireAuthContext });
 const listener = await listenSkillRegistryServer(server, port, "0.0.0.0");
 
-console.log(\`Link Skill Registry listening at \${listener.url}\`);
+console.log(\`Cloud Link Skill Registry listening at \${listener.url}\`);
 `, "utf8");
 
 function run(command, args, cwd) {

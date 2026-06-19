@@ -1,8 +1,8 @@
-name: Link Skill Registry
+name: Cloud Link Skill Registry
 slug: link-skill-registry
-description: Private internal registry for Link skill stars, installs/downloads, and run counts.
+description: Private internal registry for Cloud Link skill stars, installs/downloads, and run counts.
 owner_squad: link-platform.squad
-audience: Telnyx Link desktop clients
+audience: Telnyx Cloud Link desktop clients
 app_type: web
 install_command: npm install
 build_command: npm run build

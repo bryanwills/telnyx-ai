@@ -33,11 +33,10 @@ dependencies = [
 [project.optional-dependencies]
 openai = ["openai>=1.0.0"]
 langchain = ["langchain-core>=0.3.0"]
-crewai = ["crewai>=0.80.0"]
+crewai = []
 all = [
     "openai>=1.0.0",
     "langchain-core>=0.3.0",
-    "crewai>=0.80.0",
 ]
 dev = [
     "pytest>=8.0.0",

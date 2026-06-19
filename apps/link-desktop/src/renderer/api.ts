@@ -31,6 +31,7 @@ export type ArtifactDeploymentDataBoundary = "local" | "telnyx-cloud";
 export type MessageGatewayTransport = "auto" | "slack" | "google_chat" | "a2a";
 export type MessageGatewayStatus = "accepted" | "partial" | "delivered" | "failed" | "rejected";
 export type MessageGatewayDeliveryStatus = "queued" | "delivered" | "retryable_failure" | "failed" | "rejected";
+export type SessionAgentState = "idle" | "working" | "blocked" | "needs_approval" | "done";
 
 export interface MessageGatewayReadinessCheck {
   name: string;
@@ -119,6 +120,8 @@ export interface MessageGatewayEventsResult {
   warning?: string;
   events: MessageGatewayEvent[];
 }
+
+export type SessionDaemonReadiness = MessageGatewayReadiness;
 
 export interface SkillMetadata {
   skillId?: string;
@@ -264,6 +267,7 @@ export interface ExplorerResult {
   permission: "allowed" | "needs_access";
   freshness: string;
   excerpt: string;
+  updatedAt?: string;
   workspaceId?: string;
   url?: string;
 }
@@ -341,6 +345,28 @@ export interface WikiWorkspaceDocSubmissionResult {
   pullRequestNumber?: number;
 }
 
+export interface PersonalWikiExportDocInput {
+  id: string;
+  title: string;
+  content: string;
+  source: "manual" | "transcript" | "meeting" | "agent";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PersonalWikiExportInput {
+  title?: string;
+  docs: PersonalWikiExportDocInput[];
+}
+
+export interface PersonalWikiExportResult {
+  status: "exported";
+  rootPath: string;
+  bundleName: string;
+  documentCount: number;
+  exportedAt: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
@@ -354,10 +380,17 @@ export interface ChatMessage {
 export interface ChatArtifact {
   id: string;
   title: string;
-  kind: "markdown" | "pdf";
+  kind: "markdown" | "pdf" | "html";
   filename: string;
   content: string;
   createdAt: string;
+  slug?: string;
+  version?: string;
+  updatedAt?: string;
+  sourceSessionId?: string;
+  localAppDirectory?: string;
+  previewUrl?: string;
+  publishedUrl?: string;
 }
 
 export interface VoiceTranscriptionInput {
@@ -381,6 +414,10 @@ export interface TerminalStatus {
   lastExit: { code: number | null; signal: string | null; at: string; message?: string } | null;
   startedAt: string | null;
   updatedAt: string;
+  mode?: "local" | "managed" | "preview";
+  agentState?: SessionAgentState;
+  serviceUrl?: string;
+  remoteSessionId?: string;
 }
 
 export interface TerminalOutputEvent {
@@ -441,6 +478,68 @@ export interface ConnectorStatus {
   status: ConnectionStatus;
   mode: ConnectionMode;
   requiredAccess: string[];
+}
+
+export interface CustomMcpServer {
+  id: string;
+  name: string;
+  url: string;
+  description: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastCheckedAt: string;
+  lastToolCount: number;
+  lastError: string;
+  tokenConfigured?: boolean;
+}
+
+export interface CustomMcpServerInput {
+  id?: string;
+  name: string;
+  url: string;
+  description?: string;
+  enabled?: boolean;
+  bearerToken?: string;
+  clearBearerToken?: boolean;
+}
+
+export interface CustomMcpTestResult {
+  ok: boolean;
+  checkedAt: string;
+  toolCount: number;
+  message: string;
+  tools: Pick<ToolMetadata, "name" | "description" | "category">[];
+}
+
+export interface EmployeePlugin {
+  id: string;
+  name: string;
+  description: string;
+  audience: string;
+  toolPack: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  provider: "merge-dev";
+  mcpUrl: string;
+  connected: boolean;
+}
+
+export interface EmployeePluginInput {
+  id?: string;
+  name: string;
+  description?: string;
+  audience?: string;
+  toolPack?: string;
+  enabled?: boolean;
+}
+
+export interface MergeDevConnectionResult {
+  connected: boolean;
+  url: string;
+  credentials: CredentialGroupStatus[];
+  connectors: ConnectorStatus[];
 }
 
 export interface CredentialFieldStatus {
@@ -1437,7 +1536,7 @@ export interface SpeakSettings {
   silenceThreshold: number;
   llmCleanupEnabled: boolean;
   ttsMode: "local" | "telnyx-cloud";
-  localTtsProvider: "stub";
+  localTtsProvider: "system";
   ttsProvider: string;
   ttsVoice: string;
   updatedAt: string;
@@ -1845,6 +1944,16 @@ export interface LinkLocalEdgeDeployResult {
     endpoint: string;
     configPath: string;
   };
+}
+
+export interface LinkHtmlArtifactMaterializationResult extends LinkLocalAppInspection {
+  materialized: boolean;
+  artifactId: string;
+  artifactTitle: string;
+  slug: string;
+  htmlPath: string;
+  distPath: string;
+  replaced?: boolean;
 }
 
 export interface LinkLocalEdgeDraftApp {
@@ -2365,6 +2474,16 @@ export interface LinkDesktopApi {
   deployArtifact(input: ArtifactDeploymentRequest): Promise<ArtifactDeploymentRecord>;
   listTools(): Promise<ToolMetadata[]>;
   listConnectors(): Promise<ConnectorStatus[]>;
+  listCustomMcps(): Promise<CustomMcpServer[]>;
+  saveCustomMcp(input: CustomMcpServerInput): Promise<CustomMcpServer[]>;
+  testCustomMcp(input: CustomMcpServerInput | string): Promise<CustomMcpTestResult>;
+  setCustomMcpEnabled(input: { id: string; enabled: boolean }): Promise<CustomMcpServer[]>;
+  deleteCustomMcp(id: string): Promise<CustomMcpServer[]>;
+  listEmployeePlugins(): Promise<EmployeePlugin[]>;
+  saveEmployeePlugin(input: EmployeePluginInput): Promise<EmployeePlugin[]>;
+  setEmployeePluginEnabled(input: { id: string; enabled: boolean }): Promise<EmployeePlugin[]>;
+  deleteEmployeePlugin(id: string): Promise<EmployeePlugin[]>;
+  connectMergeDev(): Promise<MergeDevConnectionResult>;
   listCredentials(): Promise<CredentialGroupStatus[]>;
   saveCredential(input: { name: string; value: string }): Promise<CredentialGroupStatus[]>;
   getStorageBackupStatus(): Promise<StorageBackupStatus>;
@@ -2409,6 +2528,7 @@ export interface LinkDesktopApi {
   connectPylonWithOAuth(): Promise<PylonOAuthConnectionResult>;
   createPylonIssue(input: PylonCreateIssueInput): Promise<PylonCreateIssueResult>;
   submitWikiWorkspaceDoc(input: WikiWorkspaceDocSubmissionInput): Promise<WikiWorkspaceDocSubmissionResult>;
+  exportPersonalWiki(input: PersonalWikiExportInput): Promise<PersonalWikiExportResult | null>;
   listGoogleCalendarEvents(): Promise<GoogleCalendarEvent[]>;
   getCalendarWorkspace(input?: { query?: string; selectedEventId?: string }): Promise<CalendarWorkspaceView>;
   listMeetingBots(): Promise<MeetingBotOption[]>;
@@ -2497,6 +2617,7 @@ export interface LinkDesktopApi {
   deleteWikiSource(id: string): Promise<WikiDocumentationSource[]>;
   resetWikiSources(): Promise<WikiDocumentationSource[]>;
   searchExplorer(input: { query: string; workspaceId?: string }): Promise<ExplorerResult[]>;
+  listExplorerSourceItems(input: { source: ExplorerResult["source"]; workspaceId?: string; limit?: number }): Promise<ExplorerResult[]>;
   askKnowledgeAgent(input: KnowledgeAgentAskRequest): Promise<KnowledgeAgentAskResponse>;
   listChatSessions(): Promise<ChatSession[]>;
   createChatSession(input?: {
@@ -2558,6 +2679,7 @@ export interface LinkDesktopApi {
   listWikiState(): Promise<WikiState>;
   getPublisherReadiness(): Promise<LinkAppPublisherReadiness>;
   getMessageGatewayReadiness(): Promise<MessageGatewayReadiness>;
+  getSessionDaemonReadiness(): Promise<SessionDaemonReadiness>;
   listGatewayMessages(input?: { status?: MessageGatewayStatus | ""; recipient?: string }): Promise<MessageGatewayListResult>;
   sendGatewayMessage(input: {
     to: string | string[];
@@ -2590,6 +2712,7 @@ export interface LinkDesktopApi {
 	  listLocalEdgeDraftApps(): Promise<LinkLocalEdgeDraftApp[]>;
 	  importLocalEdgeApp(input?: { scope?: LinkLocalEdgeImportScope; slug?: string; replaceExisting?: boolean }): Promise<LinkLocalEdgeImportResult>;
 	  deleteLocalEdgeDraftApp(input: { directory: string }): Promise<{ deleted: boolean; directory: string }>;
+	  materializeHtmlArtifact(input: { artifact: ChatArtifact; slug?: string; replaceExisting?: boolean }): Promise<LinkHtmlArtifactMaterializationResult>;
 	  previewLocalEdgeApp(input?: { directory?: string; slug?: string }): Promise<LinkLocalEdgeDeployResult>;
   deployLocalEdgeApp(input?: { directory?: string; slug?: string; replaceExisting?: boolean }): Promise<LinkLocalEdgeDeployResult>;
   auditEvents(): Promise<unknown[]>;
@@ -2611,6 +2734,10 @@ const workboardColumns: WorkboardStatus[] = ["needs_review", "todo", "in_progres
 const taskBoardOperatingGuide =
   "Task board stages: Needs Review means an agent has a final response ready for human review; To Do means accepted but not started; In Progress means actively being worked; Done means the human reviewer accepted or closed the task. Agents move finished work to Needs Review, not Done.";
 
+function slugifyPreviewValue(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
 function sortChatSessions(sessions: ChatSession[]) {
   return [...sessions].sort((left, right) => {
     const pinnedCompare = Number(Boolean(right.pinnedAt)) - Number(Boolean(left.pinnedAt));
@@ -2620,6 +2747,8 @@ function sortChatSessions(sessions: ChatSession[]) {
 }
 
 let previewConnectors: ConnectorStatus[] = [];
+let previewCustomMcpServers: CustomMcpServer[] = [];
+let previewEmployeePlugins: EmployeePlugin[] = [];
 let previewGatewayMessages: MessageGatewayMessage[] = [];
 let previewGoogleConnected = false;
 let previewPublishedApps: LinkPublishedApp[] = [];
@@ -2708,7 +2837,7 @@ const previewOkfBundle: OkfBundlePreview = {
       path: "playbooks/support-triage.md",
       type: "Playbook",
       title: "Support Triage",
-      description: "Steps for routing customer support work through Link.",
+      description: "Steps for routing customer support work through Cloud Link.",
       resource: "docs://support/triage",
       tags: ["support"],
       timestamp: "2026-06-13T00:00:00Z",
@@ -2725,7 +2854,7 @@ const previewOkfBundle: OkfBundlePreview = {
       path: "constraints/agent-safety-rules.md",
       type: "Constraint",
       title: "Agent Safety Rules",
-      description: "Operating boundaries for Link agents before changing customer-facing systems.",
+    description: "Operating boundaries for Cloud Link agents before changing customer-facing systems.",
       resource: "docs://agent-context/safety-rules",
       tags: ["agent", "safety"],
       timestamp: "2026-06-13T00:00:00Z",
@@ -2741,8 +2870,8 @@ const previewMeetingBots: MeetingBotOption[] = [
   {
     id: "preview-meeting-bot",
     name: "link-preview-agent",
-    displayName: "Link Preview Agent",
-    description: "Preview meeting bot. Link loads live agents and Telnyx Assistants.",
+    displayName: "Cloud Link Preview Agent",
+    description: "Preview meeting bot. Cloud Link loads live agents and Telnyx Assistants.",
     status: "available",
     type: "preview",
     source: "preview",
@@ -2772,7 +2901,7 @@ let previewSpeakSettings: SpeakSettings = {
   silenceThreshold: 0.05,
   llmCleanupEnabled: true,
   ttsMode: "telnyx-cloud",
-  localTtsProvider: "stub",
+  localTtsProvider: "system",
   ttsProvider: "telnyx",
   ttsVoice: "Telnyx.NaturalHD.astra",
   updatedAt: now,
@@ -2786,7 +2915,7 @@ let previewVpnSettings: VpnSettings = {
 const previewVpnNetworks: VpnNetwork[] = [
   {
     id: "preview-network-east",
-    name: "Link Workspace East",
+    name: "Cloud Link Workspace East",
     createdAt: now,
     updatedAt: now,
     interfaceCount: 1,
@@ -2794,7 +2923,7 @@ const previewVpnNetworks: VpnNetwork[] = [
   },
   {
     id: "preview-network-eu",
-    name: "Link Workspace EU",
+    name: "Cloud Link Workspace EU",
     createdAt: now,
     updatedAt: now,
     interfaceCount: 1,
@@ -2806,7 +2935,7 @@ const previewVpnInterfaces: VpnInterface[] = [
     id: "preview-vpn-ashburn",
     name: "Workspace VPN East",
     networkId: "preview-network-east",
-    networkName: "Link Workspace East",
+    networkName: "Cloud Link Workspace East",
     status: "provisioned",
     endpoint: "64.16.243.3:5107",
     publicKey: "preview-wireguard-public-key-east",
@@ -2823,7 +2952,7 @@ const previewVpnInterfaces: VpnInterface[] = [
     id: "preview-vpn-amsterdam",
     name: "Workspace VPN EU",
     networkId: "preview-network-eu",
-    networkName: "Link Workspace EU",
+    networkName: "Cloud Link Workspace EU",
     status: "provisioning",
     endpoint: "64.16.243.4:5107",
     publicKey: "preview-wireguard-public-key-eu",
@@ -3054,11 +3183,13 @@ function previewTerminalStatus(input?: { terminalId?: string; title?: string }):
     title: input?.title || `Terminal ${previewTerminalStatuses.size + 1}`,
     running: false,
     shell: "preview-shell",
-    cwd: "Telnyx Link",
-    buffer: "Terminal preview. Open Link to run commands on your local device.\n",
+    cwd: "Telnyx Cloud Link",
+    buffer: "Terminal preview. Open Telnyx Cloud Link to run commands on your local device.\n",
     lastExit: null,
     startedAt: null,
     updatedAt: now,
+    mode: "preview",
+    agentState: "idle",
   };
   previewTerminalStatuses.set(terminalId, status);
   return status;
@@ -3074,7 +3205,7 @@ function previewScribesRoute(input: Partial<ScribesSettings> = {}): ScribesProvi
       modelId: settings.sttModel || "telnyx/stt",
       engine: "Telnyx",
       ready: false,
-      diagnostics: { ready: false, message: "Save TELNYX_API_KEY in Link to use Scribe Cloud STT." },
+      diagnostics: { ready: false, message: "Save a Telnyx API Key in Cloud Link to use Scribe Cloud STT." },
       endpoint: "https://api.telnyx.com/v2/speech-to-text",
       updatedAt: new Date().toISOString(),
     };
@@ -3089,7 +3220,7 @@ function previewScribesRoute(input: Partial<ScribesSettings> = {}): ScribesProvi
     modelId: model.id,
     engine: model.engine,
     ready: model.downloaded && model.diagnostics.ready,
-    diagnostics: model.downloaded ? model.diagnostics : { ...model.diagnostics, message: `Download ${model.label} in Link before local transcription.` },
+    diagnostics: model.downloaded ? model.diagnostics : { ...model.diagnostics, message: `Download ${model.label} in Cloud Link before local transcription.` },
     endpoint: previewScribesServer.endpoint ? `${previewScribesServer.endpoint}/v1/transcribe` : "",
     updatedAt: new Date().toISOString(),
   };
@@ -3182,17 +3313,17 @@ function previewLiteLlmRuntimeStatus(): LiteLlmRuntimeStatus {
       "Telnyx catalog and direct cloud routes are available in preview mode.",
       [
         { name: "litellm", ok: true, detail: "Preview assumes LiteLLM can start local routing." },
-        { name: "telnyx_api_key", ok: true, detail: "TELNYX_API_KEY is configured." },
+        { name: "telnyx_api_key", ok: true, detail: "Telnyx API Key is configured." },
       ],
     )
     : previewRouteHealth(
       "setup_required",
       false,
       null,
-      "Add TELNYX_API_KEY to enable Telnyx cloud routes.",
+      "Add a Telnyx API Key to enable Telnyx cloud routes.",
       [
         { name: "litellm", ok: true, detail: "Preview assumes LiteLLM can start local routing." },
-        { name: "telnyx_api_key", ok: false, detail: "TELNYX_API_KEY is missing." },
+        { name: "telnyx_api_key", ok: false, detail: "Telnyx API Key is missing." },
       ],
     );
   const managedHealth = managedConfigured
@@ -3346,7 +3477,7 @@ function previewLiteLlmRuntimeStatus(): LiteLlmRuntimeStatus {
         capabilities: ["chat", "reasoning"],
       }),
     ],
-    message: "Preview model gateway status. Local-first routes are available; cloud routes require credentials in Link.",
+    message: "Preview model gateway status. Local-first routes are available; cloud routes require credentials in Cloud Link.",
   };
 }
 
@@ -3574,7 +3705,7 @@ function previewModelCenterState(): ModelCenterState {
     id: "ollama",
     label: "Ollama",
     kind: "local",
-    description: "Local Ollama engine backed by the Link Runtime Manager.",
+    description: "Local Ollama engine backed by the Cloud Link Runtime Manager.",
     engineFamily: "ollama",
     dataBoundary: "local",
   };
@@ -3657,22 +3788,24 @@ function previewModelCenterState(): ModelCenterState {
 
 let previewCredentials: CredentialGroupStatus[] = [
   credentials("agent-control-plane", "Agent Control Plane", "Configure the Okta auth bridge URL before sign-in. TELNYX_AUTH_REV2 is stored securely after sign-in.", ["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"]),
-  credentials("mcp-proxy", "Telnyx MCP Proxy", "Connect Link to team-telnyx/mcp-proxy so agents discover approved MCP servers and tools through one Telnyx registry.", ["MCP_PROXY_URL"]),
-  credentials("link-app-publisher", "Link App Publisher", "Managed publisher service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY.", ["LINK_APP_PUBLISHER_URL"]),
-  credentials("link-message-gateway", "Link Message Gateway", "Managed message gateway service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or TELNYX_API_KEY.", ["LINK_MESSAGE_GATEWAY_URL"]),
+  credentials("mcp-proxy", "Telnyx MCP Proxy", "Connect Cloud Link to team-telnyx/mcp-proxy so agents discover approved MCP servers and tools through one Telnyx registry.", ["MCP_PROXY_URL"]),
+  credentials("link-app-publisher", "Cloud Link App Publisher", "Managed publisher service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or a Telnyx API Key.", ["LINK_APP_PUBLISHER_URL"]),
+  credentials("link-message-gateway", "Cloud Link Message Gateway", "Managed message gateway service URL. Configure an HTTPS endpoint, then authenticate with Okta Rev2 or a Telnyx API Key.", ["LINK_MESSAGE_GATEWAY_URL"]),
+  credentials("link-session-daemon", "Terminal Sessions", "Managed session daemon URL plus optional Telnyx SMS from/to numbers for blocked, approval, and done alerts. SMS uses the saved Telnyx API Key per request.", ["LINK_SESSION_DAEMON_URL", "LINK_SESSION_SMS_FROM", "LINK_SESSION_SMS_TO"]),
   credentials("litellm", "Model Gateway", "Optional managed gateway and frontier BYO settings. Local Ollama mode does not require a cloud key; Telnyx BYO uses the Telnyx API key group.", ["LITELLM_BASE_URL", "LITELLM_API_KEY", "TELNYX_INFERENCE_BASE_URL", "ANTHROPIC_API_KEY"]),
   credentials("hindsight", "Hindsight", "Configured Hindsight API URL, per-user API key, and optional memory bank id used when saving archive entries.", ["HINDSIGHT_API_URL", "HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"]),
   credentials("linear", "Linear", "Linear API key for issue and project lookup.", ["LINEAR_API_KEY"]),
-  credentials("telnyx", "Telnyx", "Telnyx API key for account, phone, messaging, and WebRTC token generation.", ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"]),
-  credentials("telnyx-storage", "Telnyx Storage", "Link a Telnyx Cloud Storage bucket for desktop workspace backups. Link reuses TELNYX_API_KEY for S3-compatible upload auth.", ["TELNYX_STORAGE_BUCKET", "TELNYX_STORAGE_REGION", "TELNYX_STORAGE_PREFIX"]),
+  credentials("telnyx", "Telnyx", "Telnyx API key for account, phone, messaging, WebRTC token generation, and Telnyx Storage access. Bucket selection lives in Storage.", ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"]),
+  credentials("telnyx-storage", "Telnyx Storage", "Attach a Telnyx Cloud Storage bucket for desktop workspace backups. Cloud Link reuses your Telnyx API Key for S3-compatible upload auth.", ["TELNYX_STORAGE_BUCKET", "TELNYX_STORAGE_REGION", "TELNYX_STORAGE_PREFIX"]),
   credentials("telnyx-meet-bridge", "Telnyx Meet Bridge", "Runtime settings for Google Meet live joins through Telnyx SIP/phone dial and Conversation Relay.", ["TELNYX_VOICE_CONNECTION_ID", "TELNYX_MEET_CALLER_ID", "TELNYX_MEET_WEBHOOK_URL", "TELNYX_MEET_CONVERSATION_RELAY_WS_URL", "LINK_MEETING_AGENT_ADAPTER_URL"]),
   credentials("agentmail", "AgentMail", "AgentMail API key plus optional domain for deterministic bot inbox identities.", ["AGENTMAIL_API_KEY", "AGENTMAIL_DOMAIN"]),
-  credentials("github", "GitHub", "Pair GitHub with a read-only Telnyx Link GitHub App so Link can access approved Telnyx repositories without asking users to create personal access tokens.", ["GITHUB_USER_ACCESS_TOKEN", "GITHUB_APP_CLIENT_ID", "GH_TOKEN"]),
-  credentials("guru", "Guru", "Connect Guru through OAuth so Link can search Guru MCP cards after the user approves access through Guru SSO. Admins can provide the OAuth client settings through env or managed app config.", ["GURU_OAUTH_CLIENT_ID", "GURU_OAUTH_CLIENT_SECRET", "GURU_OAUTH_SCOPE", "GURU_OAUTH_REDIRECT_URI", "GURU_OAUTH_ACCESS_TOKEN", "GURU_OAUTH_REFRESH_TOKEN", "GURU_OAUTH_TOKEN_EXPIRES_AT", "GURU_OAUTH_USER_ID"]),
-  credentials("pylon", "Pylon", "Connect the team-telnyx/pylon-mcp-server compatible endpoint through Pylon OAuth so Link can search tickets and create issues through user-scoped Pylon MCP access. Link blocks update_issue and update_account in v1.", ["PYLON_MCP_URL", "PYLON_MCP_CLIENT_ID", "PYLON_MCP_ACCESS_TOKEN", "PYLON_MCP_REFRESH_TOKEN", "PYLON_MCP_TOKEN_EXPIRES_AT"]),
+  credentials("merge-dev", "Merge.dev", "Connect Merge.dev Agent Handler so Cloud Link can create employee plugins backed by Merge.dev SSO and group-based tool access.", ["MERGE_AGENT_HANDLER_MCP_URL", "MERGE_AGENT_HANDLER_ACCESS_TOKEN"]),
+  credentials("github", "GitHub", "Pair GitHub with a read-only Telnyx Cloud Link GitHub App so Cloud Link can access approved Telnyx repositories without asking users to create personal access tokens.", ["GITHUB_USER_ACCESS_TOKEN", "GITHUB_APP_CLIENT_ID", "GH_TOKEN"]),
+  credentials("guru", "Guru", "Connect Guru through OAuth so Cloud Link can search Guru MCP cards after the user approves access through Guru SSO. Admins can provide the OAuth client settings through env or managed app config.", ["GURU_OAUTH_CLIENT_ID", "GURU_OAUTH_CLIENT_SECRET", "GURU_OAUTH_SCOPE", "GURU_OAUTH_REDIRECT_URI", "GURU_OAUTH_ACCESS_TOKEN", "GURU_OAUTH_REFRESH_TOKEN", "GURU_OAUTH_TOKEN_EXPIRES_AT", "GURU_OAUTH_USER_ID"]),
+  credentials("pylon", "Pylon", "Connect the team-telnyx/pylon-mcp-server compatible endpoint through Pylon OAuth so Cloud Link can search tickets and create issues through user-scoped Pylon MCP access. Cloud Link blocks update_issue and update_account in v1.", ["PYLON_MCP_URL", "PYLON_MCP_CLIENT_ID", "PYLON_MCP_ACCESS_TOKEN", "PYLON_MCP_REFRESH_TOKEN", "PYLON_MCP_TOKEN_EXPIRES_AT"]),
   credentials("slack", "Slack", "Slack user token discovers and DMs bot users; bot token can post where the app has access.", ["SLACK_USER_TOKEN", "SLACK_BOT_TOKEN"]),
-  credentials("google-workspace", "Google", "Connect Google Workspace through openclaw-itops-setup-utils/gog-setup so Link can load Calendar events, Drive docs, Meet artifacts, notes, transcripts, and contacts for your agents.", ["GOOGLE_WORKSPACE_AGENT_CONNECTION_ID", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
-  credentials("google-inbox", "Google Inbox", "Connect Gmail through gog so Link can read inbox threads and save Gmail drafts without exposing send.", ["GOOGLE_INBOX_AGENT_CONNECTION_ID", "GOOGLE_INBOX_VERIFIED_AT", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
+  credentials("google-workspace", "Google", "Connect Google Workspace through openclaw-itops-setup-utils/gog-setup so Cloud Link can load Calendar events, Drive docs, Meet artifacts, notes, transcripts, and contacts for your agents.", ["GOOGLE_WORKSPACE_AGENT_CONNECTION_ID", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
+  credentials("google-inbox", "Google Inbox", "Connect Gmail through gog so Cloud Link can read inbox threads and save Gmail drafts without exposing send.", ["GOOGLE_INBOX_AGENT_CONNECTION_ID", "GOOGLE_INBOX_VERIFIED_AT", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
   credentials("google-tasks", "Google Tasks", "Connect Google Tasks through gog so Taskbox can sync, create, update, and complete Google tasks without delete or clear commands.", ["GOOGLE_TASKS_AGENT_CONNECTION_ID", "GOOGLE_TASKS_VERIFIED_AT", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
 ];
 let previewCredentialValues: Record<string, string> = {};
@@ -3757,7 +3890,7 @@ function previewSurfaceManifests(): SurfaceManifestMap {
   return {
     chat: {
       surface: "chat",
-      label: "Chat",
+      label: "Work",
       enabled: true,
       ready: true,
       requiresAgent: false,
@@ -3789,7 +3922,7 @@ function previewSurfaceManifests(): SurfaceManifestMap {
       requiresAgent: false,
       requiresConnector: false,
       requiresCredential: !callReady,
-      reasons: callReady ? [] : ["Save TELNYX_API_KEY to load calls and assistants."],
+      reasons: callReady ? [] : ["Save a Telnyx API Key to load calls and assistants."],
       connectorIds: ["telnyx"],
       credentialNames: ["TELNYX_API_KEY"],
       message: callReady ? "Call preview is ready." : "Call preview needs a Telnyx API key.",
@@ -3950,7 +4083,7 @@ const previewLinkApi: LinkDesktopApi = {
     }
     return {
       name: skillName,
-      markdown: `---\nname: ${skillName}\ndescription: Preview skill markdown is available in Link Desktop.\n---\n\n## When to use it\n\nOpen Link Desktop to load this skill from GitHub.`,
+      markdown: `---\nname: ${skillName}\ndescription: Preview skill markdown is available in Telnyx Cloud Link Desktop.\n---\n\n## When to use it\n\nOpen Telnyx Cloud Link Desktop to load this skill from GitHub.`,
       sourcePath: "preview/SKILL.md",
       sourceUrl: "https://github.com/team-telnyx/link",
     };
@@ -4040,13 +4173,99 @@ const previewLinkApi: LinkDesktopApi = {
     return deployment;
   },
   async listTools() {
-    return previewTools;
+    return [...previewTools, ...previewCustomMcpTools(), ...previewEmployeePluginTools()];
   },
   async listConnectors() {
+    const connectors = [...previewConnectors, ...previewCustomMcpConnectors(), ...previewEmployeePluginConnectors()];
     if (previewGoogleWorkspaceEnabled()) {
-      return previewGoogleConnectors(previewConnectors);
+      return previewGoogleConnectors(connectors);
     }
-    return previewConnectors;
+    return connectors;
+  },
+  async listCustomMcps() {
+    return previewCustomMcpServers;
+  },
+  async saveCustomMcp(input) {
+    const existing = input.id ? previewCustomMcpServers.find((server) => server.id === input.id) : undefined;
+    const server = normalizePreviewCustomMcpInput(input, existing);
+    previewCustomMcpServers = [
+      server,
+      ...previewCustomMcpServers.filter((item) => item.id !== server.id),
+    ].sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+    return previewCustomMcpServers;
+  },
+  async testCustomMcp(input) {
+    const existing = typeof input === "string"
+      ? previewCustomMcpServers.find((server) => server.id === input)
+      : input.id ? previewCustomMcpServers.find((server) => server.id === input.id) : undefined;
+    if (typeof input === "string" && !existing) throw new Error("Custom MCP server was not found.");
+    const server = typeof input === "string" ? existing! : normalizePreviewCustomMcpInput(input, existing);
+    return {
+      ok: true,
+      checkedAt: new Date().toISOString(),
+      toolCount: server.lastToolCount || 2,
+      message: `${server.name} preview connection is ready.`,
+      tools: previewCustomMcpTools(server).slice(0, 2).map((item) => ({ name: item.name, description: item.description, category: item.category })),
+    };
+  },
+  async setCustomMcpEnabled(input) {
+    previewCustomMcpServers = previewCustomMcpServers.map((server) =>
+      server.id === input.id
+        ? { ...server, enabled: input.enabled, updatedAt: new Date().toISOString(), lastError: "" }
+        : server,
+    );
+    return previewCustomMcpServers;
+  },
+  async deleteCustomMcp(id) {
+    previewCustomMcpServers = previewCustomMcpServers.filter((server) => server.id !== id);
+    return previewCustomMcpServers;
+  },
+  async listEmployeePlugins() {
+    return previewEmployeePlugins;
+  },
+  async saveEmployeePlugin(input) {
+    if (!previewMergeDevConnected()) throw new Error("Connect Merge.dev before adding employee plugins.");
+    const existing = input.id ? previewEmployeePlugins.find((plugin) => plugin.id === input.id) : undefined;
+    const plugin = normalizePreviewEmployeePluginInput(input, existing);
+    previewEmployeePlugins = [
+      plugin,
+      ...previewEmployeePlugins.filter((item) => item.id !== plugin.id),
+    ].sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+    return previewEmployeePlugins;
+  },
+  async setEmployeePluginEnabled(input) {
+    previewEmployeePlugins = previewEmployeePlugins.map((plugin) =>
+      plugin.id === input.id
+        ? { ...plugin, enabled: input.enabled, updatedAt: new Date().toISOString() }
+        : plugin,
+    );
+    return previewEmployeePlugins;
+  },
+  async deleteEmployeePlugin(id) {
+    previewEmployeePlugins = previewEmployeePlugins.filter((plugin) => plugin.id !== id);
+    return previewEmployeePlugins;
+  },
+  async connectMergeDev() {
+    const updatedAt = new Date().toISOString();
+    previewCredentialValues.MERGE_AGENT_HANDLER_MCP_URL = "https://ah-api.merge.dev/mcp";
+    previewCredentials = previewCredentials.map((group) =>
+      group.id === "merge-dev"
+        ? {
+            ...group,
+            fields: group.fields.map((field) =>
+              field.name === "MERGE_AGENT_HANDLER_MCP_URL"
+                ? { ...field, configured: true, source: "saved" as const, updatedAt }
+                : field,
+            ),
+          }
+        : group,
+    );
+    return {
+      connected: true,
+      url: "https://ah-api.merge.dev/mcp",
+      credentials: previewCredentials,
+      connectors: await previewLinkApi.listConnectors(),
+    };
   },
   async listCredentials() {
     if (previewPhoneE2EEnabled()) {
@@ -4431,6 +4650,18 @@ const previewLinkApi: LinkDesktopApi = {
       issueId: `preview-pylon-${Date.now()}`,
     };
   },
+  async exportPersonalWiki(input) {
+    const docs = Array.isArray(input?.docs) ? input.docs : [];
+    if (docs.length === 0) throw new Error("Add at least one saved doc before exporting your Personal Wiki.");
+    const bundleName = slugifyPreviewValue(String(input?.title || "personal-wiki")) || "personal-wiki";
+    return {
+      status: "exported",
+      rootPath: `/Users/demo/Documents/${bundleName}`,
+      bundleName,
+      documentCount: docs.length,
+      exportedAt: new Date().toISOString(),
+    };
+  },
   async listGoogleCalendarEvents() {
     if (!previewGoogleConnected && !previewGoogleWorkspaceEnabled()) return [];
     return [
@@ -4440,10 +4671,10 @@ const previewLinkApi: LinkDesktopApi = {
         time: "Today, 10:00 AM - 10:30 AM",
         start: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         end: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
-        attendees: "Link Desktop",
+        attendees: "Telnyx Cloud Link Desktop",
         phone: "",
         meetUrl: "",
-        notes: "Preview-only event. Link loads this from Google Calendar.",
+        notes: "Preview-only event. Cloud Link loads this from Google Calendar.",
         transcript: "",
         status: "upcoming",
       },
@@ -4583,7 +4814,7 @@ const previewLinkApi: LinkDesktopApi = {
         role: "Google contact",
         phone: "",
         source: "google",
-        detail: "Preview-only contact. Link loads this from Google People API.",
+        detail: "Preview-only contact. Cloud Link loads this from Google People API.",
         connected: true,
       },
     ];
@@ -4841,7 +5072,7 @@ const previewLinkApi: LinkDesktopApi = {
         issuedAt: new Date().toISOString(),
       };
     }
-    throw new Error("WebRTC token generation is only available in Link.");
+    throw new Error("WebRTC token generation is only available in Cloud Link.");
   },
   async getWebRtcStatus() {
     if (previewPhoneE2EEnabled()) {
@@ -4861,7 +5092,7 @@ const previewLinkApi: LinkDesktopApi = {
       webRtcCredentialReady: false,
       canAutoProvision: false,
       ready: false,
-      message: "Save TELNYX_API_KEY in Link to enable WebRTC provisioning.",
+      message: "Connect to Telnyx to start making outbound calls.",
       updatedAt: new Date().toISOString(),
     };
   },
@@ -5069,7 +5300,7 @@ const previewLinkApi: LinkDesktopApi = {
     return { modelId: input.modelId, canceled: false, updatedAt: new Date().toISOString() };
   },
   async transcribeScribesLocal() {
-    throw new Error("Scribe local transcription is only available in Link.");
+    throw new Error("Scribe local transcription is only available in Cloud Link.");
   },
   async startScribesLocalServer(input) {
     previewScribesServer = {
@@ -5203,15 +5434,15 @@ const previewLinkApi: LinkDesktopApi = {
       sttMode: previewSpeakSettings.sttMode,
       sttProvider: previewSpeakSettings.sttProvider,
       providerRoute: route,
-      message: "Scribe dictation is available in Link on macOS.",
+      message: "Scribe dictation is available in Cloud Link on macOS.",
       updatedAt: new Date().toISOString(),
     };
   },
   async buildWhisper() {
-    throw new Error("Scribe dictation build is only available in Link on macOS.");
+    throw new Error("Scribe dictation build is only available in Cloud Link on macOS.");
   },
   async startWhisper() {
-    throw new Error("Scribe dictation launch is only available in Link on macOS.");
+    throw new Error("Scribe dictation launch is only available in Cloud Link on macOS.");
   },
   async stopWhisper() {
     const route = previewScribesRoute();
@@ -5234,7 +5465,7 @@ const previewLinkApi: LinkDesktopApi = {
       sttMode: previewSpeakSettings.sttMode,
       sttProvider: previewSpeakSettings.sttProvider,
       providerRoute: route,
-      message: "Scribe dictation is available in Link on macOS.",
+      message: "Scribe dictation is available in Cloud Link on macOS.",
       updatedAt: new Date().toISOString(),
     };
   },
@@ -5315,7 +5546,7 @@ const previewLinkApi: LinkDesktopApi = {
     const next = {
       ...current,
       updatedAt: new Date().toISOString(),
-      buffer: `${current.buffer}${command}Preview terminal cannot execute local commands in the browser. Open Link to run this command.\npreview@telnyx-link % `,
+      buffer: `${current.buffer}${command}Preview terminal cannot execute local commands in the browser. Open Telnyx Cloud Link to run this command.\npreview@telnyx-link % `,
     };
     previewTerminalStatuses.set(next.id || input?.terminalId || "terminal-1", next);
     return next;
@@ -5348,7 +5579,7 @@ const previewLinkApi: LinkDesktopApi = {
     return previewOnboarding;
   },
   async signInAgentControlPlane() {
-    throw new Error("Okta sign-in is only available in Link.");
+    throw new Error("Okta sign-in is only available in Cloud Link.");
   },
   async signOutAgentControlPlane() {
     return agentControlPlaneAuthStatus(false);
@@ -5401,13 +5632,16 @@ const previewLinkApi: LinkDesktopApi = {
   async searchExplorer({ query }) {
     return explorerResults(query);
   },
+  async listExplorerSourceItems({ source, limit = 25 }) {
+    return explorerRecentResults(source, limit);
+  },
   async askKnowledgeAgent({ question }) {
     return askPublicKnowledgeAgent({ question });
   },
   async listChatSessions() {
     return previewChatSessions;
   },
-  async createChatSession({ workspaceId, agentName = "Link", agentType = "openclaw", title, modelMode } = {}) {
+  async createChatSession({ workspaceId, agentName = "Cloud Link", agentType = "openclaw", title, modelMode } = {}) {
     const now = new Date().toISOString();
     const requestedRouteId = previewModelRoutingRequest(modelMode).routeId || "auto/ask-before-cloud";
     const session: ChatSession = {
@@ -5420,7 +5654,7 @@ const previewLinkApi: LinkDesktopApi = {
       updatedAt: now,
       messages: [
         message("system", `You are ${agentName}. Hindsight is available to this session when configured. ${taskBoardOperatingGuide}`),
-        message("system", `Selected Link chat agent: ${agentName}. New session initialized for ${agentType} runtime. ${taskBoardOperatingGuide}`),
+        message("system", `Selected Cloud Link chat agent: ${agentName}. New session initialized for ${agentType} runtime. ${taskBoardOperatingGuide}`),
       ],
     };
     previewChatSessions = [session, ...previewChatSessions];
@@ -5458,7 +5692,7 @@ const previewLinkApi: LinkDesktopApi = {
         requestedModelRouteId: requestedRouteId,
         status: "active",
         updatedAt: new Date().toISOString(),
-        messages: [message("system", "You are Telnyx Link.")],
+        messages: [message("system", "You are Telnyx Cloud Link.")],
       };
       previewChatSessions = [session, ...previewChatSessions];
     }
@@ -5467,7 +5701,7 @@ const previewLinkApi: LinkDesktopApi = {
       ...session.messages,
       ...(hiddenInstruction ? [message("system", hiddenInstruction)] : []),
       message("user", content),
-      message("assistant", "No live desktop bridge or model runtime is connected.", createChatArtifacts(content)),
+      message("assistant", "No live desktop bridge or model runtime is connected.", createChatArtifacts(content, "No live desktop bridge or model runtime is connected.")),
     ];
     session.requestedModelRouteId = requestedRouteId;
     session.actualModelRouteId = undefined;
@@ -5504,7 +5738,7 @@ const previewLinkApi: LinkDesktopApi = {
     return previewAuthEnabled()
       ? previewHostedAgents().map((agent) => ({
           ...agent,
-          visibility: "public" as const,
+          visibility: "internal" as const,
           source: "agent-control-plane" as const,
           squad: agent.type,
           audience: "internal",
@@ -5607,7 +5841,7 @@ const previewLinkApi: LinkDesktopApi = {
           contact: "Outbound call",
           number: "+31611470748",
           agentId: "link",
-          agentName: "Link",
+          agentName: "Cloud Link",
           direction: "outbound",
           status: "answered",
           time: "Now",
@@ -5709,7 +5943,7 @@ const previewLinkApi: LinkDesktopApi = {
       id,
       bankId: input.bankId || "preview-archive",
       summary: content.slice(0, 240),
-      evidence: [input.context || input.source || "Saved from Link chat"],
+      evidence: [input.context || input.source || "Saved from Cloud Link chat"],
       score: 1,
       source: "hindsight",
     };
@@ -5768,7 +6002,7 @@ const previewLinkApi: LinkDesktopApi = {
       authConfigured: false,
       mode: "preview",
       checks: [{ name: "Publisher service reachable", ok: false, detail: "Browser preview uses local sample apps." }],
-      message: "Configure LINK_APP_PUBLISHER_URL and open Link Desktop to publish apps.",
+      message: "Configure LINK_APP_PUBLISHER_URL and open Telnyx Cloud Link Desktop to publish apps.",
       updatedAt: new Date().toISOString(),
     };
   },
@@ -5780,7 +6014,19 @@ const previewLinkApi: LinkDesktopApi = {
       authConfigured: false,
       mode: "preview",
       checks: [{ name: "Message Gateway hosted service", ok: false, detail: "Browser preview records envelopes locally without provider send." }],
-      message: "Browser preview uses a record-only local ledger. Open Link Desktop to use the hosted Message Gateway.",
+      message: "Browser preview uses a record-only local ledger. Open Telnyx Cloud Link Desktop to use the hosted Message Gateway.",
+      updatedAt: new Date().toISOString(),
+    };
+  },
+  async getSessionDaemonReadiness() {
+    return {
+      serviceUrl: "browser-preview",
+      reachable: false,
+      ready: false,
+      authConfigured: false,
+      mode: "preview",
+      checks: [{ name: "Session Daemon hosted service", ok: false, detail: "Browser preview cannot create server-owned PTY sessions." }],
+      message: "Configure LINK_SESSION_DAEMON_URL and open Telnyx Cloud Link Desktop to use server-owned sessions.",
       updatedAt: new Date().toISOString(),
     };
   },
@@ -5899,7 +6145,7 @@ const previewLinkApi: LinkDesktopApi = {
   async selectLocalPublishApp() {
     return {
       canceled: true,
-      warnings: ["Local app folder selection requires Link Desktop."],
+      warnings: ["Local app folder selection requires Telnyx Cloud Link Desktop."],
     };
   },
   async createPublishIntent(input) {
@@ -6021,8 +6267,8 @@ const previewLinkApi: LinkDesktopApi = {
   async openPublishedApp(id) {
     const app = previewPublishedApps.find((item) => item.id === id);
     if (!app) throw new Error("Published app not found.");
-    if (app.status === "deprecated") throw new Error("This app is deprecated and cannot be opened from Link.");
-    if (!["preview", "approved", "deployed"].includes(app.status)) throw new Error("This app is not ready to open from Link.");
+    if (app.status === "deprecated") throw new Error("This app is deprecated and cannot be opened from Cloud Link.");
+    if (!["preview", "approved", "deployed"].includes(app.status)) throw new Error("This app is not ready to open from Cloud Link.");
     const url = app.vpnUrl || app.deployedUrl || app.previewUrl;
     if (!url) throw new Error("This app does not have a private app URL yet.");
     return { opened: true, url };
@@ -6093,7 +6339,7 @@ const previewLinkApi: LinkDesktopApi = {
 	        outputDir: "dist",
 	        riskLevel: "low",
 	      },
-	      warnings: ["Browser preview cannot import local folders. Open Link Desktop to import a real app."],
+	      warnings: ["Browser preview cannot import local folders. Open Telnyx Cloud Link Desktop to import a real app."],
 	      createdManifest: true,
 	      replaced: false,
 	    };
@@ -6101,6 +6347,45 @@ const previewLinkApi: LinkDesktopApi = {
 	  async deleteLocalEdgeDraftApp(input) {
 	    return { deleted: true, directory: input.directory };
 	  },
+  async materializeHtmlArtifact(input) {
+    const artifact = input.artifact;
+    const slug = slugify(String(input.slug || artifact.slug || artifact.title || "session-review"));
+    const directory = `edge-apps/personal/${slug}`;
+    const htmlPath = `${directory}/index.html`;
+    const distPath = `${directory}/dist`;
+    return {
+      canceled: false,
+      materialized: true,
+      artifactId: artifact.id,
+      artifactTitle: artifact.title,
+      slug,
+      directory,
+      manifestPath: `${directory}/link-app.json`,
+      packageName: slug,
+      htmlPath,
+      distPath,
+      replaced: input.replaceExisting === true,
+      publishInput: {
+        name: artifact.title || "Session Review",
+        slug,
+        description: "Session Review generated from a Cloud Link chat session.",
+        ownerSquad: "personal.tools",
+        audience: "Personal workspace",
+        appType: "web",
+        sourceRepo: "https://github.com/team-telnyx/link",
+        sourceRef: "main",
+        sourceSubdir: directory,
+        buildCommand: "node scripts/link-build.mjs",
+        outputDir: "dist",
+        riskLevel: "low",
+      },
+      git: {
+        sourceSubdir: directory,
+        remoteRefStatus: "unchecked",
+      },
+      warnings: ["Browser preview materialized an in-memory Session Review placeholder."],
+    };
+  },
 	  async previewLocalEdgeApp(input = {}) {
     const slug = slugify(String((input as { slug?: string }).slug || "preview-app"));
     return {
@@ -6124,7 +6409,7 @@ const previewLinkApi: LinkDesktopApi = {
       slug,
       description: "Browser-preview Edge app placeholder.",
       ownerSquad: "link-platform.squad",
-      audience: "Link",
+      audience: "Cloud Link",
       appType: "web",
       sourceRepo: "https://github.com/team-telnyx/link",
       sourceRef: "main",
@@ -6141,7 +6426,7 @@ const previewLinkApi: LinkDesktopApi = {
       url,
       app: next,
       version: next.latestVersion,
-      logs: "Browser preview cannot run telnyx-edge ship. Open Link Desktop to deploy a real app.",
+      logs: "Browser preview cannot run telnyx-edge ship. Open Telnyx Cloud Link Desktop to deploy a real app.",
       warnings: ["Browser preview cannot run telnyx-edge ship."],
       edge: {
         command: "telnyx-edge",
@@ -6276,7 +6561,7 @@ function createPreviewPublishedApp(input: LinkAppPublishInput): LinkPublishedApp
     id: appId,
     name: input.name,
     slug,
-    description: input.description || "Private Link app.",
+    description: input.description || "Private Cloud Link app.",
     ownerSquad: input.ownerSquad,
     audience: input.audience,
     appType: input.appType,
@@ -6330,7 +6615,7 @@ function resolvePreviewTaskAgent(input: WorkboardTaskSessionInput, card: Workboa
   const agentId = input.agentId || card.assigneeId || "";
   return {
     agentId,
-    agentName: input.agentName || card.assigneeName || card.assignee || "Link",
+    agentName: input.agentName || card.assigneeName || card.assignee || "Cloud Link",
     agentType,
     agentSource: input.agentSource || (String(agentType).toLowerCase().includes("a2a") ? "a2a-discovery" : agentId.startsWith("self:") ? "link" : "agent-control-plane"),
   };
@@ -6376,7 +6661,7 @@ async function ensurePreviewWorkboardTaskSession(input: WorkboardTaskSessionInpu
       },
       messages: [
         message("system", `Taskbox session for ${card.title}. No task work has been sent to the agent until the user starts the task.`),
-        message("system", `Selected Link chat agent: ${agent.agentName} / ${agent.agentId}. New session initialized for Taskbox.`),
+        message("system", `Selected Cloud Link chat agent: ${agent.agentName} / ${agent.agentId}. New session initialized for Taskbox.`),
       ],
     };
     previewChatSessions = [session, ...previewChatSessions];
@@ -6435,9 +6720,9 @@ async function dispatchPreviewWorkboardTask(input: WorkboardTaskDispatchInput): 
   const prompt = input.message?.trim() || previewTaskDispatchPrompt(card);
   session.messages = [
     ...session.messages,
-    message("system", `Taskbox dispatch: card ${card.id} moved to In Progress from Link.`),
+    message("system", `Taskbox dispatch: card ${card.id} moved to In Progress from Cloud Link.`),
     message("user", prompt),
-    message("assistant", "Preview runtime accepted the task. In Link this routes to the selected ACP or A2A agent."),
+    message("assistant", "Preview runtime accepted the task. In Cloud Link this routes to the selected ACP or A2A agent."),
   ];
   session.updatedAt = now;
   session.task = {
@@ -6511,10 +6796,10 @@ function localWorkboardSnapshot(provider: WorkboardProvider, boardId: string): W
     providers: [
       { id: "hermes", label: "Hermes Kanban", available: false, mode: "unavailable", message: "Hermes CLI is not connected in browser preview." },
       { id: "openclaw", label: "OpenClaw Workboard", available: false, mode: "unavailable", message: "OpenClaw Gateway is not connected in browser preview." },
-      { id: "google_tasks", label: "Google Tasks", available: false, mode: "unavailable", message: "Google Tasks through gog is only available in Link." },
-      { id: "local", label: "Link local board", available: true, mode: "fallback", message: "Local fallback board is active." },
+      { id: "google_tasks", label: "Google Tasks", available: false, mode: "unavailable", message: "Google Tasks through gog is only available in Cloud Link." },
+      { id: "local", label: "Cloud Link local board", available: true, mode: "fallback", message: "Local fallback board is active." },
     ],
-    boards: [{ id: provider === "google_tasks" ? "primary" : "local", name: provider === "google_tasks" ? "Google Tasks" : "Link local board", provider, description: "Durable Link-owned fallback board." }],
+    boards: [{ id: provider === "google_tasks" ? "primary" : "local", name: provider === "google_tasks" ? "Google Tasks" : "Cloud Link local board", provider, description: "Durable Cloud Link-owned fallback board." }],
     columns: workboardColumns,
     cards,
     assignees: [...new Set(cards.map((card) => card.assignee).filter((assignee): assignee is string => Boolean(assignee)))],
@@ -6537,6 +6822,158 @@ function connector(
   mode: ConnectorStatus["mode"] = "live",
 ): ConnectorStatus {
   return { id, name, category, description, requiredAccess, status, mode };
+}
+
+function normalizePreviewCustomMcpInput(input: CustomMcpServerInput, existing?: CustomMcpServer): CustomMcpServer {
+  const now = new Date().toISOString();
+  const name = input.name.trim();
+  const url = normalizePreviewCustomMcpUrl(input.url || existing?.url || "");
+  if (!name) throw new Error("Name the MCP before saving.");
+  const id = existing?.id || input.id || uniquePreviewCustomMcpId(name || url);
+  const tokenConfigured = Boolean(input.bearerToken?.trim() || (input.clearBearerToken ? false : existing?.tokenConfigured));
+  return {
+    id,
+    name,
+    url,
+    description: input.description?.trim() || existing?.description || "Custom MCP server.",
+    enabled: input.enabled ?? existing?.enabled ?? true,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    lastCheckedAt: now,
+    lastToolCount: existing?.lastToolCount || 2,
+    lastError: "",
+    tokenConfigured,
+  };
+}
+
+function normalizePreviewCustomMcpUrl(value: string) {
+  const url = value.trim();
+  try {
+    const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("MCP endpoint must use http:// or https://.");
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    throw new Error("Use a valid MCP endpoint URL.");
+  }
+}
+
+function uniquePreviewCustomMcpId(value: string) {
+  const baseId = slugify(value) || `custom-${Date.now().toString(36)}`;
+  let candidate = baseId;
+  let index = 2;
+  while (previewCustomMcpServers.some((server) => server.id === candidate)) {
+    candidate = `${baseId}-${index}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function customMcpConnectorId(id: string) {
+  return `custom-mcp-${id}`;
+}
+
+function previewCustomMcpConnectors(): ConnectorStatus[] {
+  return previewCustomMcpServers.map((server) =>
+    connector(
+      customMcpConnectorId(server.id),
+      server.name,
+      "MCP",
+      server.description || `Custom MCP server at ${server.url}.`,
+      [
+        `Endpoint: ${server.url}`,
+        `${server.lastToolCount || 0} tools discovered`,
+        server.enabled ? "Enabled for agents" : "Temporarily disabled",
+        server.tokenConfigured ? "Bearer token saved" : "No bearer token saved",
+        ...(server.lastError ? [`Last check: ${server.lastError}`] : []),
+      ],
+      server.enabled ? (server.lastError ? "needs_access" : "connected") : "requested",
+      "saved",
+    ),
+  );
+}
+
+function previewCustomMcpTools(serverFilter?: CustomMcpServer): ToolMetadata[] {
+  const servers = serverFilter ? [serverFilter] : previewCustomMcpServers.filter((server) => server.enabled);
+  return servers.flatMap((server) => {
+    const namespace = slugify(server.name).replace(/-/g, "_") || server.id.replace(/-/g, "_");
+    return [
+      tool(`${namespace}.search`, `Search ${server.name} through its MCP tools.`, server.name, "read", "medium", false),
+      tool(`${namespace}.run`, `Run an action through ${server.name}.`, server.name, "write", "high", true),
+    ];
+  });
+}
+
+function normalizePreviewEmployeePluginInput(input: EmployeePluginInput, existing?: EmployeePlugin): EmployeePlugin {
+  const now = new Date().toISOString();
+  const name = input.name.trim();
+  if (!name) throw new Error("Name the employee plugin before saving.");
+  const id = existing?.id || input.id || uniquePreviewEmployeePluginId(name);
+  return {
+    id,
+    name,
+    description: input.description?.trim() || existing?.description || "Employee plugin powered by Merge.dev Agent Handler.",
+    audience: input.audience?.trim() || existing?.audience || "Employees",
+    toolPack: input.toolPack?.trim() || existing?.toolPack || "Employee tools",
+    enabled: input.enabled ?? existing?.enabled ?? true,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    provider: "merge-dev",
+    mcpUrl: "https://ah-api.merge.dev/mcp",
+    connected: previewMergeDevConnected(),
+  };
+}
+
+function uniquePreviewEmployeePluginId(value: string) {
+  const baseId = slugify(value) || `employee-plugin-${Date.now().toString(36)}`;
+  let candidate = baseId;
+  let index = 2;
+  while (previewEmployeePlugins.some((plugin) => plugin.id === candidate)) {
+    candidate = `${baseId}-${index}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function employeePluginConnectorId(id: string) {
+  return `employee-plugin-${id}`;
+}
+
+function previewMergeDevConnected() {
+  return Boolean(previewCredentialValues.MERGE_AGENT_HANDLER_MCP_URL || previewCredentialValues.MERGE_AGENT_HANDLER_ACCESS_TOKEN);
+}
+
+function previewEmployeePluginConnectors(): ConnectorStatus[] {
+  const mergeConnected = previewMergeDevConnected();
+  return previewEmployeePlugins.map((plugin) =>
+    connector(
+      employeePluginConnectorId(plugin.id),
+      plugin.name,
+      "Employee plugin",
+      plugin.description || `${plugin.name} plugin powered by Merge.dev Agent Handler.`,
+      [
+        "Powered by Merge.dev Agent Handler",
+        "MCP endpoint: https://ah-api.merge.dev/mcp",
+        `Audience: ${plugin.audience || "Employees"}`,
+        `Tool pack: ${plugin.toolPack || "Employee tools"}`,
+        plugin.enabled ? "Enabled for agents" : "Temporarily disabled",
+      ],
+      mergeConnected && plugin.enabled ? "connected" : plugin.enabled ? "needs_access" : "requested",
+      "saved",
+    ),
+  );
+}
+
+function previewEmployeePluginTools(): ToolMetadata[] {
+  if (!previewMergeDevConnected()) return [];
+  return previewEmployeePlugins
+    .filter((plugin) => plugin.enabled)
+    .flatMap((plugin) => {
+      const namespace = `merge_${slugify(plugin.name).replace(/-/g, "_") || plugin.id.replace(/-/g, "_")}`;
+      return [
+        tool(`${namespace}.search`, `Search and inspect ${plugin.name} through Merge.dev Agent Handler.`, plugin.name, "read", "medium", false),
+        tool(`${namespace}.run`, `Run approved ${plugin.name} employee plugin actions through Merge.dev Agent Handler.`, plugin.name, "write", "high", true),
+      ];
+    });
 }
 
 function credentials(id: string, label: string, help: string, fields: string[]): CredentialGroupStatus {
@@ -6572,16 +7009,34 @@ function message(role: ChatMessage["role"], content: string, artifacts: ChatArti
   return { id: `message-${role}-${Date.now()}-${Math.random().toString(16).slice(2)}`, role, content, createdAt: new Date().toISOString(), ...(artifacts.length ? { artifacts } : {}) };
 }
 
-function createChatArtifacts(prompt: string): ChatArtifact[] {
+function createChatArtifacts(prompt: string, responseText = ""): ChatArtifact[] {
   const wantsPdf = /\bpdf\b/i.test(prompt);
   const wantsMarkdown = /\.md\b|\bmarkdown\b|\bmd file\b/i.test(prompt);
-  if (!wantsPdf && !wantsMarkdown) return [];
+  const wantsHtml = /\b(artifact|html|web page|live page|dashboard|walkthrough|checklist|timeline|visual report|interactive|session reviews?|review page)\b/i.test(prompt);
+  if (!wantsPdf && !wantsMarkdown && !wantsHtml) return [];
   const createdAt = new Date().toISOString();
-  const title = prompt.replace(/\s+/g, " ").trim().slice(0, 48) || "Link generated document";
-  const body = `# ${title}\n\nGenerated from the active Link chat.\n\n## Request\n\n${prompt.trim() || "No prompt provided."}\n\n## Notes\n\n- Review content before sharing externally.\n- Attach sources when live connectors are available.`;
+  const title = prompt.replace(/\s+/g, " ").trim().slice(0, 48) || "Cloud Link Session Review";
+  const id = `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const body = `# ${title}\n\nGenerated from the active Cloud Link chat.\n\n## Request\n\n${prompt.trim() || "No prompt provided."}\n\n## Notes\n\n- Review content before sharing externally.\n- Attach sources when live connectors are available.`;
+  if (wantsHtml) {
+    const slug = slugify(title || "session-review");
+    return [
+      {
+        id,
+        title,
+        kind: "html",
+        filename: `${slug}.html`,
+        content: buildSessionArtifactHtml({ title, prompt, responseText, createdAt, slug }),
+        createdAt,
+        updatedAt: createdAt,
+        slug,
+        version: createdAt.replace(/[:.]/g, "-"),
+      },
+    ];
+  }
   return [
     {
-      id: `artifact-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      id,
       title,
       kind: wantsPdf ? "pdf" : "markdown",
       filename: wantsPdf ? "link-generated-document.pdf" : "link-generated-document.md",
@@ -6589,6 +7044,97 @@ function createChatArtifacts(prompt: string): ChatArtifact[] {
       createdAt,
     },
   ];
+}
+
+function buildSessionArtifactHtml(input: { title: string; prompt: string; responseText: string; createdAt: string; slug: string }): string {
+  const title = escapeHtml(input.title);
+  const prompt = escapeHtml(input.prompt.trim() || "No prompt provided.");
+  const response = escapeHtml(input.responseText.trim() || "No assistant response was available when this Session Review was created.");
+  const createdAt = escapeHtml(input.createdAt);
+  const slug = escapeHtml(input.slug);
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #f7f6f4; --panel: #ffffff; --text: #20201f; --muted: #6e6a66; --line: #dedbd7; --soft: #f0efed; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #151515; --panel: #20201f; --text: #f4f1ec; --muted: #b7b0a8; --line: #3b3936; --soft: #2a2927; } }
+    * { box-sizing: border-box; } body { margin: 0; background: var(--bg); color: var(--text); } main { width: min(1120px, 100%); margin: 0 auto; padding: 24px; } header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; margin-bottom: 16px; } h1 { margin: 0; font-size: 30px; line-height: 1.1; } h2 { margin: 0 0 10px; font-size: 16px; } p { margin: 0; color: var(--muted); line-height: 1.55; } button, input { font: inherit; } input { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 11px; background: var(--panel); color: var(--text); } .pill { border: 1px solid var(--line); border-radius: 999px; padding: 7px 10px; color: var(--muted); background: var(--panel); font-size: 12px; white-space: nowrap; } .grid { display: grid; gap: 12px; } .summary { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 16px 0; } .main { grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); } .card, .panel { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 1px 2px rgba(31,30,28,.05); } .card { padding: 14px; min-height: 92px; } .panel { padding: 16px; } .label { color: var(--muted); font-size: 12px; font-weight: 760; text-transform: uppercase; letter-spacing: .04em; } .value { margin-top: 7px; font-size: 18px; font-weight: 760; overflow-wrap: anywhere; } .body { white-space: pre-wrap; color: var(--text); line-height: 1.55; } .timeline { display: grid; gap: 10px; } .step { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 9px; align-items: start; } .dot { width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center; background: var(--soft); color: var(--text); border: 1px solid var(--line); font-weight: 800; font-size: 12px; } .checklist { display: grid; gap: 8px; } label.check { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; align-items: start; color: var(--text); } label.check span { overflow-wrap: anywhere; } .footer { margin-top: 14px; color: var(--muted); font-size: 12px; } .hidden { display: none; } mark { border-radius: 4px; background: var(--soft); color: var(--text); padding: 0 2px; }
+    @media (max-width: 820px) { main { padding: 16px; } header, .summary, .main { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <div class="label">Session Review</div>
+        <h1>${title}</h1>
+        <p>Generated from session context and ready for local preview or Telnyx Edge deployment.</p>
+      </div>
+      <span class="pill">Version ${createdAt}</span>
+    </header>
+    <section class="grid summary" aria-label="Session Review summary">
+      <article class="card"><div class="label">Slug</div><div class="value">${slug}</div></article>
+      <article class="card"><div class="label">Boundary</div><div class="value">Local first</div></article>
+      <article class="card"><div class="label">Status</div><div class="value">Draft review</div></article>
+    </section>
+    <section class="grid main">
+      <article class="panel">
+        <h2>Session Request</h2>
+        <input id="filter" placeholder="Filter this review" />
+        <p class="body" id="requestText">${prompt}</p>
+      </article>
+      <article class="panel">
+        <h2>Review Checklist</h2>
+        <div class="checklist">
+          <label class="check"><input type="checkbox" /><span>Context and sources are sufficient for the audience.</span></label>
+          <label class="check"><input type="checkbox" /><span>No secrets, credentials, or private customer data are exposed.</span></label>
+          <label class="check"><input type="checkbox" /><span>Preview was checked before cloud deployment.</span></label>
+        </div>
+      </article>
+      <article class="panel">
+        <h2>Assistant Output</h2>
+        <p class="body" id="responseText">${response}</p>
+      </article>
+      <article class="panel">
+        <h2>Review Timeline</h2>
+        <div class="timeline">
+          <div class="step"><div class="dot">1</div><p>Session context captured.</p></div>
+          <div class="step"><div class="dot">2</div><p>Session Review generated as a static page.</p></div>
+          <div class="step"><div class="dot">3</div><p>Use Cloud Link to preview locally, then deploy with the same slug.</p></div>
+        </div>
+      </article>
+    </section>
+    <div class="footer">Cloud Link Session Review ${slug} generated ${createdAt}</div>
+  </main>
+  <script>
+    const filter = document.getElementById("filter");
+    const blocks = [document.getElementById("requestText"), document.getElementById("responseText")];
+    const originals = blocks.map((block) => block.textContent);
+    function escapeRegExp(value) {
+      const specials = new Set([".", "*", "+", "?", "^", "$", "{", "}", "(", ")", "|", "[", "]", "\\\\"]);
+      return [...value].map((char) => specials.has(char) ? "\\\\" + char : char).join("");
+    }
+    filter.addEventListener("input", () => {
+      const query = filter.value.trim();
+      blocks.forEach((block, index) => {
+        const text = originals[index];
+        block.innerHTML = query ? text.replace(new RegExp(escapeRegExp(query), "gi"), (match) => "<mark>" + match + "</mark>") : text;
+      });
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function escapeHtml(value: string): string {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function normalizePreviewWikiSourceInput(input: WikiDocumentationSourceInput, existingSources: WikiDocumentationSource[]): WikiDocumentationSource {
@@ -6664,7 +7210,8 @@ function customWikiSourceResults(term: string): ExplorerResult[] {
 }
 
 function explorerResults(query: string): ExplorerResult[] {
-  const term = query.trim() || "Telnyx Link";
+  const term = query.trim() || "Telnyx Cloud Link";
+  const now = new Date().toISOString();
   return [
     {
       id: "explorer-telnyx-support-center",
@@ -6674,6 +7221,7 @@ function explorerResults(query: string): ExplorerResult[] {
       permission: "allowed",
       freshness: "Public Telnyx documentation",
       excerpt: `Support Center source for ${term}: troubleshooting articles, product guidance, and customer-facing operational help.`,
+      updatedAt: now,
       workspaceId: "workspace-link",
       url: "https://support.telnyx.com/en/",
     },
@@ -6685,6 +7233,7 @@ function explorerResults(query: string): ExplorerResult[] {
       permission: "allowed",
       freshness: "Public Telnyx documentation",
       excerpt: `Developer Docs source for ${term}: API guides, product overviews, SDK references, and implementation details.`,
+      updatedAt: now,
       workspaceId: "workspace-link",
       url: "https://developers.telnyx.com/docs/overview",
     },
@@ -6696,6 +7245,7 @@ function explorerResults(query: string): ExplorerResult[] {
       permission: "allowed",
       freshness: "Guru MCP preview",
       excerpt: "Guru-backed internal knowledge card result. Connect Guru with OAuth to search live cards through Guru MCP.",
+      updatedAt: now,
       workspaceId: "workspace-link",
       url: "https://github.com/team-telnyx/telnyx-clawdbot-skills/tree/main/skills/guru",
     },
@@ -6706,12 +7256,19 @@ function explorerResults(query: string): ExplorerResult[] {
       type: "ticket",
       permission: "allowed",
       freshness: "Pylon MCP preview",
-      excerpt: "Preview Pylon issue result. Connect the Pylon MCP endpoint to search live tickets and create new issues; update tools stay blocked in Link v1.",
+      excerpt: "Preview Pylon issue result. Connect the Pylon MCP endpoint to search live tickets and create new issues; update tools stay blocked in Cloud Link v1.",
+      updatedAt: now,
       workspaceId: "workspace-link",
       url: "https://app.usepylon.com/issues/views/all-issues?conversationID=preview",
     },
     ...customWikiSourceResults(term),
   ];
+}
+
+function explorerRecentResults(source: ExplorerResult["source"], limit = 25): ExplorerResult[] {
+  return explorerResults("")
+    .filter((result) => result.source === source)
+    .slice(0, limit);
 }
 
 function agentControlPlaneAuthStatus(signedIn: boolean): AgentControlPlaneAuthStatus {
@@ -6728,7 +7285,7 @@ function agentControlPlaneAuthStatus(signedIn: boolean): AgentControlPlaneAuthSt
   };
 }
 
-const previewAgentControlPlaneMessage = "Configure AGENT_CONTROL_PLANE_URL with an HTTPS Agent Control Plane endpoint before using hosted agents.";
+const previewAgentControlPlaneMessage = "Sign in with Telnyx Okta to use hosted agents and internal workspace tools.";
 
 function previewHostedAgents(): HostedAgentSummary[] {
   return [
@@ -6814,10 +7371,10 @@ function previewVpnWorkspace(): VpnWorkspace {
     apiKeyConfigured: true,
     reachable: true,
     message: selectedInterface
-      ? "Preview VPN is connected and Link service URLs can be checked against the selected Cloud VPN."
-      : "Create a Telnyx Cloud VPN, then refresh Link.",
+      ? "Preview VPN is connected and Cloud Link service URLs can be checked against the selected Cloud VPN."
+      : "Create a Telnyx Cloud VPN, then refresh Cloud Link.",
     checks: [
-      { name: "Telnyx API key", ok: true, detail: "TELNYX_API_KEY is configured." },
+      { name: "Telnyx API key", ok: true, detail: "Telnyx API Key is configured." },
       { name: "Cloud VPNs", ok: previewVpnInterfaces.length > 0, detail: `${previewVpnInterfaces.length} Cloud VPNs found.` },
       { name: "This Mac", ok: true, detail: "The preview device is already attached to the selected VPN." },
       { name: "Tool URLs", ok: true, detail: "Publisher and gateway URLs resolve inside the selected VPN subnet." },
@@ -6845,6 +7402,17 @@ function previewVpnWorkspace(): VpnWorkspace {
         url: "https://172.27.0.11:4310",
         hostname: "172.27.0.11",
         resolvedIp: "172.27.0.11",
+        match: "vpn",
+        detail: "Resolves inside the selected VPN subnet.",
+        configured: true,
+        insideSelectedVpn: true,
+      },
+      {
+        id: "link-session-daemon",
+        label: "Sessions",
+        url: "https://172.27.0.12:4320",
+        hostname: "172.27.0.12",
+        resolvedIp: "172.27.0.12",
         match: "vpn",
         detail: "Resolves inside the selected VPN subnet.",
         configured: true,

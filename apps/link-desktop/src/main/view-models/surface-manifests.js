@@ -156,7 +156,7 @@ export function buildSurfaceManifests(input = {}) {
       surface: "chat",
       label: "Chat",
       ready: true,
-      message: "Chat is available in Link.",
+      message: "Chat is available in Cloud Link.",
       search: searchSchema({
         placeholder: "Search sessions, tasks, or agents",
         menuActions: [
@@ -181,7 +181,7 @@ export function buildSurfaceManifests(input = {}) {
       label: "Call",
       ready: hasTelnyxApi,
       requiresCredential: !hasTelnyxApi,
-      reasons: hasTelnyxApi ? [] : ["Save TELNYX_API_KEY to load call history, numbers, and assistants."],
+      reasons: hasTelnyxApi ? [] : ["Save a Telnyx API Key to load call history, numbers, and assistants."],
       connectorIds: ["telnyx"],
       credentialNames: ["TELNYX_API_KEY"],
       message: hasTelnyxApi ? "Calling features are ready." : "Call history and Telnyx voice features need a Telnyx API key.",
@@ -189,7 +189,7 @@ export function buildSurfaceManifests(input = {}) {
         placeholder: "Search calls, numbers, contacts, or bots",
         menuActions: [
           surfaceAction({ id: "restore-search", label: "Show search", kind: "menu" }),
-          surfaceAction({ id: "new-call", label: "New call", kind: "menu", enabled: hasTelnyxApi, reason: hasTelnyxApi ? "" : "Save TELNYX_API_KEY first." }),
+          surfaceAction({ id: "new-call", label: "New call", kind: "menu", enabled: hasTelnyxApi, reason: hasTelnyxApi ? "" : "Save a Telnyx API Key first." }),
         ],
         canRestoreSearch: true,
       }),

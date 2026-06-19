@@ -1,6 +1,6 @@
 name: Test Snake Link
 slug: test-snake-link
-description: Internal smoke-test Snake app for validating Link app publishing.
+description: Internal smoke-test Snake app for validating Cloud Link app publishing.
 owner_squad: link-platform.squad
 audience: Link platform testers
 app_type: web

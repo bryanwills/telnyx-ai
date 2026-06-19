@@ -23,7 +23,7 @@ def _get_base_tool() -> Any:
         except ImportError as e:
             raise ImportError(
                 "CrewAI is required for CrewAI tools. "
-                "Install with: pip install telnyx-agent-toolkit[crewai]"
+                "Install a security-reviewed CrewAI distribution separately, then install telnyx-agent-toolkit."
             ) from e
     return _BaseCrewTool
 

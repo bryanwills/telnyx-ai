@@ -5,6 +5,13 @@ import { formatSharedChannelResponse } from "./shared-channel.js";
 import { createLinkAppPublisherServer, LinkAppPublisherService, listenLinkAppPublisherServer, TelnyxEdgeCliDeployer } from "./app-publisher.js";
 import { createSkillRegistryServer, listenSkillRegistryServer, SkillRegistryService } from "./skill-registry.js";
 import { createMessageGatewayServer, listenMessageGatewayServer, MessageGatewayService } from "./message-gateway.js";
+import {
+  CloudLinkSessionService,
+  createCloudLinkSessionServer,
+  listenCloudLinkSessionServer,
+  TelnyxHostedSessionRunner,
+  TelnyxSmsNotificationAdapter,
+} from "./session-daemon.js";
 import { inspectLocalLinkApp } from "./local-app.js";
 
 const runtime = new LinkRuntime();
@@ -12,7 +19,7 @@ const [command = "chat", ...args] = process.argv.slice(2);
 
 try {
   if (command === "chat") {
-    const prompt = args.join(" ") || "Help me understand what Telnyx Link can do in the local runtime.";
+    const prompt = args.join(" ") || "Help me understand what Telnyx Cloud Link can do in the local runtime.";
     const result = await runtime.chat({ prompt, actorId: "dev_user" });
     console.log(result.response ?? result.finalOutput);
   } else if (command === "skill") {
@@ -51,7 +58,7 @@ try {
     const listener = await listenLinkAppPublisherServer(server, port);
     const readiness = service.readiness();
     const httpReady = readiness.ready && requireAuth && requireAuthContext;
-    console.log(`Link App Publisher listening at ${listener.url}`);
+    console.log(`Cloud Link App Publisher listening at ${listener.url}`);
     if (storagePath) console.log(`Catalog storage: ${storagePath}`);
     console.log(useEdgeDeployer ? "Deployer: telnyx-edge ship" : "Deployer: record-only local adapter");
     console.log(enforceReviewers ? "Reviewer policy: enforced" : "Reviewer policy: permissive");
@@ -69,7 +76,7 @@ try {
     const listener = await listenSkillRegistryServer(server, port);
     const readiness = service.readiness();
     const httpReady = readiness.ready && requireAuth && requireAuthContext;
-    console.log(`Link Skill Registry listening at ${listener.url}`);
+    console.log(`Cloud Link Skill Registry listening at ${listener.url}`);
     if (storagePath) console.log(`Registry storage: ${storagePath}`);
     console.log(requireAuth ? "Auth required: Bearer, x-telnyx-auth-rev2, or x-telnyx-api-key." : "Auth disabled for local development.");
     console.log(requireAuthContext ? "Auth context: required" : "Auth context: not required");
@@ -84,12 +91,35 @@ try {
     const listener = await listenMessageGatewayServer(server, port);
     const readiness = service.readiness();
     const httpReady = readiness.ready && requireAuth && requireAuthContext;
-    console.log(`Link Message Gateway listening at ${listener.url}`);
+    console.log(`Cloud Link Message Gateway listening at ${listener.url}`);
     if (storagePath) console.log(`Delivery ledger storage: ${storagePath}`);
     console.log("Adapters: Slack, Google Chat, and A2A record-only adapters are active unless replaced by the hosted service.");
     console.log(requireAuth ? "Auth required: Bearer, x-telnyx-auth-rev2, or x-telnyx-api-key." : "Auth disabled for local development.");
     console.log(requireAuthContext ? "Auth context: required" : "Auth context: not required");
     console.log(httpReady ? "Readiness: ready for production delivery routing" : "Readiness: not production ready; check GET /readyz");
+  } else if (command === "session-daemon") {
+    const port = Number(args.find((arg) => /^\d+$/.test(arg)) ?? process.env.PORT ?? 0);
+    const requireAuth = !args.includes("--dev-no-auth");
+    const requireAuthContext = args.includes("--require-auth-context") || process.env.LINK_SESSION_DAEMON_REQUIRE_AUTH_CONTEXT === "1";
+    const storagePath = optionValue(args, "--storage") || process.env.LINK_SESSION_DAEMON_STORAGE;
+    const runnerUrl = optionValue(args, "--runner-url") || process.env.LINK_SESSION_RUNNER_URL;
+    const runner = runnerUrl ? new TelnyxHostedSessionRunner({ runnerUrl }) : undefined;
+    const service = new CloudLinkSessionService({
+      storagePath,
+      runner,
+      smsAdapter: new TelnyxSmsNotificationAdapter(),
+    });
+    const server = createCloudLinkSessionServer(service, { requireAuth, requireAuthContext });
+    const listener = await listenCloudLinkSessionServer(server, port);
+    const readiness = service.readiness();
+    const httpReady = readiness.ready && requireAuth && requireAuthContext;
+    console.log(`Cloud Link Session Daemon listening at ${listener.url}`);
+    if (storagePath) console.log(`Session ledger storage: ${storagePath}`);
+    console.log(runnerUrl ? `Runner: Telnyx-hosted PTY runner at ${runnerUrl}` : "Runner: record-only local adapter; set LINK_SESSION_RUNNER_URL for production PTY ownership.");
+    console.log("Notifications: Telnyx SMS only. Push and email are disabled.");
+    console.log(requireAuth ? "Auth required: Bearer, x-telnyx-auth-rev2, or x-telnyx-api-key." : "Auth disabled for local development.");
+    console.log(requireAuthContext ? "Auth context: required" : "Auth context: not required");
+    console.log(httpReady ? "Readiness: ready for production session control" : "Readiness: not production ready; check GET /readyz");
   } else if (command === "publish-local-app") {
     const directory = optionValue(args, "--dir") || firstPositional(args) || process.cwd();
     const publisherUrl = (optionValue(args, "--publisher-url") || process.env.LINK_APP_PUBLISHER_URL || "http://127.0.0.1:4300").replace(/\/$/, "");

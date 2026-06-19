@@ -278,7 +278,7 @@ export class SkillRegistryService {
           version: `${existing.version}-deprecated`,
           submittedAt: now,
           submittedBy: actorId || undefined,
-          source: normalizeOptionalString(input.notes) || "Deprecated from Link Tool Studio.",
+          source: normalizeOptionalString(input.notes) || "Deprecated from Cloud Link Tool Studio.",
         },
       ],
     };
@@ -457,8 +457,8 @@ async function handleSkillRegistryRequest(
     if (options.requireAuth && !isAuthorizedSkillRegistryRequest(request, options.requireAuthContext)) {
       sendJson(response, 401, {
         error: options.requireAuthContext
-          ? "Link Skill Registry requires auth plus Telnyx actor or group context."
-          : "Link Skill Registry requires Okta Rev2 auth or TELNYX_API_KEY.",
+          ? "Cloud Link Skill Registry requires auth plus Telnyx actor or group context."
+          : "Cloud Link Skill Registry requires Okta Rev2 auth or TELNYX_API_KEY.",
       });
       return;
     }
@@ -563,13 +563,13 @@ function sendText(response: ServerResponse, statusCode: number, contentType: str
 function skillRegistryMetricsText(): string {
   const uptimeSeconds = Math.max(0, (Date.now() - skillRegistryMetricsStartedAt) / 1000);
   return [
-    "# HELP link_skill_registry_up Link Skill Registry process health.",
+    "# HELP link_skill_registry_up Cloud Link Skill Registry process health.",
     "# TYPE link_skill_registry_up gauge",
     "link_skill_registry_up 1",
-    "# HELP link_skill_registry_http_requests_total Total HTTP requests handled by Link Skill Registry.",
+    "# HELP link_skill_registry_http_requests_total Total HTTP requests handled by Cloud Link Skill Registry.",
     "# TYPE link_skill_registry_http_requests_total counter",
     `link_skill_registry_http_requests_total ${skillRegistryHttpRequestsTotal}`,
-    "# HELP link_skill_registry_process_uptime_seconds Link Skill Registry process uptime in seconds.",
+    "# HELP link_skill_registry_process_uptime_seconds Cloud Link Skill Registry process uptime in seconds.",
     "# TYPE link_skill_registry_process_uptime_seconds gauge",
     `link_skill_registry_process_uptime_seconds ${uptimeSeconds.toFixed(3)}`,
     "",
@@ -695,7 +695,7 @@ function normalizeCatalogInput(
     riskLevel,
     customerSafe,
     approvalRequired,
-    sourceOfTruth: normalizeOptionalString(input.source_of_truth ?? input.sourceOfTruth) || existing?.sourceOfTruth || "Git-backed Link tool definition.",
+    sourceOfTruth: normalizeOptionalString(input.source_of_truth ?? input.sourceOfTruth) || existing?.sourceOfTruth || "Git-backed Cloud Link tool definition.",
     repeatedChecks: normalizeOptionalString(input.repeated_checks ?? input.repeatedChecks) || existing?.repeatedChecks || "Run the included test fixture before sharing.",
     humanCheckpoints: normalizeOptionalString(input.human_checkpoints ?? input.humanCheckpoints) || existing?.humanCheckpoints || "Human owner reviews public or destructive actions.",
     testFixture: normalizeOptionalString(input.test_fixture ?? input.testFixture) || existing?.testFixture || "Use the latest real chat request as the fixture.",
@@ -732,7 +732,7 @@ function normalizeStoredCatalogRecord(value: unknown): StoredToolCatalogRecord {
     riskLevel: normalizeRiskLevel(record.riskLevel ?? record.risk_level),
     customerSafe: normalizeBoolean(record.customerSafe ?? record.customer_safe, false),
     approvalRequired: normalizeBoolean(record.approvalRequired ?? record.approval_required, true),
-    sourceOfTruth: normalizeOptionalString(record.sourceOfTruth ?? record.source_of_truth) || "Git-backed Link tool definition.",
+    sourceOfTruth: normalizeOptionalString(record.sourceOfTruth ?? record.source_of_truth) || "Git-backed Cloud Link tool definition.",
     repeatedChecks: normalizeOptionalString(record.repeatedChecks ?? record.repeated_checks) || "Run the included test fixture before sharing.",
     humanCheckpoints: normalizeOptionalString(record.humanCheckpoints ?? record.human_checkpoints) || "Human owner reviews public or destructive actions.",
     testFixture: normalizeOptionalString(record.testFixture ?? record.test_fixture) || "Use the latest real chat request as the fixture.",

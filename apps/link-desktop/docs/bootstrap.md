@@ -1,6 +1,6 @@
-# Telnyx Link Desktop Bootstrap
+# Telnyx Cloud Link Desktop Bootstrap
 
-Use this page when you need a fast, repeatable way to build, launch, and verify the Telnyx Link desktop shell from a fresh checkout.
+Use this page when you need a fast, repeatable way to build, launch, and verify the Telnyx Cloud Link desktop shell from a fresh checkout.
 
 ## Quick bootstrap
 
@@ -19,7 +19,7 @@ For an interactive local launch:
 ./script/build_and_run.sh
 ```
 
-The script is the default desktop entrypoint. It stops any existing Electron process for this app, loads `apps/link-desktop/.env.local` if present, builds `tools/link`, builds the desktop renderer, then starts Electron against the bundled renderer. Use it instead of launching another Electron copy when a local Link app is already open.
+The script is the default desktop entrypoint. It stops any existing Electron process for this app, loads `apps/link-desktop/.env.local` if present, builds `tools/link`, builds the desktop renderer, then starts Electron against the bundled renderer. Use it instead of launching another Electron copy when a local Cloud Link app is already open.
 
 ## What `build_and_run.sh` does
 
@@ -29,13 +29,13 @@ The script is the default desktop entrypoint. It stops any existing Electron pro
 - Builds `apps/link-desktop` with Vite so Electron loads `dist/renderer/index.html`.
 - Sets `LINK_DESKTOP_RENDERER=dist/renderer/index.html` for the Electron main process.
 - Uses Node.js from common local managers first, then falls back to the Codex runtime path when available.
-- Stops the previous Electron process before launching a new one, matching both the Electron binary path and the Link main script path.
+- Stops the previous Electron process before launching a new one, matching both the Electron binary path and the Cloud Link main script path.
 - The app enforces a single running instance; a second launch focuses the existing window instead of opening another copy.
 - Supports `--verify`, `--logs`, and `--debug` for smoke tests, unified log streaming, and LLDB sessions.
 
 ## Credential and service gates
 
-Link is live-ready, not live-by-default. Hosted services are contacted only when their credentials, URLs, or Okta session are configured. Missing integrations should fall back to deterministic local data or fail closed.
+Cloud Link is live-ready, not live-by-default. Hosted services are contacted only when their credentials, URLs, or Okta session are configured. Missing integrations should fall back to deterministic local data or fail closed.
 
 Use Settings for normal setup. The Settings page stores saved secrets through Electron `safeStorage` and does not return saved secret values to the renderer.
 
@@ -46,7 +46,7 @@ Common gates:
 | Area | Configure | Expected behavior when missing |
 | ---- | --------- | ------------------------------ |
 | Agent Control Plane | `AUTH_INTERNAL_URL`, `AGENT_CONTROL_PLANE_URL`, Okta Rev2 token | Local mocked agents and readiness messaging |
-| Link App Publisher | `LINK_APP_PUBLISHER_URL`, auth context, reviewer policy | Local/default catalog, managed mutations disabled unless fallback is explicitly enabled |
+| Cloud Link App Publisher | `LINK_APP_PUBLISHER_URL`, auth context, reviewer policy | Local/default catalog, managed mutations disabled unless fallback is explicitly enabled |
 | Skill Registry | `LINK_SKILL_REGISTRY_URL` | Local skill loading and queued events |
 | Google Workspace | Settings Google connection or Google env overrides | Connection card remains disconnected |
 | GitHub pairing | Settings GitHub connection or developer token fallback | Pairing card remains disconnected |
@@ -102,7 +102,7 @@ npm run whisper:build
 npm run bundle:whisper
 ```
 
-## Working on Link
+## Working on Cloud Link
 
 Start with these files:
 
@@ -114,7 +114,7 @@ Start with these files:
 | `apps/link-desktop/src/renderer/styles.css` | Desktop UI tokens and layout styles |
 | `apps/link-desktop/src/renderer/api.ts` | Renderer-side API wrapper around the preload bridge |
 | `tools/link/src/` | Shared Link runtime contracts, app publisher, skill registry, approvals, memory, message gateway |
-| `tools/link/docs/glass-reference.md` | Product direction reference for Link UX decisions |
+| `tools/link/docs/glass-reference.md` | Product direction reference for Cloud Link UX decisions |
 | `apps/link-desktop/tests/` | Desktop unit and integration tests |
 | `apps/link-desktop/tests/e2e/` | Browser and Electron E2E checks |
 
@@ -155,7 +155,7 @@ If Electron opens a blank screen, rebuild with `./script/build_and_run.sh --veri
 
 If a managed surface says it is not configured, confirm the related service URL and auth context in Settings or `.env.local`. Do not enable local fallback flags when testing production-like behavior.
 
-If Google Workspace prompts repeatedly on macOS, confirm Link is using its encrypted file keyring under Electron user data through `GOG_KEYRING_BACKEND=file`, `GOG_HOME`, and `GOG_KEYRING_PASSWORD`.
+If Google Workspace prompts repeatedly on macOS, confirm Cloud Link is using its encrypted file keyring under Electron user data through `GOG_KEYRING_BACKEND=file`, `GOG_HOME`, and `GOG_KEYRING_PASSWORD`.
 
 If App Publisher publish actions are disabled, check `/readyz` on `LINK_APP_PUBLISHER_URL` and confirm reviewer enforcement, persistent storage, auth context, Git, `telnyx-edge`, and deployer mode are configured for production-like publishers.
 

@@ -4,20 +4,20 @@ set -euo pipefail
 MODE="${1:-run}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT_DIR/apps/link-desktop"
-TMP_ROOT="${TMPDIR:-/tmp}"
 SOURCE_APP_BUNDLE="$APP_DIR/node_modules/electron/dist/Electron.app"
-DEV_APP_RUNTIME_DIR="${TMP_ROOT%/}/telnyx-link-desktop-dev"
-DEV_APP_BUNDLE="$DEV_APP_RUNTIME_DIR/Link.app"
-MAIN_EXECUTABLE="$DEV_APP_BUNDLE/Contents/MacOS/Link"
-MAIN_PROCESS_PATTERN="$MAIN_EXECUTABLE"
-LEGACY_MAIN_PROCESS_PATTERN="$SOURCE_APP_BUNDLE/Contents/MacOS/Electron"
-SOURCE_ELECTRON_PROCESS_PATTERN="$APP_DIR/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
+MAIN_EXECUTABLE="$APP_DIR/node_modules/.bin/electron"
+MAIN_PROCESS_PATTERN="$APP_DIR/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
 MAIN_SCRIPT_PATTERN="$APP_DIR/src/main/main.js"
 ENV_FILE="$APP_DIR/.env.local"
 PUBLIC_DIR="$APP_DIR/public"
 APP_ICON_ICNS="$PUBLIC_DIR/link-icon.icns"
 APP_ICON_PNG="$PUBLIC_DIR/link-icon.png"
 APP_FAVICON_PNG="$PUBLIC_DIR/link-favicon.png"
+DEV_APP_BUNDLE="$ROOT_DIR/Telnyx Cloud Link.app"
+DEV_APP_EXECUTABLE="$DEV_APP_BUNDLE/Contents/MacOS/Telnyx Cloud Link"
+NESTED_ELECTRON_EXECUTABLE="$DEV_APP_BUNDLE/Contents/Resources/Electron.app/Contents/MacOS/Electron"
+LEGACY_DEV_APP_EXECUTABLE="$ROOT_DIR/Link.app/Contents/MacOS/Link"
+LEGACY_NESTED_ELECTRON_EXECUTABLE="$ROOT_DIR/Link.app/Contents/Resources/Electron.app/Contents/MacOS/Electron"
 
 configure_node_path() {
   local candidate
@@ -61,10 +61,12 @@ stop_existing() {
   local pids remaining
   pids="$(
     {
-      pgrep -f "$LEGACY_MAIN_PROCESS_PATTERN" || true
-      pgrep -f "$SOURCE_ELECTRON_PROCESS_PATTERN" || true
       pgrep -f "$MAIN_PROCESS_PATTERN" || true
       pgrep -f "$MAIN_SCRIPT_PATTERN" || true
+      pgrep -f "$DEV_APP_EXECUTABLE" || true
+      pgrep -f "$NESTED_ELECTRON_EXECUTABLE" || true
+      pgrep -f "$LEGACY_DEV_APP_EXECUTABLE" || true
+      pgrep -f "$LEGACY_NESTED_ELECTRON_EXECUTABLE" || true
     } | sort -u
   )"
   if [[ -n "$pids" ]]; then
@@ -72,10 +74,12 @@ stop_existing() {
     for _ in {1..20}; do
       remaining="$(
         {
-          pgrep -f "$LEGACY_MAIN_PROCESS_PATTERN" || true
-          pgrep -f "$SOURCE_ELECTRON_PROCESS_PATTERN" || true
           pgrep -f "$MAIN_PROCESS_PATTERN" || true
           pgrep -f "$MAIN_SCRIPT_PATTERN" || true
+          pgrep -f "$DEV_APP_EXECUTABLE" || true
+          pgrep -f "$NESTED_ELECTRON_EXECUTABLE" || true
+          pgrep -f "$LEGACY_DEV_APP_EXECUTABLE" || true
+          pgrep -f "$LEGACY_NESTED_ELECTRON_EXECUTABLE" || true
         } | sort -u
       )"
       if [[ -z "$remaining" ]]; then
@@ -92,6 +96,20 @@ build_app() {
   npm --prefix "$APP_DIR" run build
 }
 
+prepare_dev_runtime() {
+  if [[ "$OSTYPE" != darwin* ]]; then
+    return
+  fi
+
+  DEV_APP_BUNDLE="$(
+    cd "$APP_DIR" && node --input-type=module -e 'import("./scripts/package-macos-dev-app.mjs").then(async ({ packageMacosDevApp }) => { const runtime = await packageMacosDevApp(process.cwd()); process.stdout.write(runtime.bundlePath); })'
+  )"
+  DEV_APP_EXECUTABLE="$DEV_APP_BUNDLE/Contents/MacOS/Telnyx Cloud Link"
+  NESTED_ELECTRON_EXECUTABLE="$DEV_APP_BUNDLE/Contents/Resources/Electron.app/Contents/MacOS/Electron"
+  MAIN_EXECUTABLE="$DEV_APP_EXECUTABLE"
+  MAIN_PROCESS_PATTERN="$NESTED_ELECTRON_EXECUTABLE"
+}
+
 sync_source_bundle_branding() {
   if [[ -f "$APP_ICON_ICNS" ]]; then
     cp "$APP_ICON_ICNS" "$SOURCE_APP_BUNDLE/Contents/Resources/link-icon.icns"
@@ -103,39 +121,38 @@ sync_source_bundle_branding() {
   if [[ -f "$APP_FAVICON_PNG" ]]; then
     cp "$APP_FAVICON_PNG" "$SOURCE_APP_BUNDLE/Contents/Resources/link-favicon.png"
   fi
-  /usr/libexec/PlistBuddy -c "Set :CFBundleName Link" "$SOURCE_APP_BUNDLE/Contents/Info.plist" >/dev/null
-  /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Link" "$SOURCE_APP_BUNDLE/Contents/Info.plist" >/dev/null
+  /usr/libexec/PlistBuddy -c "Set :CFBundleName Cloud Link" "$SOURCE_APP_BUNDLE/Contents/Info.plist" >/dev/null
+  /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Cloud Link" "$SOURCE_APP_BUNDLE/Contents/Info.plist" >/dev/null
   /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile link-icon.icns" "$SOURCE_APP_BUNDLE/Contents/Info.plist" >/dev/null
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier io.telnyx.link.dev" "$SOURCE_APP_BUNDLE/Contents/Info.plist" >/dev/null
 }
 
-prepare_dev_bundle() {
-  sync_source_bundle_branding
-  rm -rf "$DEV_APP_BUNDLE"
-  mkdir -p "$DEV_APP_RUNTIME_DIR"
-  ditto "$SOURCE_APP_BUNDLE" "$DEV_APP_BUNDLE"
-  mv "$DEV_APP_BUNDLE/Contents/MacOS/Electron" "$MAIN_EXECUTABLE"
-  if [[ -f "$APP_ICON_ICNS" ]]; then
-    cp "$APP_ICON_ICNS" "$DEV_APP_BUNDLE/Contents/Resources/link-icon.icns"
-    cp "$APP_ICON_ICNS" "$DEV_APP_BUNDLE/Contents/Resources/electron.icns"
+prepare_launcher_branding() {
+  if [[ "$OSTYPE" == darwin* ]]; then
+    prepare_dev_runtime
+  else
+    sync_source_bundle_branding
   fi
-  if [[ -f "$APP_ICON_PNG" ]]; then
-    cp "$APP_ICON_PNG" "$DEV_APP_BUNDLE/Contents/Resources/link-icon.png"
-  fi
-  if [[ -f "$APP_FAVICON_PNG" ]]; then
-    cp "$APP_FAVICON_PNG" "$DEV_APP_BUNDLE/Contents/Resources/link-favicon.png"
-  fi
-  /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable Link" "$DEV_APP_BUNDLE/Contents/Info.plist" >/dev/null
 }
 
 run_app() {
-  prepare_dev_bundle
-  LINK_DESKTOP_RENDERER="$APP_DIR/dist/renderer/index.html" "$MAIN_EXECUTABLE" "$MAIN_SCRIPT_PATTERN"
+  prepare_launcher_branding
+  cd "$APP_DIR"
+  if [[ "$OSTYPE" == darwin* ]]; then
+    open -W -n "$DEV_APP_BUNDLE"
+  else
+    LINK_DESKTOP_RENDERER=dist/renderer/index.html "$MAIN_EXECUTABLE" src/main/main.js
+  fi
 }
 
 launch_app() {
-  prepare_dev_bundle
-  LINK_DESKTOP_RENDERER="$APP_DIR/dist/renderer/index.html" "$MAIN_EXECUTABLE" "$MAIN_SCRIPT_PATTERN" &
+  prepare_launcher_branding
+  cd "$APP_DIR"
+  if [[ "$OSTYPE" == darwin* ]]; then
+    open -n "$DEV_APP_BUNDLE"
+  else
+    LINK_DESKTOP_RENDERER=dist/renderer/index.html "$MAIN_EXECUTABLE" src/main/main.js &
+  fi
 }
 
 stop_existing
@@ -148,12 +165,17 @@ case "$MODE" in
     run_app
     ;;
   --debug|debug)
-    prepare_dev_bundle
-    LINK_DESKTOP_RENDERER="$APP_DIR/dist/renderer/index.html" lldb -- "$MAIN_EXECUTABLE" "$MAIN_SCRIPT_PATTERN"
+    prepare_launcher_branding
+    cd "$APP_DIR"
+    if [[ "$OSTYPE" == darwin* ]]; then
+      lldb -- "$MAIN_EXECUTABLE"
+    else
+      lldb -- "$MAIN_EXECUTABLE" src/main/main.js
+    fi
     ;;
   --logs|logs|--telemetry|telemetry)
     launch_app
-    /usr/bin/log stream --info --style compact --predicate 'process == "Link" || process == "Electron"'
+    /usr/bin/log stream --info --style compact --predicate 'process == "Telnyx Cloud Link" || process == "Link" || process == "Electron"'
     ;;
   --verify|verify)
     launch_app

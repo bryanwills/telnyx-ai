@@ -1,6 +1,6 @@
 # Glass-Inspired Product Reference
 
-Telnyx Link is inspired by Ramp's Glass as a product pattern: an internal AI coworker that feels like a preconfigured workspace, not a generic chatbot. This is reference material for product direction, not permission to copy Ramp's branding, screenshots, icons, assets, copy, or implementation.
+Telnyx Cloud Link is inspired by Ramp's Glass as a product pattern: an internal AI coworker that feels like a preconfigured workspace, not a generic chatbot. This is reference material for product direction, not permission to copy Ramp's branding, screenshots, icons, assets, copy, or implementation.
 
 ## Product Patterns To Carry Forward
 

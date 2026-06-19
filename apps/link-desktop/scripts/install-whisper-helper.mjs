@@ -7,7 +7,7 @@ const execFileAsync = promisify(execFile);
 const appRoot = path.resolve(import.meta.dirname, "..");
 const whisperRoot = path.join(appRoot, "native", "telnyx-whisper");
 const buildScriptPath = path.join(whisperRoot, "Scripts", "build-app.sh");
-const helperExecutablePath = path.join(whisperRoot, "Telnyx Link.app", "Contents", "MacOS", "TelnyxDictation");
+const helperExecutablePath = path.join(whisperRoot, "Telnyx Cloud Link.app", "Contents", "MacOS", "TelnyxDictation");
 
 const { stdout, stderr } = await execFileAsync("bash", [buildScriptPath, "release"], {
   cwd: whisperRoot,
@@ -21,4 +21,4 @@ await fs.access(helperExecutablePath);
 
 console.log("Prepared bundled dictation helper:");
 console.log(`- ${path.relative(appRoot, helperExecutablePath)}`);
-console.log("Package `native/telnyx-whisper/Telnyx Link.app` into Link app resources for release builds.");
+console.log("Package `native/telnyx-whisper/Telnyx Cloud Link.app` into Cloud Link app resources for release builds.");

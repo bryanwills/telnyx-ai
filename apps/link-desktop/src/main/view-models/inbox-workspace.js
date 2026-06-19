@@ -45,7 +45,7 @@ export function buildInboxWorkspace(input = {}) {
   const setupState = !ready
     ? {
         title: "Connect Google Inbox to read threads and save Gmail drafts.",
-        body: "Link uses gog with an app-level no-send guard. Drafts are saved to Gmail Drafts, and sending still happens only in Gmail.",
+        body: "Cloud Link uses gog with an app-level no-send guard. Drafts are saved to Gmail Drafts, and sending still happens only in Gmail.",
         action: buildAction({
           id: "connect-inbox",
           label: "Connect Inbox",

@@ -43,7 +43,7 @@ export function buildCalendarWorkspace(input = {}) {
   const setupState = !ready
     ? {
         title: "Connect Google Workspace to show calendar events.",
-        body: "Link verifies Google Calendar and Contacts access, then loads events so you can open meetings or start related workflows from event context.",
+        body: "Cloud Link verifies Google Calendar and Contacts access, then loads events so you can open meetings or start related workflows from event context.",
         action: buildAction({
           id: "connect-google-workspace",
           label: "Connect Google Workspace",
@@ -703,7 +703,7 @@ function buildCalendarEmptyState({ ready, loading, error, query, events, futureV
       ? "Try another search term or filter."
       : events.length > 0
         ? `${events.length} calendar events loaded, but none are upcoming after filtering.`
-        : "Google Calendar is connected, but Link did not receive any upcoming events from your primary calendar.",
+        : "Google Calendar is connected, but Cloud Link did not receive any upcoming events from your primary calendar.",
     tone: "default",
   };
 }
@@ -713,7 +713,7 @@ function buildCalendarJoinAction(event) {
   const isSample = Boolean(event.sample);
   return buildAction({
     id: `join-event-${event.id}`,
-    label: isSample ? "Open Link" : "Join",
+    label: isSample ? "Open Telnyx Cloud Link" : "Join",
     intent: "join-calendar-event",
     enabled: Boolean(joinUrl),
     reason: joinUrl ? "" : "No meeting link saved.",

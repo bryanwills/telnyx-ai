@@ -761,7 +761,7 @@ function buildScribesWorkspaceSetupState({ status, whisperStatus, providerMode }
 
   if (providerMode === "telnyx-cloud" && !status.telnyxCloudReady) {
     return {
-      title: "Save TELNYX_API_KEY",
+      title: "Save Telnyx API Key",
       body: "Telnyx Cloud dictation is selected, but the required API key is not configured yet.",
       tone: "warning",
       action: createActionManifest({
@@ -812,7 +812,7 @@ function buildScribeAssistantSetupState({ status, whisperStatus, providerMode })
   if (providerMode === "telnyx-cloud" && !status.telnyxCloudReady) {
     return {
       title: "Cloud dictation needs credentials",
-      body: "Save TELNYX_API_KEY before starting Telnyx Cloud dictation.",
+      body: "Save a Telnyx API Key before starting Telnyx Cloud dictation.",
       tone: "warning",
     };
   }

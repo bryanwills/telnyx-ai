@@ -5,7 +5,7 @@ set -euo pipefail
 PRODUCT_NAME="TelnyxDictation"
 CONFIGURATION="${1:-release}"
 BUILD_DIR=".build/${CONFIGURATION}"
-APP_BUNDLE="Telnyx Link.app"
+APP_BUNDLE="Telnyx Cloud Link.app"
 LEGACY_APP_BUNDLE="${PRODUCT_NAME}.app"
 CONTENTS_DIR="${APP_BUNDLE}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"

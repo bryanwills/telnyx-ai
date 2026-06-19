@@ -2,7 +2,7 @@
   "name": "test-snake-link",
   "version": "0.1.0",
   "private": true,
-  "description": "Static Snake smoke app for Telnyx Link app publishing.",
+  "description": "Static Snake smoke app for Telnyx Cloud Link app publishing.",
   "main": "index.js",
   "scripts": {
     "build": "node scripts/build.mjs",

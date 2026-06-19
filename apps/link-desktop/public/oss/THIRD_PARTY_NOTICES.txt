@@ -1,4 +1,4 @@
-Telnyx Link can download Harper as an optional local grammar add-on.
+Telnyx Cloud Link can download Harper as an optional local grammar add-on.
 
 Component: Harper
 Project URL: https://github.com/Automattic/harper

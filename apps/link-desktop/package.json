@@ -1,8 +1,15 @@
 {
   "name": "@telnyx/link-desktop",
+  "productName": "Cloud Link",
   "version": "0.1.0",
   "private": true,
-  "description": "Electron desktop MVP for Telnyx Link.",
+  "description": "Electron desktop shell for Telnyx Cloud Link.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/team-telnyx/ai",
+    "directory": "apps/link-desktop"
+  },
   "type": "module",
   "main": "src/main/main.js",
   "scripts": {

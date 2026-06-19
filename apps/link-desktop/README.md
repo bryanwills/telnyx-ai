@@ -1,13 +1,46 @@
-# Telnyx Link Desktop
+# Telnyx Cloud Link Desktop
 
-This is the Electron desktop shell for Telnyx Link. It uses live-ready service adapters with deterministic local fallbacks: hosted services are contacted only when the related credentials, environment variables, or Okta session are configured.
+This is the Electron desktop shell for Telnyx Cloud Link. It uses live-ready service adapters with deterministic local fallbacks: hosted services are contacted only when the related credentials, environment variables, or Okta session are configured.
 
 For the short agent/operator bootstrap path, use [docs/bootstrap.md](docs/bootstrap.md).
 
 ## Run Locally
 
+Install the desktop package dependencies from this directory:
+
+```bash
+npm ci
+```
+
+macOS, from the repository root:
+
 ```bash
 ../../script/build_and_run.sh
+```
+
+Use `../../script/build_and_run.sh --verify` for a non-interactive launch smoke test. The script builds `tools/link`, builds this desktop renderer, replaces any existing local Cloud Link process, prepares the branded macOS development app bundle, and opens `Telnyx Cloud Link.app`.
+
+Windows or Linux development:
+
+```bash
+npm run dev
+```
+
+Windows PowerShell bundled-renderer smoke test:
+
+```powershell
+npm --prefix ../../tools/link run build
+npm run build
+$env:LINK_DESKTOP_RENDERER="dist/renderer/index.html"
+.\node_modules\.bin\electron.cmd .\src\main\main.js
+```
+
+Linux bundled-renderer smoke test:
+
+```bash
+npm --prefix ../../tools/link run build
+npm run build
+LINK_DESKTOP_RENDERER=dist/renderer/index.html ./node_modules/.bin/electron src/main/main.js
 ```
 
 Browser preview for UI QA:
@@ -24,13 +57,13 @@ The normal setup path is the Settings page. Credential fields there are write-on
 
 The Agent Control Plane should use Okta SSO; do not put an Okta password in this file. `TELNYX_ACTOR` and `TELNYX_ON_BEHALF_OF` are optional routing hints for ACP endpoints that require explicit user or squad context.
 
-The Settings view exposes a `Sign in with Okta` action for Agent Control Plane. Configure `AUTH_INTERNAL_URL` first; Link opens that auth bridge's `/rev_a/authenticate` flow in an Electron auth window and stores the resulting Rev2 token with Electron `safeStorage`. If a specific hosted agent endpoint requires a squad context, set `TELNYX_ON_BEHALF_OF` to that squad id ending in `.squad`.
+The Settings view exposes a `Sign in with Okta` action for Agent Control Plane. Configure `AUTH_INTERNAL_URL` first; Cloud Link opens that auth bridge's `/rev_a/authenticate` flow in an Electron auth window and stores the resulting Rev2 token with Electron `safeStorage`. If a specific hosted agent endpoint requires a squad context, set `TELNYX_ON_BEHALF_OF` to that squad id ending in `.squad`.
 
-GitHub pairing uses a GitHub App device flow. Users only use the GitHub card's `Connect` button: Link shows the device code in a native dialog, opens `https://github.com/login/device`, stores the returned app user token with Electron `safeStorage`, and verifies it can read `team-telnyx/link` by default. Release builds should include the public Telnyx Link GitHub App client ID in `link-desktop-config.json` next to packaged app resources, for example `{ "githubAppClientId": "..." }`. `LINK_DESKTOP_CONFIG_PATH`, `LINK_DESKTOP_CONFIG_JSON`, `LINK_GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_ID`, `GH_TOKEN`, `GITHUB_TOKEN`, and authenticated `gh` remain developer or operator fallbacks. Override the pairing check with `LINK_GITHUB_APP_VERIFY_REPO=owner/repo`.
+GitHub pairing uses a GitHub App device flow. Users only use the GitHub card's `Connect` button: Cloud Link shows the device code in a native dialog, opens `https://github.com/login/device`, stores the returned app user token with Electron `safeStorage`, and verifies it can read `team-telnyx/link` by default. Release builds should include the public Telnyx Cloud Link GitHub App client ID in `link-desktop-config.json` next to packaged app resources, for example `{ "githubAppClientId": "..." }`. `LINK_DESKTOP_CONFIG_PATH`, `LINK_DESKTOP_CONFIG_JSON`, `LINK_GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_ID`, `GH_TOKEN`, `GITHUB_TOKEN`, and authenticated `gh` remain developer or operator fallbacks. Override the pairing check with `LINK_GITHUB_APP_VERIFY_REPO=owner/repo`.
 
-Google Workspace uses `team-telnyx/openclaw-itops-setup-utils/gog-setup` with the bundled `gog` CLI. Run `npm run bundle:gog` before packaging so the platform/architecture-specific `apps/link-desktop/bin/gog-*` files are included in app resources. The resolver prefers `gog-{platform}-{arch}` and only falls back to a generic `gog` on PATH, so the repo does not need to track duplicate generic helper binaries. The Settings card only exposes `Connect`: Link fetches and stages the read-only setup utility, signs the user in with Google through gog, stores the gog account/keyring details with Electron `safeStorage`, and only shows `Connected` after Calendar and Contacts checks pass. Link forces gog to use its encrypted file keyring under the Electron user data directory with `GOG_KEYRING_BACKEND=file`, `GOG_HOME`, and a generated `GOG_KEYRING_PASSWORD` so macOS does not repeatedly prompt for the login Keychain. For production, set `GOOGLE_WORKSPACE_SETUP_ASSET_URL` to an Okta-protected internal endpoint that can return files from `team-telnyx/openclaw-itops-setup-utils`; `GOOGLE_WORKSPACE_SKILL_ASSET_URL` remains a compatibility alias. Developer fallbacks still work through `GH_TOKEN`/`GITHUB_TOKEN`, authenticated `gh`, `GOOGLE_WORKSPACE_SETUP_SCRIPT`, and direct `GOOGLE_WORKSPACE_ACCESS_TOKEN`, `GOOGLE_CALENDAR_ACCESS_TOKEN`, `GOOGLE_DRIVE_ACCESS_TOKEN`, or `GOOGLE_CONTACTS_ACCESS_TOKEN`.
+Google Workspace uses `team-telnyx/openclaw-itops-setup-utils/gog-setup` with the bundled `gog` CLI. Run `npm run bundle:gog` before packaging so the platform/architecture-specific `apps/link-desktop/bin/gog-*` files are included in app resources. The resolver prefers `gog-{platform}-{arch}` and only falls back to a generic `gog` on PATH, so the repo does not need to track duplicate generic helper binaries. The Settings card only exposes `Connect`: Cloud Link fetches and stages the read-only setup utility, signs the user in with Google through gog, stores the gog account/keyring details with Electron `safeStorage`, and only shows `Connected` after Calendar and Contacts checks pass. Cloud Link forces gog to use its encrypted file keyring under the Electron user data directory with `GOG_KEYRING_BACKEND=file`, `GOG_HOME`, and a generated `GOG_KEYRING_PASSWORD` so macOS does not repeatedly prompt for the login Keychain. For production, set `GOOGLE_WORKSPACE_SETUP_ASSET_URL` to an Okta-protected internal endpoint that can return files from `team-telnyx/openclaw-itops-setup-utils`; `GOOGLE_WORKSPACE_SKILL_ASSET_URL` remains a compatibility alias. Developer fallbacks still work through `GH_TOKEN`/`GITHUB_TOKEN`, authenticated `gh`, `GOOGLE_WORKSPACE_SETUP_SCRIPT`, and direct `GOOGLE_WORKSPACE_ACCESS_TOKEN`, `GOOGLE_CALENDAR_ACCESS_TOKEN`, `GOOGLE_DRIVE_ACCESS_TOKEN`, or `GOOGLE_CONTACTS_ACCESS_TOKEN`.
 
-Telnyx Whisper lives under `native/telnyx-whisper` and is controlled from Settings > Speech. Link uses the saved Telnyx API key for Telnyx STT/TTS helper calls, starts the macOS helper from the Electron main process, and defaults the dictation shortcut to holding `fn`. Run `npm run bundle:whisper` before packaging so release builds include `native/telnyx-whisper/Telnyx Link.app` inside app resources. Packaged users only need the prebuilt helper bundle; do not rely on shipping `Package.swift` or the full source tree.
+Telnyx Whisper lives under `native/telnyx-whisper` and is controlled from Settings > Speech. Cloud Link uses the saved Telnyx API key for Telnyx STT/TTS helper calls, starts the macOS helper from the Electron main process, and defaults the dictation shortcut to holding `fn`. Run `npm run bundle:whisper` before packaging so release builds include `native/telnyx-whisper/Telnyx Cloud Link.app` inside app resources. Packaged users only need the prebuilt helper bundle; do not rely on shipping `Package.swift` or the full source tree.
 
 ## Runtime Configuration
 
@@ -41,16 +74,17 @@ Most users should connect services through Settings. Operators and developers ca
 | Development renderer | `VITE_DEV_SERVER_URL`, `LINK_DESKTOP_RENDERER` | Development-only renderer overrides. Packaged builds ignore `LINK_DESKTOP_RENDERER` and load the bundled renderer to keep the trusted preload bridge attached only to shipped app files. |
 | Request timeouts | `LINK_DESKTOP_FETCH_TIMEOUT_MS` | Default outbound `fetch` timeout is 15 seconds. Existing call-specific signals, such as long-running knowledge-agent requests, still win. |
 | GitHub | `LINK_DESKTOP_CONFIG_PATH`, `LINK_DESKTOP_CONFIG_JSON`, `LINK_GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_ID`, `LINK_GITHUB_APP_VERIFY_REPO`, `GH_TOKEN`, `GITHUB_TOKEN` | GitHub pairing verifies access to `team-telnyx/link` by default. Developer token fallbacks should stay local. |
-| Agent Control Plane | `AGENT_CONTROL_PLANE_URL`, `A2A_DISCOVERY_URL`, `AUTH_INTERNAL_URL`, `TELNYX_ACTOR`, `TELNYX_ON_BEHALF_OF`, `TELNYX_AUTH_REV2` | Prefer Okta SSO from Settings. Auth, hosted ACP, and A2A integrations have no production default in public builds; configure HTTPS service URLs explicitly. HTTP is accepted only for loopback local development endpoints. |
-| Link App Publisher | `LINK_APP_PUBLISHER_URL`, `LINK_APP_PUBLISHER_LOCAL_FALLBACK`, `LINK_APP_PUBLISHER_DEPLOYER`, `LINK_APP_PUBLISHER_ENFORCE_REVIEWERS`, `LINK_APP_PUBLISHER_REQUIRE_AUTH_CONTEXT`, `LINK_APP_PUBLISHER_REQUIRE_PUSHED_REF` | Production-like publisher runs should require auth context, reviewer enforcement, persistent storage, and Edge deployer readiness. |
-| Link Skill Registry | `LINK_SKILL_REGISTRY_URL`, `LINK_SKILL_REGISTRY_STORAGE`, `LINK_SKILL_REGISTRY_REQUIRE_AUTH_CONTEXT` | Desktop queues local skill events when the registry is unavailable. Production registry runs should require auth context. |
-| Pylon MCP | `PYLON_MCP_URL`, `PYLON_MCP_CLIENT_ID`, `PYLON_MCP_ACCESS_TOKEN`, `PYLON_MCP_REFRESH_TOKEN`, `PYLON_MCP_TOKEN_EXPIRES_AT` | Settings should own normal OAuth setup. Link allows read tools and `create_issue`; update tools are blocked. |
+| Agent Control Plane | `AGENT_CONTROL_PLANE_URL`, `A2A_DISCOVERY_URL`, `AUTH_INTERNAL_URL`, `TELNYX_ACTOR`, `TELNYX_ON_BEHALF_OF`, `TELNYX_AUTH_REV2` | Prefer Okta SSO from Settings. Internal Telnyx desktop builds ship with the Okta auth bridge and ACP service URLs preconfigured; external/public builds should still configure HTTPS service URLs explicitly. HTTP is accepted only for loopback local development endpoints. |
+| Cloud Link App Publisher | `LINK_APP_PUBLISHER_URL`, `LINK_APP_PUBLISHER_LOCAL_FALLBACK`, `LINK_APP_PUBLISHER_DEPLOYER`, `LINK_APP_PUBLISHER_ENFORCE_REVIEWERS`, `LINK_APP_PUBLISHER_REQUIRE_AUTH_CONTEXT`, `LINK_APP_PUBLISHER_REQUIRE_PUSHED_REF` | Production-like publisher runs should require auth context, reviewer enforcement, persistent storage, and Edge deployer readiness. |
+| Cloud Link Skill Registry | `LINK_SKILL_REGISTRY_URL`, `LINK_SKILL_REGISTRY_STORAGE`, `LINK_SKILL_REGISTRY_REQUIRE_AUTH_CONTEXT` | Desktop queues local skill events when the registry is unavailable. Production registry runs should require auth context. |
+| Cloud Link Sessions | `LINK_SESSION_DAEMON_URL`, `LINK_SESSION_DAEMON_STORAGE`, `LINK_SESSION_DAEMON_REQUIRE_AUTH_CONTEXT`, `LINK_SESSION_RUNNER_URL`, `LINK_SESSION_SMS_FROM`, `LINK_SESSION_SMS_TO`, `LINK_SESSION_MOBILE_URL` | Desktop uses the managed session daemon for server-owned PTY/agent sessions when configured. SMS alerts use the saved `TELNYX_API_KEY` per request; push and email are disabled. |
+| Pylon MCP | `PYLON_MCP_URL`, `PYLON_MCP_CLIENT_ID`, `PYLON_MCP_ACCESS_TOKEN`, `PYLON_MCP_REFRESH_TOKEN`, `PYLON_MCP_TOKEN_EXPIRES_AT` | Settings should own normal OAuth setup. Cloud Link allows read tools and `create_issue`; update tools are blocked. |
 | Google Workspace | `GOOGLE_WORKSPACE_SETUP_ASSET_URL`, `GOOGLE_WORKSPACE_SKILL_ASSET_URL`, `GOOGLE_WORKSPACE_SETUP_SCRIPT`, `GOG_ACCOUNT`, `GOOGLE_WORKSPACE_ACCESS_TOKEN`, `GOOGLE_CALENDAR_ACCESS_TOKEN`, `GOOGLE_DRIVE_ACCESS_TOKEN`, `GOOGLE_CONTACTS_ACCESS_TOKEN` | Production should use an Okta-protected setup asset. Direct access-token variables are developer fallbacks. |
 | Google OAuth | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_WORKSPACE_REFRESH_TOKEN`, `GOOGLE_WORKSPACE_TOKEN_EXPIRES_AT` | Used by saved Google Workspace connections when token refresh is configured. |
 | Guru | `GURU_OAUTH_CLIENT_ID`, `GURU_OAUTH_CLIENT_SECRET`, `GURU_OAUTH_SCOPE`, `GURU_OAUTH_REDIRECT_URI`, `GURU_OAUTH_ACCESS_TOKEN`, `GURU_OAUTH_REFRESH_TOKEN`, `GURU_OAUTH_TOKEN_EXPIRES_AT`, `GURU_USER_EMAIL`, `GURU_USER_TOKEN` | Prefer OAuth. Basic-token fields remain compatibility fallbacks. |
 | Telnyx APIs | `TELNYX_API_KEY`, `LINK_DESKTOP_LIVE_CALL_E2E`, `LINK_DESKTOP_LIVE_CALL_CONFIRM`, `LINK_DESKTOP_LIVE_CALL_SECONDS` | Live call E2E is opt-in and hangs up automatically after the configured duration. |
 | Local terminal | `LINK_DESKTOP_ENABLE_TERMINAL` | Development builds expose the built-in terminal. Packaged builds require `LINK_DESKTOP_ENABLE_TERMINAL=1` before launch because the terminal can run arbitrary local shell commands. |
-| Docs and memory adapters | `INTERCOM_ACCESS_TOKEN`, `INTERCOM_API_BASE_URL`, `INTERCOM_VERSION`, `MINTLIFY_API_KEY`, `MINTLIFY_API_BASE_URL`, `MINTLIFY_DOMAIN`, `HINDSIGHT_API_URL`, `HINDSIGHT_API_KEY`, `HINDSIGHT_BANK_ID` | Hindsight requires both URL and key. If other adapters are unset or unreachable, Link falls back to deterministic local data where available. |
+| Docs and memory adapters | `INTERCOM_ACCESS_TOKEN`, `INTERCOM_API_BASE_URL`, `INTERCOM_VERSION`, `MINTLIFY_API_KEY`, `MINTLIFY_API_BASE_URL`, `MINTLIFY_DOMAIN`, `HINDSIGHT_API_URL`, `HINDSIGHT_API_KEY`, `HINDSIGHT_BANK_ID` | Hindsight requires both URL and key. If other adapters are unset or unreachable, Cloud Link falls back to deterministic local data where available. |
 | AIDA | `AIDA_MCP_URL` | Optional explicit MCP endpoint for self-hosted OpenClaw/Hermes routes. Hosted runtimes can own their AIDA configuration server-side. |
 | MCP | `MCP_PROXY_URL` | Managed service adapters should fail closed or use local cached state when unavailable. |
 
@@ -87,7 +121,7 @@ App publisher Electron E2E:
 npm run test:e2e:publisher
 ```
 
-That command builds `tools/link` plus the desktop renderer, starts a local managed Link App Publisher with auth and actor/group context required, launches Electron against it, and verifies the Apps catalog, duplicate/fork handoff, and reviewer approval path through the real preload IPC bridge. It intentionally uses the record-only deployer, so `/readyz` reports publisher reachable but not production Edge-ready.
+That command builds `tools/link` plus the desktop renderer, starts a local managed Cloud Link App Publisher with auth and actor/group context required, launches Electron against it, and verifies the Apps catalog, duplicate/fork handoff, and reviewer approval path through the real preload IPC bridge. It intentionally uses the record-only deployer, so `/readyz` reports publisher reachable but not production Edge-ready.
 
 `meta-dev.yml` follows Telnyx's PADR-1 service metadata shape. If `meta-prod.yml` is added later, `npm run metadata:check` validates the merged dev+prod view through `infra-svc-metatool`.
 
@@ -101,7 +135,7 @@ That command builds `tools/link` plus the desktop renderer, starts a local manag
 - Connections with connector status and Auto/Allow/Ask tool permission groups
 - Memory with Hindsight-ready banks, recall testing, and explicit refresh state
 - Wiki with personal and squad bot training kits
-- Apps publishing through the managed Link App Publisher contract, with explicit service configuration and local fallback catalog state
+- Apps publishing through the managed Cloud Link App Publisher contract, with explicit service configuration and local fallback catalog state
 - Internal Design System and Settings surfaces
 
 Chat sessions, Taskbox cards, generated artifacts, saved connector state, and local app publisher state are persisted in Electron user data.
@@ -110,19 +144,19 @@ The app uses hybrid live-ready adapters. It contacts production services only wh
 
 ## Taskbox Status Architecture
 
-All Link task workflows use the same four stages: `Needs Review`, `To Do`, `In Progress`, and `Done`. New unstarted tasks land in `To Do`; sending a task to an ACP agent moves it to `In Progress`; when an agent finishes and has a final response ready, it moves the task to `Needs Review`; a human reviewer moves accepted or closed work to `Done`.
+All Cloud Link task workflows use the same four stages: `Needs Review`, `To Do`, `In Progress`, and `Done`. New unstarted tasks land in `To Do`; sending a task to an ACP agent moves it to `In Progress`; when an agent finishes and has a final response ready, it moves the task to `Needs Review`; a human reviewer moves accepted or closed work to `Done`.
 
-Link injects this operating guide into task monitoring chat sessions and live ACP routing prompts so agents know to use `Needs Review`, not `Done`, when handing completed agent work back to a human.
+Cloud Link injects this operating guide into task monitoring chat sessions and live ACP routing prompts so agents know to use `Needs Review`, not `Done`, when handing completed agent work back to a human.
 
-## Link App Publisher
+## Cloud Link App Publisher
 
 Apps publishing is wired for the managed publisher service rather than direct Edge Compute deployment from the desktop app. The desktop bridge exposes fixed IPC methods for catalog listing, publish intents, version requests, review decisions, rollback/deprecation, duplication handoff, and opening approved app URLs. The publisher service owns source-ref handling, Edge Compute deployment, version history, and catalog promotion.
 
-No publisher service URL is bundled into public builds. Set `LINK_APP_PUBLISHER_URL` to an HTTPS managed publisher endpoint, or to an HTTP loopback endpoint for local development. Link authenticates with the saved Okta Rev2 token or `TELNYX_API_KEY`, and only opens approved HTTPS app hosts.
+No publisher service URL is bundled into public builds. Set `LINK_APP_PUBLISHER_URL` to an HTTPS managed publisher endpoint, or to an HTTP loopback endpoint for local development. Cloud Link authenticates with the saved Okta Rev2 token or `TELNYX_API_KEY`, and only opens approved HTTPS app hosts.
 
 The Apps page calls `/readyz` and shows a publisher status banner. If it says `Configure Publisher`, the catalog is showing local/default data and publish/open actions are not exercising a managed publisher service yet.
 
-To publish a local app, add `link-app.yml` at the app directory root, commit the app to a `team-telnyx` GitHub repo, then use Apps > Create > App > Load `link-app.yml`. Link reads the manifest locally, derives the Git remote/current commit/source subdir, and sends only that source reference to the managed publisher.
+To publish a local app, add `link-app.yml` at the app directory root, commit the app to a `team-telnyx` GitHub repo, then use Apps > Create > App > Load `link-app.yml`. Cloud Link reads the manifest locally, derives the Git remote/current commit/source subdir, and sends only that source reference to the managed publisher.
 
 ```yaml
 name: Carrier Readiness Hub
@@ -175,11 +209,11 @@ LINK_APP_PUBLISHER_URL=http://127.0.0.1:4300 TELNYX_API_KEY=dev-publisher-token 
 
 Managed publish mutations fail closed when the publisher is unavailable or authentication is missing. Set `LINK_APP_PUBLISHER_LOCAL_FALLBACK=1` only for explicit offline development.
 
-For a production-like Edge handoff, start the publisher with `--edge-deployer` or `LINK_APP_PUBLISHER_DEPLOYER=telnyx-edge`. The publisher service then clones the submitted `team-telnyx` source ref, runs an allowlisted `install_command` or infers one from lockfiles, runs the manifest `build_command`, verifies `output_dir`, and runs `telnyx-edge ship` in `source_subdir`; Link Desktop still only talks to the managed publisher API. Set `LINK_APP_PUBLISHER_REQUIRE_PUSHED_REF=1` for desktop dogfood builds that should reject local-only commits before submission.
+For a production-like Edge handoff, start the publisher with `--edge-deployer` or `LINK_APP_PUBLISHER_DEPLOYER=telnyx-edge`. The publisher service then clones the submitted `team-telnyx` source ref, runs an allowlisted `install_command` or infers one from lockfiles, runs the manifest `build_command`, verifies `output_dir`, and runs `telnyx-edge ship` in `source_subdir`; Telnyx Cloud Link Desktop still only talks to the managed publisher API. Set `LINK_APP_PUBLISHER_REQUIRE_PUSHED_REF=1` for desktop dogfood builds that should reject local-only commits before submission.
 
 The production smoke can use `--check-app-url` to verify the approved private app URL responds from the configured network. The Edge deployer also rejects deployment URLs outside approved HTTPS hostnames before they reach the catalog. The managed API also exposes version history, rollback, ownership transfer, and deprecation endpoints so the catalog remains operable after the first publish.
 
-For reviewer policy, start the publisher with `--enforce-reviewers` or `LINK_APP_PUBLISHER_ENFORCE_REVIEWERS=1`. Link Desktop forwards configured actor/group context so the service can require approvals from the app's reviewers or owning squad. Production publishers should also set `LINK_APP_PUBLISHER_REQUIRE_AUTH_CONTEXT=1` or pass `--require-auth-context`, which makes `/readyz` fail until API requests are required to carry actor/group context from the auth boundary.
+For reviewer policy, start the publisher with `--enforce-reviewers` or `LINK_APP_PUBLISHER_ENFORCE_REVIEWERS=1`. Telnyx Cloud Link Desktop forwards configured actor/group context so the service can require approvals from the app's reviewers or owning squad. Production publishers should also set `LINK_APP_PUBLISHER_REQUIRE_AUTH_CONTEXT=1` or pass `--require-auth-context`, which makes `/readyz` fail until API requests are required to carry actor/group context from the auth boundary.
 
 Before routing desktop users to a production publisher, verify readiness:
 

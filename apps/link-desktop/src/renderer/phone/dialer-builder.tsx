@@ -222,7 +222,7 @@ export function DialerBuilder({
     <div className="dialerBuilderActions">
       <button className="button primary" type="button" onClick={() => void saveAndActivate()}>
         <Save size={15} />
-        Save
+        Update
       </button>
     </div>
   ), [saveAndActivate]);

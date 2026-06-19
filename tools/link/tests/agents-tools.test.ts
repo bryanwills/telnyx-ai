@@ -5,10 +5,10 @@ import { InMemoryAuditLogger } from "../src/audit.js";
 import { LinkRuntime } from "../src/runtime.js";
 import { createDefaultToolRegistry, metadataForTool, mockedTools } from "../src/tools.js";
 
-test("root agent is configured for Telnyx Link with specialist handoffs", () => {
-  assert.equal(rootAgent.name, "Telnyx Link");
+test("root agent is configured for Telnyx Cloud Link with specialist handoffs", () => {
+  assert.equal(rootAgent.name, "Telnyx Cloud Link");
   assert.match(rootAgent.instructions, /trusted AI companion/);
-  assert.match(rootAgent.instructions, /Hindsight is Link's source-attributed long-term memory layer/);
+  assert.match(rootAgent.instructions, /Hindsight is Cloud Link's source-attributed long-term memory layer/);
   assert.equal(rootAgent.handoffs.length, 8);
   assert.ok(rootAgent.handoffs.includes("Link Shared Channel Agent"));
 });
@@ -18,7 +18,7 @@ test("specialist agents declare boundaries and safety metadata", () => {
     assert.ok(agent.name);
     assert.ok(agent.purpose);
     assert.ok(agent.instructions);
-    assert.match(agent.instructions, /Hindsight is Link's source-attributed long-term memory layer/);
+    assert.match(agent.instructions, /Hindsight is Cloud Link's source-attributed long-term memory layer/);
     assert.ok(agent.allowedToolCategories.length > 0);
     assert.ok(["low", "medium", "high"].includes(agent.riskLevel));
     assert.ok(agent.customerSafeRules.length > 0);
@@ -56,7 +56,7 @@ test("LinkRuntime chat logs routing in mocked mode", async () => {
   const runtime = new LinkRuntime({ auditLogger });
   const result = await runtime.chat({ prompt: "Need help with network carrier outage", actorId: "tester" });
 
-  assert.equal(result.agent, "Telnyx Link");
+  assert.equal(result.agent, "Telnyx Cloud Link");
   assert.equal(result.routedTo, "Network Operations Agent");
   assert.ok(auditLogger.all().some((event) => event.eventType === "agent.routed"));
 });

@@ -359,7 +359,7 @@ function normalizeLocalPublishInput(input: Partial<LinkLocalAppPublishInput>): L
   return {
     name,
     slug: optionalString(input.slug) || slugify(name),
-    description: optionalString(input.description) || "Private Link app.",
+    description: optionalString(input.description) || "Private Cloud Link app.",
     ownerSquad: requiredString(input.ownerSquad, "owner_squad"),
     audience: requiredString(input.audience, "audience"),
     appType: input.appType === "mcp_app" ? "mcp_app" : "web",
@@ -518,7 +518,7 @@ async function writeImportedLinkAppManifest(
   const outputDir = manifest.outputDir || "dist";
   const ownerSquad = optionalString(input.ownerSquad) || manifest.ownerSquad || (input.scope === "company" ? "company-tools.squad" : "personal.tools");
   const audience = optionalString(input.audience) || manifest.audience || (input.scope === "company" ? "Telnyx employees" : "Personal");
-  const description = optionalString(input.description) || manifest.description || packageJson.description || "Imported Link app hosted on Telnyx dev Edge.";
+  const description = optionalString(input.description) || manifest.description || packageJson.description || "Imported Cloud Link app hosted on Telnyx dev Edge.";
   const reviewers = manifest.reviewers.length ? manifest.reviewers : input.scope === "company" ? ["link-platform.squad"] : [];
   const fields: [string, string | undefined][] = [
     ["name", optionalString(input.name) || manifest.name || titleize(input.slug)],

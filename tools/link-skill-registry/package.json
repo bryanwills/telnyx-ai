@@ -2,7 +2,7 @@
   "name": "link-skill-registry",
   "version": "0.1.0",
   "private": true,
-  "description": "Private Link Skill Registry service for stars, installs/downloads, and run counts.",
+  "description": "Private Cloud Link Skill Registry service for stars, installs/downloads, and run counts.",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

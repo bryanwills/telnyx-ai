@@ -119,13 +119,15 @@ test("Scribes Plan C renders the full workspace and Telnyx cloud gating", async 
   assert.match(configurePanelSource, /sttMode: provider === "telnyx" \? "telnyx-cloud" : "local"/);
   assert.doesNotMatch(configurePanelSource, /async function selectCloudRoute/);
   assert.doesNotMatch(configurePanelSource, /Use for STT/);
-  assert.match(app, /Deep sync/);
+  const scribesViewSource = app.slice(app.indexOf("function ScribesView"), app.indexOf("function formatScribesSessionType"));
+  assert.match(scribesViewSource, /activeTab === "history"[\s\S]*?Deep sync/);
   assert.match(app, /calendarEventScribesSessionId/);
   assert.match(app, /Scribe meeting notes/);
   assert.match(app, /function ScribesHistoryPanel/);
   const historyPanelSource = app.slice(app.indexOf("function ScribesHistoryPanel"), app.indexOf("function ScribesMeetingNotesPanel"));
   assert.match(historyPanelSource, /linkApi\.getScribesWorkspaceView\(\{ query, typeFilter \}\)/);
   assert.match(historyPanelSource, /placeholder=\{workspaceView\?\.searchSchema\?\.placeholder \|\| "Search recordings, meetings, transcripts, or artifacts"\}/);
+  assert.doesNotMatch(historyPanelSource, /Deep sync/);
   assert.match(historyPanelSource, /<span role="columnheader">Transcript<\/span>[\s\S]*?<span role="columnheader">Type<\/span>[\s\S]*?<span role="columnheader">Updated<\/span>/);
   assert.doesNotMatch(historyPanelSource, /<span role="columnheader">Duration<\/span>/);
   assert.doesNotMatch(historyPanelSource, /<span role="columnheader">Actions<\/span>/);

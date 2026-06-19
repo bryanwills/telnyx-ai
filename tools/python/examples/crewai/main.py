@@ -4,7 +4,8 @@ This example creates a CrewAI agent with Telnyx tools for
 managing telecom resources.
 
 Requirements:
-    pip install telnyx-agent-toolkit[crewai]
+    Install a security-reviewed CrewAI distribution separately.
+    pip install telnyx-agent-toolkit
 
 Usage:
     export TELNYX_API_KEY=KEY...

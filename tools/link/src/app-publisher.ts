@@ -762,8 +762,8 @@ export class RecordOnlyLinkAppDeployer implements LinkAppPublisherDeployer {
       sourceSubdir: request.version.sourceSubdir,
       url: request.url,
       logUrl: request.logUrl,
-      message: "Deployment recorded by the Link App Publisher; production Edge deployers can replace this record-only adapter.",
-      logs: "Deployment recorded by the Link App Publisher; no Edge job ran in record-only mode.",
+      message: "Deployment recorded by the Cloud Link App Publisher; production Edge deployers can replace this record-only adapter.",
+      logs: "Deployment recorded by the Cloud Link App Publisher; no Edge job ran in record-only mode.",
       createdAt: request.createdAt,
       updatedAt: request.createdAt,
     };
@@ -1102,8 +1102,8 @@ async function handlePublisherRequest(
     if (options.requireAuth && !isAuthorizedPublisherRequest(request, options.requireAuthContext)) {
       sendJson(response, 401, {
         error: options.requireAuthContext
-          ? "Link App Publisher requires auth plus Telnyx actor or group context."
-          : "Link App Publisher requires Okta Rev2 auth or TELNYX_API_KEY.",
+          ? "Cloud Link App Publisher requires auth plus Telnyx actor or group context."
+          : "Cloud Link App Publisher requires Okta Rev2 auth or TELNYX_API_KEY.",
       });
       return;
     }
@@ -1204,13 +1204,13 @@ function sendText(response: ServerResponse, statusCode: number, contentType: str
 function appPublisherMetricsText(): string {
   const uptimeSeconds = Math.max(0, (Date.now() - appPublisherMetricsStartedAt) / 1000);
   return [
-    "# HELP link_app_publisher_up Link App Publisher process health.",
+    "# HELP link_app_publisher_up Cloud Link App Publisher process health.",
     "# TYPE link_app_publisher_up gauge",
     "link_app_publisher_up 1",
-    "# HELP link_app_publisher_http_requests_total Total HTTP requests handled by Link App Publisher.",
+    "# HELP link_app_publisher_http_requests_total Total HTTP requests handled by Cloud Link App Publisher.",
     "# TYPE link_app_publisher_http_requests_total counter",
     `link_app_publisher_http_requests_total ${appPublisherHttpRequestsTotal}`,
-    "# HELP link_app_publisher_process_uptime_seconds Link App Publisher process uptime in seconds.",
+    "# HELP link_app_publisher_process_uptime_seconds Cloud Link App Publisher process uptime in seconds.",
     "# TYPE link_app_publisher_process_uptime_seconds gauge",
     `link_app_publisher_process_uptime_seconds ${uptimeSeconds.toFixed(3)}`,
     "",
@@ -1401,7 +1401,7 @@ function readStoredApp(value: unknown): LinkAppPublisherApp | null {
     id,
     name,
     slug,
-    description: normalizeOptionalString(value.description) || "Private Link app.",
+    description: normalizeOptionalString(value.description) || "Private Cloud Link app.",
     ownerSquad: normalizeOptionalString(value.ownerSquad ?? value.owner_squad) || "unknown.squad",
     audience: normalizeOptionalString(value.audience) || "Telnyx",
     appType: normalizeAppType(value.appType ?? value.app_type),
@@ -1516,7 +1516,7 @@ function normalizePublishIntent(input: LinkAppPublishIntentInput): NormalizedPub
   return {
     name,
     slug,
-    description: normalizeOptionalString(app.description) || "Private Link app.",
+    description: normalizeOptionalString(app.description) || "Private Cloud Link app.",
     ownerSquad: normalizeRequiredString(app.owner_squad ?? app.ownerSquad, "owner_squad"),
     audience: normalizeRequiredString(app.audience, "audience"),
     appType,

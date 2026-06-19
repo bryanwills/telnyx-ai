@@ -87,7 +87,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if let button = statusItem.button {
             if let img = NSImage(systemSymbolName: "waveform",
-                                 accessibilityDescription: "Telnyx Link") {
+                                 accessibilityDescription: "Telnyx Cloud Link") {
                 img.isTemplate = true
                 button.image = img
             } else {
@@ -329,7 +329,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @MainActor
     @objc private func openConfigureFromMenu() {
-        showTransientHUDMessage("Open Telnyx Link -> Scribe -> Configure to manage Scribe settings.")
+        showTransientHUDMessage("Open Telnyx Cloud Link -> Scribe -> Configure to manage Scribe settings.")
     }
 
     @MainActor
@@ -502,7 +502,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.showPermissionAlert(
                         title: "Microphone Access Required",
                         message: """
-                            Telnyx Link cannot start while microphone access is denied.
+                            Telnyx Cloud Link cannot start while microphone access is denied.
 
                             Enable access in System Settings -> Privacy & Security -> Microphone.
                             """,
@@ -618,7 +618,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             showPermissionAlert(
                 title: "Accessibility Access Recommended",
                 message: """
-                    Telnyx Link uses Accessibility to paste transcribed text into the active app.
+                    Telnyx Cloud Link uses Accessibility to paste transcribed text into the active app.
 
                     Without it, text will be copied to the clipboard only (no auto-paste).
 
@@ -969,14 +969,14 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if TelnyxAPIKeyResolver.resolve() == nil {
             updateMenuBarStatus("API key required")
             message = """
-            Telnyx Link is running in the menu bar.
+            Telnyx Cloud Link is running in the menu bar.
 
             TELNYX_API_KEY is not configured yet. Add it to ~/.config/telnyx-dictation/.env, then press Cmd+Shift+L to dictate.
             """
         } else {
             restoreIdleMenuBarStatus()
             message = """
-            Telnyx Link is running in the menu bar.
+            Telnyx Cloud Link is running in the menu bar.
 
             Press Cmd+Shift+L to start dictation, or use the microphone icon in the menu bar.
             """

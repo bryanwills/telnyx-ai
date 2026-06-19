@@ -6,7 +6,7 @@ export const modelCenterRoleMeta = {
   chatPrimary: {
     id: "chatPrimary",
     label: "Chat primary",
-    description: "Default model for Link chat.",
+    description: "Default model for Cloud Link chat.",
     routeId: "auto/ask-before-cloud",
   },
   chatFallback: {
@@ -408,7 +408,7 @@ export function assessFit({ hardwareProfile, variant, policy = {}, engineId = ""
     return {
       status: "unknown",
       label: "Unknown fit",
-      reason: "Link needs both model size and hardware telemetry to estimate fit.",
+      reason: "Cloud Link needs both model size and hardware telemetry to estimate fit.",
       requiredMemoryBytes: 0,
       recommendedMemoryBytes: 0,
       requiredStorageBytes: 0,

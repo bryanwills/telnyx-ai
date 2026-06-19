@@ -5,7 +5,8 @@ Telecom provisioning crew using CrewAI with Telnyx tools.
 ## Setup
 
 ```bash
-pip install telnyx-agent-toolkit[crewai]
+# Install a security-reviewed CrewAI distribution separately first.
+pip install telnyx-agent-toolkit
 export TELNYX_API_KEY=KEY...
 export OPENAI_API_KEY=sk-...
 ```
