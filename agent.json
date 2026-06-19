@@ -163,7 +163,7 @@
       "description": "Configure AI-first IDE integrations for Telnyx tools, skills, and MCP server access.",
       "guide": "/guides/cursor-mcp-setup.md",
       "cli": "telnyx-agent setup-cursor-mcp --json",
-      "docs": "https://github.com/team-telnyx/ai/blob/main/cli/docs/vscode-extension-plan.md",
+      "docs": "https://github.com/team-telnyx/telnyx-vscode-extension/blob/main/docs/vscode-extension-plan.md",
       "actions": ["setup_cursor_mcp"],
       "requires": []
     }
