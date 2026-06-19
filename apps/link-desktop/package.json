@@ -1,15 +1,8 @@
 {
   "name": "@telnyx/link-desktop",
-  "productName": "Link",
   "version": "0.1.0",
   "private": true,
-  "description": "Electron desktop shell for Telnyx Link.",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/team-telnyx/ai",
-    "directory": "apps/link-desktop"
-  },
+  "description": "Electron desktop MVP for Telnyx Link.",
   "type": "module",
   "main": "src/main/main.js",
   "scripts": {
@@ -17,47 +10,32 @@
     "dev": "node scripts/dev.mjs",
     "prestart": "npm --prefix ../../tools/link run build && npm run build",
     "start": "LINK_DESKTOP_RENDERER=dist/renderer/index.html electron src/main/main.js",
-    "restart": "node scripts/restart.mjs",
-    "bundle:gog": "node scripts/install-gog-cli.mjs",
-    "bundle:whisper": "node scripts/install-whisper-helper.mjs",
     "build": "vite build",
     "metadata:check": "scripts/check-service-metadata.sh",
-    "whisper:build": "cd native/telnyx-whisper && bash Scripts/build-app.sh release",
-    "whisper:test": "swift test --package-path native/telnyx-whisper",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "pretest:e2e:google": "npm --prefix ../../tools/link run build && npm run build",
-    "test:e2e:google": "tsx --test tests/e2e/google-workspace.test.ts",
-    "pretest:e2e:inbox": "npm --prefix ../../tools/link run build && npm run build",
-    "test:e2e:inbox": "tsx --test tests/e2e/google-inbox.test.ts",
-    "test:e2e:phone": "tsx --test tests/e2e/phone-dialer.test.ts",
-    "pretest:e2e:publisher": "npm --prefix ../../tools/link run build && npm run build",
-    "test:e2e:publisher": "tsx --test tests/e2e/app-publisher.test.ts",
     "preview": "vite --host 127.0.0.1"
   },
   "dependencies": {
-    "@telnyx/link": "file:../../tools/link",
     "@telnyx/webrtc": "^2.27.1",
-    "extract-zip": "^2.0.1",
+    "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^39.2.7",
     "lucide-react": "^0.561.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "react-is": "^19.2.7"
+    "react-is": "^19.2.7",
+    "recharts": "^3.8.1",
+    "vite": "^8.0.16"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "@vitejs/plugin-react": "^6.0.2",
-    "electron": "^39.8.10",
-    "playwright": "^1.60.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0",
-    "vite": "^8.0.16"
+    "typescript": "^5.7.0"
   },
   "overrides": {
-    "uuid": "^11.1.1",
-    "esbuild": "^0.28.1"
+    "uuid": "^11.1.1"
   },
   "engines": {
     "node": ">=20.0.0"
