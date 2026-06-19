@@ -18,12 +18,11 @@ Cloud Link is designed for everyday internal work: asking questions, finding the
 
 ## Getting Started
 
-Install the desktop dependencies, then run the app:
+Install the desktop and local runtime dependencies, then run the app:
 
 ```sh
-cd apps/link-desktop
-npm ci
-cd ../..
+npm --prefix tools/link ci
+npm --prefix apps/link-desktop ci
 ./script/build_and_run.sh
 ```
 
