@@ -3194,37 +3194,51 @@ function TerminalDock({ onClose }: { onClose: () => void }) {
   return (
     <section className="terminalDock" aria-label="Terminal">
       <header className="terminalDockHeader">
-        <div className="terminalDockTabs" role="tablist" aria-label="Terminal tabs">
-          {tabs.map((tab) => (
-            <div
-              key={tab.id}
-              className={`terminalDockTab ${activeTerminalId === tab.id ? "selected" : ""}`}
-              role="tab"
-              tabIndex={0}
-              aria-selected={activeTerminalId === tab.id}
-              onClick={() => setActiveTerminalId(tab.id)}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter" && event.key !== " ") return;
-                event.preventDefault();
-                setActiveTerminalId(tab.id);
-              }}
+        <div className="terminalDockHeaderLeft">
+          <div className="terminalDockBrand" aria-label="Cloud Link Terminal">
+            <span className="terminalDockBrandIcon" aria-hidden="true"><SquareTerminal size={14} /></span>
+            <strong>Cloud Link Terminal</strong>
+            <button
+              className="terminalDockInfo"
+              type="button"
+              aria-label="Cloud Link Terminal info"
+              data-tooltip="Runs local commands. Configure Terminal Sessions for managed runs that continue after this Mac sleeps."
             >
-              <SquareTerminal size={15} />
-              <span>{tab.title}</span>
-              <button
-                className="terminalDockTabClose"
-                type="button"
-                onClick={(event) => void closeTerminalTab(event, tab.id)}
-                aria-label={`Close ${tab.title}`}
-                title={`Close ${tab.title}`}
+              i
+            </button>
+          </div>
+          <div className="terminalDockTabs" role="tablist" aria-label="Terminal tabs">
+            {tabs.map((tab) => (
+              <div
+                key={tab.id}
+                className={`terminalDockTab ${activeTerminalId === tab.id ? "selected" : ""}`}
+                role="tab"
+                tabIndex={0}
+                aria-selected={activeTerminalId === tab.id}
+                onClick={() => setActiveTerminalId(tab.id)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  setActiveTerminalId(tab.id);
+                }}
               >
-                <X size={12} />
-              </button>
-            </div>
-          ))}
-          <button className="terminalNewTabButton" type="button" onClick={() => void addTerminalTab()} aria-label="Open bottom panel tab" title="Open bottom panel tab">
-            <Plus size={14} />
-          </button>
+                <SquareTerminal size={15} />
+                <span>{tab.title}</span>
+                <button
+                  className="terminalDockTabClose"
+                  type="button"
+                  onClick={(event) => void closeTerminalTab(event, tab.id)}
+                  aria-label={`Close ${tab.title}`}
+                  title={`Close ${tab.title}`}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            <button className="terminalNewTabButton" type="button" onClick={() => void addTerminalTab()} aria-label="Open bottom panel tab" title="Open bottom panel tab">
+              <Plus size={14} />
+            </button>
+          </div>
         </div>
         <div className="terminalDockMeta">
           <span>{terminalStatusLabel(activeStatus, busy)}</span>
@@ -3235,18 +3249,6 @@ function TerminalDock({ onClose }: { onClose: () => void }) {
       </header>
       <pre className="terminalOutput" ref={outputRef}>{activeOutput || "Starting terminal...\n"}</pre>
       <form className="terminalCommandRow" onSubmit={submitCommand}>
-        <div className="terminalCommandBrand" aria-label="Cloud Link Terminal">
-          <span className="terminalCommandBrandIcon" aria-hidden="true"><SquareTerminal size={14} /></span>
-          <strong>Cloud Link Terminal</strong>
-          <button
-            className="terminalCommandInfo"
-            type="button"
-            aria-label="Cloud Link Terminal info"
-            title="Runs local commands. Configure Terminal Sessions for managed runs that continue after this Mac sleeps."
-          >
-            i
-          </button>
-        </div>
         <span>{terminalPrompt(activeStatus)}</span>
         <input
           value={activeCommand}
