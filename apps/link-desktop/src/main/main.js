@@ -3548,6 +3548,30 @@ function resolveLocalExternalModelId(input = {}) {
     .replace(/^ollama:/, "");
 }
 
+function promoteLocalModelForAgents(modelId) {
+  const normalizedModelId = String(modelId || "").trim();
+  if (!normalizedModelId) return;
+  const now = new Date().toISOString();
+  const roles = { ...(modelCenterPreferences.roles || {}) };
+  for (const roleId of ["chatPrimary", "agentDefault"]) {
+    if (!String(roles[roleId]?.modelId || "").trim()) {
+      roles[roleId] = { roleId, modelId: normalizedModelId, updatedAt: now };
+    }
+  }
+  modelCenterPreferences = normalizeModelCenterPreferences({
+    ...modelCenterPreferences,
+    roles,
+    engines: {
+      ...(modelCenterPreferences.engines || {}),
+      ollama: {
+        ...(modelCenterPreferences.engines?.ollama || {}),
+        enabled: true,
+        defaultModelId: normalizedModelId,
+      },
+    },
+  });
+}
+
 async function pollOllamaPull(modelId, externalId) {
   const response = await fetch(`${ollamaBaseUrl()}/api/pull`, {
     method: "POST",
@@ -3594,8 +3618,10 @@ async function pullLocalModel(input = {}) {
   void pollOllamaPull(modelId, externalId)
     .then(async () => {
       localModelOperations.delete(modelId);
+      promoteLocalModelForAgents(modelId);
       stopLiteLlmProxy();
       invalidateAiModelRouteHealthCache();
+      await saveDesktopState();
       await writeLiteLlmConfig().catch(() => {});
     })
     .catch((error) => {
@@ -3660,8 +3686,10 @@ async function importLocalModel(input = {}) {
       }),
     ],
   });
+  promoteLocalModelForAgents(modelId);
   stopLiteLlmProxy();
   await saveDesktopState();
+  await writeLiteLlmConfig().catch(() => {});
   invalidateAiModelRouteHealthCache();
   return getModelCenterSnapshot({ force: true });
 }

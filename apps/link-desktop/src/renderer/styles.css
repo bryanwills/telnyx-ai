@@ -117,8 +117,17 @@ button {
 .desktop.terminalOpen .mainPane,
 .desktop.terminalOpen .appSurface,
 .desktop.terminalOpen .pageSurface,
+.desktop.terminalOpen .assistantPanel,
 .desktop.terminalOpen .pageSectionShell {
   min-height: 0;
+}
+
+.desktop.terminalOpen .workspace,
+.desktop.terminalOpen .rail,
+.desktop.terminalOpen .sidebar,
+.desktop.terminalOpen .assistantPanel,
+.desktop.terminalOpen .pageSectionShell {
+  overflow: hidden;
 }
 
 .desktop[data-theme="dark"] {
@@ -949,6 +958,10 @@ button {
   .railSecondaryGroup {
     margin-top: 0;
   }
+}
+
+.desktop.terminalOpen .railSecondaryGroup {
+  margin-top: auto;
 }
 
 .accountMenuWrap {
@@ -4012,23 +4025,30 @@ button {
   line-height: 1.4;
 }
 
-.telnyxSetupGrid {
+.telnyxSetupStatusList {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.telnyxSetupGrid > div {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--border-soft);
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
 }
 
-.telnyxSetupGrid strong {
+.telnyxSetupStatusRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  padding: 14px 16px;
+}
+
+.telnyxSetupStatusRow + .telnyxSetupStatusRow {
+  border-top: 1px solid var(--border-soft);
+}
+
+.telnyxSetupStatusRow strong {
+  display: block;
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 820;
@@ -4036,10 +4056,11 @@ button {
   text-transform: uppercase;
 }
 
-.telnyxSetupGrid span {
+.telnyxSetupStatusRow p {
+  margin: 5px 0 0;
   color: var(--text);
-  font-size: 16px;
-  font-weight: 820;
+  font-size: 14px;
+  line-height: 1.35;
 }
 
 .telnyxSetupAlert {
@@ -4062,13 +4083,22 @@ button {
 }
 
 @media (max-width: 900px) {
-  .telnyxSetupHero,
-  .telnyxSetupGrid {
+  .telnyxSetupHero {
     grid-template-columns: 1fr;
   }
 
   .telnyxSetupHero {
     align-items: start;
+  }
+
+  .telnyxSetupStatusRow {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 10px;
+  }
+
+  .telnyxSetupStatusRow .badge {
+    justify-self: start;
   }
 }
 
@@ -5657,9 +5687,11 @@ body.assistantPanelResizing {
 }
 
 .terminalDock {
+  position: relative;
+  z-index: 80;
   display: grid;
   grid-row: 3;
-  grid-template-rows: 40px minmax(0, 1fr) 38px;
+  grid-template-rows: 40px minmax(0, 1fr) auto;
   min-height: 0;
   border-top: 1px solid var(--border);
   color: #f4f1ec;
@@ -5779,15 +5811,63 @@ body.assistantPanelResizing {
 
 .terminalCommandRow {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: max-content auto minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
-  padding: 0 16px;
+  min-height: 44px;
+  padding: 6px 16px;
   border-top: 1px solid #2d2b28;
   color: #d7d0c8;
   background: #151515;
   font: 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.terminalCommandBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #f4f1ec;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.terminalCommandBrandIcon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  color: #00d4a2;
+  background: rgba(0, 212, 162, 0.1);
+}
+
+.terminalCommandBrand strong {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 780;
+  white-space: nowrap;
+}
+
+.terminalCommandInfo {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid #3a3835;
+  border-radius: 999px;
+  color: #8e8881;
+  background: transparent;
+  font: 700 11px/1 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-transform: none;
+}
+
+.terminalCommandInfo:hover,
+.terminalCommandInfo:focus-visible {
+  color: #f4f1ec;
+  border-color: #5b554f;
+  background: #242321;
+  outline: none;
 }
 
 .terminalCommandRow input {
@@ -5804,6 +5884,16 @@ body.assistantPanelResizing {
 
 .terminalCommandRow input::placeholder {
   color: #706b65;
+}
+
+@media (max-width: 860px) {
+  .terminalCommandRow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .terminalCommandBrand {
+    grid-column: 1 / -1;
+  }
 }
 
 .assistantChatFrame {
@@ -13923,6 +14013,19 @@ body.assistantPanelResizing {
 }
 
 @container (max-width: 440px) {
+  .phoneSetupAlert {
+    grid-template-columns: 36px minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+
+  .phoneSetupAlert .runtimeSettingsButton {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@container (max-width: 760px) {
   .phoneSetupAlert {
     grid-template-columns: 36px minmax(0, 1fr);
     align-items: start;
@@ -22573,10 +22676,10 @@ body.assistantPanelResizing {
 
 .modelCenterHeader {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 22px;
+  margin-bottom: 14px;
 }
 
 .modelCenterEyebrow {
@@ -22604,7 +22707,7 @@ body.assistantPanelResizing {
 
 .modelCenterStack {
   display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .modelCenterGrid {
@@ -22675,6 +22778,24 @@ body.assistantPanelResizing {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 16px;
+}
+
+.modelCenterCatalogCard .modelCenterCardHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.modelCenterCatalogCard .modelCenterCardHeader h3 {
+  line-height: 1.15;
+}
+
+.modelCenterCatalogCard .modelCenterCardHeader p {
+  max-width: 720px;
+}
+
+.modelCenterCatalogCard .modelCenterCatalogList {
+  min-width: 0;
 }
 
 .modelCenterCardHeader h3 {
@@ -22801,6 +22922,38 @@ body.assistantPanelResizing {
   margin: 0 0 16px;
 }
 
+.modelCenterEngineList {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.modelCenterEnginePanel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.modelCenterEngineHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.modelCenterEngineHeader h3,
+.modelCenterEngineHeader p {
+  margin: 0;
+}
+
+.modelCenterEngineHeader p {
+  margin-top: 5px;
+  color: var(--text-dim);
+}
+
 .modelCenterToggleRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -22833,6 +22986,52 @@ body.assistantPanelResizing {
 .modelCenterToggleRow input[type="checkbox"] {
   width: 24px;
   height: 24px;
+}
+
+.modelCenterSettingRow {
+  display: grid;
+  grid-template-columns: minmax(0, 0.44fr) minmax(260px, 0.56fr);
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.modelCenterSettingRow strong,
+.modelCenterSettingRow small {
+  display: block;
+}
+
+.modelCenterSettingRow small {
+  margin-top: 4px;
+  color: var(--text-dim);
+}
+
+.modelCenterSettingControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.modelCenterSettingControls select {
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  padding: 0 12px;
+}
+
+.modelCenterSettingControlsCompact {
+  grid-template-columns: repeat(2, max-content);
+  justify-content: end;
 }
 
 .modelCenterInlineActions,
@@ -22891,6 +23090,14 @@ body.assistantPanelResizing {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.modelCenterRoleMetaGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.modelCenterAssignedModelField {
+  margin-bottom: 18px;
 }
 
 .modelCenterStatusGrid {
@@ -23219,46 +23426,68 @@ body.assistantPanelResizing {
   align-self: stretch;
   width: 100%;
   min-height: 34px;
-  margin-bottom: 14px;
+  margin-bottom: 0;
 }
 
-.modelCenterImportRow {
+.modelCenterDesignTabs + .modelCenterStack,
+.modelCenterDesignTabs + .modelCenterCard {
+  margin-top: -2px;
+}
+
+.modelCenterToolbarGroup {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  margin: 0 0 16px;
-  padding: 12px;
-  border: 1px solid var(--border-soft);
-  border-radius: 14px;
-  background: var(--surface-soft);
+  gap: 10px;
+  margin-top: -2px;
 }
 
-.modelCenterImportLabel {
+.modelCenterSearchToolbar {
+  width: 100%;
+}
+
+.modelCenterFilterBar {
+  margin-top: 0;
+}
+
+.modelCenterInstallPanel {
+  border-color: rgba(14, 212, 162, 0.34);
+  background: rgba(14, 212, 162, 0.06);
+}
+
+.modelCenterInstallGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 12px;
+}
+
+.modelCenterInstallField {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.modelCenterInstallField span {
   color: var(--text-dim);
   font-size: 12px;
   font-weight: 780;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  white-space: nowrap;
 }
 
-.modelCenterImportGroup {
-  display: grid;
-  grid-template-columns: minmax(160px, 1fr) auto;
-  gap: 8px;
+.modelCenterInstallField input {
   min-width: 0;
-}
-
-.modelCenterImportRow input {
-  min-width: 0;
-  min-height: 38px;
+  min-height: 42px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
   color: var(--text);
   font: inherit;
   padding: 0 12px;
+}
+
+.modelCenterInstallAction {
+  align-self: end;
+  min-height: 42px;
+  white-space: nowrap;
 }
 
 .modelCenterCatalogSearch {
@@ -23420,11 +23649,7 @@ body.assistantPanelResizing {
     grid-template-columns: 1fr;
   }
 
-  .modelCenterImportRow {
-    grid-template-columns: 1fr;
-  }
-
-  .modelCenterImportGroup {
+  .modelCenterInstallGrid {
     grid-template-columns: 1fr;
   }
 
@@ -23458,10 +23683,15 @@ body.assistantPanelResizing {
   .modelCenterSplitFields,
   .modelCenterSetupSteps,
   .modelCenterDiagnosticActions,
+  .modelCenterSettingRow,
+  .modelCenterRoleMetaGrid,
   .modelCenterRouteRowActionable,
   .modelCenterRouteDefinitions > div,
-  .modelCenterCatalogNotice,
-  .modelCenterImportRow {
+  .modelCenterCatalogNotice {
+    grid-template-columns: 1fr;
+  }
+
+  .modelCenterSettingControls {
     grid-template-columns: 1fr;
   }
 

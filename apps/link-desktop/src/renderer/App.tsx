@@ -299,6 +299,7 @@ type SettingsTab =
   | "models"
   | "local-models"
   | "cloud-models"
+  | "engines"
   | "local-api-server"
   | "mcp-routing"
   | "diagnostics"
@@ -319,6 +320,7 @@ type ModelCenterTab =
   | "models"
   | "local-models"
   | "cloud-models"
+  | "engines"
   | "local-api-server"
   | "mcp-routing"
   | "diagnostics";
@@ -434,6 +436,7 @@ const modelCenterSectionGroups: readonly PageSectionTabGroup<ModelCenterTab>[] =
   {
     title: "Workspace",
     tabs: [
+      ["engines", "Engines", SquareTerminal],
       ["local-models", "Local Models", SquareTerminal],
       ["cloud-models", "Cloud Models", Cloud],
       ["mcp-routing", "Routing", GitBranch],
@@ -1467,7 +1470,7 @@ const viewMeta: Record<ViewId, { label: string; icon: AppIcon }> = {
   calendar: { label: "Calendar", icon: CalendarDays },
   memory: { label: "Archive", icon: ArchiveIcon },
   wiki: { label: "Compose", icon: BookOpen },
-  models: { label: "Models", icon: ModelsIcon },
+  models: { label: "Runtime", icon: ModelsIcon },
   settings: { label: "Settings", icon: Settings },
 };
 
@@ -3232,6 +3235,18 @@ function TerminalDock({ onClose }: { onClose: () => void }) {
       </header>
       <pre className="terminalOutput" ref={outputRef}>{activeOutput || "Starting terminal...\n"}</pre>
       <form className="terminalCommandRow" onSubmit={submitCommand}>
+        <div className="terminalCommandBrand" aria-label="Cloud Link Terminal">
+          <span className="terminalCommandBrandIcon" aria-hidden="true"><SquareTerminal size={14} /></span>
+          <strong>Cloud Link Terminal</strong>
+          <button
+            className="terminalCommandInfo"
+            type="button"
+            aria-label="Cloud Link Terminal info"
+            title="Runs local commands. Configure Terminal Sessions for managed runs that continue after this Mac sleeps."
+          >
+            i
+          </button>
+        </div>
         <span>{terminalPrompt(activeStatus)}</span>
         <input
           value={activeCommand}
@@ -3404,13 +3419,13 @@ function OnboardingView({
       title: "Keep AI work local until you choose otherwise.",
       body: onboardingPrimaryRoute
         ? `Cloud Link can run chat, dictation, agents, and draft outputs on this Mac first. Your current everyday route is ${onboardingPrimaryRoute.label}.`
-        : "Cloud Link can keep chat, dictation, agents, and draft outputs on this Mac first. Choose a primary route in Workspace > Models to lock that in.",
+        : "Cloud Link can keep chat, dictation, agents, and draft outputs on this Mac first. Choose a primary route in Workspace > Runtime to lock that in.",
       icon: ShieldCheck,
       statusTone: liteLlmRuntime?.ready ? "success" : "warning",
       statusLabel: liteLlmRuntime?.ready ? "Local runtime ready" : "Review local runtime",
       surfaceLabel: onboardingPrimaryRoute ? dataBoundaryLabel(onboardingPrimaryRoute.dataBoundary) : "Workspace",
       facts: [
-        { label: "Primary route", value: onboardingPrimaryRoute?.label ?? "Choose a local route in Workspace > Models" },
+        { label: "Primary route", value: onboardingPrimaryRoute?.label ?? "Choose a local route in Workspace > Runtime" },
         { label: "Fallback route", value: onboardingFallbackRouteLabel },
         { label: "Core idea", value: "Run AI locally when you want privacy first, or connect cloud models and services through Telnyx when you need reach." },
       ],
@@ -3437,7 +3452,7 @@ function OnboardingView({
       ],
       primaryActionLabel: "Open Chat",
       onPrimaryAction: () => setView("chats"),
-      secondaryActionLabel: "Review models",
+      secondaryActionLabel: "Review runtime",
       onSecondaryAction: () => openSettingsTab("models"),
     },
     {
@@ -3475,7 +3490,7 @@ function OnboardingView({
       facts: [
         { label: "Where they appear", value: "Agents page and the chat agent picker." },
         { label: "Current count", value: selfHostedAgentCount > 0 ? `${selfHostedAgentCount} self-hosted agent${selfHostedAgentCount === 1 ? "" : "s"} detected` : "No self-hosted agents detected yet" },
-        { label: "Related setup", value: "Workspace > Models for inference routes and Routing for service access." },
+        { label: "Related setup", value: "Workspace > Runtime for inference routes and Routing for service access." },
       ],
       primaryActionLabel: "Open Agents",
       onPrimaryAction: () => setView("agents"),
@@ -3941,7 +3956,7 @@ function OnboardingView({
       meta: liteLlmReady || connectorReady("litellm") ? "Local and cloud routing reviewed." : "AI runtime guidance still needs setup.",
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => openSettingsTab("models")}>Models</button>
+          <button className="button secondary" onClick={() => openSettingsTab("models")}>Runtime</button>
           <button className="button ghost" onClick={() => openSettingsTab("plugins")}>Plugins</button>
           {!(liteLlmReady || connectorReady("litellm") || completed.has("model-gateway")) && <button className="button ghost" onClick={() => void markStep("model-gateway")}>Use current route</button>}
         </div>
@@ -3977,7 +3992,7 @@ function OnboardingView({
       action: (
         <div className="onboardingActions">
           <button className="button secondary" onClick={() => setView("agents")}>Agents</button>
-          <button className="button ghost" onClick={() => openSettingsTab("models")}>Models</button>
+          <button className="button ghost" onClick={() => openSettingsTab("models")}>Runtime</button>
           {!primaryAgentOsReady && <button className="button ghost" onClick={() => void markStep("primary-agent-os")}>Use current agent OS</button>}
         </div>
       ),
@@ -3985,14 +4000,14 @@ function OnboardingView({
     },
     {
       id: "models-general",
-      title: "Confirm default models",
-      body: "Review Models > General so chat, agents, and Scribe start from the default routes you actually want the workspace to use.",
+      title: "Confirm runtime defaults",
+      body: "Review Runtime routing so chat, agents, and Scribe start from the default routes you actually want the workspace to use.",
       complete: completed.has("models-general"),
       icon: MonitorPlay,
       meta: onboardingPrimaryRoute ? `Primary route: ${onboardingPrimaryRoute.label}.` : "Choose a default route.",
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => openSettingsTab("models")}>Models</button>
+          <button className="button secondary" onClick={() => openSettingsTab("models")}>Runtime</button>
           {!completed.has("models-general") && <button className="button ghost" onClick={() => void markStep("models-general")}>Defaults look right</button>}
         </div>
       ),
@@ -4280,10 +4295,10 @@ function OnboardingView({
   };
   const configurationStepCtas: Record<string, { label: string; run: () => void }> = {
     okta: { label: oktaComplete ? "Review SSO" : "Sign in with SSO", run: () => void signInOkta() },
-    "model-gateway": { label: "Open Models", run: () => openSettingsTab("models") },
+    "model-gateway": { label: "Open Runtime", run: () => openSettingsTab("models") },
     "primary-agent-os": { label: "Open Agents", run: () => setView("agents") },
     "session-daemon": { label: "Open Terminal Sessions", run: () => openSettingsTab("sessions") },
-    "models-general": { label: "Open Models", run: () => openSettingsTab("models") },
+    "models-general": { label: "Open Runtime", run: () => openSettingsTab("models") },
     accounts: { label: "Open Plugins", run: () => openSettingsTab("plugins") },
     "google-workspace": { label: "Open Plugins", run: () => openSettingsTab("plugins") },
     "telnyx-api": { label: "Open Numbers", run: () => openSettingsTab("numbers") },
@@ -4701,7 +4716,7 @@ function Rail({
       {renderRailButton({ id: "apps", label: "Apps", icon: Grid2X2Plus })}
       <div className="railSecondaryGroup">
         {renderRailButton({ id: "storage", label: "Storage", icon: FolderOpen })}
-        {renderRailButton({ id: "models", label: "Models", icon: ModelsIcon })}
+        {renderRailButton({ id: "models", label: "Runtime", icon: ModelsIcon })}
         {renderRailButton({ id: "settings", label: "Settings", icon: Settings })}
         <div className="accountMenuWrap" ref={accountMenuRef}>
           <button
@@ -4894,12 +4909,12 @@ function ModelsWorkspaceView({
     <section className="content settingsView">
       <div className="pageSectionShell">
         <PageSectionSidebar
-          heading="Models"
+          heading="Runtime"
           headingIcon={viewMeta.models.icon}
           groups={modelCenterSectionGroups}
           activeTab={activeTab}
           onSelect={setTab}
-          label="Models sections"
+          label="Runtime sections"
           resizable={false}
         />
         <div className="pageSectionMain">
@@ -7095,7 +7110,8 @@ function DriveView({
     return (
       <div className="storageWorkspaceStack">
         {!storageApiKeyReady && (
-          <div className="phoneSetupAlert" aria-live="polite">
+          <div className="phoneSetupAlert serviceSetupAlert" aria-live="polite">
+            <span className="serviceSetupAlertIcon" aria-hidden="true"><Cloud size={18} /></span>
             <div>
               <strong>Connect a Telnyx API Key to load cloud buckets</strong>
               <p>Cloud Link can only list and attach Telnyx Cloud Storage buckets after your account key is connected.</p>
@@ -22182,11 +22198,14 @@ function LegacySettingsView({
     "models",
     "local-models",
     "cloud-models",
+    "engines",
     "local-api-server",
     "mcp-routing",
     "diagnostics",
   ]);
-  const settingsHeadingTitle = tab === "sessions" ? "Terminal Sessions" : settingsSectionTabs.find(([id]) => id === tab)?.[1] || "Settings";
+  const settingsHeadingTitle = modelCenterTabs.has(tab)
+    ? "Runtime"
+    : tab === "sessions" ? "Terminal Sessions" : settingsSectionTabs.find(([id]) => id === tab)?.[1] || "Settings";
   const settingsHeaderAction = tab === "dialer" ? dialerBuilderActions : tab === "mcps" ? (
     <button
       className="button primary"
@@ -22846,9 +22865,62 @@ function LegacySettingsView({
     const storageGroup = credentials.find((group) => group.id === "telnyx-storage");
     const storageReady = Boolean(storageGroup && credentialGroupConnected(storageGroup, connectors, googleWorkspaceConnected));
     const cloudModelReady = connectors.some((connector) => connector.id === "telnyx" && (connector.status === "connected" || connector.status === "signed_in")) || telnyxApiKeyReady;
+    const telnyxStatusRows = [
+      {
+        label: "Cloud apps",
+        body: "Authenticate Telnyx-powered Cloud Link apps and account workflows.",
+        status: telnyxApiKeyReady ? "Connected" : "Needs key",
+        tone: telnyxApiKeyReady ? "success" : "warning",
+      },
+      {
+        label: "Cloud phone",
+        body: "Create WebRTC credentials and place outbound calls from Cloud Link.",
+        status: webRtcReady ? "Ready" : telnyxApiKeyReady ? "Needs configuration" : "Needs key",
+        tone: webRtcReady ? "success" : "warning",
+      },
+      {
+        label: "Cloud models",
+        body: "Use Telnyx-hosted model routes for chat, agents, and tool work.",
+        status: cloudModelReady ? "Available" : "Needs key",
+        tone: cloudModelReady ? "success" : "warning",
+      },
+      {
+        label: "Cloud agents",
+        body: "Discover and run Telnyx-hosted agents for delegated work and managed workflows.",
+        status: telnyxApiKeyReady ? "Available" : "Needs key",
+        tone: telnyxApiKeyReady ? "success" : "warning",
+      },
+      {
+        label: "Cloud storage",
+        body: "Browse buckets and attach cloud storage to local workflows.",
+        status: storageReady ? "Bucket linked" : telnyxApiKeyReady ? "Needs bucket" : "Needs key",
+        tone: storageReady ? "success" : "warning",
+      },
+      {
+        label: "Cloud Speech-to-Text",
+        body: "Transcribe calls, recordings, meetings, and uploaded audio with Telnyx cloud STT.",
+        status: telnyxApiKeyReady ? "Available" : "Needs key",
+        tone: telnyxApiKeyReady ? "success" : "warning",
+      },
+      {
+        label: "Cloud Text-to-Speech",
+        body: "Generate spoken output and voice previews with Telnyx cloud TTS.",
+        status: telnyxApiKeyReady ? "Available" : "Needs key",
+        tone: telnyxApiKeyReady ? "success" : "warning",
+      },
+    ] as const;
 
     return (
       <div className="setupSettingsPanel telnyxSetupPanel">
+        {!telnyxApiKeyReady && (
+          <section className="phoneSetupAlert serviceSetupAlert telnyxSetupAlert">
+            <span className="serviceSetupAlertIcon" aria-hidden="true"><Settings size={18} /></span>
+            <div>
+              <strong>Add a Telnyx API Key to unlock Cloud Link features.</strong>
+              <p>Cloud Link stores the key locally and uses it for Telnyx-only workflows.</p>
+            </div>
+          </section>
+        )}
         <section className="telnyxSetupHero">
           <div className="telnyxSetupHeroIcon">
             <Cloud size={24} />
@@ -22859,32 +22931,17 @@ function LegacySettingsView({
           </div>
           <Badge tone={telnyxConnected ? "success" : "warning"}>{telnyxConnected ? "Connected" : "Needs setup"}</Badge>
         </section>
-        <section className="telnyxSetupGrid" aria-label="Telnyx setup status">
-          <div>
-            <strong>Account key</strong>
-            <span>{telnyxApiKeyReady ? "Connected" : "Required"}</span>
-          </div>
-          <div>
-            <strong>Dialer</strong>
-            <span>{webRtcReady ? "Ready" : telnyxApiKeyReady ? "Can be created" : "Needs key"}</span>
-          </div>
-          <div>
-            <strong>Cloud models</strong>
-            <span>{cloudModelReady ? "Available" : "Needs key"}</span>
-          </div>
-          <div>
-            <strong>Cloud storage</strong>
-            <span>{storageReady ? "Bucket linked" : telnyxApiKeyReady ? "Choose bucket" : "Needs key"}</span>
-          </div>
-        </section>
-        {!telnyxApiKeyReady && (
-          <section className="phoneSetupAlert telnyxSetupAlert">
-            <div>
-              <strong>Add a Telnyx API Key to unlock Cloud Link features.</strong>
-              <p>Cloud Link stores the key locally and uses it for Telnyx-only workflows.</p>
+        <section className="telnyxSetupStatusList" aria-label="Telnyx setup status">
+          {telnyxStatusRows.map((row) => (
+            <div key={row.label} className="telnyxSetupStatusRow">
+              <div>
+                <strong>{row.label}</strong>
+                <p>{row.body}</p>
+              </div>
+              <Badge tone={row.tone}>{row.status}</Badge>
             </div>
-          </section>
-        )}
+          ))}
+        </section>
         <section className="telnyxSetupCredentialCard">
           <div className="telnyxSetupSectionHeader">
             <h3>Telnyx API Key</h3>
@@ -22913,6 +22970,32 @@ function LegacySettingsView({
     const endpointReady = Boolean(sessionsGroup?.fields.some((field) => field.name === "LINK_SESSION_DAEMON_URL" && field.configured));
     const authReady = connectors.some((connector) => connector.id === "telnyx" && (connector.status === "connected" || connector.status === "signed_in"))
       || credentials.some((group) => group.id === "telnyx" && group.fields.some((field) => field.name === "TELNYX_API_KEY" && field.configured));
+    const sessionStatusRows = [
+      {
+        label: "Terminal Sessions endpoint",
+        body: "Connect the server endpoint that owns managed PTYs and long-running agent runs.",
+        status: endpointReady ? "Configured" : "Required",
+        tone: endpointReady ? "success" : "warning",
+      },
+      {
+        label: "Runner",
+        body: "Shows whether Cloud Link can reach the managed session runner.",
+        status: sessionsReachable ? "Reachable" : "Not connected",
+        tone: sessionsReachable ? "success" : "warning",
+      },
+      {
+        label: "Telnyx auth",
+        body: "Uses your Telnyx key to send human-in-the-loop notifications.",
+        status: authReady ? "Available" : "Needs key",
+        tone: authReady ? "success" : "warning",
+      },
+      {
+        label: "SMS alerts",
+        body: "Send blocked, approval, and done alerts to the configured phone number.",
+        status: smsReady ? "Enabled" : "Optional",
+        tone: smsReady ? "success" : "default",
+      },
+    ] as const;
 
     return (
       <div className="setupSettingsPanel sessionsSettingsPanel">
@@ -22921,27 +23004,20 @@ function LegacySettingsView({
             <span className="serviceSetupAlertIcon" aria-hidden="true"><SquareTerminal size={18} /></span>
             <div>
               <strong>Finish Terminal Sessions setup before starting managed runs.</strong>
-              <p>Add a Terminal Sessions endpoint, then connect Telnyx if you want blocked, approval, and done SMS alerts.</p>
+              <p>Add an endpoint to start managed runs. Connect Telnyx for SMS alerts.</p>
             </div>
           </section>
         )}
-        <section className="telnyxSetupGrid" aria-label="Terminal Sessions setup status">
-          <div>
-            <strong>Terminal Sessions endpoint</strong>
-            <span>{endpointReady ? "Configured" : "Required"}</span>
-          </div>
-          <div>
-            <strong>Runner</strong>
-            <span>{sessionsReachable ? "Reachable" : "Not connected"}</span>
-          </div>
-          <div>
-            <strong>Telnyx auth</strong>
-            <span>{authReady ? "Available" : "Needs key"}</span>
-          </div>
-          <div>
-            <strong>SMS alerts</strong>
-            <span>{smsReady ? "Enabled" : "Optional"}</span>
-          </div>
+        <section className="telnyxSetupStatusList" aria-label="Terminal Sessions setup status">
+          {sessionStatusRows.map((row) => (
+            <div key={row.label} className="telnyxSetupStatusRow">
+              <div>
+                <strong>{row.label}</strong>
+                <p>{row.body}</p>
+              </div>
+              <Badge tone={row.tone}>{row.status}</Badge>
+            </div>
+          ))}
         </section>
         <section className="telnyxSetupCredentialCard">
           <div className="telnyxSetupSectionHeader">
@@ -23718,7 +23794,8 @@ function LegacySettingsView({
         {directory === "mcps" && customMcpStatus && <p className="wikiSourceStatus customMcpStatus">{customMcpStatus}</p>}
         {directory === "plugins" && employeePluginStatus && <p className="wikiSourceStatus employeePluginStatus">{employeePluginStatus}</p>}
         {directory === "plugins" && !mergeDevConnected() && (
-          <section className="phoneSetupAlert agentMailSetupAlert mergeDevSetupAlert">
+          <section className="phoneSetupAlert serviceSetupAlert agentMailSetupAlert mergeDevSetupAlert">
+            <span className="serviceSetupAlertIcon" aria-hidden="true"><Plug size={18} /></span>
             <div>
               <strong>Connect Merge.dev to add employee plugins.</strong>
               <p>Merge.dev Agent Handler provides the SSO-backed MCP endpoint for employee plugin tools.</p>
@@ -24024,7 +24101,8 @@ function LegacySettingsView({
       <div className="setupSettingsPanel settingsDirectoryPanel agentMailSettingsPanel">
         {renderSettingsDirectoryToolbar("Search aliases, agents, meetings, or inboxes", `${filteredAliases.length} aliases`, "Refresh aliases")}
         {!connected && (
-          <section className="phoneSetupAlert agentMailSetupAlert">
+          <section className="phoneSetupAlert serviceSetupAlert agentMailSetupAlert">
+            <span className="serviceSetupAlertIcon" aria-hidden="true"><Mail size={18} /></span>
             <div>
               <strong>Connect AgentMail to create aliases.</strong>
               <p>AgentMail provides deterministic inbox identities for agents invited to meetings and workflows.</p>

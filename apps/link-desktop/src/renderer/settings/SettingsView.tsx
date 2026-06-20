@@ -3,6 +3,7 @@ import {
   Check,
   ChevronDown,
   Cloud,
+  Download,
   FolderOpen,
   GitBranch,
   HardDrive,
@@ -39,10 +40,12 @@ type ActualSettingsTab =
   | "models"
   | "local-models"
   | "cloud-models"
+  | "engines"
   | "local-api-server"
   | "mcp-routing"
   | "diagnostics";
 type ModelPageTab = "installed" | "available";
+type ModelStatusFilter = "all" | "ready" | "needs_setup" | "recommended";
 
 export type DesktopShortcutActionId =
   | "open-start"
@@ -64,6 +67,7 @@ export type DesktopShortcutBinding = {
 
 const tabs: Array<{ id: ActualSettingsTab; label: string; icon: typeof SlidersHorizontal }> = [
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
+  { id: "engines", label: "Engines", icon: Server },
   { id: "local-models", label: "Local Models", icon: HardDrive },
   { id: "cloud-models", label: "Cloud Models", icon: Cloud },
   { id: "mcp-routing", label: "Routing", icon: GitBranch },
@@ -241,8 +245,11 @@ export function SettingsView({
   const [error, setError] = useState("");
   const [busyAction, setBusyAction] = useState("");
   const [catalogQuery, setCatalogQuery] = useState("");
+  const [modelFiltersOpen, setModelFiltersOpen] = useState(false);
+  const [modelStatusFilter, setModelStatusFilter] = useState<ModelStatusFilter>("all");
   const [customOllamaId, setCustomOllamaId] = useState("");
   const [importName, setImportName] = useState("");
+  const [localModelInstallOpen, setLocalModelInstallOpen] = useState(false);
   const [providerDrafts, setProviderDrafts] = useState<Record<string, { enabled: boolean; baseUrl: string; apiKey: string; defaultModelId: string }>>({});
   const [engineDrafts, setEngineDrafts] = useState<Record<string, { enabled: boolean; baseUrl: string; defaultModelId: string; maxLoadedModels: number; timeoutSeconds: number; checkForUpdates: boolean; verifyDependencies: boolean }>>({});
   const [localApiDraft, setLocalApiDraft] = useState({ host: "127.0.0.1", port: "4090", apiKey: "", corsEnabled: false, exposedRoleIds: ["chatPrimary", "taskRouting"] as string[] });
@@ -352,8 +359,9 @@ export function SettingsView({
     return modelCenter.catalogModels
       .filter((model) => !model.policy.hiddenByPolicy && model.providerId === "ollama")
       .filter((model) => !query || `${model.label} ${model.description} ${model.capabilities.join(" ")} ${model.providerId}`.toLowerCase().includes(query))
+      .filter((model) => modelStatusFilter === "all" || (modelStatusFilter === "recommended" && model.recommended) || modelStatusFilter === "ready")
       .sort((left, right) => Number(right.recommended) - Number(left.recommended) || left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
-  }, [catalogQuery, modelCenter]);
+  }, [catalogQuery, modelCenter, modelStatusFilter]);
 
   const filteredCloudCatalogModels = useMemo(() => {
     if (!modelCenter) return [];
@@ -361,8 +369,9 @@ export function SettingsView({
     return modelCenter.catalogModels
       .filter((model) => !model.policy.hiddenByPolicy && model.providerId === cloudCatalogProviderId)
       .filter((model) => !query || `${model.label} ${model.description} ${model.capabilities.join(" ")} ${model.providerId}`.toLowerCase().includes(query))
+      .filter((model) => modelStatusFilter === "all" || (modelStatusFilter === "recommended" && model.recommended) || modelStatusFilter === "ready")
       .sort((left, right) => Number(right.recommended) - Number(left.recommended) || left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
-  }, [catalogQuery, cloudCatalogProviderId, modelCenter]);
+  }, [catalogQuery, cloudCatalogProviderId, modelCenter, modelStatusFilter]);
 
   const filteredCatalogModels = useMemo(() => {
     if (!modelCenter) return [];
@@ -372,6 +381,39 @@ export function SettingsView({
       .filter((model) => !query || `${model.label} ${model.description} ${model.capabilities.join(" ")} ${model.providerId}`.toLowerCase().includes(query))
       .sort((left, right) => Number(right.recommended) - Number(left.recommended) || left.label.localeCompare(right.label, undefined, { sensitivity: "base" }));
   }, [catalogQuery, modelCenter]);
+
+  const filteredInstalledLocalModels = useMemo(() => {
+    if (!modelCenter) return [];
+    const query = catalogQuery.trim().toLowerCase();
+    return modelCenter.installedModels
+      .filter((model) => !query || `${model.label} ${model.externalId} ${model.providerId} ${model.engineId} ${model.capabilities.join(" ")} ${model.tags?.join(" ") || ""}`.toLowerCase().includes(query))
+      .filter((model) => {
+        if (modelStatusFilter === "all") return true;
+        if (modelStatusFilter === "ready") return model.health.state === "ready";
+        if (modelStatusFilter === "needs_setup") return model.health.state !== "ready";
+        if (modelStatusFilter === "recommended") return Boolean(model.variant);
+        return true;
+      });
+  }, [catalogQuery, modelCenter, modelStatusFilter]);
+
+  const filteredCloudProviders = useMemo(() => {
+    if (!modelCenter) return [];
+    const query = catalogQuery.trim().toLowerCase();
+    return modelCenter.providers
+      .filter((provider) => provider.definition.category === "cloud")
+      .filter((provider) => {
+        if (!query) return true;
+        const modelText = provider.models.map((model) => `${model.label} ${model.description} ${model.capabilities.join(" ")}`).join(" ");
+        return `${provider.definition.label} ${provider.definition.description} ${provider.definition.id} ${provider.config.message} ${modelText}`.toLowerCase().includes(query);
+      })
+      .filter((provider) => {
+        if (modelStatusFilter === "all") return true;
+        if (modelStatusFilter === "ready") return provider.config.healthy;
+        if (modelStatusFilter === "needs_setup") return !provider.config.healthy;
+        if (modelStatusFilter === "recommended") return provider.models.some((model) => model.recommended);
+        return true;
+      });
+  }, [catalogQuery, modelCenter, modelStatusFilter]);
 
   async function runAction(actionId: string, action: () => Promise<ModelCenterState>) {
     setBusyAction(actionId);
@@ -419,6 +461,19 @@ export function SettingsView({
     await runAction(`assign-role:${roleId}`, () => linkApi.assignModelRole({ roleId, modelId: event.target.value }));
   }
 
+  async function installCustomOllamaModel() {
+    const externalId = customOllamaId.trim();
+    if (!externalId) return;
+    await runAction("pull-custom", () => linkApi.pullLocalModel({ externalId }));
+    setLocalModelsSubTab("installed");
+  }
+
+  async function importLocalModelForAgents() {
+    const name = importName.trim();
+    await runAction("import-gguf", () => linkApi.importLocalModel(name ? { name } : undefined));
+    setLocalModelsSubTab("installed");
+  }
+
   function renderModelPageTabs(
     activeSubTab: ModelPageTab,
     setActiveSubTab: (tab: ModelPageTab) => void,
@@ -446,17 +501,75 @@ export function SettingsView({
     );
   }
 
+  function renderModelSearchToolbar(scope: "local" | "cloud", activeSubTab: ModelPageTab) {
+    if (!modelCenter) return null;
+    const cloudProviders = modelCenter.providers.filter((provider) => provider.definition.category === "cloud");
+    const placeholder = activeSubTab === "installed"
+      ? `Search ${scope === "local" ? "installed local models" : "cloud providers"}`
+      : `Search ${scope === "local" ? "local models" : "cloud models"}`;
+    const count = scope === "local"
+      ? activeSubTab === "installed"
+        ? `${filteredInstalledLocalModels.length} installed`
+        : `${filteredLocalCatalogModels.length} available`
+      : activeSubTab === "installed"
+        ? `${filteredCloudProviders.length} providers`
+        : `${filteredCloudCatalogModels.length} available`;
+    return (
+      <div className="modelCenterToolbarGroup">
+        <div className="chatSearchRow modelCenterSearchToolbar">
+          <button
+            className={`iconButton agentFilterButton ${modelFiltersOpen || modelStatusFilter !== "all" ? "selected" : ""}`}
+            type="button"
+            aria-label={modelFiltersOpen ? "Hide model filters" : "Show model filters"}
+            title={modelFiltersOpen ? "Hide model filters" : "Show model filters"}
+            onClick={() => setModelFiltersOpen((open) => !open)}
+          >
+            <SlidersHorizontal size={16} />
+          </button>
+          <div className="explorerSearch compactSearch">
+            <Search size={16} />
+            <input value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder={placeholder} />
+          </div>
+        </div>
+        {modelFiltersOpen && (
+          <div className="chatFilterBar modelCenterFilterBar" role="group" aria-label={`${scope === "local" ? "Local" : "Cloud"} model filters`}>
+            <span className="chatFilterCount">{count}</span>
+            <label className="agentFilter">
+              Status
+              <select value={modelStatusFilter} onChange={(event) => setModelStatusFilter(event.target.value as ModelStatusFilter)}>
+                <option value="all">All</option>
+                <option value="ready">Ready</option>
+                <option value="needs_setup">Needs setup</option>
+                <option value="recommended">Recommended</option>
+              </select>
+            </label>
+            {scope === "cloud" && activeSubTab === "available" && (
+              <label className="agentFilter">
+                Provider
+                <select value={cloudCatalogProviderId} onChange={(event) => setCloudCatalogProviderId(event.target.value)} disabled={cloudProviders.length === 0}>
+                  {cloudProviders.map((provider) => (
+                    <option key={provider.definition.id} value={provider.definition.id}>
+                      {provider.definition.label} · {isCloudMarketplaceProviderConnected(provider) ? "Connected" : "Needs setup"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderRolePicker(roleId: ModelRoleAssignment["roleId"], assignment: ModelCenterState["roles"][ModelRoleAssignment["roleId"]]) {
     return (
       <section className="modelCenterCard">
         <header className="modelCenterCardHeader">
           <div>
             <h3>{roleLabel(roleId)}</h3>
-            <p>{assignment?.dataBoundary ? `Current boundary: ${assignment.dataBoundary}` : "No model assigned yet."}</p>
           </div>
         </header>
-        <label className="modelCenterField">
-          <span>Assigned model</span>
+        <label className="modelCenterField modelCenterAssignedModelField">
           <select value={assignment?.modelId || ""} onChange={(event) => void assignRole(roleId, event)}>
             <option value="">Select a model</option>
             {assignableModels.filter((model) => canAssignToRole(roleId, model)).map((model) => (
@@ -465,7 +578,7 @@ export function SettingsView({
           </select>
         </label>
         {assignment && (
-          <div className="modelCenterMetaGrid">
+          <div className="modelCenterMetaGrid modelCenterRoleMetaGrid">
             <div>
               <strong>Provider</strong>
               <span>{assignment.providerId}</span>
@@ -473,6 +586,10 @@ export function SettingsView({
             <div>
               <strong>Route</strong>
               <span>{assignment.routeId}</span>
+            </div>
+            <div>
+              <strong>Boundary</strong>
+              <span>{assignment.dataBoundary}</span>
             </div>
           </div>
         )}
@@ -595,17 +712,11 @@ export function SettingsView({
           <header className="modelCenterCardHeader">
             <div>
               <h3>Installed Local Models</h3>
-              <p>Inventory from the active local engine with fit, health, and removal controls.</p>
-            </div>
-            <div className="modelCenterHeaderActions">
-              <button className="button secondary" type="button" onClick={() => void runAction("import-gguf", () => linkApi.importLocalModel())}>
-                <Upload size={14} />
-                Import GGUF
-              </button>
+              <p>Local model files installed into a configured engine.</p>
             </div>
           </header>
           <div className="modelCenterTable">
-            {modelCenter.installedModels.map((model) => (
+            {filteredInstalledLocalModels.map((model) => (
               <div key={model.id} className="modelCenterTableRow">
                 <div>
                   <strong>{model.label}</strong>
@@ -621,7 +732,8 @@ export function SettingsView({
                 </div>
               </div>
             ))}
-            {modelCenter.installedModels.length === 0 && <EmptyState title="No local models yet" body="Install a curated Ollama model from Available or import a local GGUF file." />}
+            {modelCenter.installedModels.length === 0 && <EmptyState title="No local models installed" body="Install a curated model from Available, or use Install model above for a custom Ollama or GGUF model." />}
+            {modelCenter.installedModels.length > 0 && filteredInstalledLocalModels.length === 0 && <EmptyState title="No models match this search" body="Clear the search field or adjust the filter." />}
           </div>
         </section>
       </div>
@@ -635,55 +747,13 @@ export function SettingsView({
     const selectedCloudProviderConnected = selectedCloudProvider ? isCloudMarketplaceProviderConnected(selectedCloudProvider) : false;
     const models = scope === "local" ? filteredLocalCatalogModels : selectedCloudProviderConnected ? filteredCloudCatalogModels : [];
     return (
-      <section className="modelCenterCard">
+      <section className={`modelCenterCard ${scope === "local" ? "modelCenterCatalogCard" : "modelCenterCatalogCard modelCenterCatalogCardCloud"}`}>
         <header className="modelCenterCardHeader">
           <div>
             <h3>{scope === "local" ? "Local model catalog" : "Cloud model catalog"}</h3>
-            <p>{scope === "local" ? "Find or install models that run on this Mac." : "Find hosted models available from cloud providers."}</p>
+            {scope === "cloud" && <p>Find hosted models available from cloud providers.</p>}
           </div>
-          {scope === "cloud" ? (
-            <div className="modelCenterCatalogControls">
-              <label className="modelCenterProviderSelect">
-                <span>Provider</span>
-                <select value={selectedCloudProvider?.definition.id || ""} onChange={(event) => setCloudCatalogProviderId(event.target.value)} disabled={cloudProviders.length === 0}>
-                  {cloudProviders.map((provider) => (
-                    <option key={provider.definition.id} value={provider.definition.id}>
-                      {provider.definition.label} · {isCloudMarketplaceProviderConnected(provider) ? "Connected" : "Needs setup"}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="modelCenterCatalogSearch">
-                <Search size={17} />
-                <input value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Search models, roles, or capabilities" />
-              </label>
-            </div>
-          ) : (
-            <label className="modelCenterCatalogSearch">
-              <Search size={17} />
-              <input value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Search models, roles, or capabilities" />
-            </label>
-          )}
         </header>
-        {scope === "local" && (
-          <div className="modelCenterImportRow">
-            <span className="modelCenterImportLabel">Advanced install</span>
-            <div className="modelCenterImportGroup">
-              <input value={customOllamaId} onChange={(event) => setCustomOllamaId(event.target.value)} placeholder="Custom Ollama id" />
-              <button className="button secondary" type="button" onClick={() => void runAction("pull-custom", () => linkApi.pullLocalModel({ externalId: customOllamaId }))} disabled={!customOllamaId.trim()}>
-                <Upload size={14} />
-                Install custom model
-              </button>
-            </div>
-            <div className="modelCenterImportGroup">
-              <input value={importName} onChange={(event) => setImportName(event.target.value)} placeholder="Imported model name" />
-              <button className="button ghost" type="button" onClick={() => void runAction("import-gguf", () => linkApi.importLocalModel({ name: importName }))} disabled={!importName.trim()}>
-                <FolderOpen size={14} />
-                Import GGUF
-              </button>
-            </div>
-          </div>
-        )}
         <div className="modelCenterCatalogList">
           {scope === "cloud" && !selectedCloudProvider && (
             <EmptyState title="No cloud providers available" body="Add or refresh a cloud provider before browsing hosted models." />
@@ -990,6 +1060,7 @@ export function SettingsView({
             </details>
           );
         })}
+        {providers.length === 0 && <EmptyState title="No providers match this search" body="Clear the search field or adjust the filter." />}
       </div>
     );
   }
@@ -997,26 +1068,23 @@ export function SettingsView({
   function renderLocalEngineCards() {
     if (!modelCenter) return null;
     return (
-      <div className="modelCenterStack">
+      <div className="modelCenterEngineList">
         {modelCenter.engines.map((engine) => {
           const draft = engineDrafts[engine.id];
           const selectedModelId = draft?.defaultModelId ?? engine.defaultModelId ?? "";
-          const localModelOptions = [
-            ...modelCenter.installedModels
-              .filter((model) => modelIdBelongsToEngine(model.id, engine.id) || model.providerId === engine.id)
-              .map((model) => ({ id: model.id, label: model.label })),
-            ...modelCenter.catalogModels
-              .filter((model) => modelIdBelongsToEngine(model.id, engine.id) || model.providerId === engine.id)
-              .map((model) => ({ id: model.id, label: model.label })),
-          ].filter((model, index, models) => models.findIndex((candidate) => candidate.id === model.id) === index);
+          const localModelOptions = modelCenter.installedModels
+            .filter((model) => modelIdBelongsToEngine(model.id, engine.id) || model.providerId === engine.id)
+            .map((model) => ({ id: model.id, label: model.label }))
+            .filter((model, index, models) => models.findIndex((candidate) => candidate.id === model.id) === index);
           const modelSelectOptions = selectedModelId && !localModelOptions.some((model) => model.id === selectedModelId)
             ? [{ id: selectedModelId, label: selectedModelId }, ...localModelOptions]
             : localModelOptions;
+          const hasInstalledModelOptions = localModelOptions.length > 0;
           return (
-            <section key={engine.id} className="modelCenterCard">
-              <header className="modelCenterCardHeader">
+            <section key={engine.id} className="modelCenterEnginePanel">
+              <header className="modelCenterEngineHeader">
                 <div>
-                  <h3>{engine.definition.label}</h3>
+                  <h3>{engine.definition.label} engine</h3>
                   <p>{engine.message}</p>
                 </div>
                 <StatusBadge>{engine.ready ? "Ready" : engine.reachable ? "Reachable" : "Offline"}</StatusBadge>
@@ -1027,23 +1095,47 @@ export function SettingsView({
                   <span>{engine.baseUrl || "Not configured"}</span>
                 </div>
                 <div>
-                  <strong>Installed models</strong>
+                  <strong>Models installed</strong>
                   <span>{engine.discoveredModelCount}</span>
                 </div>
               </div>
-              <label className="modelCenterField">
-                <span>Default local model</span>
-                <select value={selectedModelId} onChange={(event) => setEngineDrafts((current) => ({ ...current, [engine.id]: { ...(current[engine.id] || { enabled: engine.enabled, baseUrl: engine.baseUrl || "", defaultModelId: "", maxLoadedModels: engine.settings.maxLoadedModels, timeoutSeconds: engine.settings.timeoutSeconds, checkForUpdates: engine.settings.checkForUpdates, verifyDependencies: engine.settings.verifyDependencies }), defaultModelId: event.target.value } }))}>
-                  <option value="">Select a local model</option>
-                  {modelSelectOptions.map((model) => (
-                    <option key={model.id} value={model.id}>{model.label}</option>
-                  ))}
-                </select>
-              </label>
-              <div className="modelCenterInlineActions">
-                <button className="button secondary" type="button" onClick={() => void saveEngine(engine.id)} disabled={!draft}>
-                  Save
-                </button>
+              <div className="modelCenterSettingRow">
+                <div>
+                  <strong>Default local model</strong>
+                  <small>{hasInstalledModelOptions ? "Use this model when a local route does not name a specific model." : `Install a model into ${engine.definition.label} before choosing a default.`}</small>
+                </div>
+                {hasInstalledModelOptions ? (
+                  <div className="modelCenterSettingControls">
+                    <select value={selectedModelId} onChange={(event) => setEngineDrafts((current) => ({ ...current, [engine.id]: { ...(current[engine.id] || { enabled: engine.enabled, baseUrl: engine.baseUrl || "", defaultModelId: "", maxLoadedModels: engine.settings.maxLoadedModels, timeoutSeconds: engine.settings.timeoutSeconds, checkForUpdates: engine.settings.checkForUpdates, verifyDependencies: engine.settings.verifyDependencies }), defaultModelId: event.target.value } }))}>
+                      <option value="">Select a local model</option>
+                      {modelSelectOptions.map((model) => (
+                        <option key={model.id} value={model.id}>{model.label}</option>
+                      ))}
+                    </select>
+                    <button className="button secondary" type="button" onClick={() => void saveEngine(engine.id)} disabled={!draft}>
+                      Set default
+                    </button>
+                  </div>
+                ) : (
+                  <div className="modelCenterSettingControls modelCenterSettingControlsCompact">
+                    <button className="button primary" type="button" onClick={() => {
+                      setLocalModelInstallOpen(true);
+                      setLocalModelsSubTab("installed");
+                      setTab("local-models");
+                    }}>
+                      <Download size={14} />
+                      Install model
+                    </button>
+                    <button className="button secondary" type="button" onClick={() => {
+                      setLocalModelsSubTab("available");
+                      setTab("local-models");
+                    }}>
+                      Browse available
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="modelCenterInlineActions modelCenterPrimaryActions">
                 <button className="button ghost" type="button" onClick={() => void runAction(`refresh-engine:${engine.id}`, () => linkApi.refreshProviderModels({ providerId: engine.id }))}>
                   Refresh engine
                 </button>
@@ -1055,18 +1147,84 @@ export function SettingsView({
     );
   }
 
-  function renderLocalModelsTab() {
+  function renderLocalModelInstallPanel() {
+    if (!localModelInstallOpen) return null;
+    return (
+      <section className="modelCenterCard modelCenterInstallPanel">
+        <header className="modelCenterCardHeader">
+          <div>
+            <h3>Install local model</h3>
+            <p>Pull an Ollama model or import a GGUF/Modelfile. Installed models become the local default route for agents when no explicit routing override is set.</p>
+          </div>
+          <button className="button ghost" type="button" onClick={() => setLocalModelInstallOpen(false)}>
+            Close
+          </button>
+        </header>
+        <div className="modelCenterInstallGrid">
+          <label className="modelCenterInstallField">
+            <span>Ollama model id</span>
+            <input value={customOllamaId} onChange={(event) => setCustomOllamaId(event.target.value)} placeholder="llama3.2:latest" />
+          </label>
+          <button className="button primary modelCenterInstallAction" type="button" onClick={() => void installCustomOllamaModel()} disabled={!customOllamaId.trim() || busyAction === "pull-custom"}>
+            <Upload size={14} />
+            Install
+          </button>
+          <label className="modelCenterInstallField">
+            <span>Imported model name</span>
+            <input value={importName} onChange={(event) => setImportName(event.target.value)} placeholder="Optional name for GGUF or Modelfile" />
+          </label>
+          <button className="button secondary modelCenterInstallAction" type="button" onClick={() => void importLocalModelForAgents()} disabled={busyAction === "import-gguf"}>
+            <FolderOpen size={14} />
+            Import file
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  function renderEnginesTab() {
     if (!modelCenter) return null;
     return (
       <div className="modelCenterStack">
-        {renderModelPageTabs(localModelsSubTab, setLocalModelsSubTab, "Local model sections")}
-        {localModelsSubTab === "installed" && renderInstalledLocalModelsSection()}
-        {localModelsSubTab === "available" && (
-          <>
-            {renderCatalogSection("local")}
-            {renderLocalEngineCards()}
-          </>
+        <section className="modelCenterCard">
+          <header className="modelCenterCardHeader">
+            <div>
+              <h3>Local engines</h3>
+              <p>Engines run local models on this Mac. Start or connect an engine before installing models for agents.</p>
+            </div>
+          </header>
+          {modelCenter.engines.length > 0
+            ? renderLocalEngineCards()
+            : <EmptyState title="No local engines configured" body="Install or connect a local engine such as Ollama before adding local models." />}
+        </section>
+      </div>
+    );
+  }
+
+  function renderLocalModelsTab() {
+    if (!modelCenter) return null;
+    const hasReadyLocalEngine = modelCenter.engines.some((engine) => engine.ready);
+    return (
+      <div className="modelCenterStack">
+        {renderLocalModelInstallPanel()}
+        {!hasReadyLocalEngine && (
+          <section className="phoneSetupAlert serviceSetupAlert modelCenterRouteSetupAlert">
+            <span className="serviceSetupAlertIcon" aria-hidden="true"><Server size={18} /></span>
+            <div>
+              <strong>Set up a local engine before installing models.</strong>
+              <p>Engines like Ollama run local models on this Mac. Open Engines to start or refresh the runtime.</p>
+            </div>
+            <button className="runtimeSettingsButton" type="button" onClick={() => setTab("engines")}>
+              Open Engines
+            </button>
+          </section>
         )}
+        {renderModelPageTabs(localModelsSubTab, setLocalModelsSubTab, "Local model sections")}
+        {renderModelSearchToolbar("local", localModelsSubTab)}
+        {localModelsSubTab === "installed" && (
+          renderInstalledLocalModelsSection()
+        )}
+        {localModelsSubTab === "available" && renderCatalogSection("local")}
       </div>
     );
   }
@@ -1076,7 +1234,8 @@ export function SettingsView({
     return (
       <div className="modelCenterStack">
         {renderModelPageTabs(cloudModelsSubTab, setCloudModelsSubTab, "Cloud model sections")}
-        {cloudModelsSubTab === "installed" && renderProvidersCards(modelCenter.providers)}
+        {renderModelSearchToolbar("cloud", cloudModelsSubTab)}
+        {cloudModelsSubTab === "installed" && renderProvidersCards(filteredCloudProviders)}
         {cloudModelsSubTab === "available" && renderCatalogSection("cloud")}
       </div>
     );
@@ -1353,7 +1512,13 @@ export function SettingsView({
         <h2>{tabs.find((candidate) => candidate.id === activeTab)?.label || "Settings"}</h2>
       </div>
       <div className="modelCenterHeaderMeta">
-        {embedded && (
+        {activeTab === "local-models" && (
+          <button className={localModelInstallOpen ? "button secondary" : "button primary"} type="button" onClick={() => setLocalModelInstallOpen((open) => !open)}>
+            {localModelInstallOpen ? <X size={14} /> : <Download size={14} />}
+            {localModelInstallOpen ? "Hide install" : "Install model"}
+          </button>
+        )}
+        {embedded && activeTab !== "local-models" && activeTab !== "cloud-models" && (
           <button className="button ghost" type="button" onClick={() => void refreshModelCenter()} disabled={loading}>
             <RefreshCw size={14} />
             Refresh
@@ -1368,7 +1533,8 @@ export function SettingsView({
     <>
       {error && <div className="modelCenterError">{error}</div>}
       {modelCenter && modelRoutesNeedSetup && (
-        <section className="phoneSetupAlert modelCenterRouteSetupAlert">
+        <section className="phoneSetupAlert serviceSetupAlert modelCenterRouteSetupAlert">
+          <span className="serviceSetupAlertIcon" aria-hidden="true"><GitBranch size={18} /></span>
           <div>
             <strong>No model routes are ready yet.</strong>
             <p>Assign a local or cloud model to a role before chat, agents, and tools can use model routing.</p>
@@ -1384,6 +1550,7 @@ export function SettingsView({
       {modelCenter && (
         <>
           {activeTab === "shortcuts" && renderShortcutsTab()}
+          {activeTab === "engines" && renderEnginesTab()}
           {activeTab === "local-models" && renderLocalModelsTab()}
           {activeTab === "cloud-models" && renderCloudModelsTab()}
           {activeTab === "local-api-server" && renderLocalApiTab()}
