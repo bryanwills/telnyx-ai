@@ -3890,7 +3890,7 @@ function previewSurfaceManifests(): SurfaceManifestMap {
   return {
     chat: {
       surface: "chat",
-      label: "Work",
+      label: "Chat",
       enabled: true,
       ready: true,
       requiresAgent: false,

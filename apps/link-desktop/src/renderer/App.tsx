@@ -1441,7 +1441,7 @@ function readableInkColor(hexColor: string) {
 }
 
 const navItems: { id: ViewId; label: string; icon: AppIcon }[] = [
-  { id: "chats", label: "Work", icon: MessageSquare },
+  { id: "chats", label: "Chat", icon: MessageSquare },
   { id: "workboard", label: "Taskbox", icon: SquareCheck },
   { id: "inbox", label: "Inbox", icon: Inbox },
   { id: "calendar", label: "Calendar", icon: CalendarDays },
@@ -1457,7 +1457,7 @@ const linkGettingStartedAgentName = "Cloud Link";
 
 const viewMeta: Record<ViewId, { label: string; icon: AppIcon }> = {
   onboarding: { label: "Get Started", icon: Flag },
-  chats: { label: "Work", icon: MessageSquare },
+  chats: { label: "Chat", icon: MessageSquare },
   gateway: { label: "Gateway", icon: Send },
   apps: { label: "Apps", icon: Grid2X2Plus },
   skills: { label: "Skills", icon: Zap },
@@ -3307,7 +3307,7 @@ const internalTestingChecklistItems = [
   { id: "archive-memory", label: "Review one archive memory", view: "memory" },
   { id: "plugin-settings", label: "Open plugin settings", view: "settings", actionLabel: "Plugins" },
   { id: "contact-preview", label: "Review one call contact", view: "phone", actionLabel: "Calls" },
-  { id: "feedback-report", label: "Write one feedback note", view: "chats", actionLabel: "Work" },
+  { id: "feedback-report", label: "Write one feedback note", view: "chats", actionLabel: "Chat" },
 ] satisfies { id: string; label: string; view?: ViewId; settingsTab?: SettingsTab; assistantTab?: AssistantMode; actionLabel?: string }[];
 
 function readInternalTestingChecklist() {
@@ -4175,13 +4175,13 @@ function OnboardingView({
     {
       id: "smoke-test",
       title: "Run one final smoke test",
-      body: "Before you treat Cloud Link as ready, run one short end-to-end pass across Work, Taskbox, Scribe, and one connected plugin so setup gaps are obvious.",
+      body: "Before you treat Cloud Link as ready, run one short end-to-end pass across Chat, Taskbox, Scribe, and one connected plugin so setup gaps are obvious.",
       complete: completed.has("smoke-test"),
       icon: Check,
       meta: completed.has("smoke-test") ? "Final smoke test marked complete." : "Run one short pass before daily use.",
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => setView("chats")}>Open Work</button>
+          <button className="button secondary" onClick={() => setView("chats")}>Open Chat</button>
           {!completed.has("smoke-test") && <button className="button ghost" onClick={() => void markStep("smoke-test")}>Smoke test done</button>}
         </div>
       ),
@@ -4290,7 +4290,7 @@ function OnboardingView({
       "Make sure the publisher is reachable.",
     ],
     "smoke-test": [
-      "Send one Work request.",
+      "Send one Chat request.",
       "Create or review one Taskbox item.",
       "Check Scribe and one connected plugin before calling setup complete.",
     ],
@@ -4312,7 +4312,7 @@ function OnboardingView({
     "grammar-plugin": { label: "Open Grammar", run: () => setView("scribes") },
     "skill-sources": { label: "Open Skills", run: () => setView("skills") },
     "app-publisher": { label: "Open Apps", run: () => setView("apps") },
-    "smoke-test": { label: "Open Work", run: () => setView("chats") },
+    "smoke-test": { label: "Open Chat", run: () => setView("chats") },
   };
   const learningStepIcons: Record<string, AppIcon> = {
     chat: MessageSquare,
@@ -4465,7 +4465,7 @@ function OnboardingView({
     "feedback-report": {
       description: "Finish by writing one short feedback note while the setup and learn pass are still fresh.",
       bullets: [
-        "Open Work after trying the main surfaces.",
+        "Open Chat after trying the main surfaces.",
         "Capture what worked, what broke, and what felt confusing.",
         "Use the note as a product bug report or follow-up task.",
       ],
@@ -4817,7 +4817,7 @@ function Sidebar({
         <Search size={15} />
         <input placeholder="Search..." />
       </div>
-      <SidebarSection title="Work" count={chatSessions.length} icon={<MessageSquare size={13} />} compact active={view === "chats"}>
+      <SidebarSection title="Chat" count={chatSessions.length} icon={<MessageSquare size={13} />} compact active={view === "chats"}>
         {chatSessions.slice(0, 4).map((session) => (
           <button
             key={session.id}
@@ -6244,7 +6244,7 @@ function ChatsView({
       <div className="chatResultDetails">
         <div className="chatReviewTabs" role="tablist" aria-label={`${session.title} review`}>
           {([
-            ["chat", "Work", MessageSquare],
+            ["chat", "Chat", MessageSquare],
             ["actions", "Actions", SquareCheck],
             ["sources", "Sources", ExternalLink],
             ["archive", "Archive", ArchiveIcon],
@@ -6484,7 +6484,7 @@ function ChatsView({
     <section className="content chatView canonicalChat chatListView">
       <header className="pageHeader">
         <div>
-          <h1>Work</h1>
+          <h1>Chat</h1>
         </div>
         <div className="headerActions">
           <button className="button primary" onClick={() => void startNewSession()}>
@@ -10096,8 +10096,8 @@ function AssistantPanel({
             className="assistantRailButton"
             type="button"
             onClick={() => openAssistantMode("chat")}
-            aria-label="Open Work assistant"
-            title="Work"
+            aria-label="Open Chat assistant"
+            title="Chat"
           >
             <MessageSquare size={17} />
           </button>
@@ -10146,7 +10146,7 @@ function AssistantPanel({
       />
       <div className="assistantPanelTop">
         <div className="assistantTabs">
-          <button className={mode === "chat" ? "selected" : ""} onClick={() => setMode("chat")}><MessageSquare size={15} />Work</button>
+          <button className={mode === "chat" ? "selected" : ""} onClick={() => setMode("chat")}><MessageSquare size={15} />Chat</button>
           <button className={mode === "phone" ? "selected" : ""} onClick={() => setMode("phone")}><Phone size={15} />Call</button>
           <button className={mode === "scribe" ? "selected" : ""} onClick={() => setMode("scribe")}><Mic size={15} />Scribe</button>
         </div>
