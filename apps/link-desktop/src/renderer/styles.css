@@ -961,7 +961,7 @@ button {
 }
 
 .desktop.terminalOpen .railSecondaryGroup {
-  margin-top: auto;
+  margin-top: 0;
 }
 
 .accountMenuWrap {
