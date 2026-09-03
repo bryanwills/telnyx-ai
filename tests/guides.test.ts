@@ -14,6 +14,7 @@ const __dirname = typeof import.meta.dirname === "string"
   : dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const GUIDES_DIR = join(ROOT, "guides");
+const SKILLS_DIR = join(ROOT, "skills");
 // agent.json lives alongside guides in the repo root (site is a separate repo)
 const AGENT_JSON_PATH = join(ROOT, "agent.json");
 
@@ -54,6 +55,150 @@ describe("agent.json validity", () => {
     assert.match(guide, /telnyx-agent rcs-send/);
     assert.match(guide, /telnyx-agent rcs-capabilities/);
     assert.match(guide, /skills\/telnyx-messaging-hosted-curl\/SKILL\.md/);
+  });
+});
+
+describe("Meeting Bot plugin catalogs", () => {
+  const rootReadme = readFileSync(join(ROOT, "README.md"), "utf-8");
+  const pluginsReadme = readFileSync(join(ROOT, "plugins", "README.md"), "utf-8");
+  const skillsReadme = readFileSync(join(SKILLS_DIR, "README.md"), "utf-8");
+  const rootPlugin = JSON.parse(readFileSync(join(ROOT, "plugin.json"), "utf-8"));
+  const marketplace = JSON.parse(
+    readFileSync(join(ROOT, ".claude-plugin", "marketplace.json"), "utf-8")
+  );
+  const aiPluginDir = join(ROOT, "providers", "claude", "plugins", "telnyx-ai");
+  const aiManifest = JSON.parse(
+    readFileSync(join(aiPluginDir, ".claude-plugin", "plugin.json"), "utf-8")
+  );
+  const aiSkillCount = readdirSync(join(aiPluginDir, "skills"), {
+    withFileTypes: true,
+  }).filter((entry: { isDirectory(): boolean }) => entry.isDirectory()).length;
+  const catalogRow = pluginsReadme
+    .split("\n")
+    .find((line: string) => line.startsWith("| `telnyx-ai` |"));
+  const aiMarketplace = marketplace.plugins.find(
+    (plugin: any) => plugin.name === "telnyx-ai"
+  );
+
+  it("advertises Meeting Bot with the actual telnyx-ai skill count", () => {
+    assert.equal(aiSkillCount, 13);
+    assert.ok(catalogRow, "plugins/README.md missing telnyx-ai row");
+    assert.match(catalogRow, /Meeting Bot/);
+    assert.ok(catalogRow.endsWith(`| ${aiSkillCount} |`));
+    assert.match(rootReadme, /telnyx-ai@telnyx[^\n]*Meeting Bot/);
+    assert.match(rootPlugin.description, /Meeting Bot/);
+    assert.match(skillsReadme, /`telnyx-meeting-bot`[^\n]*Zoom[^\n]*Webex/);
+    assert.match(skillsReadme, /telnyx-ai@telnyx[^\n]*Meeting Bot/);
+    assert.ok(aiMarketplace, "marketplace missing telnyx-ai plugin");
+    assert.match(aiMarketplace.description, /Meeting Bot/);
+    assert.equal(aiManifest.description, aiMarketplace.description);
+    assert.ok(aiManifest.keywords.includes("meeting-bot"));
+  });
+});
+
+describe("Meeting Bot discovery and durable alert contract", () => {
+  const capability = agentJson.capabilities.find(
+    (candidate: any) => candidate.id === "meeting_bot"
+  );
+  const guide = readFileSync(join(GUIDES_DIR, "meeting-bot.md"), "utf-8");
+  const skill = readFileSync(
+    join(SKILLS_DIR, "telnyx-meeting-bot", "SKILL.md"),
+    "utf-8"
+  );
+  const repeatProtocol = readFileSync(
+    join(SKILLS_DIR, "telnyx-meeting-bot", "references", "repeating-semantic-actions.md"),
+    "utf-8"
+  );
+  const artifactRecovery = readFileSync(
+    join(SKILLS_DIR, "telnyx-meeting-bot", "references", "artifact-selection-and-recovery.md"),
+    "utf-8"
+  );
+
+  it("registers the canonical capability and guide", () => {
+    assert.ok(capability, 'agent.json missing the "meeting_bot" capability');
+    assert.equal(capability.guide, "/guides/meeting-bot.md");
+    assert.equal(capability.api, "POST /v2/meeting_sessions");
+    assert.equal(capability.docs, "https://developers.telnyx.com/docs/meeting");
+    assert.match(guide, /https:\/\/api\.telnyx\.com\/v2\/meeting_bot\/mcp/);
+    assert.match(guide, /skills\/telnyx-meeting-bot\/SKILL\.md/);
+    assert.match(guide, /meeting-bot-service\/tree\/a9f6326bcaf7428364861290b787d5db1772e9f6/);
+    assert.match(guide, /wait_seconds=2/);
+    assert.match(guide, /actions\/speak/);
+    assert.match(
+      guide,
+      /headers\.set\("Authorization", \["Bearer", apiKey\]\.join\(" "\)\);/
+    );
+    for (const type of ["summary", "action_items", "decisions", "topics", "open_questions", "custom"]) {
+      assert.ok(
+        guide.includes("| `" + type + "` |"),
+        `meeting-bot guide missing artifact type: ${type}`
+      );
+    }
+  });
+
+  it("keeps mention delivery crash-safe", () => {
+    assert.match(skill, /"status": "pending"/);
+    assert.match(skill, /stable `delivery_id`/);
+    assert.match(skill, /Mark the outbox item\s+`sent` only after confirmed delivery/);
+    assert.match(skill, /retry pending alerts/i);
+    assert.match(skill, /wait_seconds: 2/);
+    assert.match(skill, /### Reactive lunch answer/);
+    assert.match(skill, /A one-shot\s+key uses only session and rule/);
+    assert.match(skill, /"key": "action:<session_id>:<rule_id>"/);
+    assert.doesNotMatch(skill, /"key": "action:<session_id>:<rule_id>:<first_trigger_seq>"/);
+    assert.match(skill, /repeating-semantic-actions\.md/);
+    assert.match(skill, /persist `occurrence_first_seq` and `evidence_seqs`/);
+    assert.match(skill, /action:<session_id>:<rule_id>:repeat:<occurrence_first_seq>/);
+    assert.match(skill, /repeating literal rule, atomically claim `action:<session_id>:<rule_id>:repeat:<segment\.seq>`/);
+    assert.match(skill, /never key from the newest evaluation segment/);
+    assert.match(repeatProtocol, /shortest contiguous suffix ending at the current sequence/);
+    assert.match(repeatProtocol, /durable exclusive lease/);
+    assert.match(repeatProtocol, /active_occurrence/);
+    assert.match(repeatProtocol, /compares the prior `generation`, lease owner\/validity, and prior\s+`last_evaluated_seq`/);
+    assert.match(repeatProtocol, /must fail that CAS/);
+    assert.match(repeatProtocol, /one per-sequence CAS transaction/);
+    assert.match(repeatProtocol, /That same transaction must advance `last_evaluated_seq`/);
+    assert.match(repeatProtocol, /create `active_occurrence` plus the durable\s+`claimed` action/);
+    assert.match(repeatProtocol, /second CAS changes that\s+claim from `claimed` to `dispatching`/);
+    assert.match(repeatProtocol, /CAS loser reloads state without dispatching/);
+    assert.match(repeatProtocol, /never advance the cursor and clear in separate\s+writes/);
+    assert.match(repeatProtocol, /every positive overlapping window reuses its\s+persisted claim key/);
+    assert.match(repeatProtocol, /context window contains none of the persisted `evidence_seqs`/);
+    assert.match(repeatProtocol, /persisted semantic condition evaluates false/);
+    assert.match(repeatProtocol, /clear commits and a\s+still-later ordered evaluation produces a new false-to-true transition/);
+    assert.match(skill, /do \*\*not\*\* automatically repeat an\s+accepted action/);
+    assert.match(skill, /Creating the claim only reserves its key/);
+    assert.match(skill, /a CAS changes `claimed`\s+\(or proven `pre_send_failed`\) to `dispatching` immediately before the transport\s+call/);
+    assert.match(skill, /no request\s+bytes were sent may mark `pre_send_failed`/);
+    assert.match(skill, /Before\s+evaluating triggers, atomically convert every recovered\s+live-action claim still marked `dispatching` to `outcome_unknown`/);
+    assert.match(skill, /never redispatch it/);
+    assert.match(guide, /successful `claimed` → `dispatching` CAS immediately before transport/);
+    assert.match(guide, /convert any recovered\s+`dispatching` speech\/chat claim to `outcome_unknown` before evaluating triggers/);
+  });
+
+  it("selects the final summary and retries only proven non-dispatches", () => {
+    assert.match(skill, /artifact-selection-and-recovery\.md/);
+    assert.match(skill, /`transcript\.completed\.occurred_at`/);
+    assert.doesNotMatch(skill, /summary_creation_attempted/);
+    assert.match(guide, /no automatic-origin marker/);
+    assert.match(guide, /`pre_send_failed`/);
+    assert.match(guide, /`outcome_unknown`/);
+    assert.match(artifactRecovery, /no `automatic`, `origin`, or final-summary marker/);
+    assert.match(artifactRecovery, /known_manual_artifact_ids/);
+    assert.match(artifactRecovery, /unreconciled_unknown_manual_creates/);
+    assert.match(artifactRecovery, /`created_at >= transcript_completed_at`/);
+    assert.match(artifactRecovery, /Poll all current candidates/);
+    assert.match(artifactRecovery, /Never use\s+artifact ID, list order, completion order, or client-clock windows as an\s+origin tie-breaker/);
+    assert.match(artifactRecovery, /two\s+candidates share the minimum timestamp/);
+    assert.match(artifactRecovery, /Rank\s+\*\*all statuses\*\* before filtering by status/);
+    assert.match(artifactRecovery, /never skip to a later completed candidate/);
+    assert.match(artifactRecovery, /unique closest is\s+`failed`.*use the fallback rather than a later\s+artifact/s);
+    assert.match(artifactRecovery, /same-type unknown create remains unreconciled/);
+    assert.match(artifactRecovery, /every otherwise-unrecognized\s+same-type artifact is possible manual output/);
+    assert.match(artifactRecovery, /Immediately before fallback, re-list once more/);
+    assert.match(artifactRecovery, /proves that no request bytes were sent/);
+    assert.match(artifactRecovery, /Recovery from either `dispatching` or `outcome_unknown`\s+must persist an unreconciled same-type unknown-create marker and\s+re-list\/reconcile only/);
+    assert.match(artifactRecovery, /Never collapse `pre_send_failed` and `outcome_unknown`/);
   });
 });
 
