@@ -24,51 +24,22 @@ in-meeting changes unless the requester explicitly asks for that.
 
 ## Quick Workflow
 
-1. Resolve only missing essentials: meeting URL, join now versus a scheduled
-   time, desired live/final outputs, and any trigger/action rules. Reuse details
-   already stated in the request or authorized context; do not ask again.
-2. Persist an operation record **before** creating the session. Generate and
-   retain one stable `idempotency_key`; call `join_meeting` with
-   `summarize_on_end: true`, no `speak_on_enter`, and no `chat_on_enter`. If an
-   explicit later speech rule exists, set `barge_in: true` so new human speech
-   can stop the bot's output.
-3. Poll `get_session`, `get_transcript`, and (when available) `get_events`.
-   Choose transcript `wait_seconds` from the request—use about `2` seconds for
-   “as soon as,” reactive speech, or urgent mention alerts—and persist cursors,
-   seen segments, outboxes, action claims, and IDs for safe recovery.
-4. On each new final segment, evaluate requested literal or semantic rules.
-   Deliver mention notifications through the durable outbox; atomically claim
-   and execute each authorized `speak`/`send_chat` action at most once.
-5. On a terminal session, drain transcript pages, wait a bounded time for
-   `transcript.completed`, obtain the requested implemented artifact types
-   without duplicate creation, then deliver a Markdown report.
+1. Resolve only missing essentials: meeting URL, join now versus a scheduled time, desired live/final outputs, and trigger/action rules. Reuse authorized details; do not ask again.
+2. Persist an operation record **before** creating the session and choose its transport. Ordinary sessions use MCP `join_meeting`. Any Portal Assistant or Anam avatar session uses REST `POST /v2/meeting_sessions` with the requested object(s). Persist one stable `idempotency_key`, the transport, and the exact logical create request; store only a secret reference for a write-only Anam key. REST-only sessions are immediate, so omit `join_at`; Assistant sessions also omit `barge_in`. For an ordinary session with an authorized later speech rule, set `barge_in: true` so human speech can stop bot output.
+3. Poll `get_session`, `get_transcript`, and, when available, `get_events`. Select `wait_seconds` from the request—about `2` for “as soon as,” reactive speech, or urgent mentions—and persist cursors, seen segments, outboxes, claims, and IDs for recovery.
+4. On each new final segment, evaluate requested literal or semantic rules; deliver mention notifications through the durable outbox, and atomically claim and execute each authorized `speak`/`send_chat` action at most once.
+5. On a terminal session, drain transcript pages, wait a bounded time for `transcript.completed`, obtain requested implemented artifact types without duplicate creation, then deliver a Markdown report.
 
 ## Preconditions and Safe Defaults
 
-- Require `TELNYX_API_KEY` in a backend secret store. Never include it in a URL,
-  transcript, event, artifact, chat message, or user-facing report.
-- Before joining, ensure the runtime can keep monitoring or can resume from a
-  durable background task. Do not promise end-to-end monitoring from a process
-  that will disappear without preserving and resuming the operation record.
-- Verify the requester is authorized to have a visible bot attend this meeting.
-  The bot may need a host to admit it; never try to bypass a waiting room,
-  password, platform policy, or consent requirement.
-- Default notification target: **this current conversation**. Do not configure a
-  `webhook_url` merely to send the requester notifications.
-- Default behavior: immediate join if no future time was requested,
-  `summarize_on_end: true`, observe-only, and no recording-media deletion.
-  `speak`, `send_chat`, `speak_on_enter`, and `chat_on_enter` are opt-in actions.
-- An explicit conditional request such as “when someone asks about lunch, say
-  ‘I want pizza’” is advance authorization for that exact action. Persist the
-  trigger, exact payload, one-shot/repeat policy, and latency target before join;
-  do not interrupt the live workflow to ask for approval again.
-- Choose monitoring cadence from the request. Default immediate reactions and
-  urgent mentions to `wait_seconds: 2`; do not silently substitute a 15-second
-  cadence for an “as soon as” instruction.
-- If a meeting link is not present, ask for it. If time is ambiguous, ask only
-  whether to join now or at a specified time. If “my name” is not resolvable
-  from the request, current conversation, or authorized profile context, ask
-  which name/phrases (and optional variants) to watch for.
+- Require `TELNYX_API_KEY` in a backend secret store. Never include it in a URL, transcript, event, artifact, chat message, or user-facing report.
+- Before joining, ensure the runtime can keep monitoring or can resume from durable background state. Do not promise end-to-end monitoring from a process that disappears without preserving and resuming the operation record.
+- Verify authorization for a visible bot. A host may need to admit it; never bypass a waiting room, password, platform policy, or consent requirement.
+- Default notification target: **this current conversation**. Do not configure a `webhook_url` merely to send requester notifications.
+- Default behavior is immediate join, `summarize_on_end: true`, observe-only, and no recording-media deletion. `speak`, `send_chat`, `speak_on_enter`, and `chat_on_enter` are opt-in.
+- An explicit conditional request such as “when someone asks about lunch, say ‘I want pizza’” authorizes exactly that action. Before join, persist trigger, exact payload, one-shot/repeat policy, and latency target; do not interrupt the workflow to ask again.
+- Select monitoring cadence from the request: default immediate reactions and urgent mentions to `wait_seconds: 2`, never silently substituting a 15-second cadence for “as soon as.”
+- If the link is missing, ask for it. If timing is ambiguous, ask only now versus specified time. If “my name” is not resolvable from authorized request/context/profile data, ask for name/phrases and optional variants.
 
 ## Connect to the Production MCP Server
 
@@ -76,19 +47,12 @@ Prefer the production Streamable HTTP MCP endpoint:
 
 ```text
 https://api.telnyx.com/v2/meeting_bot/mcp
-Authorization: Bearer <TELNYX_API_KEY>
+Authorization: Bearer ***
 ```
 
-Use the service's exact tools: `join_meeting`, `get_session`, `list_sessions`,
-`get_transcript`, `get_events`, `leave_meeting`, `get_recordings`, `speak`,
-`stop_speaking`, `send_chat`, `create_artifact`, `get_artifact`, and
-`get_artifacts`.
+Use the service's exact tools: `join_meeting`, `get_session`, `list_sessions`, `get_transcript`, `get_events`, `leave_meeting`, `get_recordings`, `speak`, `stop_speaking`, `send_chat`, `create_artifact`, `get_artifact`, and `get_artifacts`.
 
-MCP tools return one JSON text block. Decode `result.content[0].text` as JSON
-only after checking `result.isError`. HTTP/transport failures (for example 401,
-timeouts, or a 5xx) are different from an HTTP-200 MCP tool failure with
-`result.isError: true`; handle both, preserve the error code/message, and do
-not treat an HTTP 200 as success by itself.
+MCP tools return one JSON text block. Decode `result.content[0].text` only after checking `result.isError`. HTTP/transport failures (for example 401, timeouts, or 5xx) differ from an HTTP-200 MCP tool failure with `result.isError: true`; preserve the error code/message and do not treat HTTP 200 as success alone.
 
 If MCP is unavailable, use the equivalent production REST base:
 
@@ -96,18 +60,11 @@ If MCP is unavailable, use the equivalent production REST base:
 https://api.telnyx.com/v2/meeting_sessions
 ```
 
-REST equivalents include `POST /`, `GET /{id}`,
-`POST /{id}/actions/speak`, `POST /{id}/actions/stop_speaking`,
-`POST /{id}/actions/send_chat`, `GET /{id}/transcript`, `GET /{id}/events`,
-`DELETE /{id}`, `GET /{id}/recordings`, `GET /{id}/artifacts`,
-`POST /{id}/artifacts`, and `GET /{id}/artifacts/{artifact_id}`. Send
-`Authorization: Bearer <TELNYX_API_KEY>`. REST responses use `{ "data": ... }`.
-Use REST only as a transport fallback—the lifecycle and durability rules below
-remain the same.
+REST equivalents include `POST /`, `GET /{id}`, `POST /{id}/actions/speak`, `POST /{id}/actions/stop_speaking`, `POST /{id}/actions/send_chat`, `GET /{id}/transcript`, `GET /{id}/events`, `DELETE /{id}`, `GET /{id}/recordings`, `GET /{id}/artifacts`, `POST /{id}/artifacts`, and `GET /{id}/artifacts/{artifact_id}`. Send the standard bearer-token `Authorization` header. REST responses use `{ "data": ... }`. REST is a fallback transport for ordinary sessions when MCP is unavailable, but it is required for Portal Assistant and Anam avatar creates because MCP cannot express those objects. The lifecycle and durability rules remain the same.
 
 ## Create or Schedule Exactly Once
 
-Before the first `join_meeting`, checkpoint a durable operation record outside
+Before the first session create, checkpoint a durable operation record outside
 transient chat memory whenever the host supports files, a task store, or durable
 workflow state. Store at least:
 
@@ -116,6 +73,9 @@ workflow state. Store at least:
   "operation_id": "host-stable-id",
   "meeting_url": "redacted-or-secret-reference",
   "idempotency_key": "meeting-bot:<host-stable-id>",
+  "create_transport": "mcp-or-rest",
+  "create_request_without_write_only_secrets": {},
+  "avatar_api_key_secret_ref": null,
   "session_id": null,
   "poll_wait_seconds": 2,
   "live_rules": [],
@@ -135,8 +95,8 @@ workflow state. Store at least:
 }
 ```
 
-Use a UUID or a host-durable operation ID, not a new timestamp on retry. Then
-call `join_meeting` with the smallest safe argument set:
+Use a UUID or host-durable operation ID, not a new timestamp on retry. For an
+ordinary session, call MCP `join_meeting` with the smallest safe argument set:
 
 ```json
 {
@@ -150,12 +110,17 @@ call `join_meeting` with the smallest safe argument set:
 Omit `join_at` for an immediate join. Do not add greeting/chat/action arguments.
 If the request contains an authorized later `speak` rule, include
 `"barge_in": true`; this lets human speech stop bot output and does not itself
-make the bot speak. Persist the returned `id` as `session_id` immediately.
-If the create request has an
-uncertain transport outcome, retry **only** with the same persisted
-`idempotency_key`; never issue a second key, which could place a second bot in
-the meeting. If the host cannot persist state, state that duplicate-prevention
-across a restart cannot be guaranteed and avoid an unbounded retry.
+make the bot speak.
+
+For a Portal Assistant, Anam avatar, or combined session, use REST instead and
+persist the complete sanitized body from the sections below. Omit `join_at`; when
+an Assistant is present, omit `barge_in`. Persist the returned `id` as
+`session_id` immediately. After an uncertain create outcome, retry **only**
+through the original transport with the same logical request and
+`idempotency_key`; re-resolve an Anam key from its secret reference at dispatch
+instead of persisting the value. Never issue a second key, which could place a
+second bot in the meeting. If durable state is unavailable, disclose that
+duplicate prevention across restart is not guaranteed and avoid unbounded retry.
 
 ## Live Session and Transcript Loop
 
@@ -414,7 +379,7 @@ that are absent from the session, events, or collected finalized transcript.
 
 On restart, load the durable operation record before doing anything. If it has a
 `session_id`, resume `get_session`, event/transcript drains, and summary polling
-from persisted cursors and outbox state—never call `join_meeting` again. Retry
+from persisted cursors and outbox state—never create another session. Retry
 pending mention alerts with their original delivery IDs and leave confirmed
 `sent` items alone. A recovered `claimed` action may attempt the dispatch CAS. Before
 evaluating triggers, atomically convert every recovered
@@ -424,8 +389,10 @@ repeat actions marked `accepted` or `outcome_unknown`. Reconcile event history
 where useful, but a missing event is not proof the side effect did not happen. Resume each
 artifact request from its persisted ID/deadline and never repeat an ambiguous
 create. If the record has an idempotency key but no saved session ID because
-creation was interrupted, retry the original `join_meeting` arguments with that
-same key only after checking any available response/log receipt. Persist every
+creation was interrupted, retry the original create through its recorded
+transport with the same logical request and key only after checking any available
+response/log receipt. Re-resolve a write-only Anam key from its secret reference;
+never substitute MCP for a REST-only create. Persist every
 state transition, alert/action state, cursor, terminal observation, and artifact
 ID before relying on it.
 
@@ -434,52 +401,46 @@ needed and use `leave_meeting(id)` (REST: `DELETE /{id}`); it leaves/cancels but
 does not erase the durable session history. Do not use destructive recording
 media deletion as a cleanup shortcut.
 
+## Portal-configured Assistant (REST-only)
+
+Use `POST /v2/meeting_sessions` (not MCP `join_meeting`) with an existing portal-configured Assistant `id` in the authenticated organization. Create it with the caller's normal Telnyx bearer key; production requires Gateway Rev2 authentication. Never put Assistant/API secrets, Call Control connection IDs, from numbers, SIP URIs, or authorization fields in `assistant`. Allowed fields are `id`, optional `audio_gate` (`half_duplex` default or `full_duplex`), optional string-map `dynamic_variables`, and optional `leave_on_end` (default `false`).
+
+Assistant sessions are immediate-only: omit `join_at` and `barge_in`; the assistant handles interruption natively. A map has at most 63 customer entries; keys are 1–128 characters, values are strings up to 2048 characters, and reserved infrastructure keys are rejected. Poll ordinary status and `joined_at`, plus `assistant_state` (`starting|connected|failed|ended`) and its change timestamp. `connected` is readiness; non-null `joined_at` proves attendance. `full_duplex` continuously listens through per-participant audio and has higher meeting-media usage and cost, so use safe-default `half_duplex` unless native continuous barge-in is required. See the REST body and polling flow in [the guide](https://github.com/team-telnyx/ai/blob/main/guides/meeting-bot.md).
+
+## Anam Avatar (REST-only)
+
+Create an Anam avatar only through `POST /v2/meeting_sessions`, with `avatar.provider: "anam"`, `avatar_id`, and `api_key`; it is absent from MCP `join_meeting`. The key is write-only: never persist, log, or report it. Responses echo only provider/avatar ID and `avatar_state` (`starting|connected|degraded|disconnected`) with its change timestamp.
+
+Avatar sessions are immediate-only: no `join_at`, calendar/scheduled flow, MCP, or mid-meeting toggle. `connected` means avatar media readiness, not attendance, so also require `joined_at`. Avatar webpage output wins over `camera_image`; `speak` routes through that page, and `speak_on_enter` waits for active plus avatar connected. Do not prewarm: the meeting media layer creates the Output Media page as part of session startup. See REST examples and recovery guidance in [the guide](https://github.com/team-telnyx/ai/blob/main/guides/meeting-bot.md).
+
+## Combined Assistant + Avatar
+
+One immediate REST create can include both objects: the Assistant supplies conversation and voice while the avatar lip-syncs it. Monitor assistant readiness, avatar readiness, and `joined_at` separately; do not add `barge_in` or `join_at`. See the complete create body in [the guide](https://github.com/team-telnyx/ai/blob/main/guides/meeting-bot.md).
+
 ## Worked Interpretations
 
 ### Mention alert and final summary
 
-For: “Join this meeting and tell me what they discussed when it ends; if they
-mention my name, let me know.”
+For: “Join this meeting and tell me what they discussed when it ends; if they mention my name, let me know.”
 
-- If the message already includes a meeting URL and the requester identity/name
-  is known from authorized conversation/profile context, join immediately with
-  `summarize_on_end: true`, the stable idempotency key, no voice/chat actions,
-  and that name plus known variants as terms.
-- If the link is missing, ask only for the link. If it is unclear whether the
-  meeting is now or later, ask only for join timing. If “my name” is not known,
-  ask for the name/phrases and optional variants.
-- Tell the requester if host admission is required; send mention alerts in this
-  conversation; after completion, send the bounded, evidence-based report.
+- If the message already includes a meeting URL and the requester identity/name is known from authorized conversation/profile context, join immediately with `summarize_on_end: true`, the stable idempotency key, no voice/chat actions, and that name plus known variants as terms.
+- If the link is missing, ask only for the link. If it is unclear whether the meeting is now or later, ask only for join timing. If “my name” is not known, ask for the name/phrases and optional variants.
+- Tell the requester if host admission is required; send mention alerts in this conversation; after completion, send the bounded, evidence-based report.
 
 ### Reactive lunch answer
 
-For: “Join the meeting and as soon as someone asks what we should have for
-lunch, please use the speak request and say I want pizza.”
+For: “Join the meeting and as soon as someone asks what we should have for lunch, please use the speak request and say I want pizza.”
 
-- Treat this as explicit authorization for one in-meeting `speak`; do not ask
-  again when the condition occurs.
-- Join immediately with `summarize_on_end: true`, stable idempotency, no entrance
-  speech/chat, and `barge_in: true`.
-- Persist a one-shot semantic rule and use `wait_seconds: 2`. Evaluate each new
-  final segment plus a short trailing context window; require a clear lunch-choice
-  question rather than the isolated word “lunch.”
-- Atomically claim the first match and call
-  `speak(id, text: "I want pizza")` with `interrupt` omitted. Mark accepted only
-  from a non-error MCP result or REST 202; do not repeat an ambiguous dispatch.
+- Treat this as explicit authorization for one in-meeting `speak`; do not ask again when the condition occurs.
+- Join immediately with `summarize_on_end: true`, stable idempotency, no entrance speech/chat, and `barge_in: true`.
+- Persist a one-shot semantic rule and use `wait_seconds: 2`. Evaluate each new final segment plus a short trailing context window; require a clear lunch-choice question rather than the isolated word “lunch.”
+- Atomically claim the first match and call `speak(id, text: "I want pizza")` with `interrupt` omitted. Mark accepted only from a non-error MCP result or REST 202; do not repeat an ambiguous dispatch.
 
 ### Demo: delegated attendance and TL;DR
 
-For the on-screen request: “I can't join this meeting: `<meeting URL>`. Join as
-Anusha's bot, tell me when you're in, and send me a TL;DR when it ends.”
+For the on-screen request: “I can't join this meeting: `<meeting URL>`. Join as Anusha's bot, tell me when you're in, and send me a TL;DR when it ends.”
 
-Join now as `Anusha's bot` with stable idempotency, `summarize_on_end: true`, and
-no unrequested speech/chat. Post joining/admission updates to Anusha's current
-conversation, then “Anusha's bot joined” only when `joined_at` is non-null. A
-summary-only demo may use a `10`–`20` second wait; use `2` seconds if it promises
-live reactions. At terminal status, drain final transcript and send the automatic
-`summary` with attendance, completeness, and provenance. The visible story is:
-Anusha cannot attend → texts her agent → colleagues see her bot join → her agent
-confirms attendance → she receives the TL;DR.
+Join now as `Anusha's bot` with stable idempotency, `summarize_on_end: true`, and no unrequested speech/chat. Post joining/admission updates to Anusha's current conversation, then “Anusha's bot joined” only when `joined_at` is non-null. A summary-only demo may use a `10`–`20` second wait; use `2` seconds if it promises live reactions. At terminal status, drain final transcript and send the automatic `summary` with attendance, completeness, and provenance. The visible story is: Anusha cannot attend → texts her agent → colleagues see her bot join → her agent confirms attendance → she receives the TL;DR.
 
 ## Source Authority and References
 

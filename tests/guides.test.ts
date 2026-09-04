@@ -5,6 +5,8 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -105,6 +107,24 @@ describe("Meeting Bot discovery and durable alert contract", () => {
     join(SKILLS_DIR, "telnyx-meeting-bot", "SKILL.md"),
     "utf-8"
   );
+  const publicMeetingBotArtifacts = new Map([
+    ["guide", guide],
+    ["canonical skill", skill],
+    [
+      "Claude skill",
+      readFileSync(
+        join(ROOT, "providers", "claude", "plugins", "telnyx-ai", "skills", "telnyx-meeting-bot", "SKILL.md"),
+        "utf-8"
+      ),
+    ],
+    [
+      "Cursor skill",
+      readFileSync(
+        join(ROOT, "providers", "cursor", "plugin", "skills", "telnyx-meeting-bot", "SKILL.md"),
+        "utf-8"
+      ),
+    ],
+  ]);
   const repeatProtocol = readFileSync(
     join(SKILLS_DIR, "telnyx-meeting-bot", "references", "repeating-semantic-actions.md"),
     "utf-8"
@@ -113,6 +133,19 @@ describe("Meeting Bot discovery and durable alert contract", () => {
     join(SKILLS_DIR, "telnyx-meeting-bot", "references", "artifact-selection-and-recovery.md"),
     "utf-8"
   );
+
+  it("keeps public Meeting Bot artifacts free of internal provider names", () => {
+    const forbiddenProviderHash = "2ed6b4c1ae9f8249477df9193d20e75474c152748e0f2a2cc224ead2e1c8769d";
+    for (const [name, content] of publicMeetingBotArtifacts) {
+      const wordHashes = (content.toLowerCase().match(/[a-z]+/g) ?? []).map((word) =>
+        createHash("sha256").update(word).digest("hex")
+      );
+      assert.ok(
+        !wordHashes.includes(forbiddenProviderHash),
+        `${name} contains a forbidden internal provider name`
+      );
+    }
+  });
 
   it("registers the canonical capability and guide", () => {
     assert.ok(capability, 'agent.json missing the "meeting_bot" capability');
@@ -142,7 +175,11 @@ describe("Meeting Bot discovery and durable alert contract", () => {
     assert.match(skill, /Mark the outbox item\s+`sent` only after confirmed delivery/);
     assert.match(skill, /retry pending alerts/i);
     assert.match(skill, /wait_seconds: 2/);
+    assert.match(skill, /## Worked Interpretations/);
+    assert.match(skill, /### Mention alert and final summary/);
     assert.match(skill, /### Reactive lunch answer/);
+    assert.match(skill, /### Demo: delegated attendance and TL;DR/);
+    assert.match(skill, /Anusha cannot attend → texts her agent → colleagues see her bot join/);
     assert.match(skill, /A one-shot\s+key uses only session and rule/);
     assert.match(skill, /"key": "action:<session_id>:<rule_id>"/);
     assert.doesNotMatch(skill, /"key": "action:<session_id>:<rule_id>:<first_trigger_seq>"/);
@@ -199,6 +236,83 @@ describe("Meeting Bot discovery and durable alert contract", () => {
     assert.match(artifactRecovery, /proves that no request bytes were sent/);
     assert.match(artifactRecovery, /Recovery from either `dispatching` or `outcome_unknown`\s+must persist an unreconciled same-type unknown-create marker and\s+re-list\/reconcile only/);
     assert.match(artifactRecovery, /Never collapse `pre_send_failed` and `outcome_unknown`/);
+  });
+
+  it("documents REST-only assistant and Anam avatar contracts", () => {
+    const jsonAfter = (heading: string) => {
+      const start = guide.indexOf(heading);
+      assert.notEqual(start, -1, `guide missing ${heading}`);
+      const match = /```json\n([\s\S]*?)\n```/.exec(guide.slice(start));
+      assert.ok(match, `${heading} needs a JSON body`);
+      return JSON.parse(match[1]!);
+    };
+
+    const assistant = jsonAfter("### Portal Assistant REST create");
+    assert.deepEqual(Object.keys(assistant).sort(), ["assistant", "idempotency_key", "meeting_url"]);
+    assert.deepEqual(Object.keys(assistant.assistant).sort(), [
+      "audio_gate",
+      "dynamic_variables",
+      "id",
+      "leave_on_end",
+    ]);
+    assert.match(skill, /## Portal-configured Assistant \(REST-only\)/);
+    assert.match(skill, /higher meeting-media usage and cost/);
+    assert.match(guide, /higher meeting-media usage and cost/);
+    assert.match(skill, /meeting media layer creates the Output Media page/);
+    assert.match(guide, /meeting media layer creates the Output Media page/);
+    assert.match(skill, /choose its transport[\s\S]*Ordinary sessions use MCP `join_meeting`[\s\S]*Portal Assistant or Anam avatar session uses REST/i);
+    assert.match(skill, /"create_transport": "mcp-or-rest"/);
+    assert.match(skill, /"create_request_without_write_only_secrets": \{\}/);
+    assert.match(skill, /"avatar_api_key_secret_ref": null/);
+    assert.match(skill, /retry the original create through its recorded[\s\S]*transport[\s\S]*never substitute MCP for a REST-only create/i);
+    assert.match(skill, /REST is a fallback transport for ordinary sessions when MCP is unavailable[\s\S]*required for Portal Assistant and Anam avatar creates/i);
+    assert.doesNotMatch(skill, /\]\(\.\.\/\.\.\/guides\/meeting-bot\.md\)/);
+    assert.match(skill, /https:\/\/github\.com\/team-telnyx\/ai\/blob\/main\/guides\/meeting-bot\.md/);
+    assert.match(guide, /REST-only[\s\S]*absent from MCP `join_meeting`/);
+    assert.match(guide, /immediate-only[\s\S]*`join_at`[\s\S]*`barge_in`/);
+    assert.match(guide, /63 customer entries[\s\S]*1–128[\s\S]*2048[\s\S]*reserved/i);
+    assert.match(guide, /`starting`, `connected`, `failed`, `ended`/);
+    assert.match(guide, /`joined_at` is attendance evidence/);
+    assert.match(guide, /Gateway Rev2[\s\S]*normal Telnyx bearer key/);
+    assert.doesNotMatch(guide, /@assistant-session\.json/);
+    const assistantSection = guide.slice(guide.indexOf("### Portal Assistant REST create"));
+    const assistantBash = /```bash\n([\s\S]*?)\n```/.exec(assistantSection)?.[1];
+    assert.ok(assistantBash, "Portal Assistant section needs a Bash request");
+    const assistantSyntax = spawnSync("bash", ["-n"], { input: assistantBash, encoding: "utf8" });
+    assert.equal(assistantSyntax.status, 0, assistantSyntax.stderr);
+    assert.match(assistantBash, /--data-binary[\s\S]*"assistant"/);
+    assert.match(assistantBash, /Authorization: Bearer \$TELNYX_API_KEY/);
+    assert.doesNotMatch(JSON.stringify(assistant), /join_at|barge_in/);
+
+    const avatar = jsonAfter("### Anam avatar REST create");
+    assert.deepEqual(Object.keys(avatar).sort(), ["avatar", "idempotency_key", "meeting_url"]);
+    assert.deepEqual(Object.keys(avatar.avatar).sort(), ["api_key", "avatar_id", "provider"]);
+    assert.match(skill, /## Anam Avatar \(REST-only\)/);
+    assert.match(guide, /write-only[\s\S]*must not be persisted, logged, or reported/i);
+    assert.doesNotMatch(guide, /@anam-avatar-session\.json/);
+    assert.match(guide, /jq -n[\s\S]*api_key: env\.ANAM_API_KEY[\s\S]*\| curl/);
+    assert.match(guide, /--data-binary @-/);
+    assert.doesNotMatch(guide, /\$\{ANAM_API_KEY\}|--arg api_key/);
+    assert.match(guide, /ANAM_API_KEY[\s\S]*already exported from[\s\S]*a backend secret store/i);
+    const avatarSection = guide.slice(guide.indexOf("### Anam avatar REST create"));
+    assert.doesNotMatch(avatarSection, /Supported Output Media platforms/);
+    const avatarBash = /```bash\n([\s\S]*?)\n```/.exec(avatarSection)?.[1];
+    assert.ok(avatarBash, "Anam avatar section needs a Bash request");
+    const syntax = spawnSync("bash", ["-n"], { input: avatarBash, encoding: "utf8" });
+    assert.equal(syntax.status, 0, syntax.stderr);
+    assert.match(avatarBash, /Authorization: Bearer \$TELNYX_API_KEY/);
+    assert.match(skill, /Send the standard bearer-token `Authorization` header\. REST responses use/);
+    assert.match(guide, /`starting`, `connected`, `degraded`, `disconnected`/);
+    assert.match(guide, /camera_image/);
+    assert.match(guide, /speak_on_enter[\s\S]*active[\s\S]*avatar[\s\S]*connected/i);
+    assert.match(guide, /no\s+(?:supported\s+)?prewarm[\s\S]*Output Media page/i);
+    assert.doesNotMatch(JSON.stringify(avatar), /join_at/);
+
+    const combined = jsonAfter("### Combined REST create");
+    assert.deepEqual(Object.keys(combined).sort(), ["assistant", "avatar", "idempotency_key", "meeting_url"]);
+    assert.match(guide, /Assistant provides the\s+conversation and voice;\s+the avatar lip-syncs its speech/i);
+    assert.match(guide, /both readiness axes[\s\S]*`joined_at`/i);
+    assert.doesNotMatch(JSON.stringify(combined), /join_at|barge_in/);
   });
 });
 
